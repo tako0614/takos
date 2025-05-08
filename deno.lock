@@ -1,0 +1,129 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@dajiaji/mlkem@^2.3.0": "2.3.1",
+    "jsr:@hpke/common@^1.7.1": "1.7.2",
+    "jsr:@hpke/common@^1.7.2": "1.7.2",
+    "jsr:@hpke/core@*": "1.7.2",
+    "jsr:@hpke/ml-kem@*": "0.1.0",
+    "jsr:@std/assert@1": "1.0.13",
+    "jsr:@std/internal@^1.0.6": "1.0.6",
+    "npm:@hpke/core@^1.7.2": "1.7.2",
+    "npm:@hpke/ml-kem@0.1": "0.1.0",
+    "npm:@noble/hashes@*": "1.8.0",
+    "npm:@noble/hashes@^1.7.1": "1.8.0",
+    "npm:@noble/hashes@^1.8.0": "1.8.0",
+    "npm:@noble/post-quantum@~0.4.1": "0.4.1",
+    "npm:@types/node@*": "22.12.0",
+    "npm:crystals-kyber-js@^2.3.1": "2.3.1",
+    "npm:hono@^4.7.8": "4.7.8",
+    "npm:hpke@0.5": "0.5.0",
+    "npm:json-canonicalize@^1.0.6": "1.0.6"
+  },
+  "jsr": {
+    "@dajiaji/mlkem@2.3.1": {
+      "integrity": "0636f16f21539d2f853a10284f667fb8f2eb5f7d8c378eb8acca2da1c868ff02",
+      "dependencies": [
+        "npm:@noble/hashes@^1.7.1"
+      ]
+    },
+    "@hpke/common@1.7.2": {
+      "integrity": "5bef57c3b008bce9284d1ba6d50348b4d006397643f8b949891fd93c21852d5a"
+    },
+    "@hpke/core@1.7.2": {
+      "integrity": "6792063b05b603897430674fd6475a755661da89547e2ab0b25b37ea447dc231",
+      "dependencies": [
+        "jsr:@hpke/common@^1.7.2"
+      ]
+    },
+    "@hpke/ml-kem@0.1.0": {
+      "integrity": "7da6fab3d475cf80adecf5657d8899cee34701a31d0bcccc3a1844037ee953e9",
+      "dependencies": [
+        "jsr:@dajiaji/mlkem",
+        "jsr:@hpke/common@^1.7.1"
+      ]
+    },
+    "@std/assert@1.0.13": {
+      "integrity": "ae0d31e41919b12c656c742b22522c32fb26ed0cba32975cb0de2a273cb68b29",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.6": {
+      "integrity": "9533b128f230f73bd209408bb07a4b12f8d4255ab2a4d22a1fd6d87304aca9a4"
+    }
+  },
+  "npm": {
+    "@hpke/common@1.7.2": {
+      "integrity": "sha512-x8wGc1S3ANyQpbTXxhDuzQwzZn9IDaOARpEq/QzDyWFBEhOFyN8mJd6oMnvFkxe0H96JFgIU6eI4G2aaNxgFJQ=="
+    },
+    "@hpke/core@1.7.2": {
+      "integrity": "sha512-WPsy/Wp1oF+47EVfQdXG55TGS+rOKAAZJ4W/4BFnTENGGq/EAJeX1h0ooCarkqWrJsREsrpa4EiIZkz1m8hMOA==",
+      "dependencies": [
+        "@hpke/common"
+      ]
+    },
+    "@hpke/ml-kem@0.1.0": {
+      "integrity": "sha512-A6YZ7Bz4VclsleJy+6JpbzfVUhY/2K27gp3TAq3fBS9Ql33WM0lzGXoqIJ1xyPcJV51/j31mENiLTADV6byK2A==",
+      "dependencies": [
+        "@hpke/common",
+        "mlkem"
+      ]
+    },
+    "@noble/hashes@1.7.1": {
+      "integrity": "sha512-B8XBPsn4vT/KJAGqDzbwztd+6Yte3P4V7iafm24bxgDe/mlRuK6xmWPuCNrKt2vDafZ8MfJLlchDG/vYafQEjQ=="
+    },
+    "@noble/hashes@1.8.0": {
+      "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="
+    },
+    "@noble/post-quantum@0.4.1": {
+      "integrity": "sha512-TRXjvnY9jAFNWbxOx+pKt21BNsCEWKFjMbIKwdx9CQXBudDanpY20EfOcooV7DIsRS/+Mf8D8utpUPjfGrQ8fA==",
+      "dependencies": [
+        "@noble/hashes@1.8.0"
+      ]
+    },
+    "@types/node@22.12.0": {
+      "integrity": "sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "crystals-kyber-js@2.3.1": {
+      "integrity": "sha512-ANA5XaO5c7nSKq0N1u9mG5uhC9q1rl7MN83vEwkBo9LE+N99O4EcNl8EBbLaiQfemi8Xf7e7KyfqB0es0jQPGg==",
+      "dependencies": [
+        "@noble/hashes@1.7.1"
+      ]
+    },
+    "hono@4.7.8": {
+      "integrity": "sha512-PCibtFdxa7/Ldud9yddl1G81GjYaeMYYTq4ywSaNsYbB1Lug4mwtOMJf2WXykL0pntYwmpRJeOI3NmoDgD+Jxw=="
+    },
+    "hpke@0.5.0": {
+      "integrity": "sha512-rD6Y9v9a2rrUsdRcmgH1rDo8NTrqzwfSZ72hcC4yp3/QpEiCujDnROGk+x8n48FrHu798OzIZOTrQYYMO09VnQ=="
+    },
+    "json-canonicalize@1.0.6": {
+      "integrity": "sha512-kP2iYpOS5SZHYhIaR1t9oG80d4uTY3jPoaBj+nimy3njtJk8+sRsVatN8pyJRDRtk9Su3+6XqA2U8k0dByJBUQ=="
+    },
+    "mlkem@2.3.1": {
+      "integrity": "sha512-ZlhI0U1ZXpXd1U3DRyk1xafXNm7rU4lm2sSPIX5lidoLHJ7gyKQ4dafNd7W/MgIejadVfKTTa3uL1PDSbesL3g==",
+      "dependencies": [
+        "@noble/hashes@1.8.0"
+      ]
+    },
+    "undici-types@6.20.0": {
+      "integrity": "sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/assert@1",
+      "npm:@hpke/core@^1.7.2",
+      "npm:@hpke/ml-kem@0.1",
+      "npm:@noble/hashes@^1.8.0",
+      "npm:@noble/post-quantum@~0.4.1",
+      "npm:crystals-kyber-js@^2.3.1",
+      "npm:hono@^4.7.8",
+      "npm:hpke@0.5",
+      "npm:json-canonicalize@^1.0.6"
+    ]
+  }
+}

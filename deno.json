@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "dev": "deno run --watch main.ts"
+  },
+  "imports": {
+    "@hpke/core": "npm:@hpke/core@^1.7.2",
+    "@hpke/ml-kem": "npm:@hpke/ml-kem@^0.1.0",
+    "@noble/hashes": "npm:@noble/hashes@^1.8.0",
+    "@noble/post-quantum": "npm:@noble/post-quantum@^0.4.1",
+    "@std/assert": "jsr:@std/assert@1",
+    "crystals-kyber-js": "npm:crystals-kyber-js@^2.3.1",
+    "hono": "npm:hono@^4.7.8",
+    "hpke": "npm:hpke@^0.5.0",
+    "json-canonicalize": "npm:json-canonicalize@^1.0.6"
+  }
+}
