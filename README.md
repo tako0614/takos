@@ -29,6 +29,12 @@ pnpm build:all
 pnpm test:all
 ```
 
+Docs preview:
+
+```bash
+pnpm docs:dev
+```
+
 For local control-plane development:
 
 ```bash
@@ -46,9 +52,9 @@ pnpm local:up
 
 ## Documentation
 
-Additional architecture and product docs may live in an external docs
-repository, but this repo should remain understandable on its own. Public
-setup, build, and contribution flow must stay documented here.
+Takos docs live in-repo under `apps/docs-site/docs` and are rendered with
+VitePress. Keep `README.md` as the short entrypoint and put longer setup,
+runtime, deployment, and contributor guidance in the docs site.
 
 `takos-private/` can consume this repo as a sibling checkout and should only use
 package exports, not `apps/*` source paths. The `home-agent` runner is
@@ -62,5 +68,5 @@ with your own before deploying.
 
 ## Contributing
 
-See `CONTRIBUTING.md` for contributor expectations and `SECURITY.md` for
-security reporting guidance.
+See `CONTRIBUTING.md`, `apps/docs-site/docs`, and `SECURITY.md` for
+contributor expectations, product/spec docs, and security reporting guidance.

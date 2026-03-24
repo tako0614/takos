@@ -22,7 +22,11 @@ import {
 import { LOCAL_QUEUE_NAMES } from '../queue-runtime.ts';
 import { createInMemoryRoutingStore, createPersistentRoutingStore } from '../routing-store.ts';
 import { createRedisQueue, createRedisRoutingStore, disposeRedisClient } from '../redis-bindings.ts';
-import { createFetcherRegistry, parseServiceTargetMap } from '../url-registry.ts';
+import {
+  createForwardingFetcher,
+  parseServiceTargetMap,
+  type ServiceTargetMap,
+} from '../url-registry.ts';
 import {
   createLocalTenantWorkerRuntimeRegistry,
   type TenantWorkerRuntimeRegistry,
@@ -148,6 +152,16 @@ async function createSharedState() {
 // can override TAKOS_LOCAL_* env vars before the first platform access.
 let sharedPromise: Promise<SharedState> | null = null;
 const dispatchRegistries = new Set<TenantWorkerRuntimeRegistry>();
+const LOCAL_FORWARD_SERVICE_NAMES = new Set([
+  'RUNTIME_HOST',
+  'runtime-host',
+  'EXECUTOR_HOST',
+  'executor-host',
+  'BROWSER_HOST',
+  'browser-host',
+  'TAKOS_EGRESS',
+  'takos-egress',
+]);
 
 let seeded = false;
 
@@ -223,6 +237,31 @@ function buildBaseConfig() {
   } as const;
 }
 
+function validateLocalForwardTargets(targets: ServiceTargetMap): ServiceTargetMap {
+  const invalidTargets = Object.keys(targets).filter((name) => !LOCAL_FORWARD_SERVICE_NAMES.has(name));
+  if (invalidTargets.length > 0) {
+    throw new Error(
+      `TAKOS_LOCAL_DISPATCH_TARGETS_JSON may only override infra service targets: ${invalidTargets.join(', ')}`,
+    );
+  }
+  return targets;
+}
+
+function createStrictLocalServiceRegistry(
+  forwardTargets: ServiceTargetMap,
+  tenantWorkerRuntimeRegistry: TenantWorkerRuntimeRegistry,
+): DispatchEnv['DISPATCHER'] {
+  return {
+    get(name: string): ServiceBindingFetcher {
+      const target = forwardTargets[name];
+      if (target) {
+        return createForwardingFetcher(target);
+      }
+      return tenantWorkerRuntimeRegistry.get(name) as unknown as ServiceBindingFetcher;
+    },
+  } as unknown as DispatchEnv['DISPATCHER'];
+}
+
 export async function createTakosWebEnv(): Promise<Env> {
   await ensureRoutingSeeded();
   const config = buildBaseConfig();
@@ -269,7 +308,9 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
   await ensureRoutingSeeded();
   const config = buildBaseConfig();
   const shared = await getSharedState();
-  const targets = parseServiceTargetMap(process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON);
+  const targets = validateLocalForwardTargets(
+    parseServiceTargetMap(process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON),
+  );
   const implicitTargets = {
     ...(process.env.TAKOS_LOCAL_RUNTIME_URL?.trim()
       ? {
@@ -296,7 +337,7 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
         }
       : {}),
   };
-  const serviceTargets = {
+  const forwardTargets = {
     ...implicitTargets,
     ...targets,
   };
@@ -305,7 +346,7 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
     db: shared.db,
     workerBundles: shared.workerBundles,
     encryptionKey: config.ENCRYPTION_KEY,
-    serviceTargets,
+    serviceTargets: forwardTargets,
   });
   dispatchRegistries.add(tenantWorkerRuntimeRegistry);
 
@@ -315,9 +356,6 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
     ROUTING_DO_PHASE: config.ROUTING_DO_PHASE,
     ROUTING_STORE: shared.routingStore,
     ADMIN_DOMAIN: config.ADMIN_DOMAIN,
-    DISPATCHER: createFetcherRegistry(
-      serviceTargets,
-      (name) => tenantWorkerRuntimeRegistry.get(name) as ServiceBindingFetcher,
-    ) as unknown as DispatchEnv['DISPATCHER'],
+    DISPATCHER: createStrictLocalServiceRegistry(forwardTargets, tenantWorkerRuntimeRegistry),
   };
 }

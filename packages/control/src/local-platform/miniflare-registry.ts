@@ -1,10 +1,10 @@
 import os from 'node:os';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts';
 import type { WorkerBinding } from '../application/services/wfp/index.ts';
-import { deployments, getDb, serviceDeployments } from '../infra/db/index.ts';
+import { deployments, getDb } from '../infra/db/index.ts';
 import { services } from '../infra/db/schema-services';
 import { CF_COMPATIBILITY_DATE } from '../shared/constants.ts';
 import { decrypt, decryptEnvVars, type EncryptedData } from '../shared/utils/crypto.ts';
@@ -23,6 +23,7 @@ type LocalTenantWorkerRegistryOptions = {
 
 type DeploymentRuntimeRecord = {
   id: string;
+  serviceId: string;
   routeRef: string;
   artifactRef: string;
   bundleR2Key: string;
@@ -58,6 +59,8 @@ type PreparedBundle = {
   scriptPath: string;
 };
 
+const LOCAL_ROUTING_STATUSES = ['active', 'canary', 'rollback'] as const;
+
 function resolveRoot(explicit: string | null | undefined, suffix: string): string {
   return explicit && explicit.trim()
     ? path.resolve(explicit, suffix)
@@ -81,6 +84,26 @@ function parseRuntimeConfig(raw: string | null | undefined): WorkerRuntimeConfig
   } catch {
     return {};
   }
+}
+
+function parseDeploymentRouteRef(targetJson: string | null | undefined): string | null {
+  if (!targetJson) return null;
+  try {
+    const parsed = JSON.parse(targetJson) as Record<string, unknown>;
+    if (typeof parsed.route_ref === 'string' && parsed.route_ref.trim()) {
+      return parsed.route_ref.trim();
+    }
+    const endpoint = parsed.endpoint;
+    if (endpoint && typeof endpoint === 'object') {
+      const endpointRecord = endpoint as Record<string, unknown>;
+      if (endpointRecord.kind === 'service-ref' && typeof endpointRecord.ref === 'string' && endpointRecord.ref.trim()) {
+        return endpointRecord.ref.trim();
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 async function decryptBindingsSnapshot(
@@ -119,6 +142,7 @@ async function resolveDeploymentRuntime(
   const db = getDb(dbBinding);
   const byArtifact = await db.select({
     id: deployments.id,
+    serviceId: deployments.serviceId,
     routeRef: services.routeRef,
     artifactRef: deployments.artifactRef,
     bundleR2Key: deployments.bundleR2Key,
@@ -128,10 +152,10 @@ async function resolveDeploymentRuntime(
     envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
   })
     .from(deployments)
-    .innerJoin(services, eq(services.id, serviceDeployments.serviceId))
+    .innerJoin(services, eq(services.id, deployments.serviceId))
     .where(and(
       eq(deployments.artifactRef, workerRef),
-      eq(deployments.routingStatus, 'active'),
+      inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
     ))
     .orderBy(desc(deployments.version))
     .get();
@@ -139,6 +163,7 @@ async function resolveDeploymentRuntime(
   if (byArtifact?.artifactRef && byArtifact.bundleR2Key) {
     return {
       id: byArtifact.id,
+      serviceId: byArtifact.serviceId,
       routeRef: byArtifact.routeRef ?? workerRef,
       artifactRef: byArtifact.artifactRef,
       bundleR2Key: byArtifact.bundleR2Key,
@@ -151,6 +176,7 @@ async function resolveDeploymentRuntime(
 
   const byWorker = await db.select({
     id: deployments.id,
+    serviceId: deployments.serviceId,
     routeRef: services.routeRef,
     artifactRef: deployments.artifactRef,
     bundleR2Key: deployments.bundleR2Key,
@@ -164,16 +190,54 @@ async function resolveDeploymentRuntime(
     .where(eq(services.routeRef, workerRef))
     .get();
 
-  if (!byWorker?.artifactRef || !byWorker.bundleR2Key) return null;
+  if (byWorker?.artifactRef && byWorker.bundleR2Key) {
+    return {
+      id: byWorker.id,
+      serviceId: byWorker.serviceId,
+      routeRef: byWorker.routeRef ?? workerRef,
+      artifactRef: byWorker.artifactRef,
+      bundleR2Key: byWorker.bundleR2Key,
+      wasmR2Key: byWorker.wasmR2Key,
+      runtimeConfigSnapshotJson: byWorker.runtimeConfigSnapshotJson,
+      bindingsSnapshotEncrypted: byWorker.bindingsSnapshotEncrypted,
+      envVarsSnapshotEncrypted: byWorker.envVarsSnapshotEncrypted,
+    };
+  }
+
+  const candidateDeployments = await db.select({
+    id: deployments.id,
+    serviceId: deployments.serviceId,
+    serviceRouteRef: services.routeRef,
+    artifactRef: deployments.artifactRef,
+    bundleR2Key: deployments.bundleR2Key,
+    wasmR2Key: deployments.wasmR2Key,
+    runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+    bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+    envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+    targetJson: deployments.targetJson,
+  })
+    .from(deployments)
+    .innerJoin(services, eq(services.id, deployments.serviceId))
+    .where(inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES))
+    .orderBy(desc(deployments.version))
+    .all();
+
+  const matchedDeployment = candidateDeployments.find((deployment) => {
+    const deploymentRouteRef = parseDeploymentRouteRef(deployment.targetJson);
+    return deploymentRouteRef === workerRef;
+  });
+
+  if (!matchedDeployment?.artifactRef || !matchedDeployment.bundleR2Key) return null;
   return {
-    id: byWorker.id,
-    routeRef: byWorker.routeRef ?? workerRef,
-    artifactRef: byWorker.artifactRef,
-    bundleR2Key: byWorker.bundleR2Key,
-    wasmR2Key: byWorker.wasmR2Key,
-    runtimeConfigSnapshotJson: byWorker.runtimeConfigSnapshotJson,
-    bindingsSnapshotEncrypted: byWorker.bindingsSnapshotEncrypted,
-    envVarsSnapshotEncrypted: byWorker.envVarsSnapshotEncrypted,
+    id: matchedDeployment.id,
+    serviceId: matchedDeployment.serviceId,
+    routeRef: matchedDeployment.serviceRouteRef ?? workerRef,
+    artifactRef: matchedDeployment.artifactRef,
+    bundleR2Key: matchedDeployment.bundleR2Key,
+    wasmR2Key: matchedDeployment.wasmR2Key,
+    runtimeConfigSnapshotJson: matchedDeployment.runtimeConfigSnapshotJson,
+    bindingsSnapshotEncrypted: matchedDeployment.bindingsSnapshotEncrypted,
+    envVarsSnapshotEncrypted: matchedDeployment.envVarsSnapshotEncrypted,
   };
 }
 
@@ -247,7 +311,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
   const miniflareModule = await import('miniflare');
   const { Miniflare } = miniflareModule as unknown as MiniflareModule;
   const bundleCacheRoot = resolveRoot(options.bundleCacheRoot, 'bundles');
-  const fetcherCache = new Map<string, Promise<ResolvedTenantWorker>>();
+  const deploymentRuntimeCache = new Map<string, Promise<ResolvedTenantWorker>>();
 
   const resolveExternalFetcher = (name: string): FetcherLike => {
     const target = options.serviceTargets?.[name];
@@ -273,28 +337,29 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
       return lazyFetcher as unknown as Fetcher;
     },
     async dispose(): Promise<void> {
-      const resolved = await Promise.allSettled(fetcherCache.values());
+      const resolved = await Promise.allSettled(deploymentRuntimeCache.values());
       await Promise.all(resolved.map(async (result) => {
         if (result.status === 'fulfilled') {
           await result.value.runtime.dispose();
         }
       }));
-      fetcherCache.clear();
+      deploymentRuntimeCache.clear();
     },
   };
 
   async function getOrCreateWorker(workerRef: string): Promise<ResolvedTenantWorker> {
-    const cached = fetcherCache.get(workerRef);
+    const deployment = await resolveDeploymentRuntime(options.db, workerRef);
+    if (!deployment) {
+      throw new Error(`Worker not found: ${workerRef}`);
+    }
+
+    const cacheKey = deployment.id;
+    const cached = deploymentRuntimeCache.get(cacheKey);
     if (cached) return cached;
 
     const created = (async () => {
       if (!options.workerBundles) {
         throw new Error('WORKER_BUNDLES is not configured for local tenant runtime');
-      }
-
-      const deployment = await resolveDeploymentRuntime(options.db, workerRef);
-      if (!deployment) {
-        throw new Error(`Worker not found: ${workerRef}`);
       }
 
       const [bindingsSnapshot, envVars] = await Promise.all([
@@ -365,11 +430,11 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
       return { fetcher: fetcher as unknown as Fetcher, runtime: mf };
     })();
 
-    fetcherCache.set(workerRef, created);
+    deploymentRuntimeCache.set(cacheKey, created);
     try {
       return await created;
     } catch (error) {
-      fetcherCache.delete(workerRef);
+      deploymentRuntimeCache.delete(cacheKey);
       throw error;
     }
   }
