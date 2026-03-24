@@ -62,11 +62,22 @@ local の URL forward は tenant worker の canonical path ではなく、主に
 
 同じ `service-ref` を指す `active` / `canary` / `rollback` が並ぶ場合も、local は routing target に含まれる deployment identity を使って worker runtime を選びます。
 
+### local tenant runtime の Vectorize 制限
+
+tenant worker の public binding contract では `vectorize` を扱えます。  
+ただし current local tenant runtime は Miniflare-backed adapter なので、`vectorize` binding の materialization にはまだ対応していません。
+
+現在の挙動は次です。
+
+- Cloudflare tenant worker: `vectorize` binding を利用できる
+- local tenant worker: `vectorize` binding 付き worker は fail-fast で止まる
+
 ## local でできないこと、差分が出うること
 
 - Cloudflare platform 固有の内部最適化や実装差
 - backend ごとの performance 特性
 - Cloudflare 上の実 resource behavior を完全に再現すること
+- local tenant worker で `vectorize` binding を実行すること
 - production traffic 上での最終的な実証
 
 local は production backend の代替ではなく、product contract を大きく崩さずに検証するための backend です。

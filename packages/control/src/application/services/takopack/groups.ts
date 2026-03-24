@@ -178,6 +178,7 @@ export function buildProvisionedResourceReferenceMaps(
     d1: new Map<string, string>(),
     r2: new Map<string, string>(),
     kv: new Map<string, string>(),
+    vectorize: new Map<string, string>(),
   };
 
   if (!provisionedResources) {
@@ -202,6 +203,13 @@ export function buildProvisionedResourceReferenceMaps(
     addProvisionedReference(maps.kv, resource.id, resource.resourceId);
     addProvisionedReference(maps.kv, resource.name, resource.resourceId);
     addProvisionedReference(maps.kv, resource.resourceId, resource.resourceId);
+  }
+
+  for (const resource of provisionedResources.vectorize) {
+    addProvisionedReference(maps.vectorize, resource.binding, resource.resourceId);
+    addProvisionedReference(maps.vectorize, resource.id, resource.resourceId);
+    addProvisionedReference(maps.vectorize, resource.name, resource.resourceId);
+    addProvisionedReference(maps.vectorize, resource.resourceId, resource.resourceId);
   }
 
   return maps;

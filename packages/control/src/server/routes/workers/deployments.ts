@@ -5,6 +5,7 @@ import type { AuthenticatedRouteEnv } from '../shared/helpers';
 import { zValidator } from '../zod-validator';
 import { createDeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
+import type { DeploymentProviderName } from '../../../application/services/deployment/types.ts';
 import { DEPLOYMENT_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
@@ -31,7 +32,7 @@ type ApiDeploymentSummary = {
   routing_weight: number;
   bundle_hash: string | null;
   bundle_size: number | null;
-  provider: { name: 'cloudflare' | 'oci' };
+  provider: { name: DeploymentProviderName };
   target: ReturnType<typeof parseDeploymentTargetConfig>;
   deployed_by: string | null;
   deploy_message: string | null;

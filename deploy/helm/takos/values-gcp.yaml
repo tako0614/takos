@@ -1,0 +1,94 @@
+# GCP production overlay
+# Usage: helm install takos . -f values.yaml -f values-gcp.yaml
+
+# Disable bundled infrastructure (use GCP managed services)
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+minio:
+  enabled: false
+
+# GCP Cloud SQL PostgreSQL
+externalDatabase:
+  url: ""  # Set via --set or external secret: postgresql://user:pass@cloud-sql-proxy:5432/takos
+
+# GCP Memorystore Redis
+externalRedis:
+  url: ""  # Set via --set or external secret: redis://memorystore-endpoint:6379
+
+# GCP Cloud Storage (S3-compatible via interoperability)
+externalS3:
+  endpoint: "https://storage.googleapis.com"
+  region: "asia-northeast1"
+  bucket: "takos-tenant-source"
+  accessKeyId: ""      # Use Workload Identity instead
+  secretAccessKey: ""
+
+# Production domains
+domains:
+  admin: "admin.takos.example.com"
+  tenantBase: "app.takos.example.com"
+
+# Use existing secrets managed by External Secrets Operator
+secrets:
+  create: false
+  existingSecrets:
+    platform: "takos-platform-secret"
+    auth: "takos-auth-secret"
+    encryption: "takos-platform-secret"
+    llm: "takos-llm-secret"
+    database: "takos-database-secret"
+    redis: "takos-redis-secret"
+    s3: "takos-s3-secret"
+
+# GCE Ingress
+ingress:
+  enabled: true
+  className: "gce"
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: ""  # Set to reserved static IP name
+    networking.gke.io/managed-certificates: "takos-managed-cert"
+  tls:
+    enabled: false  # GCP managed certificates handle TLS
+
+# Production resource tuning
+controlWeb:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+controlDispatch:
+  replicaCount: 3
+
+controlWorker:
+  replicaCount: 2
+
+runtime:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+
+executor:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+
+browser:
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+
+# GKE Workload Identity
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: ""  # Set to GCP service account email

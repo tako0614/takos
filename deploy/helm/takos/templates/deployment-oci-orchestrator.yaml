@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "takos.fullname" . }}-oci-orchestrator
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oci-orchestrator
+spec:
+  replicas: {{ .Values.ociOrchestrator.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: oci-orchestrator
+      {{- include "takos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "takos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: oci-orchestrator
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "takos.fullname" . }}-oci-orchestrator
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: oci-orchestrator
+          image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
+          imagePullPolicy: {{ .Values.images.control.pullPolicy }}
+          command: ["pnpm", "local:oci-orchestrator"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.ociOrchestrator.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.ociOrchestrator.port | quote }}
+            - name: OCI_ORCHESTRATOR_DATA_DIR
+              value: "/var/lib/takos/control/oci-orchestrator"
+            - name: TAKOS_LOCAL_DATA_DIR
+              value: "/var/lib/takos/control"
+            {{- if .Values.secrets.ociOrchestratorToken }}
+            - name: OCI_ORCHESTRATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
+                  key: OCI_ORCHESTRATOR_TOKEN
+                  optional: true
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "takos.fullname" . }}-global
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.database | default (printf "%s-database" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.redis | default (printf "%s-redis" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.s3 | default (printf "%s-s3" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.auth | default (printf "%s-auth" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.llm | default (printf "%s-llm" (include "takos.fullname" .)) }}
+                optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.ociOrchestrator.resources | nindent 12 }}
+          volumeMounts:
+            - name: oci-data
+              mountPath: /var/lib/takos/control/oci-orchestrator
+      volumes:
+        - name: oci-data
+          {{- if .Values.ociOrchestrator.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "takos.fullname" . }}-oci-orchestrator
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

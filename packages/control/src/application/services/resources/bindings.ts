@@ -98,6 +98,7 @@ export async function buildBindingFromResource(
   id?: string;
   bucket_name?: string;
   namespace_id?: string;
+  index_name?: string;
 } | null> {
   const resource = await getResourceById(db, resourceId);
 
@@ -131,7 +132,7 @@ export async function buildBindingFromResource(
       return {
         type: 'vectorize',
         name: bindingName,
-        id: resource.cf_name || undefined,
+        index_name: resource.cf_name || undefined,
       };
 
     default:

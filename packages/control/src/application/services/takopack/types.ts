@@ -5,6 +5,11 @@ export interface ManifestResources {
   d1?: Array<{ binding: string; migrations?: string }>;
   r2?: Array<{ binding: string }>;
   kv?: Array<{ binding: string }>;
+  vectorize?: Array<{
+    binding: string;
+    dimensions?: number;
+    metric?: 'cosine' | 'euclidean' | 'dot-product';
+  }>;
 }
 
 export type TakopackManifestKind =
@@ -65,9 +70,13 @@ export interface TakopackPackageObject extends TakopackObjectBase {
 export interface TakopackResourceObject extends TakopackObjectBase {
   kind: 'Resource';
   spec: {
-    type: 'd1' | 'r2' | 'kv' | 'secretRef';
+    type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize';
     binding?: string;
     migrations?: string;
+    vectorize?: {
+      dimensions: number;
+      metric: 'cosine' | 'euclidean' | 'dot-product';
+    };
   };
 }
 
@@ -88,7 +97,7 @@ export interface TakopackBindingObject extends TakopackObjectBase {
     to: string;
     mount?: {
       as?: string;
-      type?: 'd1' | 'r2' | 'kv';
+      type?: 'd1' | 'r2' | 'kv' | 'vectorize';
     };
   };
 }
@@ -215,7 +224,7 @@ export interface TakopackManifest {
     bundle: string;
     bundleHash: string;
     bundleSize: number;
-    bindings: { d1: string[]; r2: string[]; kv: string[]; services?: string[] };
+    bindings: { d1: string[]; r2: string[]; kv: string[]; vectorize?: string[]; services?: string[] };
     env: Record<string, string>;
   }>;
   endpoints?: ManifestEndpoint[];
@@ -265,6 +274,7 @@ export interface ResourceProvisionResult {
   d1: ResourceProvisionResultEntry[];
   r2: Array<{ binding: string; name: string; resourceId: string; wasAdopted: boolean }>;
   kv: ResourceProvisionResultEntry[];
+  vectorize: ResourceProvisionResultEntry[];
 }
 
 export interface WorkerDeploymentResult {
@@ -279,7 +289,7 @@ export interface WorkerDeploymentResult {
 export type ManifestWorkerConfig = NonNullable<TakopackManifest['workers']>[number];
 
 export interface ResolvedWorkerResourceBinding {
-  bindingType: 'd1' | 'r2' | 'kv';
+  bindingType: 'd1' | 'r2' | 'kv' | 'vectorize';
   bindingName: string;
   resourceId: string;
   wfpBinding: WorkerBinding;
@@ -289,6 +299,7 @@ export interface ProvisionedResourceReferenceMaps {
   d1: Map<string, string>;
   r2: Map<string, string>;
   kv: Map<string, string>;
+  vectorize: Map<string, string>;
 }
 
 export interface InstallResult {
@@ -302,6 +313,7 @@ export interface InstallResult {
     d1: number;
     r2: number;
     kv: number;
+    vectorize: number;
   };
   rolloutInitiated?: boolean;
   applyReport: TakopackApplyReportEntry[];

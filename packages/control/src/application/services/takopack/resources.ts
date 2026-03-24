@@ -57,6 +57,7 @@ export class TakopackResourceService {
       d1: [],
       r2: [],
       kv: [],
+      vectorize: [],
     };
 
     const createdResources: Array<{ id: string; type: string; cfId?: string; cfName?: string }> = [];
@@ -202,6 +203,60 @@ export class TakopackResourceService {
               binding: kvConfig.binding,
               id: kvId || '',
               name: kvName,
+              resourceId,
+              wasAdopted: false,
+            });
+          }
+        }
+      }
+
+      if (manifestResources.vectorize) {
+        for (const vectorizeConfig of manifestResources.vectorize) {
+          const manifestKey = buildManifestKey(bundleKey, vectorizeConfig.binding);
+          const existing = await db.select().from(resources).where(
+            and(eq(resources.manifestKey, manifestKey), eq(resources.type, 'vectorize'))
+          ).get();
+
+          if (existing) {
+            await db.update(resources).set({
+              orphanedAt: null,
+              updatedAt: new Date().toISOString(),
+            }).where(eq(resources.id, existing.id));
+
+            result.vectorize.push({
+              binding: vectorizeConfig.binding,
+              id: existing.cfName || existing.cfId || '',
+              name: existing.name,
+              resourceId: existing.id,
+              wasAdopted: true,
+            });
+          } else {
+            const vectorizeName = `${safeName}-${vectorizeConfig.binding.toLowerCase()}-${suffix}`;
+            const created = await provisionCloudflareResource(this.env, {
+              ownerId: userId,
+              spaceId,
+              name: vectorizeName,
+              type: 'vectorize',
+              cfName: vectorizeName,
+              ...(vectorizeConfig.dimensions || vectorizeConfig.metric
+                ? {
+                    vectorize: {
+                      dimensions: vectorizeConfig.dimensions ?? 1536,
+                      metric: vectorizeConfig.metric ?? 'cosine',
+                    },
+                  }
+                : {}),
+            });
+            const resourceId = created.id;
+
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, resourceId));
+
+            createdResources.push({ id: resourceId, type: 'vectorize', cfId: created.cfId || undefined, cfName: vectorizeName });
+
+            result.vectorize.push({
+              binding: vectorizeConfig.binding,
+              id: created.cfName,
+              name: vectorizeName,
               resourceId,
               wasAdopted: false,
             });

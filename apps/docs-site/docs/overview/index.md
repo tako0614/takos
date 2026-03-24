@@ -6,7 +6,7 @@ Takos は、AI を含むアプリケーションや worker ベースのサービ
 
 - workspace 単位の分離
 - repo と workflow artifact を起点にした app deploy
-- worker / http service を混在させた service graph
+- worker を中心にした service graph
 - resource と binding の一貫した扱い
 - thread / run / artifact を中心にした AI 実行モデル
 - Cloudflare と local をまたぐ運用面
@@ -30,6 +30,9 @@ Takos は control plane と tenant runtime を分けて扱います。
 - tenant runtime: deploy された worker bundle や image が実際に処理を受ける面
 
 この分離によって、local と Cloudflare で control plane の adapter を変えつつ、tenant 側の contract を揃えやすくしています。
+
+現時点の `.takos/app.yml` v1alpha1 では `worker` service を正本にしています。  
+internal routing model には `http-url` target がありますが、manifest の public contract としてはまだ予約領域です。
 
 ## 想定する読者
 

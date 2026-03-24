@@ -215,6 +215,15 @@ export function filterBindingsByCapabilities(params: {
       continue;
     }
 
+    if (binding.type === 'vectorize') {
+      if (params.allowed.has('vectorize.write')) {
+        allowedBindings.push(binding);
+      } else {
+        deniedBindings.push(binding);
+      }
+      continue;
+    }
+
     if (binding.type === 'service') {
       allowedBindings.push(binding);
       continue;

@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "takos.fullname" . }}-control-worker
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control-worker
+spec:
+  replicas: {{ .Values.controlWorker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: control-worker
+      {{- include "takos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "takos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: control-worker
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: control-worker
+          image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
+          imagePullPolicy: {{ .Values.images.control.pullPolicy }}
+          command: ["pnpm", "local:worker"]
+          env:
+            - name: TAKOS_LOCAL_RUNTIME_HOST_URL
+              value: {{ include "takos.runtimeHostUrl" . | quote }}
+            - name: TAKOS_LOCAL_EXECUTOR_HOST_URL
+              value: {{ include "takos.executorHostUrl" . | quote }}
+            - name: TAKOS_LOCAL_WORKER_POLL_INTERVAL_MS
+              value: {{ .Values.controlWorker.pollIntervalMs | quote }}
+            - name: TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS
+              value: {{ .Values.controlWorker.scheduledIntervalMs | quote }}
+            - name: TAKOS_LOCAL_WORKER_HEARTBEAT_FILE
+              value: "/var/lib/takos/control/worker-heartbeat.json"
+            - name: TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS
+              value: {{ .Values.controlWorker.heartbeatTtlMs | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "takos.fullname" . }}-global
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.database | default (printf "%s-database" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.redis | default (printf "%s-redis" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.s3 | default (printf "%s-s3" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.auth | default (printf "%s-auth" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.llm | default (printf "%s-llm" (include "takos.fullname" .)) }}
+                optional: true
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - |
+                  const fs = require('fs');
+                  const f = '/var/lib/takos/control/worker-heartbeat.json';
+                  const stat = fs.statSync(f);
+                  const age = Date.now() - new Date(stat.mtime).getTime();
+                  if (age > {{ .Values.controlWorker.heartbeatTtlMs }}) process.exit(1);
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.controlWorker.resources | nindent 12 }}
+          volumeMounts:
+            - name: control-data
+              mountPath: /var/lib/takos/control
+      volumes:
+        - name: control-data
+          emptyDir: {}

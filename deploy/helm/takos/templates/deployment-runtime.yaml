@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "takos.fullname" . }}-runtime
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runtime
+spec:
+  {{- if not .Values.runtime.autoscaling.enabled }}
+  replicas: {{ .Values.runtime.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: runtime
+      {{- include "takos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "takos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: runtime
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: runtime
+          image: "{{ .Values.images.runtime.repository }}:{{ .Values.images.runtime.tag }}"
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: TAKOS_API_URL
+              value: {{ include "takos.controlWebUrl" . | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.s3 | default (printf "%s-s3" (include "takos.fullname" .)) }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.runtime.resources | nindent 12 }}

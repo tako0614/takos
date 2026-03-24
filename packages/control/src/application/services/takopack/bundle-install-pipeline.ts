@@ -197,7 +197,7 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
 
   let groupsCreated = 0;
   let toolsCreated = 0;
-  let resourcesCreated = { d1: 0, r2: 0, kv: 0 };
+  let resourcesCreated = { d1: 0, r2: 0, kv: 0, vectorize: 0 };
   const appliedEntries: TakopackApplyReportEntry[] = normalizedApplyReport
     .filter((entry) => entry.phase === 'planned')
     .map((entry) => ({
@@ -224,6 +224,7 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
       d1: provisionedResources.d1.length,
       r2: provisionedResources.r2.length,
       kv: provisionedResources.kv.length,
+      vectorize: provisionedResources.vectorize.length,
     };
     tracker.add('cleanup provisioned resources', async () => {
       await cleanupProvisionedResources(env, provisionedResources!);

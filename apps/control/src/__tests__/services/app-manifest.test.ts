@@ -40,6 +40,45 @@ spec:
 `)).toThrow(/type must be worker/);
   });
 
+  it('parses vectorize resources and worker bindings', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: vector-app
+spec:
+  version: 1.0.0
+  resources:
+    semantic-index:
+      type: vectorize
+      binding: SEARCH_INDEX
+      vectorize:
+        dimensions: 768
+        metric: euclidean
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        vectorize: [semantic-index]
+`);
+
+    expect(manifest.spec.resources?.['semantic-index']).toEqual({
+      type: 'vectorize',
+      binding: 'SEARCH_INDEX',
+      vectorize: {
+        dimensions: 768,
+        metric: 'euclidean',
+      },
+    });
+    expect(manifest.spec.services.api.bindings?.vectorize).toEqual(['semantic-index']);
+  });
+
   it('round-trips build source labels through bundle manifest json', async () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
@@ -91,5 +130,129 @@ spec:
       workflow_job_id: 'job-1',
       source_sha: 'sha-1',
     }]);
+  });
+
+  it('emits vectorize resources and worker bindings into bundle docs', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: vector-app
+spec:
+  version: 1.0.0
+  resources:
+    semantic-index:
+      type: vectorize
+      binding: SEARCH_INDEX
+      vectorize:
+        dimensions: 1536
+        metric: cosine
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        vectorize: [semantic-index]
+`);
+
+    const docs = appManifestToBundleDocs(manifest, new Map([
+      ['api', {
+        service_name: 'api',
+        workflow_path: '.takos/workflows/build.yml',
+        workflow_job: 'build-api',
+        workflow_artifact: 'api-dist',
+        artifact_path: 'dist/api.mjs',
+      }],
+    ]));
+
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Resource',
+      metadata: { name: 'semantic-index' },
+      spec: expect.objectContaining({
+        type: 'vectorize',
+        binding: 'SEARCH_INDEX',
+        vectorize: {
+          dimensions: 1536,
+          metric: 'cosine',
+        },
+      }),
+    }));
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Workload',
+      metadata: { name: 'api' },
+      spec: expect.objectContaining({
+        pluginConfig: expect.objectContaining({
+          bindings: expect.objectContaining({}),
+        }),
+      }),
+    }));
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Binding',
+      metadata: { name: 'semantic-index-to-api' },
+      spec: expect.objectContaining({
+        from: 'semantic-index',
+        to: 'api',
+        mount: expect.objectContaining({
+          as: 'SEARCH_INDEX',
+          type: 'vectorize',
+        }),
+      }),
+    }));
+  });
+
+  it('round-trips vectorize through takopack manifest parsing', async () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: vector-app
+spec:
+  version: 1.0.0
+  resources:
+    semantic-index:
+      type: vectorize
+      binding: SEARCH_INDEX
+      vectorize:
+        dimensions: 1536
+        metric: cosine
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        vectorize: [semantic-index]
+`);
+
+    const docs = appManifestToBundleDocs(manifest, new Map([
+      ['api', {
+        service_name: 'api',
+        workflow_path: '.takos/workflows/build.yml',
+        workflow_job: 'build-api',
+        workflow_artifact: 'api-dist',
+        artifact_path: 'dist/api.mjs',
+      }],
+    ]));
+
+    const bundleData = await buildBundlePackageData(docs, new Map([
+      ['dist/api.mjs', new TextEncoder().encode('export default {};').buffer],
+    ]));
+    const parsed = await parsePackage(bundleData);
+
+    expect(parsed.manifest.resources?.vectorize).toEqual([{
+      binding: 'SEARCH_INDEX',
+      dimensions: 1536,
+      metric: 'cosine',
+    }]);
+    expect(parsed.manifest.workers?.[0]?.bindings.vectorize).toEqual(['SEARCH_INDEX']);
   });
 });

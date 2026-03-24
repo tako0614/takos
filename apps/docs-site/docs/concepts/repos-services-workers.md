@@ -10,9 +10,9 @@ Takos は repo-local な `.takos/app.yml` と workflow artifact を使って app
 Service は internal model での実行単位です。service には少なくとも次の形があります。
 
 - worker service
-- http service
+- http-url target
 
-App は複数 service を持てます。例えば、入口の worker service と外部 HTTP backend を同じ app graph で扱えます。
+App は複数 service を持てます。現在の `.takos/app.yml` v1alpha1 では worker service を正本にしつつ、internal routing model では外部 HTTP backend への target も扱います。
 
 ## Worker
 
@@ -20,7 +20,7 @@ Worker は public surface での deployable unit です。利用者からは `wo
 
 ## route
 
-route は service への入り口です。Takos では route を通じて、worker service や http service に path を割り当てます。
+route は service への入り口です。Takos では route を通じて、主に worker service に path を割り当てます。
 
 ## なぜ Worker と Service を分けるのか
 
