@@ -142,7 +142,7 @@ export async function runLocalSmoke() {
   return {
     runId: result.id,
     status: result.status,
-    workerId: result.workerId,
+    workerId: result.serviceId,
     startedAt: result.startedAt,
     completedAt: result.completedAt,
     output: result.output,
