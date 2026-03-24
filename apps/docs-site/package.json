@@ -1,0 +1,17 @@
+{
+  "name": "@takos/docs-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs --host 0.0.0.0 --port 4173",
+    "build": "vitepress build docs",
+    "preview": "vitepress preview docs --host 0.0.0.0 --port 4173",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitepress": "^1.6.0"
+  }
+}
