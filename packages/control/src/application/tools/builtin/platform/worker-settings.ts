@@ -209,7 +209,7 @@ export const WORKER_BINDINGS_SET: ToolDefinition = {
           type: 'object',
           description: 'Resource binding',
           properties: {
-            type: { type: 'string', description: 'Binding type: d1, r2_bucket, kv_namespace, service', enum: ['d1', 'r2_bucket', 'kv_namespace', 'service'] },
+            type: { type: 'string', description: 'Binding type: d1, r2_bucket, kv_namespace, vectorize, service', enum: ['d1', 'r2_bucket', 'kv_namespace', 'vectorize', 'service'] },
             name: { type: 'string', description: 'Binding name in code (e.g., DB, STORAGE)' },
             id: { type: 'string', description: 'Resource handle (resource id, cf_id, cf_name, or resource name)' },
           },

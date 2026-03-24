@@ -25,7 +25,7 @@ spec:
 
 ## service
 
-service には 2 種類あります。
+current contract で manifest に直接定義できる service は `worker` です。
 
 ### worker service
 
@@ -53,17 +53,10 @@ worker service の重要ルール:
 - local build field は使わず、`build.fromWorkflow` を使う
 - `path` は `.takos/workflows/` 配下である必要がある
 - deploy producer job は `needs`, `strategy.matrix`, `services` を使えない
+- `bindings.vectorize` を使うと Vectorize index を tenant worker に渡せる
 
-### http service
-
-```yaml
-services:
-  payments:
-    type: http
-    baseUrl: https://payments.internal.example
-```
-
-http service は Takos の外や別 backend への接続先を表します。
+現時点の `.takos/app.yml` v1alpha1 では `http service` は public contract に含めていません。  
+Takos の internal routing model には `http-url` target がありますが、manifest surface としてはまだ予約領域です。
 
 ## resources
 
@@ -75,6 +68,12 @@ resources:
     migrations:
       up: .takos/migrations/main-db/up
       down: .takos/migrations/main-db/down
+  semantic-index:
+    type: vectorize
+    binding: SEARCH_INDEX
+    vectorize:
+      dimensions: 1536
+      metric: cosine
 ```
 
 利用できる resource type:
@@ -83,6 +82,45 @@ resources:
 - `r2`
 - `kv`
 - `secretRef`
+- `vectorize`
+
+`vectorize` は Cloudflare Vectorize index を表します。`dimensions` と `metric` を指定できます。
+
+## worker bindings
+
+```yaml
+services:
+  api:
+    type: worker
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build-api
+        artifact: api-dist
+        artifactPath: dist/api.mjs
+    bindings:
+      d1: [main-db]
+      r2: [assets]
+      kv: [cache]
+      vectorize: [semantic-index]
+      services: [search-gateway]
+```
+
+current contract で worker service に渡せる binding は次です。
+
+- `d1`
+- `r2`
+- `kv`
+- `vectorize`
+- `services`
+
+次は tenant worker の public contract にはまだ含めていません。
+
+- Durable Objects
+- Queues
+- Browser binding
+- Workers AI binding
+- Hyperdrive などの Cloudflare 固有 binding
 
 ## routes
 
@@ -101,8 +139,7 @@ routes:
 route のルール:
 
 - `service` は既知の service を指す必要がある
-- http service を route に出す場合は `ingress` が必須
-- `ingress` は worker service を指す必要がある
+- `ingress` を使う場合は worker service を指す必要がある
 
 ## mcpServers
 

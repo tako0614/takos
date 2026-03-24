@@ -9,9 +9,13 @@ type AppMetadata = {
 };
 
 type AppResource = {
-  type: 'd1' | 'r2' | 'kv' | 'secretRef';
+  type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize';
   binding?: string;
   migrations?: string | { up: string; down: string };
+  vectorize?: {
+    dimensions: number;
+    metric: 'cosine' | 'euclidean' | 'dot-product';
+  };
 };
 
 type WorkflowArtifactBuild = {
@@ -31,6 +35,7 @@ type WorkerService = {
     d1?: string[];
     r2?: string[];
     kv?: string[];
+    vectorize?: string[];
     services?: string[];
   };
 };
@@ -240,12 +245,14 @@ export function parseAppManifestYaml(raw: string): AppManifest {
           const d1 = asStringArray(bindingsRecord.d1, `spec.services.${serviceName}.bindings.d1`);
           const r2 = asStringArray(bindingsRecord.r2, `spec.services.${serviceName}.bindings.r2`);
           const kv = asStringArray(bindingsRecord.kv, `spec.services.${serviceName}.bindings.kv`);
+          const vectorize = asStringArray(bindingsRecord.vectorize, `spec.services.${serviceName}.bindings.vectorize`);
           const svc = asStringArray(bindingsRecord.services, `spec.services.${serviceName}.bindings.services`);
           return {
             bindings: {
               ...(d1 ? { d1 } : {}),
               ...(r2 ? { r2 } : {}),
               ...(kv ? { kv } : {}),
+              ...(vectorize ? { vectorize } : {}),
               ...(svc ? { services: svc } : {}),
             },
           };
@@ -262,8 +269,8 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   for (const [resourceName, resourceValue] of Object.entries(resourcesRecord)) {
     const resource = asRecord(resourceValue);
     const type = asRequiredString(resource.type, `spec.resources.${resourceName}.type`);
-    if (!['d1', 'r2', 'kv', 'secretRef'].includes(type)) {
-      throw new Error(`spec.resources.${resourceName}.type must be d1/r2/kv/secretRef`);
+    if (!['d1', 'r2', 'kv', 'secretRef', 'vectorize'].includes(type)) {
+      throw new Error(`spec.resources.${resourceName}.type must be d1/r2/kv/secretRef/vectorize`);
     }
     resources[resourceName] = {
       type: type as AppResource['type'],
@@ -276,6 +283,20 @@ export function parseAppManifestYaml(raw: string): AppManifest {
                   up: normalizeRepoPath(asRequiredString(asRecord(resource.migrations).up, `spec.resources.${resourceName}.migrations.up`)),
                   down: normalizeRepoPath(asRequiredString(asRecord(resource.migrations).down, `spec.resources.${resourceName}.migrations.down`)),
                 },
+          }
+        : {}),
+      ...(type === 'vectorize'
+        ? {
+            vectorize: {
+              dimensions: Number(asRecord(resource.vectorize).dimensions ?? 1536),
+              metric: ((() => {
+                const metric = String(asRecord(resource.vectorize).metric ?? 'cosine').trim();
+                if (!['cosine', 'euclidean', 'dot-product'].includes(metric)) {
+                  throw new Error(`spec.resources.${resourceName}.vectorize.metric must be cosine/euclidean/dot-product`);
+                }
+                return metric as 'cosine' | 'euclidean' | 'dot-product';
+              })()),
+            },
           }
         : {}),
     };
@@ -448,6 +469,7 @@ export function appManifestToBundleDocs(
       spec: {
         type: resource.type,
         ...(resource.binding ? { binding: resource.binding } : {}),
+        ...(resource.type === 'vectorize' && resource.vectorize ? { vectorize: resource.vectorize } : {}),
         ...(resource.migrations
           ? typeof resource.migrations === 'string'
             ? { migrations: resource.migrations }
@@ -475,9 +497,6 @@ export function appManifestToBundleDocs(
         pluginConfig: {
           env: service.env || {},
           bindings: {
-            d1: service.bindings?.d1 || [],
-            r2: service.bindings?.r2 || [],
-            kv: service.bindings?.kv || [],
             services: service.bindings?.services || [],
           },
         },
@@ -495,6 +514,7 @@ export function appManifestToBundleDocs(
         ...(bindingLists.d1 || []),
         ...(bindingLists.r2 || []),
         ...(bindingLists.kv || []),
+        ...(bindingLists.vectorize || []),
       ];
       if (!inBindings.includes(resourceName) || !mountType) continue;
       docs.push({

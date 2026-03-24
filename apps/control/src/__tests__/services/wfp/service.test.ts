@@ -76,6 +76,29 @@ describe('WFPService', () => {
       expect(url).toContain('/scripts/my-worker');
       expect(init.method).toBe('PUT');
     });
+
+    it('serializes vectorize bindings into worker metadata', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await svc.createWorker({
+        workerName: 'vector-worker',
+        workerScript: 'export default { fetch() { return new Response("ok"); } }',
+        bindings: [
+          { type: 'vectorize', name: 'SEARCH_INDEX', index_name: 'semantic-index' },
+        ],
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const metadataBlob = (init.body as FormData).get('metadata') as Blob;
+      const metadata = JSON.parse(await metadataBlob.text());
+      expect(metadata.bindings).toContainEqual({
+        type: 'vectorize',
+        name: 'SEARCH_INDEX',
+        index_name: 'semantic-index',
+      });
+    });
   });
 
   describe('deleteWorker', () => {

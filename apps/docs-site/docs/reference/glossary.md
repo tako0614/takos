@@ -14,7 +14,7 @@ public surface での deployable unit。
 
 ## Service
 
-internal model での実行単位。worker service と http service がある。
+internal model での実行単位。current public manifest では worker service が正本。
 
 ## Route
 

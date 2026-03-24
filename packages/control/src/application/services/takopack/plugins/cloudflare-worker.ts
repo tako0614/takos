@@ -101,10 +101,12 @@ function buildWorkerFromWorkload(
   const d1FromPlugin = readStringArray(bindingConfig.d1, 'bindings.d1');
   const r2FromPlugin = readStringArray(bindingConfig.r2, 'bindings.r2');
   const kvFromPlugin = readStringArray(bindingConfig.kv, 'bindings.kv');
+  const vectorizeFromPlugin = readStringArray(bindingConfig.vectorize, 'bindings.vectorize');
 
   const d1 = Array.from(new Set([...d1FromPlugin, ...context.bindings.d1]));
   const r2 = Array.from(new Set([...r2FromPlugin, ...context.bindings.r2]));
   const kv = Array.from(new Set([...kvFromPlugin, ...context.bindings.kv]));
+  const vectorize = Array.from(new Set([...vectorizeFromPlugin, ...context.bindings.vectorize]));
 
   return {
     name: resolveWorkerName(workload),
@@ -115,6 +117,7 @@ function buildWorkerFromWorkload(
       d1,
       r2,
       kv,
+      ...(vectorize.length > 0 ? { vectorize } : {}),
       ...(services.length > 0 ? { services } : {}),
     },
     env,
@@ -140,6 +143,7 @@ function validateWorkload(
   readStringArray(bindingConfig.d1, 'bindings.d1');
   readStringArray(bindingConfig.r2, 'bindings.r2');
   readStringArray(bindingConfig.kv, 'bindings.kv');
+  readStringArray(bindingConfig.vectorize, 'bindings.vectorize');
   readStringArray(bindingConfig.services, 'bindings.services');
   readStringMap(pluginConfig.env, 'env');
 

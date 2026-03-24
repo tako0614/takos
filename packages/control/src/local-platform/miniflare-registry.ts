@@ -438,6 +438,11 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
           case 'r2_bucket':
             if (binding.bucket_name) r2Buckets[binding.name] = binding.bucket_name;
             break;
+          case 'vectorize':
+            throw new Error(
+              `Local tenant runtime does not support vectorize bindings yet (${binding.name}). ` +
+              'Deploy on Cloudflare to use Vectorize-backed tenant workers.'
+            );
           case 'service': {
             const serviceName = binding.service || binding.name;
             serviceBindings[binding.name] = async (request: Request) => {

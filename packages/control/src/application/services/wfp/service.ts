@@ -31,12 +31,13 @@ import { logWarn } from '../../../shared/utils/logger';
 export type { AssetManifestEntry, AssetUploadFile, AssetsUploadSession, AssetsUploadCompletion } from './assets';
 
 export interface WorkerBinding {
-  type: 'plain_text' | 'secret_text' | 'd1' | 'r2_bucket' | 'kv_namespace' | 'service';
+  type: 'plain_text' | 'secret_text' | 'd1' | 'r2_bucket' | 'kv_namespace' | 'vectorize' | 'service';
   name: string;
   text?: string;
   database_id?: string;
   bucket_name?: string;
   namespace_id?: string;
+  index_name?: string;
   service?: string;
   environment?: string;
 }
@@ -50,6 +51,7 @@ export interface CloudflareBindingRecord {
   database_id?: string;
   bucket_name?: string;
   namespace_id?: string;
+  index_name?: string;
   service?: string;
   environment?: string;
 }
@@ -708,6 +710,8 @@ export class WFPService {
           return { type: 'r2_bucket', name: b.name, bucket_name: b.bucket_name };
         case 'kv_namespace':
           return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
+        case 'vectorize':
+          return { type: 'vectorize', name: b.name, index_name: b.index_name };
         case 'plain_text':
           return { type: 'plain_text', name: b.name, text: b.text };
         default:
@@ -765,6 +769,8 @@ export class WFPService {
         return { type: 'r2_bucket', name: binding.name, bucket_name: binding.bucket_name };
       case 'kv_namespace':
         return { type: 'kv_namespace', name: binding.name, namespace_id: binding.namespace_id };
+      case 'vectorize':
+        return { type: 'vectorize', name: binding.name, index_name: binding.index_name };
       case 'service':
         return { type: 'service', name: binding.name, service: binding.service, environment: binding.environment };
       default:
@@ -816,6 +822,17 @@ export class WFPService {
           name,
           ...(typeof candidate.namespace_id === 'string' ? { namespace_id: candidate.namespace_id } : {}),
         };
+      case 'vectorize':
+        if (!name) break;
+        return {
+          type: 'vectorize',
+          name,
+          ...(typeof candidate.index_name === 'string'
+            ? { index_name: candidate.index_name }
+            : typeof candidate.id === 'string'
+              ? { index_name: candidate.id }
+              : {}),
+        };
       case 'service':
         if (!name) break;
         return {
@@ -849,6 +866,7 @@ export class WFPService {
         id?: string;
         bucket_name?: string;
         namespace_id?: string;
+        index_name?: string;
       }>;
       bundleUrl?: string;
       bundleScript?: string;
@@ -882,6 +900,8 @@ export class WFPService {
         case 'kv':
         case 'kv_namespace':
           return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
+        case 'vectorize':
+          return { type: 'vectorize', name: b.name, index_name: b.index_name || b.id };
         case 'plain_text':
           return { type: 'plain_text', name: b.name, text: b.text || '' };
         case 'secret_text':

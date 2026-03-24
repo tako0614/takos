@@ -8,6 +8,7 @@ export interface ResolvedWorkloadBindings {
   d1: string[];
   r2: string[];
   kv: string[];
+  vectorize: string[];
 }
 
 export interface WorkloadPluginValidationContext {

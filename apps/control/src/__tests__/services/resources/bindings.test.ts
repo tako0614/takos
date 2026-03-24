@@ -110,7 +110,7 @@ describe('buildBindingFromResource', () => {
     expect(result).toEqual({
       type: 'vectorize',
       name: 'MY_VECTORS',
-      id: 'my-vectorize-index',
+      index_name: 'my-vectorize-index',
     });
   });
 

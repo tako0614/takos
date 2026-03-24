@@ -262,13 +262,13 @@ function buildBindingLookup(
   resources: TakopackResourceObject[],
   workloads: TakopackWorkloadObject[],
   bindings: TakopackBindingObject[]
-): Map<string, { d1: string[]; r2: string[]; kv: string[] }> {
+): Map<string, { d1: string[]; r2: string[]; kv: string[]; vectorize: string[] }> {
   const resourcesByName = new Map(resources.map((resource) => [resource.metadata.name, resource]));
   const workloadsByName = new Map(workloads.map((workload) => [workload.metadata.name, workload]));
-  const out = new Map<string, { d1: string[]; r2: string[]; kv: string[] }>();
+  const out = new Map<string, { d1: string[]; r2: string[]; kv: string[]; vectorize: string[] }>();
 
   for (const workload of workloads) {
-    out.set(workload.metadata.name, { d1: [], r2: [], kv: [] });
+    out.set(workload.metadata.name, { d1: [], r2: [], kv: [], vectorize: [] });
   }
 
   for (const binding of bindings) {
@@ -289,7 +289,7 @@ function buildBindingLookup(
     }
 
     const type = String(resource.spec.type || '').trim();
-    if (type !== 'd1' && type !== 'r2' && type !== 'kv') {
+    if (type !== 'd1' && type !== 'r2' && type !== 'kv' && type !== 'vectorize') {
       throw new Error(`Binding ${binding.metadata.name} references unsupported resource type: ${type}`);
     }
 
@@ -312,7 +312,7 @@ function buildBindingLookup(
       throw new Error(`Binding ${binding.metadata.name} references unresolved workload bindings`);
     }
 
-    const target = resolved[type as 'd1' | 'r2' | 'kv'];
+    const target = resolved[type as 'd1' | 'r2' | 'kv' | 'vectorize'];
     if (!target.includes(bindingName)) {
       target.push(bindingName);
     }
@@ -367,6 +367,7 @@ export function buildNormalizedManifest(params: {
   const resourcesD1: Array<{ binding: string; migrations?: string }> = [];
   const resourcesR2: Array<{ binding: string }> = [];
   const resourcesKV: Array<{ binding: string }> = [];
+  const resourcesVectorize: Array<{ binding: string; dimensions?: number; metric?: 'cosine' | 'euclidean' | 'dot-product' }> = [];
 
   for (const resource of resourceObjects) {
     const type = String(resource.spec.type || '').trim();
@@ -395,6 +396,24 @@ export function buildNormalizedManifest(params: {
       continue;
     }
 
+    if (type === 'vectorize') {
+      const vectorize = asRecord(resource.spec.vectorize);
+      const dimensions = vectorize.dimensions == null ? undefined : Number(vectorize.dimensions);
+      const metric = vectorize.metric == null ? undefined : String(vectorize.metric).trim();
+      if (dimensions != null && (!Number.isFinite(dimensions) || dimensions <= 0)) {
+        throw new Error(`Resource ${resource.metadata.name} spec.vectorize.dimensions must be a positive number`);
+      }
+      if (metric != null && !['cosine', 'euclidean', 'dot-product'].includes(metric)) {
+        throw new Error(`Resource ${resource.metadata.name} spec.vectorize.metric must be cosine/euclidean/dot-product`);
+      }
+      resourcesVectorize.push({
+        binding,
+        ...(dimensions != null ? { dimensions: Math.floor(dimensions) } : {}),
+        ...(metric ? { metric: metric as 'cosine' | 'euclidean' | 'dot-product' } : {}),
+      });
+      continue;
+    }
+
     throw new Error(`Unsupported Resource.spec.type for ${resource.metadata.name}: ${type}`);
   }
 
@@ -413,7 +432,7 @@ export function buildNormalizedManifest(params: {
       );
     }
 
-    const bindings = bindingLookup.get(workload.metadata.name) || { d1: [], r2: [], kv: [] };
+    const bindings = bindingLookup.get(workload.metadata.name) || { d1: [], r2: [], kv: [], vectorize: [] };
     plugin.validate(workload, {
       files: params.files,
       checksums: params.checksums,
@@ -659,12 +678,13 @@ export function buildNormalizedManifest(params: {
     },
     ...(dependencies ? { dependencies } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
-    ...((resourcesD1.length > 0 || resourcesR2.length > 0 || resourcesKV.length > 0)
+    ...((resourcesD1.length > 0 || resourcesR2.length > 0 || resourcesKV.length > 0 || resourcesVectorize.length > 0)
       ? {
           resources: {
             ...(resourcesD1.length > 0 ? { d1: resourcesD1 } : {}),
             ...(resourcesR2.length > 0 ? { r2: resourcesR2 } : {}),
             ...(resourcesKV.length > 0 ? { kv: resourcesKV } : {}),
+            ...(resourcesVectorize.length > 0 ? { vectorize: resourcesVectorize } : {}),
           },
         }
       : {}),

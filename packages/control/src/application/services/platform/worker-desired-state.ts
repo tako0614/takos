@@ -273,6 +273,13 @@ function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
         name: row.bindingName,
         namespace_id: row.resourceCfId,
       };
+    case 'vectorize':
+      if (!row.resourceCfName) return null;
+      return {
+        type: 'vectorize',
+        name: row.bindingName,
+        index_name: row.resourceCfName,
+      };
     case 'service':
       return {
         type: 'service',
@@ -747,7 +754,11 @@ export class ServiceDesiredStateService {
     return rows.map((row) => ({
       id: row.id,
       name: row.bindingName,
-      type: row.bindingType === 'r2' ? 'r2_bucket' : row.bindingType === 'kv' ? 'kv_namespace' : row.bindingType,
+      type: row.bindingType === 'r2'
+        ? 'r2_bucket'
+        : row.bindingType === 'kv'
+          ? 'kv_namespace'
+          : row.bindingType,
       resource_id: row.resourceId,
       resource_name: row.resourceName,
     }));

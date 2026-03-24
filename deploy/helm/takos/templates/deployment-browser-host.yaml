@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "takos.fullname" . }}-browser-host
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: browser-host
+spec:
+  replicas: {{ .Values.browserHost.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: browser-host
+      {{- include "takos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "takos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: browser-host
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: browser-host
+          image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
+          imagePullPolicy: {{ .Values.images.control.pullPolicy }}
+          command: ["pnpm", "local:browser-host"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.browserHost.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.browserHost.port | quote }}
+            - name: TAKOS_LOCAL_BROWSER_URL
+              value: {{ include "takos.browserUrl" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "takos.fullname" . }}-global
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.database | default (printf "%s-database" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.redis | default (printf "%s-redis" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.s3 | default (printf "%s-s3" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.auth | default (printf "%s-auth" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.llm | default (printf "%s-llm" (include "takos.fullname" .)) }}
+                optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.browserHost.resources | nindent 12 }}

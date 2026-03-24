@@ -51,7 +51,7 @@ export class TakopackWorkerService {
       const workerName = `worker-${workerId}`;
       const slug = buildWorkerSlug(params.packageName, workerConfig.name, workerId);
       const hostname = this.buildWorkerHostname(slug, params.hostnameHint, isSingleWorker);
-      const workerBindingConfig = workerConfig.bindings || { d1: [], r2: [], kv: [] };
+      const workerBindingConfig = workerConfig.bindings || { d1: [], r2: [], kv: [], vectorize: [] };
       const workerScriptBuffer = getRequiredPackageFile(
         params.files,
         workerConfig.bundle,
@@ -195,7 +195,7 @@ export class TakopackWorkerService {
 
   private async resolveManifestWorkerResourceBindings(
     spaceId: string,
-    bindings: { d1: string[]; r2: string[]; kv: string[] },
+    bindings: { d1: string[]; r2: string[]; kv: string[]; vectorize?: string[] },
     provisionedResources?: ResourceProvisionResult
   ): Promise<ResolvedWorkerResourceBinding[]> {
     const resolved: ResolvedWorkerResourceBinding[] = [];
@@ -224,6 +224,14 @@ export class TakopackWorkerService {
         toWfpBinding: (name: string, resource: { cfId?: string }) => {
           if (!resource.cfId) throw new Error(`KV resource is missing Cloudflare namespace ID: ${name}`);
           return { type: 'kv_namespace' as const, name, namespace_id: resource.cfId };
+        },
+      },
+      {
+        type: 'vectorize' as const,
+        names: bindings.vectorize || [],
+        toWfpBinding: (name: string, resource: { cfName?: string }) => {
+          if (!resource.cfName) throw new Error(`Vectorize resource is missing Cloudflare index name: ${name}`);
+          return { type: 'vectorize' as const, name, index_name: resource.cfName };
         },
       },
     ] as const;
@@ -258,7 +266,7 @@ export class TakopackWorkerService {
 
   private async resolveResourceReferenceForWorkerBinding(
     spaceId: string,
-    type: 'd1' | 'r2' | 'kv',
+    type: 'd1' | 'r2' | 'kv' | 'vectorize',
     reference: string,
     provisionedResources?: ResourceProvisionResult
   ): Promise<{ resourceId: string; cfId?: string; cfName?: string }> {
