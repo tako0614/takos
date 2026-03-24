@@ -112,7 +112,7 @@ async function waitForRunCompletion(runId: string) {
       status: runs.status,
       error: runs.error,
       output: runs.output,
-      workerId: runs.workerId,
+      serviceId: runs.serviceId,
       startedAt: runs.startedAt,
       completedAt: runs.completedAt,
     }).from(runs).where(eq(runs.id, runId)).get();
