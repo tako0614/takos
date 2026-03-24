@@ -15,7 +15,7 @@ export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' 
 
 export type RoutingStatus = 'active' | 'canary' | 'rollback' | 'archived';
 
-export type DeploymentProviderName = 'cloudflare' | 'oci';
+export type DeploymentProviderName = 'cloudflare' | 'oci' | 'ecs' | 'cloud-run' | 'kubernetes';
 
 export type DeploymentProviderRef = {
   name: DeploymentProviderName;

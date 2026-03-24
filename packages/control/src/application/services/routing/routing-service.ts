@@ -6,6 +6,7 @@ import type {
   RoutingRecord,
   RoutingTarget,
   StoredHttpEndpoint,
+  WeightedDeploymentTarget,
 } from './types';
 
 export type { RoutingBindings } from './types';
@@ -117,10 +118,17 @@ export function selectRouteRefFromRoutingTarget(
   target: RoutingTarget,
   options?: { random?: () => number }
 ): string | null {
+  return selectDeploymentTargetFromRoutingTarget(target, options)?.routeRef ?? null;
+}
+
+export function selectDeploymentTargetFromRoutingTarget(
+  target: RoutingTarget,
+  options?: { random?: () => number }
+): WeightedDeploymentTarget | null {
   if (target.type !== 'deployments') return null;
 
   const rng = options?.random ?? Math.random;
-  const candidates: Array<{ routeRef: string; weight: number }> = [];
+  const candidates: Array<WeightedDeploymentTarget & { weight: number }> = [];
 
   for (const entry of target.deployments) {
     const routeRef = typeof entry?.routeRef === 'string' && entry.routeRef.length > 0
@@ -129,7 +137,12 @@ export function selectRouteRefFromRoutingTarget(
     if (!routeRef) continue;
     const weight = coercePositiveInt(entry.weight) ?? 0;
     if (weight <= 0) continue;
-    candidates.push({ routeRef, weight });
+    candidates.push({
+      routeRef,
+      weight,
+      ...(entry.deploymentId ? { deploymentId: entry.deploymentId } : {}),
+      ...(entry.status ? { status: entry.status } : {}),
+    });
   }
 
   if (candidates.length === 0) {
@@ -138,20 +151,27 @@ export function selectRouteRefFromRoutingTarget(
       const routeRef = typeof entry?.routeRef === 'string' && entry.routeRef.length > 0
         ? entry.routeRef
         : '';
-      if (routeRef) return routeRef;
+      if (routeRef) {
+        return {
+          routeRef,
+          weight: coercePositiveInt(entry.weight) ?? 100,
+          ...(entry.deploymentId ? { deploymentId: entry.deploymentId } : {}),
+          ...(entry.status ? { status: entry.status } : {}),
+        };
+      }
     }
     return null;
   }
 
   const total = candidates.reduce((sum, c) => sum + c.weight, 0);
-  if (total <= 0) return candidates[0]?.routeRef ?? null;
+  if (total <= 0) return candidates[0] ?? null;
 
   let r = rng() * total;
   for (const c of candidates) {
     r -= c.weight;
-    if (r < 0) return c.routeRef;
+    if (r < 0) return c;
   }
-  return candidates[candidates.length - 1]?.routeRef ?? null;
+  return candidates[candidates.length - 1] ?? null;
 }
 
 /**

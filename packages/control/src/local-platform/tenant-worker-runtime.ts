@@ -12,7 +12,7 @@ export type TenantWorkerRuntimeFactoryOptions = {
 };
 
 export type TenantWorkerRuntimeRegistry = {
-  get(name: string): Fetcher;
+  get(name: string, options?: { deploymentId?: string }): Fetcher;
   dispose(): Promise<void>;
 };
 
@@ -58,24 +58,22 @@ export async function createLocalTenantWorkerRuntimeRegistry(
   };
 
   return {
-    get(name: string): Fetcher {
-      const cached = fetchers.get(name);
+    get(name: string, options?: { deploymentId?: string }): Fetcher {
+      const cacheKey = `${name}:${options?.deploymentId ?? ''}`;
+      const cached = fetchers.get(cacheKey);
       if (cached) return cached;
 
       const lazyFetcher = {
-        async fetch(input: string | Request, init?: RequestInit): Promise<Response> {
+        async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
           const registry = await loadRegistry();
-          const fetcher = registry.get(name) as unknown as {
-            fetch(request: string | Request, init?: RequestInit): Promise<Response>;
-          };
-          return fetcher.fetch(input, init);
+          return registry.get(name, options).fetch(input as never, init as never) as unknown as Promise<Response>;
         },
         connect(): never {
           throw new Error('connect() is not supported by the local tenant runtime registry');
         },
       } as unknown as Fetcher;
 
-      fetchers.set(name, lazyFetcher);
+      fetchers.set(cacheKey, lazyFetcher);
       return lazyFetcher;
     },
     async dispose(): Promise<void> {

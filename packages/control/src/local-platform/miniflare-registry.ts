@@ -138,8 +138,46 @@ async function decryptEnvVarSnapshot(
 async function resolveDeploymentRuntime(
   dbBinding: D1Database,
   workerRef: string,
+  options?: { deploymentId?: string },
 ): Promise<DeploymentRuntimeRecord | null> {
   const db = getDb(dbBinding);
+  if (options?.deploymentId) {
+    const byDeploymentId = await db.select({
+      id: deployments.id,
+      serviceId: deployments.serviceId,
+      routeRef: services.routeRef,
+      artifactRef: deployments.artifactRef,
+      bundleR2Key: deployments.bundleR2Key,
+      wasmR2Key: deployments.wasmR2Key,
+      runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+      bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+      envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+    })
+      .from(deployments)
+      .innerJoin(services, eq(services.id, deployments.serviceId))
+      .where(and(
+        eq(deployments.id, options.deploymentId),
+        inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
+      ))
+      .get();
+
+    if (byDeploymentId?.artifactRef && byDeploymentId.bundleR2Key) {
+      return {
+        id: byDeploymentId.id,
+        serviceId: byDeploymentId.serviceId,
+        routeRef: byDeploymentId.routeRef ?? workerRef,
+        artifactRef: byDeploymentId.artifactRef,
+        bundleR2Key: byDeploymentId.bundleR2Key,
+        wasmR2Key: byDeploymentId.wasmR2Key,
+        runtimeConfigSnapshotJson: byDeploymentId.runtimeConfigSnapshotJson,
+        bindingsSnapshotEncrypted: byDeploymentId.bindingsSnapshotEncrypted,
+        envVarsSnapshotEncrypted: byDeploymentId.envVarsSnapshotEncrypted,
+      };
+    }
+
+    return null;
+  }
+
   const byArtifact = await db.select({
     id: deployments.id,
     serviceId: deployments.serviceId,
@@ -222,10 +260,16 @@ async function resolveDeploymentRuntime(
     .orderBy(desc(deployments.version))
     .all();
 
-  const matchedDeployment = candidateDeployments.find((deployment) => {
+  const matchedDeployments = candidateDeployments.filter((deployment) => {
     const deploymentRouteRef = parseDeploymentRouteRef(deployment.targetJson);
     return deploymentRouteRef === workerRef;
   });
+
+  if (matchedDeployments.length > 1) {
+    throw new Error(`Ambiguous local tenant route ref: ${workerRef}`);
+  }
+
+  const matchedDeployment = matchedDeployments[0];
 
   if (!matchedDeployment?.artifactRef || !matchedDeployment.bundleR2Key) return null;
   return {
@@ -305,7 +349,7 @@ function normalizeFetcherInput(
 }
 
 export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorkerRegistryOptions): Promise<{
-  get(name: string): Fetcher;
+  get(name: string, registryOptions?: { deploymentId?: string }): Fetcher;
   dispose(): Promise<void>;
 }> {
   const miniflareModule = await import('miniflare');
@@ -320,10 +364,10 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
   };
 
   const registry = {
-    get(name: string): Fetcher {
+    get(name: string, registryOptions?: { deploymentId?: string }): Fetcher {
       const lazyFetcher = {
         async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-          const resolved = await getOrCreateWorker(name);
+          const resolved = await getOrCreateWorker(name, registryOptions);
           const [normalizedInput, normalizedInit] = normalizeFetcherInput(input, init);
           return resolved.fetcher.fetch(
             normalizedInput as never,
@@ -347,10 +391,13 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
     },
   };
 
-  async function getOrCreateWorker(workerRef: string): Promise<ResolvedTenantWorker> {
-    const deployment = await resolveDeploymentRuntime(options.db, workerRef);
+  async function getOrCreateWorker(
+    workerRef: string,
+    registryOptions?: { deploymentId?: string },
+  ): Promise<ResolvedTenantWorker> {
+    const deployment = await resolveDeploymentRuntime(options.db, workerRef, registryOptions);
     if (!deployment) {
-      throw new Error(`Worker not found: ${workerRef}`);
+      throw new Error(`Worker not found: ${workerRef}${registryOptions?.deploymentId ? ` (${registryOptions.deploymentId})` : ''}`);
     }
 
     const cacheKey = deployment.id;

@@ -32,6 +32,7 @@ Takos の deployment target endpoint は次です。
 
 tenant の canonical worker path は `service-ref` です。  
 `http-url` は外部 service や OCI 系 backend のための target であり、tenant worker の正本 path ではありません。
+weighted rollout では stable な `service-ref` でも deployment identity を保持し、active/canary/rollback を区別します。
 
 ## routing status
 

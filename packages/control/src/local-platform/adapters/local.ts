@@ -34,7 +34,12 @@ import {
 type RoutingRecordInput =
   | {
       type?: 'deployments' | 'http-endpoint-set';
-      deployments?: Array<{ routeRef: string; weight?: number; status?: 'active' | 'canary' | 'rollback' }>;
+      deployments?: Array<{
+        routeRef: string;
+        weight?: number;
+        deploymentId?: string;
+        status?: 'active' | 'canary' | 'rollback';
+      }>;
       endpoints?: Array<{
         name: string;
         routes: Array<{ pathPrefix?: string; methods?: string[] }>;
@@ -178,6 +183,7 @@ async function ensureRoutingSeeded(): Promise<void> {
       : { type: 'deployments' as const, deployments: (value.deployments ?? []).map((deployment) => ({
         routeRef: deployment.routeRef,
         weight: deployment.weight ?? 100,
+        ...(deployment.deploymentId ? { deploymentId: deployment.deploymentId } : {}),
         status: deployment.status ?? 'active',
       })) };
     await shared.routingStore.putRecord(hostname, target, Date.now());
@@ -252,12 +258,12 @@ function createStrictLocalServiceRegistry(
   tenantWorkerRuntimeRegistry: TenantWorkerRuntimeRegistry,
 ): DispatchEnv['DISPATCHER'] {
   return {
-    get(name: string): ServiceBindingFetcher {
+    get(name: string, options?: { deploymentId?: string }): ServiceBindingFetcher {
       const target = forwardTargets[name];
       if (target) {
         return createForwardingFetcher(target);
       }
-      return tenantWorkerRuntimeRegistry.get(name) as unknown as ServiceBindingFetcher;
+      return tenantWorkerRuntimeRegistry.get(name, options) as unknown as ServiceBindingFetcher;
     },
   } as unknown as DispatchEnv['DISPATCHER'];
 }

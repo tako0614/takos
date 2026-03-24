@@ -1,0 +1,316 @@
+## -----------------------------------------------------------------
+## Global settings
+## -----------------------------------------------------------------
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## -----------------------------------------------------------------
+## Domain configuration
+## -----------------------------------------------------------------
+domains:
+  admin: "admin.takos.example.com"
+  tenantBase: "app.takos.example.com"
+
+## -----------------------------------------------------------------
+## Container images
+## -----------------------------------------------------------------
+images:
+  control:
+    repository: takos/control
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  runtime:
+    repository: takos/runtime
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  executor:
+    repository: takos/executor
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  browser:
+    repository: takos/browser
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+## -----------------------------------------------------------------
+## Control plane - Web (HTTP API)
+## -----------------------------------------------------------------
+controlWeb:
+  replicaCount: 2
+  port: 8787
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+## -----------------------------------------------------------------
+## Control plane - Dispatch
+## -----------------------------------------------------------------
+controlDispatch:
+  replicaCount: 2
+  port: 8788
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## Control plane - Worker
+## -----------------------------------------------------------------
+controlWorker:
+  replicaCount: 1
+  pollIntervalMs: 250
+  scheduledIntervalMs: 60000
+  heartbeatTtlMs: 120000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+## -----------------------------------------------------------------
+## Runtime host (manages runtime pods)
+## -----------------------------------------------------------------
+runtimeHost:
+  replicaCount: 1
+  port: 8789
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## Executor host (manages executor pods)
+## -----------------------------------------------------------------
+executorHost:
+  replicaCount: 1
+  port: 8790
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## Browser host (manages browser pods)
+## -----------------------------------------------------------------
+browserHost:
+  replicaCount: 1
+  port: 8791
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## OCI Orchestrator
+## -----------------------------------------------------------------
+ociOrchestrator:
+  replicaCount: 1
+  port: 9002
+  persistence:
+    enabled: true
+    size: 1Gi
+
+## -----------------------------------------------------------------
+## Runtime (agent runtime workloads)
+## -----------------------------------------------------------------
+runtime:
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+## -----------------------------------------------------------------
+## Executor (code execution workloads)
+## -----------------------------------------------------------------
+executor:
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+## -----------------------------------------------------------------
+## Browser (headless browser workloads)
+## -----------------------------------------------------------------
+browser:
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 60
+
+## -----------------------------------------------------------------
+## Secrets
+## -----------------------------------------------------------------
+secrets:
+  create: true
+
+  ## Use existing secrets instead of creating new ones.
+  ## When set, the chart will reference these secret names directly.
+  existingSecrets:
+    platform: ""
+    auth: ""
+    encryption: ""
+    llm: ""
+    database: ""
+    redis: ""
+    s3: ""
+
+  ## Values used when secrets.create is true.
+  ## In production, use existingSecrets or an external secrets operator.
+  platformPrivateKey: ""
+  platformPublicKey: ""
+  encryptionKey: ""
+  googleClientId: ""
+  googleClientSecret: ""
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  googleApiKey: ""
+  ociOrchestratorToken: ""
+
+## -----------------------------------------------------------------
+## External database (used when postgresql.enabled is false)
+## -----------------------------------------------------------------
+externalDatabase:
+  host: ""
+  port: 5432
+  database: "takos"
+  username: "takos"
+  password: ""
+  url: ""
+
+## -----------------------------------------------------------------
+## External Redis (used when redis.enabled is false)
+## -----------------------------------------------------------------
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+  url: ""
+
+## -----------------------------------------------------------------
+## External S3 (used when minio.enabled is false)
+## -----------------------------------------------------------------
+externalS3:
+  endpoint: ""
+  region: "us-east-1"
+  bucket: "takos-tenant-source"
+  accessKeyId: ""
+  secretAccessKey: ""
+
+## -----------------------------------------------------------------
+## Bitnami PostgreSQL subchart
+## -----------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    username: takos
+    password: takos
+    database: takos
+  primary:
+    persistence:
+      size: 10Gi
+
+## -----------------------------------------------------------------
+## Bitnami Redis subchart
+## -----------------------------------------------------------------
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 2Gi
+
+## -----------------------------------------------------------------
+## Bitnami MinIO subchart
+## -----------------------------------------------------------------
+minio:
+  enabled: true
+  auth:
+    rootUser: takos
+    rootPassword: takos-dev-secret
+  defaultBuckets: "takos-tenant-source"
+  persistence:
+    size: 10Gi
+
+## -----------------------------------------------------------------
+## Ingress
+## -----------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  tls:
+    enabled: true
+    secretName: "takos-tls"
+    clusterIssuer: ""
+
+## -----------------------------------------------------------------
+## Service Account
+## -----------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+## -----------------------------------------------------------------
+## Pod Security Context
+## -----------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+
+## -----------------------------------------------------------------
+## Network Policy
+## -----------------------------------------------------------------
+networkPolicy:
+  enabled: false

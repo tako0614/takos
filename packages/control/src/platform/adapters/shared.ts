@@ -1,29 +1,18 @@
 import {
-  resolveHostnameRouting,
+  selectDeploymentTargetFromRoutingTarget,
   selectRouteRefFromHttpEndpointSet,
   selectRouteRefFromRoutingTarget,
 } from '../../application/services/routing/index.ts';
-import type { RoutingBindings, RoutingStore, RoutingTarget } from '../../application/services/routing/types.ts';
+import type { RoutingStore, RoutingTarget } from '../../application/services/routing/types.ts';
 import type {
   ControlPlatform,
   PlatformConfig,
   PlatformDeployProviderConfig,
   PlatformDeployProviderRegistry,
-  PlatformObjects,
-  PlatformQueues,
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
 } from '../types.ts';
-import type {
-  AiBinding,
-  DurableNamespaceBinding,
-  KvStoreBinding,
-  ObjectStoreBinding,
-  QueueBinding,
-  SqlDatabaseBinding,
-  VectorIndexBinding,
-} from '../../shared/types/bindings.ts';
 
 type PlatformConfigInput = {
   adminDomain?: string;
@@ -38,28 +27,20 @@ type PlatformConfigInput = {
 };
 
 type PlatformServiceInputs = {
-  routingBindings: RoutingBindings;
-  sqlBinding?: SqlDatabaseBinding;
+  routing: PlatformServices['routing'];
+  sqlBinding?: NonNullable<PlatformServices['sql']>['binding'];
   routingStore?: RoutingStore;
-  hostnameRouting?: KvStoreBinding;
-  queues?: PlatformQueues;
-  objects?: PlatformObjects;
+  hostnameRouting?: PlatformServices['hostnameRouting'];
+  queues?: PlatformServices['queues'];
+  objects?: PlatformServices['objects'];
   notifications?: PlatformServices['notifications'];
   locks?: PlatformServices['locks'];
   hosts?: PlatformServices['hosts'];
-  ai?: {
-    binding?: AiBinding;
-    vectorize?: VectorIndexBinding;
-    openAiApiKey?: string;
-    anthropicApiKey?: string;
-    googleApiKey?: string;
-  };
-  assets?: {
-    binding?: PlatformServiceBinding;
-  };
+  ai?: PlatformServices['ai'];
+  assets?: PlatformServices['assets'];
   documents?: PlatformServices['documents'];
   serviceRegistry?: {
-    get(name: string): PlatformServiceBinding;
+    get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
   deploymentProviders?: PlatformDeployProviderRegistry;
 };
@@ -97,22 +78,26 @@ export function createDeploymentProviderRegistry(
   };
 }
 
-export function createRoutingService(bindings: RoutingBindings): PlatformServices['routing'] {
-  const selectRouteRef = (target: RoutingTarget, pathname: string, method: string) => {
+export function createRoutingService(options: {
+  resolveHostname: PlatformServices['routing']['resolveHostname'];
+}): PlatformServices['routing'] {
+  const selectDeploymentTarget = (target: RoutingTarget, pathname: string, method: string) => {
     if (target.type === 'http-endpoint-set') {
-      return selectRouteRefFromHttpEndpointSet(target.endpoints, pathname, method);
+      const routeRef = selectRouteRefFromHttpEndpointSet(target.endpoints, pathname, method);
+      return routeRef ? { routeRef, weight: 100, status: 'active' as const } : null;
     }
-    return selectRouteRefFromRoutingTarget(target);
+    return selectDeploymentTargetFromRoutingTarget(target);
+  };
+  const selectRouteRef = (target: RoutingTarget, pathname: string, method: string) => {
+    return selectDeploymentTarget(target, pathname, method)?.routeRef
+      ?? (target.type === 'http-endpoint-set'
+        ? selectRouteRefFromHttpEndpointSet(target.endpoints, pathname, method)
+        : selectRouteRefFromRoutingTarget(target));
   };
 
   return {
-    resolveHostname(hostname, executionContext) {
-      return resolveHostnameRouting({
-        env: bindings,
-        hostname,
-        executionCtx: executionContext,
-      });
-    },
+    resolveHostname: options.resolveHostname,
+    selectDeploymentTarget,
     selectRouteRef,
   };
 }
@@ -122,7 +107,7 @@ export function createPlatformServices(input: PlatformServiceInputs): PlatformSe
     sql: {
       binding: input.sqlBinding,
     },
-    routing: createRoutingService(input.routingBindings),
+    routing: input.routing,
     routingStore: input.routingStore,
     hostnameRouting: input.hostnameRouting,
     queues: input.queues ?? {},

@@ -18,7 +18,11 @@ describe('platform adapters', () => {
         tenantBaseDomain: minimalBindings.TENANT_BASE_DOMAIN,
       }),
       createPlatformServices({
-        routingBindings: {},
+        routing: {
+          resolveHostname: async () => ({ target: null, tombstone: false, source: 'store' }),
+          selectDeploymentTarget: () => null,
+          selectRouteRef: () => null,
+        },
       }),
     );
 
