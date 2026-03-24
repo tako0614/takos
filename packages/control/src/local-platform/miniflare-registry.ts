@@ -12,7 +12,7 @@ import { createForwardingFetcher, type ServiceTargetMap } from './url-registry.t
 
 type FetcherLike = Fetcher;
 
-type DebugTenantWorkerRegistryOptions = {
+type LocalTenantWorkerRegistryOptions = {
   db: D1Database;
   workerBundles?: R2Bucket;
   encryptionKey?: string;
@@ -240,7 +240,7 @@ function normalizeFetcherInput(
   return [input, init];
 }
 
-export async function createDebugTenantRuntimeRegistry(options: DebugTenantWorkerRegistryOptions): Promise<{
+export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorkerRegistryOptions): Promise<{
   get(name: string): Fetcher;
   dispose(): Promise<void>;
 }> {

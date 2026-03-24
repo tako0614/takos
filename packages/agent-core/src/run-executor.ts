@@ -196,7 +196,8 @@ async function markRunFailedFromExecutor(
   controlRpc: ControlRpcClient,
   payload: {
     runId: string;
-    workerId: string;
+    serviceId?: string;
+    workerId?: string;
     leaseVersion?: number;
     error: string;
   },

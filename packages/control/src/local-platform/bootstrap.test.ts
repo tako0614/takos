@@ -56,7 +56,6 @@ import { services } from ${JSON.stringify(servicesSchemaModuleUrl)};
 async function main() {
   process.env.ADMIN_DOMAIN = 'admin.local';
   process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-  process.env.TAKOS_LOCAL_DEBUG_TENANT_RUNTIME = 'miniflare';
   process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
     'hello.local': {
       type: 'deployments',
@@ -173,7 +172,6 @@ describe('local bootstrap', () => {
     TAKOS_LOCAL_RUNTIME_URL: process.env.TAKOS_LOCAL_RUNTIME_URL,
     TAKOS_LOCAL_EXECUTOR_URL: process.env.TAKOS_LOCAL_EXECUTOR_URL,
     TAKOS_LOCAL_BROWSER_URL: process.env.TAKOS_LOCAL_BROWSER_URL,
-    TAKOS_LOCAL_DEBUG_TENANT_RUNTIME: process.env.TAKOS_LOCAL_DEBUG_TENANT_RUNTIME,
   };
   let tempDataDir: string | null = null;
 
@@ -185,7 +183,6 @@ describe('local bootstrap', () => {
     delete process.env.TAKOS_LOCAL_RUNTIME_URL;
     delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
     delete process.env.TAKOS_LOCAL_BROWSER_URL;
-    delete process.env.TAKOS_LOCAL_DEBUG_TENANT_RUNTIME;
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
     process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
     await clearLocalPlatformDataForTests();
@@ -348,7 +345,7 @@ describe('local bootstrap', () => {
     });
   });
 
-  it('does not materialize tenant workers by default when no URL target is configured', async () => {
+  it('materializes tenant workers by default when no URL target is configured', async () => {
     process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
       'hello.local': {
         type: 'deployments',
@@ -384,15 +381,28 @@ describe('local bootstrap', () => {
       routingStatus: 'active',
       routingWeight: 100,
     }).run();
+    await env.WORKER_BUNDLES?.put('deployments/worker-demo/1/bundle.js', `
+      export default {
+        async fetch(request) {
+          return new Response(JSON.stringify({
+            ok: true,
+            worker: 'worker-demo-v1',
+            path: new URL(request.url).pathname
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    `);
 
     const fetch = await createLocalDispatchFetchForTests();
     const response = await fetch(new Request('http://hello.local/api/demo'));
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      error: 'Tenant worker not found',
-      message: 'The tenant worker may be provisioning or has been deleted',
+      ok: true,
       worker: 'worker-demo-v1',
+      path: '/api/demo',
     });
   });
 

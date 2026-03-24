@@ -340,7 +340,7 @@ describe('platform architecture contract', () => {
   it('keeps canonical local runtime on explicit local runtime host handlers', () => {
     const localRuntime = read('src/local-platform/runtime.ts');
     const localAdapter = read('src/local-platform/adapters/local.ts');
-    const localDebugTenantRuntime = read('src/local-platform/debug-tenant-runtime.ts');
+    const localTenantRuntime = read('src/local-platform/tenant-worker-runtime.ts');
 
     expect(localRuntime).not.toContain("@takos/control-hosts/executor-host");
     expect(localRuntime).not.toContain("@takos/control-hosts/runtime-host");
@@ -349,8 +349,9 @@ describe('platform architecture contract', () => {
     expect(localRuntime).not.toContain("../runtime/container-hosts/executor-host.ts");
     expect(localRuntime).not.toContain("../runtime/container-hosts/browser-session-host.ts");
 
-    expect(localAdapter).toContain("from '../debug-tenant-runtime.ts'");
+    expect(localAdapter).toContain("from '../tenant-worker-runtime.ts'");
     expect(localAdapter).not.toContain("from '../miniflare-registry.ts'");
-    expect(localDebugTenantRuntime).toContain("import('./tenant-worker-runtime.ts')");
+    expect(localTenantRuntime).toContain("import('./miniflare-registry.ts')");
+    expect(localTenantRuntime).not.toContain('TAKOS_LOCAL_DEBUG_TENANT_RUNTIME');
   });
 });

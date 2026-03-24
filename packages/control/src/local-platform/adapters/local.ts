@@ -23,8 +23,10 @@ import { LOCAL_QUEUE_NAMES } from '../queue-runtime.ts';
 import { createInMemoryRoutingStore, createPersistentRoutingStore } from '../routing-store.ts';
 import { createRedisQueue, createRedisRoutingStore, disposeRedisClient } from '../redis-bindings.ts';
 import { createFetcherRegistry, parseServiceTargetMap } from '../url-registry.ts';
-import type { TenantWorkerRuntimeRegistry } from '../tenant-worker-runtime.ts';
-import { createLocalDebugTenantWorkerRuntimeRegistry } from '../debug-tenant-runtime.ts';
+import {
+  createLocalTenantWorkerRuntimeRegistry,
+  type TenantWorkerRuntimeRegistry,
+} from '../tenant-worker-runtime.ts';
 type RoutingRecordInput =
   | {
       type?: 'deployments' | 'http-endpoint-set';
@@ -221,21 +223,6 @@ function buildBaseConfig() {
   } as const;
 }
 
-function createMissingTenantWorkerFetcher(name: string): ServiceBindingFetcher {
-  return {
-    async fetch(): Promise<Response> {
-      return Response.json({
-        error: 'Tenant worker not found',
-        message: 'The tenant worker may be provisioning or has been deleted',
-        worker: name,
-      }, { status: 503 });
-    },
-    connect(): never {
-      throw new Error(`Tenant worker not found: ${name}`);
-    },
-  } as unknown as ServiceBindingFetcher;
-}
-
 export async function createTakosWebEnv(): Promise<Env> {
   await ensureRoutingSeeded();
   const config = buildBaseConfig();
@@ -313,20 +300,14 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
     ...implicitTargets,
     ...targets,
   };
-  const tenantWorkerRuntimeRegistry = await createLocalDebugTenantWorkerRuntimeRegistry({
+  const tenantWorkerRuntimeRegistry = await createLocalTenantWorkerRuntimeRegistry({
     dataDir: shared.dataDir,
     db: shared.db,
     workerBundles: shared.workerBundles,
     encryptionKey: config.ENCRYPTION_KEY,
     serviceTargets,
   });
-  if (tenantWorkerRuntimeRegistry) {
-    dispatchRegistries.add(tenantWorkerRuntimeRegistry);
-  }
-
-  const tenantDispatcherFallback: (name: string) => ServiceBindingFetcher = tenantWorkerRuntimeRegistry
-    ? (name) => tenantWorkerRuntimeRegistry.get(name) as ServiceBindingFetcher
-    : createMissingTenantWorkerFetcher;
+  dispatchRegistries.add(tenantWorkerRuntimeRegistry);
 
   return {
     HOSTNAME_ROUTING: shared.hostnameRouting,
@@ -336,7 +317,7 @@ export async function createTakosDispatchEnv(): Promise<DispatchEnv> {
     ADMIN_DOMAIN: config.ADMIN_DOMAIN,
     DISPATCHER: createFetcherRegistry(
       serviceTargets,
-      tenantDispatcherFallback,
+      (name) => tenantWorkerRuntimeRegistry.get(name) as ServiceBindingFetcher,
     ) as unknown as DispatchEnv['DISPATCHER'],
   };
 }

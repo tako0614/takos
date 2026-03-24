@@ -16,21 +16,13 @@ export type TenantWorkerRuntimeRegistry = {
   dispose(): Promise<void>;
 };
 
-export type DebugTenantWorkerRuntimeFactoryOptions = {
+export type LocalTenantWorkerRuntimeFactoryOptions = {
   dataDir?: string | null;
-  debugRuntimeMode?: string | null;
 } & Omit<TenantWorkerRuntimeFactoryOptions, 'bundleCacheRoot' | 'persistRoot'>;
 
-type DebugRuntimeRegistryModule = typeof import('./miniflare-registry.ts');
+type LocalRuntimeRegistryModule = typeof import('./miniflare-registry.ts');
 
-function resolveDebugTenantRuntimeMode(explicitMode?: string | null): 'miniflare' | null {
-  const rawMode = explicitMode
-    ?? process.env.TAKOS_LOCAL_DEBUG_TENANT_RUNTIME
-    ?? '';
-  return rawMode.trim().toLowerCase() === 'miniflare' ? 'miniflare' : null;
-}
-
-function resolveDebugPersistenceRoots(dataDir?: string | null) {
+function resolveLocalPersistenceRoots(dataDir?: string | null) {
   if (!dataDir) {
     return {
       bundleCacheRoot: null,
@@ -39,19 +31,15 @@ function resolveDebugPersistenceRoots(dataDir?: string | null) {
   }
 
   return {
-    bundleCacheRoot: path.join(dataDir, 'debug', 'miniflare', 'bundles'),
-    persistRoot: path.join(dataDir, 'debug', 'miniflare', 'state'),
+    bundleCacheRoot: path.join(dataDir, 'tenant-runtime', 'bundles'),
+    persistRoot: path.join(dataDir, 'tenant-runtime', 'state'),
   };
 }
 
-export async function createDebugTenantWorkerRuntimeRegistry(
-  options: DebugTenantWorkerRuntimeFactoryOptions,
-): Promise<TenantWorkerRuntimeRegistry | null> {
-  if (resolveDebugTenantRuntimeMode(options.debugRuntimeMode) !== 'miniflare') {
-    return null;
-  }
-
-  const { bundleCacheRoot, persistRoot } = resolveDebugPersistenceRoots(options.dataDir);
+export async function createLocalTenantWorkerRuntimeRegistry(
+  options: LocalTenantWorkerRuntimeFactoryOptions,
+): Promise<TenantWorkerRuntimeRegistry> {
+  const { bundleCacheRoot, persistRoot } = resolveLocalPersistenceRoots(options.dataDir);
   const registryOptions: TenantWorkerRuntimeFactoryOptions = {
     ...options,
     bundleCacheRoot,
@@ -63,8 +51,8 @@ export async function createDebugTenantWorkerRuntimeRegistry(
 
   const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> => {
     if (!registryPromise) {
-      const module = await import('./miniflare-registry.ts') as DebugRuntimeRegistryModule;
-      registryPromise = module.createDebugTenantRuntimeRegistry(registryOptions);
+      const module = await import('./miniflare-registry.ts') as LocalRuntimeRegistryModule;
+      registryPromise = module.createLocalTenantRuntimeRegistry(registryOptions);
     }
     return registryPromise;
   };
