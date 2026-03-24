@@ -1,6 +1,7 @@
 export interface AgentExecutorDispatchPayload {
   runId: string;
   workerId: string;
+  serviceId?: string;
   model?: string;
   leaseVersion?: number;
 }
@@ -36,6 +37,8 @@ export async function dispatchAgentExecutorStart(
 
   const startPayload: AgentExecutorStartPayload = {
     ...body,
+    workerId: body.workerId || body.serviceId || '',
+    serviceId: body.serviceId || body.workerId,
     ...controlConfig,
   };
 

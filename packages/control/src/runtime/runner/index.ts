@@ -196,6 +196,7 @@ export default {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 runId,
+                serviceId,
                 workerId: serviceId,
                 model,
                 leaseVersion,
