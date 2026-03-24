@@ -81,7 +81,7 @@ describe('local public runtime contract', () => {
     const tenantRuntime = await read('local-platform/tenant-worker-runtime.ts', sourcePackageRoot);
     const servicesSchema = await read('infra/db/schema-services.ts', sourcePackageRoot);
 
-    expect(localAdapter).toContain("import('../debug-tenant-runtime.ts')");
+    expect(localAdapter).toContain("from '../debug-tenant-runtime.ts'");
     expect(localAdapter).toContain('createLocalDebugTenantWorkerRuntimeRegistry');
     expect(localAdapter).not.toContain("path.join(shared.dataDir, 'miniflare'");
     expect(localAdapter).not.toContain('miniflare-registry');

@@ -349,7 +349,7 @@ describe('platform architecture contract', () => {
     expect(localRuntime).not.toContain("../runtime/container-hosts/executor-host.ts");
     expect(localRuntime).not.toContain("../runtime/container-hosts/browser-session-host.ts");
 
-    expect(localAdapter).toContain("import('../debug-tenant-runtime.ts')");
+    expect(localAdapter).toContain("from '../debug-tenant-runtime.ts'");
     expect(localAdapter).not.toContain("from '../miniflare-registry.ts'");
     expect(localDebugTenantRuntime).toContain("import('./tenant-worker-runtime.ts')");
   });
