@@ -1,0 +1,28 @@
+{
+  "name": "@takos/control-hosts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/containers": "^0.1.1",
+    "@takos/actions-engine": "workspace:*",
+    "@takos/common": "workspace:*",
+    "@takos/cloudflare-compat": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.7.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./container-runtime": "./src/container-runtime.ts",
+    "./runtime-host": "./src/runtime-host.ts",
+    "./executor-host": "./src/executor-host.ts",
+    "./browser-host": "./src/browser-host.ts",
+    "./browser-session-types": "./src/browser-session-types.ts",
+    "./executor-dispatch": "./src/executor-dispatch.ts",
+    "./executor-proxy-config": "./src/executor-proxy-config.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "package.json"
+  ]
+}

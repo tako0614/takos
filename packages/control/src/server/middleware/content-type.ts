@@ -1,0 +1,59 @@
+import type { Context, MiddlewareHandler } from 'hono';
+
+type ContentTypeOptions = {
+  allowedTypes?: string[];
+  allowEmptyBody?: boolean;
+};
+
+const DEFAULT_ALLOWED_TYPES = ['application/json'];
+
+export function validateContentType(options: ContentTypeOptions = {}): MiddlewareHandler {
+  const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
+  const allowEmptyBody = options.allowEmptyBody ?? true;
+
+  return async (c: Context, next) => {
+    const method = c.req.method;
+
+    if (!['POST', 'PUT', 'PATCH'].includes(method)) {
+      await next();
+      return;
+    }
+
+    const contentType = c.req.header('Content-Type');
+    const contentLength = c.req.header('Content-Length');
+
+    if (allowEmptyBody && (!contentLength || contentLength === '0')) {
+      await next();
+      return;
+    }
+
+    if (!contentType) {
+      return c.json({
+        error: 'Missing Content-Type header',
+        code: 'MISSING_CONTENT_TYPE'
+      }, 415);
+    }
+
+    const baseContentType = contentType.split(';')[0].trim().toLowerCase();
+
+    const isAllowed = allowedTypes.some(allowed => {
+      const normalizedAllowed = allowed.toLowerCase();
+      if (normalizedAllowed.endsWith('/*')) {
+        const prefix = normalizedAllowed.slice(0, -2);
+        return baseContentType.startsWith(prefix + '/');
+      }
+      return baseContentType === normalizedAllowed;
+    });
+
+    if (!isAllowed) {
+      return c.json({
+        error: `Unsupported Content-Type: ${baseContentType}`,
+        code: 'UNSUPPORTED_CONTENT_TYPE',
+        allowed: allowedTypes
+      }, 415);
+    }
+
+    await next();
+  };
+}
+

@@ -1,0 +1,290 @@
+## OSS-safe deployment template.
+## Replace placeholder domains, account IDs, namespace IDs, and resource IDs
+## before deploying.
+
+name = "takos"
+main = "src/web.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+
+[observability]
+enabled = true
+
+[vars]
+# Non-sensitive configuration only
+ADMIN_DOMAIN = "admin.example.com"
+TENANT_BASE_DOMAIN = "app.example.com"
+GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+# RoutingDO rollout phase (1-4). Default is 1 when unset.
+ROUTING_DO_PHASE = "4"
+WFP_DISPATCH_NAMESPACE = "your-dispatch-namespace"
+CF_ACCOUNT_ID = "replace-with-account-id"
+CF_ZONE_ID = "replace-with-zone-id"
+
+[triggers]
+crons = ["3,18,33,48 * * * *", "5 * * * *"]
+
+# IMPORTANT: The following sensitive values must be set via `wrangler secret put`:
+# - GOOGLE_CLIENT_SECRET: OAuth client secret for Google authentication (required)
+# Static assets (routed through Worker for hostname-based routing)
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "takos-control-db"
+database_id = "replace-with-d1-database-id"
+migrations_dir = "db/migrations"
+
+# KV for hostname routing
+[[kv_namespaces]]
+binding = "HOSTNAME_ROUTING"
+id = "replace-with-kv-namespace-id"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+[[durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+
+[[durable_objects.bindings]]
+name = "NOTIFICATION_NOTIFIER"
+class_name = "NotificationNotifierDO"
+
+# Distributed rate limiting (optional - falls back to in-memory if not configured)
+[[durable_objects.bindings]]
+name = "RATE_LIMITER_DO"
+class_name = "RateLimiterDO"
+
+[[durable_objects.bindings]]
+name = "ROUTING_DO"
+class_name = "RoutingDO"
+
+[[durable_objects.bindings]]
+name = "GIT_PUSH_LOCK"
+class_name = "GitPushLockDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["RunNotifierDO"]
+
+[[migrations]]
+tag = "v3"
+new_classes = ["RateLimiterDO"]
+
+[[migrations]]
+tag = "v4"
+new_classes = ["NotificationNotifierDO"]
+
+[[migrations]]
+tag = "v5"
+new_classes = ["RoutingDO"]
+
+[[migrations]]
+tag = "v6"
+new_classes = ["GitPushLockDO"]
+
+# R2 Bucket for worker bundles (optional - for production)
+[[r2_buckets]]
+binding = "WORKER_BUNDLES"
+bucket_name = "takos-worker-bundles"
+
+# R2 Bucket for tenant custom workers
+[[r2_buckets]]
+binding = "TENANT_BUILDS"
+bucket_name = "takos-tenant-builds"
+
+# R2 Bucket for tenant source code
+[[r2_buckets]]
+binding = "TENANT_SOURCE"
+bucket_name = "takos-tenant-source"
+
+# R2 Bucket for Git store objects (blobs, trees, commits)
+[[r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects"
+
+# R2 Bucket for offloading hot D1 bulk data (RunEvent JSONL, large Messages, Usage raw)
+[[r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload"
+
+# Secrets (set via wrangler secret put):
+# Authentication:
+# - GOOGLE_CLIENT_SECRET: OAuth client secret for Google authentication
+#
+# Platform keys:
+# - PLATFORM_PRIVATE_KEY: Private key for signing platform tokens
+# - PLATFORM_PUBLIC_KEY: Public key for verifying platform tokens
+#
+# Cloudflare API:
+# - CF_API_TOKEN: Cloudflare API token for worker management
+
+# Queue for agent run execution
+[[queues.producers]]
+queue = "takos-runs"
+binding = "RUN_QUEUE"
+
+# Queue for index jobs (embeddings, graph updates)
+[[queues.producers]]
+queue = "takos-index-jobs"
+binding = "INDEX_QUEUE"
+
+# Queue for workflow job execution (GitHub Actions-style workflows)
+[[queues.producers]]
+queue = "takos-workflow-jobs"
+binding = "WORKFLOW_QUEUE"
+
+# Queue for deployment job execution
+[[queues.producers]]
+queue = "takos-deployment-jobs"
+binding = "DEPLOY_QUEUE"
+
+# Vectorize for semantic search
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings"
+
+# AI for embeddings
+[ai]
+binding = "AI"
+
+# Browser rendering (Puppeteer)
+[browser]
+binding = "BROWSER"
+
+# Internal service bindings
+[[services]]
+binding = "TAKOS_DISPATCH"
+service = "takos-dispatch"
+
+[[services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker"
+
+[[services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host"
+
+[[services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host"
+
+[env.staging]
+name = "takos-staging"
+workers_dev = true
+
+[env.staging.vars]
+ADMIN_DOMAIN = "test.takos.jp"
+TENANT_BASE_DOMAIN = "app.test.takos.jp"
+GOOGLE_CLIENT_ID = "your-staging-google-client-id.apps.googleusercontent.com"
+ROUTING_DO_PHASE = "4"
+WFP_DISPATCH_NAMESPACE = "takos-staging-tenants"
+CF_ACCOUNT_ID = "a10162d23653f1ad1193dabf520a5dd0"
+CF_ZONE_ID = "0dbf0fc2fc29c4d7ede723c47009aa29"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "takos-control-staging-db-2"
+database_id = "7f1c25b3-034c-4a0f-87c7-3795fbdb349f"
+migrations_dir = "db/migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "HOSTNAME_ROUTING"
+id = "8562573b04b44c44b744154b46cba71d"
+
+[[env.staging.durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "NOTIFICATION_NOTIFIER"
+class_name = "NotificationNotifierDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER_DO"
+class_name = "RateLimiterDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "ROUTING_DO"
+class_name = "RoutingDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "GIT_PUSH_LOCK"
+class_name = "GitPushLockDO"
+
+[[env.staging.r2_buckets]]
+binding = "WORKER_BUNDLES"
+bucket_name = "takos-worker-bundles-staging"
+
+[[env.staging.r2_buckets]]
+binding = "TENANT_BUILDS"
+bucket_name = "takos-tenant-builds-staging"
+
+[[env.staging.r2_buckets]]
+binding = "TENANT_SOURCE"
+bucket_name = "takos-tenant-source-staging"
+
+[[env.staging.r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects-staging"
+
+[[env.staging.r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload-staging"
+
+[[env.staging.queues.producers]]
+queue = "takos-runs-staging"
+binding = "RUN_QUEUE"
+
+[[env.staging.queues.producers]]
+queue = "takos-index-jobs-staging"
+binding = "INDEX_QUEUE"
+
+[[env.staging.queues.producers]]
+queue = "takos-workflow-jobs-staging"
+binding = "WORKFLOW_QUEUE"
+
+[[env.staging.queues.producers]]
+queue = "takos-deployment-jobs-staging"
+binding = "DEPLOY_QUEUE"
+
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings-staging"
+
+[env.staging.ai]
+binding = "AI"
+
+[env.staging.browser]
+binding = "BROWSER"
+
+[[env.staging.services]]
+binding = "TAKOS_DISPATCH"
+service = "takos-dispatch-staging"
+
+[[env.staging.services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker-staging"
+
+[[env.staging.services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host-staging"
+
+[[env.staging.services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host-staging"

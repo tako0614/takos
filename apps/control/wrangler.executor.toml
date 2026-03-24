@@ -1,0 +1,147 @@
+# takos-executor-host Worker configuration
+# Gateway that dispatches to Cloudflare Containers and exposes /proxy/* for CF binding operations.
+# Called by takos-runner via service binding (EXECUTOR_HOST) for /dispatch.
+#
+# OSS-safe deployment template. Replace placeholder IDs and URLs
+# before deploying.
+
+name = "takos-executor"
+main = "src/executor-host.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+[observability]
+enabled = true
+
+# Container DO binding
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "TakosAgentExecutorContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TakosAgentExecutorContainer"]
+
+# Container configuration — basic: 0.25 vCPU / 1 GiB, up to 100 instances
+[[containers]]
+class_name = "TakosAgentExecutorContainer"
+image = "../executor/Dockerfile"
+image_build_context = "../.."
+instance_type = "basic"
+max_instances = 100
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "takos-control-db"
+database_id = "replace-with-d1-database-id"
+
+# RunNotifierDO lives in takos-web (service name: takos)
+[[durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+script_name = "takos"
+
+# R2 for agent message offloading
+[[r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload"
+
+# R2 for Git store objects (blobs, trees, commits)
+[[r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects"
+
+# Vectorize for semantic search
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings"
+
+# AI for embeddings
+[ai]
+binding = "AI"
+
+# Egress service binding (for tool HTTP calls)
+[[services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker"
+
+[[services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host"
+
+[[services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host"
+
+# Queue for index jobs
+[[queues.producers]]
+queue = "takos-index-jobs"
+binding = "INDEX_QUEUE"
+
+[vars]
+# Control RPC requests must target the takos control-plane worker, not this
+# executor gateway worker.
+CONTROL_RPC_BASE_URL = "https://your-control-plane.workers.dev"
+
+# Secrets (set via wrangler secret put):
+# - OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY: proxied to container on demand
+# Note: proxy auth uses DO-local random tokens (no JWT keys needed)
+
+[env.staging]
+name = "takos-executor-staging"
+workers_dev = true
+
+[env.staging.vars]
+CONTROL_RPC_BASE_URL = "https://takos-staging.shoutatomiyama0614.workers.dev"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "TakosAgentExecutorContainer"
+
+[[env.staging.durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+script_name = "takos-staging"
+
+[[env.staging.containers]]
+class_name = "TakosAgentExecutorContainer"
+image = "../executor/Dockerfile"
+image_build_context = "../.."
+instance_type = "standard-1"
+max_instances = 10
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "takos-control-staging-db-2"
+database_id = "7f1c25b3-034c-4a0f-87c7-3795fbdb349f"
+
+[[env.staging.r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload-staging"
+
+[[env.staging.r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects-staging"
+
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings-staging"
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker-staging"
+
+[[env.staging.services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host-staging"
+
+[[env.staging.services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host-staging"
+
+[[env.staging.queues.producers]]
+queue = "takos-index-jobs-staging"
+binding = "INDEX_QUEUE"

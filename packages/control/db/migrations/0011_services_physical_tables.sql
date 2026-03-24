@@ -1,0 +1,2 @@
+-- Historical migration stub.
+-- Physical/compat service tables were consolidated into the canonical service schema.

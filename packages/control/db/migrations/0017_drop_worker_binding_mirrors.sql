@@ -1,0 +1,4 @@
+DROP TRIGGER IF EXISTS "trg_service_bindings_mirror_insert_to_worker_bindings";
+DROP TRIGGER IF EXISTS "trg_service_bindings_mirror_delete_to_worker_bindings";
+DROP TRIGGER IF EXISTS "trg_service_common_env_links_mirror_insert_to_worker_links";
+DROP TRIGGER IF EXISTS "trg_service_common_env_links_mirror_delete_to_worker_links";

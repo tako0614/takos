@@ -1,0 +1,535 @@
+import { getDb } from '../../../infra/db';
+import { workflowRuns, workflowJobs } from '../../../infra/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+import type { Env } from '../../../shared/types';
+import { createBundleDeploymentOrchestrator } from './bundle-deployment-orchestrator';
+import { generateId } from '../../../shared/utils';
+import { checkRepoAccess } from '../source/repos';
+import * as gitStore from '../git-smart';
+import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts';
+import {
+  appManifestToBundleDocs,
+  buildBundlePackageData,
+  extractBuildSourcesFromManifestJson,
+  parseAndValidateWorkflowYaml,
+  parseAppManifestYaml,
+  selectAppManifestPathFromRepo,
+  validateDeployProducerJob,
+  type AppDeploymentBuildSource,
+  type AppManifest,
+} from '../source/app-manifest';
+
+type RepoRefType = 'branch' | 'tag' | 'commit';
+
+type CreateAppDeploymentInput = {
+  repoId: string;
+  ref?: string;
+  refType?: RepoRefType;
+  approveOauthAutoEnv?: boolean;
+  approveSourceChange?: boolean;
+};
+
+type ResolvedRepoTarget = {
+  repoId: string;
+  ref: string;
+  refType: RepoRefType;
+  commitSha: string;
+  treeSha: string;
+};
+
+type ResolvedBuildArtifacts = {
+  buildSources: AppDeploymentBuildSource[];
+  packageFiles: Map<string, ArrayBuffer | Uint8Array>;
+};
+
+type BundleListItem = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['list']>>[number];
+type BundleDetail = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['get']>>;
+
+function encodeSourceRef(refType: RepoRefType | undefined, ref: string | undefined): string | undefined {
+  const normalizedRef = String(ref || '').trim();
+  if (!normalizedRef) return undefined;
+  return `${refType || 'branch'}:${normalizedRef}`;
+}
+
+function decodeSourceRef(encoded: string | null | undefined): {
+  ref: string | null;
+  ref_type: RepoRefType | null;
+} {
+  const raw = String(encoded || '').trim();
+  if (!raw) return { ref: null, ref_type: null };
+  const separator = raw.indexOf(':');
+  if (separator <= 0) return { ref: raw, ref_type: null };
+  const rawType = raw.slice(0, separator).trim();
+  const ref = raw.slice(separator + 1).trim();
+  return {
+    ref: ref || null,
+    ref_type: rawType === 'branch' || rawType === 'tag' || rawType === 'commit' ? rawType : null,
+  };
+}
+
+function normalizeRepoPath(value: string): string {
+  return String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\/+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/{2,}/g, '/')
+    .trim();
+}
+
+function getPackageStorage(env: Env) {
+  return env.WORKER_BUNDLES || env.GIT_OBJECTS || null;
+}
+
+function getGitBucket(env: Env) {
+  return env.GIT_OBJECTS || null;
+}
+
+function buildStoredPackageAssetId(spaceId: string) {
+  return `internal:app-packages/${spaceId}/${generateId()}/app-deploy.takopack`;
+}
+
+function buildWorkflowRunRef(refType: RepoRefType, ref: string): string | null {
+  if (refType === 'branch') return `refs/heads/${ref}`;
+  if (refType === 'tag') return `refs/tags/${ref}`;
+  return null;
+}
+
+function normalizeRepoRef(refType: RepoRefType, ref: string): string {
+  const normalized = String(ref || '').trim();
+  if (!normalized) {
+    throw new Error('ref is required');
+  }
+  if (refType === 'branch') {
+    return normalized.replace(/^refs\/heads\//, '');
+  }
+  if (refType === 'tag') {
+    return normalized.replace(/^refs\/tags\//, '');
+  }
+  return normalized;
+}
+
+function isDirectoryMode(mode: string | undefined): boolean {
+  return mode === '040000' || mode === '40000';
+}
+
+function looksLikeInlineSql(value: string): boolean {
+  const sql = value.trim();
+  if (!sql) return false;
+  if (/\n/.test(sql) && /;/.test(sql)) return true;
+  return /^(--|\/\*|\s*(create|alter|drop|insert|update|delete|pragma|begin|commit|with)\b)/i.test(sql);
+}
+
+function toPublicSourceType(item: { sourceType: string | null | undefined; sourceRepoId: string | null | undefined }): string | null {
+  if (item.sourceRepoId) return 'repo';
+  return item.sourceType || null;
+}
+
+function toAppDeploymentSummary(item: BundleListItem) {
+  const sourceRef = decodeSourceRef(item.sourceTag);
+  return {
+    id: item.id,
+    app_id: item.appId,
+    name: item.name,
+    version: item.version,
+    description: item.description,
+    icon: item.icon,
+    deployed_at: item.installedAt,
+    source: {
+      type: toPublicSourceType(item),
+      repo_id: item.sourceRepoId,
+      ref: sourceRef.ref,
+      ref_type: sourceRef.ref_type,
+    },
+  };
+}
+
+function toAppDeploymentDetail(item: BundleDetail) {
+  if (!item) return null;
+  const sourceRef = decodeSourceRef(item.sourceTag);
+  const hostnames = Array.isArray(item.hostnames)
+    ? item.hostnames.filter((hostname): hostname is string => typeof hostname === 'string' && hostname.length > 0)
+    : [];
+  return {
+    id: item.id,
+    app_id: item.appId,
+    name: item.name,
+    version: item.version,
+    description: item.description,
+    icon: item.icon,
+    manifest_json: item.manifestJson,
+    deployed_at: item.installedAt,
+    source: {
+      type: toPublicSourceType(item),
+      repo_id: item.sourceRepoId,
+      ref: sourceRef.ref,
+      ref_type: sourceRef.ref_type,
+    },
+    hostname: hostnames[0] ?? null,
+    hostnames,
+    build_sources: extractBuildSourcesFromManifestJson(item.manifestJson),
+    groups: item.groups,
+    ui_extensions: item.uiExtensions,
+    mcp_servers: item.mcpServers,
+  };
+}
+
+async function readRepoTextFileAtCommit(
+  env: Env,
+  treeSha: string,
+  filePath: string,
+): Promise<string | null> {
+  const bucket = getGitBucket(env);
+  if (!bucket) throw new Error('Git storage is not configured');
+  const blob = await gitStore.getBlobAtPath(bucket, treeSha, normalizeRepoPath(filePath));
+  if (!blob) return null;
+  return new TextDecoder().decode(blob);
+}
+
+function toArrayBuffer(value: ArrayBuffer | SharedArrayBuffer | ArrayBufferView): ArrayBuffer {
+  if (value instanceof ArrayBuffer) return value.slice(0);
+  if (value instanceof SharedArrayBuffer) {
+    const copy = new Uint8Array(value.byteLength);
+    copy.set(new Uint8Array(value));
+    return copy.buffer;
+  }
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+  return copy.buffer;
+}
+
+async function readRepoManifestAtCommit(env: Env, treeSha: string): Promise<{ path: string; raw: string }> {
+  const entries = ['.takos/app.yml', '.takos/app.yaml'] as const;
+  const found: string[] = [];
+  for (const entry of entries) {
+    const content = await readRepoTextFileAtCommit(env, treeSha, entry);
+    if (content != null) {
+      found.push(entry);
+      if (found.length === 1) {
+        return { path: entry, raw: content };
+      }
+    }
+  }
+  const selected = selectAppManifestPathFromRepo(found);
+  if (!selected) {
+    throw new Error('No .takos/app.yml found at the requested repo ref');
+  }
+  throw new Error(`Failed to read manifest: ${selected}`);
+}
+
+async function addRepoSqlPathToPackage(
+  env: Env,
+  treeSha: string,
+  configuredPath: string,
+  packageFiles: Map<string, ArrayBuffer | Uint8Array>,
+): Promise<void> {
+  const bucket = getGitBucket(env);
+  if (!bucket) throw new Error('Git storage is not configured');
+
+  const normalizedPath = normalizeRepoPath(configuredPath);
+  if (!normalizedPath) {
+    throw new Error('Migration path is empty');
+  }
+
+  const entry = await gitStore.getEntryAtPath(bucket, treeSha, normalizedPath);
+  if (!entry) {
+    throw new Error(`Migration path not found in repo: ${normalizedPath}`);
+  }
+
+  if (isDirectoryMode(entry.mode)) {
+    const files = await gitStore.flattenTree(bucket, entry.sha, normalizedPath, { skipSymlinks: true });
+    const sqlFiles = files.filter((file) => file.path.toLowerCase().endsWith('.sql'));
+    if (sqlFiles.length === 0) {
+      throw new Error(`Migration directory contains no .sql files: ${normalizedPath}`);
+    }
+    for (const file of sqlFiles) {
+      const blob = await gitStore.getBlob(bucket, file.sha);
+      if (!blob) {
+        throw new Error(`Migration file not found in git object storage: ${file.path}`);
+      }
+      packageFiles.set(file.path, toArrayBuffer(blob));
+    }
+    return;
+  }
+
+  if (!normalizedPath.toLowerCase().endsWith('.sql')) {
+    throw new Error(`Migration file must end with .sql: ${normalizedPath}`);
+  }
+  const blob = await gitStore.getBlob(bucket, entry.sha);
+  if (!blob) {
+    throw new Error(`Migration file not found in git object storage: ${normalizedPath}`);
+  }
+  packageFiles.set(normalizedPath, toArrayBuffer(blob));
+}
+
+export class AppDeploymentService {
+  constructor(private env: Env) {}
+
+  private async resolveRepoTarget(spaceId: string, userId: string, input: CreateAppDeploymentInput): Promise<ResolvedRepoTarget> {
+    const repoId = String(input.repoId || '').trim();
+    if (!repoId) throw new Error('repo_id is required');
+
+    const repoAccess = await checkRepoAccess(this.env, repoId, userId, ['owner', 'admin', 'editor']);
+    if (!repoAccess || repoAccess.spaceId !== spaceId) {
+      throw new Error('Repository not found or not accessible from this space');
+    }
+
+    const refType = input.refType || 'branch';
+    const ref = normalizeRepoRef(
+      refType,
+      String(input.ref || '').trim() || (refType === 'branch' ? repoAccess.repo.default_branch || 'main' : ''),
+    );
+    if (!ref) {
+      throw new Error('ref is required for tag/commit deployments');
+    }
+
+    const bucket = getGitBucket(this.env);
+    if (!bucket) throw new Error('Git storage is not configured');
+
+    const commitSha = refType === 'commit'
+      ? ref
+      : await gitStore.resolveRef(this.env.DB, repoId, ref);
+    if (!commitSha) {
+      throw new Error(`Ref not found: ${ref}`);
+    }
+    const commit = await gitStore.getCommitData(bucket, commitSha);
+    if (!commit) {
+      throw new Error(`Commit not found: ${commitSha}`);
+    }
+
+    return {
+      repoId,
+      ref,
+      refType,
+      commitSha,
+      treeSha: commit.tree,
+    };
+  }
+
+  private async resolveBuildArtifacts(
+    target: ResolvedRepoTarget,
+    manifest: AppManifest,
+  ): Promise<ResolvedBuildArtifacts> {
+    const bucket = getGitBucket(this.env);
+    if (!bucket) throw new Error('Git storage is not configured');
+    const db = getDb(this.env.DB);
+    const workflowCache = new Map<string, ReturnType<typeof parseAndValidateWorkflowYaml>>();
+    const packageFiles = new Map<string, ArrayBuffer | Uint8Array>();
+    const buildSources: AppDeploymentBuildSource[] = [];
+
+    for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
+      if (service.type !== 'worker') continue;
+      const build = service.build.fromWorkflow;
+      const workflowContent = await readRepoTextFileAtCommit(this.env, target.treeSha, build.path);
+      if (!workflowContent) {
+        throw new Error(`Workflow file not found at repo ref: ${build.path}`);
+      }
+
+      let workflow = workflowCache.get(build.path);
+      if (!workflow) {
+        workflow = parseAndValidateWorkflowYaml(workflowContent, build.path);
+        workflowCache.set(build.path, workflow);
+      }
+      validateDeployProducerJob(workflow, build.path, build.job);
+
+      const workflowRunRef = buildWorkflowRunRef(target.refType, target.ref);
+
+      // Build where conditions for workflow run query
+      const baseConditions = and(
+        eq(workflowRuns.repoId, target.repoId),
+        eq(workflowRuns.workflowPath, build.path),
+        eq(workflowRuns.status, 'completed'),
+        eq(workflowRuns.conclusion, 'success'),
+        ...(workflowRunRef ? [eq(workflowRuns.ref, workflowRunRef)] : [eq(workflowRuns.sha, target.commitSha)]),
+      );
+
+      // Find matching workflow runs
+      const matchingRuns = await db.select({
+        id: workflowRuns.id,
+        sha: workflowRuns.sha,
+        completedAt: workflowRuns.completedAt,
+        createdAt: workflowRuns.createdAt,
+      }).from(workflowRuns).where(baseConditions).orderBy(
+        desc(workflowRuns.completedAt),
+        desc(workflowRuns.createdAt),
+      ).all();
+
+      // Find a run with a successful matching job
+      let foundRun: { id: string; sha: string | null; jobId: string } | null = null;
+      for (const run of matchingRuns) {
+        const matchingJob = await db.select({ id: workflowJobs.id }).from(workflowJobs).where(
+          and(
+            eq(workflowJobs.runId, run.id),
+            eq(workflowJobs.jobKey, build.job),
+            eq(workflowJobs.status, 'completed'),
+            eq(workflowJobs.conclusion, 'success'),
+          )
+        ).orderBy(
+          desc(workflowJobs.completedAt),
+          desc(workflowJobs.createdAt),
+        ).get();
+
+        if (matchingJob) {
+          foundRun = { id: run.id, sha: run.sha, jobId: matchingJob.id };
+          break;
+        }
+      }
+
+      if (!foundRun) {
+        throw new Error(`Latest successful workflow run not found for ${build.path}#${build.job} on ${target.refType}:${target.ref}`);
+      }
+
+      const jobId = String(foundRun.jobId || '').trim();
+      if (!jobId) {
+        throw new Error(`Successful workflow job record not found for ${build.path}#${build.job} on run ${foundRun.id}`);
+      }
+
+      const artifactPath = normalizeRepoPath(build.artifactPath);
+      const resolvedArtifact = await resolveWorkflowArtifactFileForJob(this.env, {
+        repoId: target.repoId,
+        runId: foundRun.id,
+        jobId,
+        artifactName: build.artifact,
+        artifactPath,
+      });
+      const artifactObject = await bucket.get(resolvedArtifact.r2Key)
+        || await this.env.TENANT_SOURCE?.get(resolvedArtifact.r2Key)
+        || null;
+      if (!artifactObject) {
+        throw new Error(`Workflow artifact file disappeared during app deploy: ${resolvedArtifact.r2Key}`);
+      }
+
+      packageFiles.set(artifactPath, new Uint8Array(await artifactObject.arrayBuffer()));
+      buildSources.push({
+        service_name: serviceName,
+        workflow_path: build.path,
+        workflow_job: build.job,
+        workflow_artifact: build.artifact,
+        artifact_path: artifactPath,
+        workflow_run_id: foundRun.id,
+        workflow_job_id: jobId,
+        ...(foundRun.sha ? { source_sha: foundRun.sha } : {}),
+      });
+    }
+
+    for (const resource of Object.values(manifest.spec.resources || {})) {
+      if (!resource.migrations) continue;
+      if (typeof resource.migrations === 'string') {
+        if (!looksLikeInlineSql(resource.migrations)) {
+          await addRepoSqlPathToPackage(this.env, target.treeSha, resource.migrations, packageFiles);
+        }
+        continue;
+      }
+
+      await addRepoSqlPathToPackage(this.env, target.treeSha, resource.migrations.up, packageFiles);
+      await addRepoSqlPathToPackage(this.env, target.treeSha, resource.migrations.down, packageFiles);
+    }
+
+    return {
+      buildSources,
+      packageFiles,
+    };
+  }
+
+  async deployFromRepoRef(spaceId: string, userId: string, input: CreateAppDeploymentInput) {
+    const target = await this.resolveRepoTarget(spaceId, userId, input);
+    const { raw: manifestRaw } = await readRepoManifestAtCommit(this.env, target.treeSha);
+    const manifest = parseAppManifestYaml(manifestRaw);
+    const { buildSources, packageFiles } = await this.resolveBuildArtifacts(target, manifest);
+    const docs = appManifestToBundleDocs(
+      manifest,
+      new Map(buildSources.map((source) => [source.service_name, source])),
+    );
+    const bundleData = await buildBundlePackageData(docs, packageFiles);
+
+    const packageStorage = getPackageStorage(this.env);
+    if (!packageStorage) {
+      throw new Error('Package storage is not configured');
+    }
+
+    const storedAssetId = buildStoredPackageAssetId(spaceId);
+    await packageStorage.put(storedAssetId.replace(/^internal:/, ''), bundleData, {
+      httpMetadata: { contentType: 'application/x-takopack' },
+      customMetadata: {
+        source: 'app-repo-ref',
+        repo_id: target.repoId,
+        ref: target.ref,
+        ref_type: target.refType,
+        commit_sha: target.commitSha,
+      },
+    });
+
+    const service = createBundleDeploymentOrchestrator(this.env);
+    const result = await service.install(spaceId, userId, bundleData, {
+      source: {
+        type: 'git',
+        repoId: target.repoId,
+        ...(encodeSourceRef(target.refType, target.ref) ? { tag: encodeSourceRef(target.refType, target.ref) } : {}),
+        assetId: storedAssetId,
+      },
+      skipDependencyResolution: true,
+      requireAutoEnvApproval: true,
+      oauthAutoEnvApproved: input.approveOauthAutoEnv === true,
+      approveSourceChange: input.approveSourceChange === true,
+    });
+
+    const sourceRef = decodeSourceRef(result.sourceTag);
+    return {
+      app_deployment_id: result.bundleDeploymentId,
+      app_id: result.appId,
+      name: result.name,
+      version: result.version,
+      apply_report: result.applyReport,
+      resources_created: result.resourcesCreated,
+      source: {
+        type: 'repo',
+        repo_id: result.sourceRepoId || target.repoId,
+        ref: sourceRef.ref || target.ref,
+        ref_type: sourceRef.ref_type || target.refType,
+        commit_sha: target.commitSha,
+      },
+      build_sources: buildSources,
+    };
+  }
+
+  async list(spaceId: string) {
+    const service = createBundleDeploymentOrchestrator(this.env);
+    const items = await service.list(spaceId);
+    return items.map(toAppDeploymentSummary);
+  }
+
+  async get(spaceId: string, appDeploymentId: string) {
+    const service = createBundleDeploymentOrchestrator(this.env);
+    return toAppDeploymentDetail(await service.get(spaceId, appDeploymentId));
+  }
+
+  async remove(spaceId: string, appDeploymentId: string) {
+    const service = createBundleDeploymentOrchestrator(this.env);
+    await service.uninstall(spaceId, appDeploymentId);
+  }
+
+  async rollback(spaceId: string, userId: string, appDeploymentId: string, options?: {
+    approveOauthAutoEnv?: boolean;
+  }) {
+    const service = createBundleDeploymentOrchestrator(this.env);
+    const result = await service.rollbackToPrevious(spaceId, userId, appDeploymentId, {
+      requireAutoEnvApproval: true,
+      oauthAutoEnvApproved: options?.approveOauthAutoEnv === true,
+    });
+
+    return {
+      app_deployment_id: result.installed.bundleDeploymentId,
+      previous_version: result.previousVersion,
+      target_version: result.targetVersion,
+      deployed: {
+        app_id: result.installed.appId,
+        name: result.installed.name,
+        version: result.installed.version,
+        apply_report: result.installed.applyReport,
+      },
+    };
+  }
+}
+
+export function createAppDeploymentService(env: Env) {
+  return new AppDeploymentService(env);
+}

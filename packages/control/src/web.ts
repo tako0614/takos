@@ -1,0 +1,436 @@
+// Canonical entrypoint for the takos-web worker.
+// Keep worker-only fetch/scheduled wiring here and shared logic in neutral modules.
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type {
+  Env,
+  User,
+} from './shared/types';
+import type {
+  PlatformExecutionContext,
+  PlatformScheduledController,
+} from './shared/types/bindings.ts';
+import { createApiRouter } from './server/routes/api';
+import { RateLimiters } from './shared/utils/rate-limiter';
+import { externalAuthRouter } from './server/routes/auth/external';
+import { authSessionRouter } from './server/routes/auth/session';
+import { authCliRouter } from './server/routes/auth/cli';
+import { authLinkRouter } from './server/routes/auth/link';
+import oauth from './server/routes/oauth';
+import wellKnown from './server/routes/well-known';
+import activitypubStore from './server/routes/activitypub-store';
+import { registerProfileRoutes } from './server/routes/profiles/register';
+import { smartHttpRoutes } from './server/routes/smart-http';
+import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessions, runSnapshotGcBatch } from './application/services/maintenance';
+import { runR2OrphanedObjectGcBatch } from './application/services/r2';
+import { runCommonEnvScheduledMaintenance } from './application/services/common-env';
+import { requireAuth, optionalAuth } from './server/middleware/auth';
+import { staticAssetsMiddleware } from './server/middleware/static-assets';
+import { isInvalidArrayBufferError } from './shared/utils/db-guards';
+import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
+import { logError, logInfo, logWarn } from './shared/utils/logger';
+import { buildCloudflareWebPlatform } from './platform/adapters/cloudflare.ts';
+import type { ControlPlatform } from './platform/types.ts';
+import { setPlatformContext } from './platform/context.ts';
+import { getPlatformConfig, getPlatformServices } from './platform/accessors.ts';
+
+// Durable Object exports for wrangler.toml bindings.
+export { SessionDO } from './runtime/durable-objects/session';
+export { RunNotifierDO } from './runtime/durable-objects/run-notifier';
+export { NotificationNotifierDO } from './runtime/durable-objects/notification-notifier';
+export { RateLimiterDO } from './runtime/durable-objects/rate-limiter';
+export { RoutingDO } from './runtime/durable-objects/routing';
+export { GitPushLockDO } from './runtime/durable-objects/git-push-lock';
+
+// Cached environment validation guard.
+const envGuard = createEnvGuard(validateWebEnv);
+
+type Variables = {
+  user?: User;
+  platform?: ControlPlatform<Env>;
+};
+
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+app.use('*', async (c, next) => {
+  const platformEnv = c.env as Env & { PLATFORM?: ControlPlatform<Env> };
+  if (platformEnv.PLATFORM) {
+    setPlatformContext(c, platformEnv.PLATFORM);
+  }
+  await next();
+});
+
+export const webApp = app;
+export function createWebApp() {
+  return app;
+}
+
+function isAllowedOrigin(origin: string, adminDomain: string): boolean {
+  if (origin === `https://${adminDomain}`) return true;
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    return true;
+  }
+  return false;
+}
+
+function isSelfHostLoopback(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function isSelfHostInternalHostname(hostname: string): boolean {
+  return hostname === 'control-web';
+}
+
+// CORS - explicit configuration for security
+// Configured with:
+// - Allowed origins: Admin domain (env.ADMIN_DOMAIN) and localhost for development
+// - Allowed methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+// - Allowed headers: Content-Type, Authorization, X-Requested-With, Accept
+// - Expose headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+// - Max age: 86400 (24 hours) for preflight caching
+// - Credentials: true (for cookie-based auth)
+app.use('*', async (c, next) => {
+  // Skip CORS for git Smart HTTP endpoints (git clients don't send Origin)
+  if (new URL(c.req.url).pathname.startsWith('/git/')) {
+    await next();
+    return;
+  }
+  const corsMiddleware = cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      return isAllowedOrigin(origin, getPlatformConfig(c).adminDomain) ? origin : null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    maxAge: 86400, // 24 hours
+  });
+  return corsMiddleware(c, next);
+});
+
+// HTTPS enforcement middleware for production (Cloudflare Workers)
+// Check X-Forwarded-Proto header for HTTPS
+app.use('*', async (c, next) => {
+  const proto = c.req.header('X-Forwarded-Proto');
+
+  // Use operator-controlled env var instead of client-controlled Host header
+  // to determine whether HTTPS enforcement should be skipped.
+  const isDev = getPlatformConfig(c).environment === 'development';
+
+  if (!isDev) {
+    // Require HTTPS in production - reject if X-Forwarded-Proto exists and is not https
+    if (proto && proto !== 'https') {
+      return c.json({ error: 'HTTPS required' }, 403);
+    }
+  }
+
+  await next();
+});
+
+// S28: Security headers middleware (CSP, X-Frame-Options, etc.)
+app.use('*', async (c, next) => {
+  await next();
+
+  // Add security headers to all responses
+  const response = c.res;
+  const headers = response.headers;
+
+  // S28: Content Security Policy - restrict script/style/image sources
+  const adminDomain = getPlatformConfig(c).adminDomain || 'takos.jp';
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' https://static.cloudflareinsights.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://accounts.google.com https://api.openai.com",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    `form-action 'self' https://${adminDomain}`,
+    "object-src 'none'",
+  ].join('; ');
+
+  // Only add CSP to HTML responses (not API JSON responses)
+  // Skip if route already set a custom CSP (e.g., with nonce for inline scripts)
+  const contentType = headers.get('Content-Type') || '';
+  if (contentType.includes('text/html') && !headers.has('Content-Security-Policy')) {
+    headers.set('Content-Security-Policy', csp);
+  }
+
+  // S28: Additional security headers for all responses
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'SAMEORIGIN');
+  headers.set('X-XSS-Protection', '1; mode=block');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+});
+
+// Static assets middleware (for admin domain only)
+// With serve_directly = false, we need to explicitly serve static assets
+app.use('*', staticAssetsMiddleware);
+
+// Health check
+app.get('/health', (c) => c.json({ status: 'ok' }));
+
+
+// ============================================================================
+// Public Routes (no auth required)
+// ============================================================================
+
+// Auth routes (public) — rate-limited login/callback/cli
+{
+  const authRateLimiter = RateLimiters.auth();
+  const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
+  auth.use('/login', authRateLimiter.middleware());
+  auth.use('/callback', authRateLimiter.middleware());
+  auth.use('/cli', authRateLimiter.middleware());
+  auth.route('/', externalAuthRouter);
+  auth.route('/', authSessionRouter);
+  auth.route('/', authCliRouter);
+  auth.route('/', authLinkRouter);
+  app.route('/auth', auth);
+}
+
+// OAuth2 Authorization Server routes (public)
+app.route('/oauth', oauth);
+
+// Well-known endpoints (public)
+app.route('/.well-known', wellKnown);
+app.route('/', activitypubStore);
+
+// ============================================================================
+// API Routes (under /api prefix)
+// ============================================================================
+
+const apiRouter = createApiRouter({ requireAuth, optionalAuth });
+
+// Mount API router at /api
+app.route('/api', apiRouter);
+
+// ============================================================================
+// Git Smart HTTP Routes (under /git prefix)
+// ============================================================================
+
+app.route('/', smartHttpRoutes);
+
+// ============================================================================
+// Profile Routes (special handling for /@username)
+// ============================================================================
+
+registerProfileRoutes(app, optionalAuth);
+
+// ============================================================================
+// Error Handling
+// ============================================================================
+
+// 404 handler - serve SPA for non-API routes, JSON error for API routes
+app.notFound(async (c) => {
+  const path = new URL(c.req.url).pathname;
+
+  // If it's an API/auth/git route, return JSON error.
+  // /oauth/authorize and /oauth/device are served by their Hono handlers (which
+  // delegate to the SPA), so any 404 fallthrough from /oauth/ is a real 404.
+  if (
+    path.startsWith('/api/')
+    || path.startsWith('/auth/')
+    || path.startsWith('/oauth/')
+    || path.startsWith('/git/')
+    || path.startsWith('/ap/')
+    || path.startsWith('/ns/')
+    || path.startsWith('/.well-known/')
+  ) {
+    return c.json({ error: 'Not Found' }, 404);
+  }
+
+  // For non-API routes, serve index.html (SPA fallback)
+  const assets = getPlatformServices(c).assets.binding;
+  if (assets) {
+    try {
+      const indexHtml = await assets.fetch(new Request(new URL('/index.html', c.req.url)));
+      if (indexHtml.ok) {
+        return new Response(indexHtml.body, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache',
+          },
+        });
+      }
+    } catch (e) {
+      logError('Failed to serve SPA fallback', e, { module: 'web' });
+    }
+  }
+
+  return c.json({ error: 'Not Found' }, 404);
+});
+
+// S14: Error handler - never expose stack traces or sensitive error details in production
+app.onError((err, c) => {
+  if (isInvalidArrayBufferError(err)) {
+    logWarn(`Rejected malformed lookup payload on ${c.req.method} ${c.req.path}`, { module: 'prisma_guard' });
+    return c.json({
+      error: 'Bad Request',
+      code: 'BAD_REQUEST',
+      message: 'Malformed lookup parameter',
+    }, 400);
+  }
+
+  // Log full error for debugging (server-side only)
+  logError('Unhandled error', err, { module: 'web' });
+
+  // Generate a unique error ID for correlation
+  const errorId = crypto.randomUUID().slice(0, 8);
+
+  // In production, only return generic error with correlation ID
+  return c.json({
+    error: 'Internal Server Error',
+    error_id: errorId,
+    message: 'An unexpected error occurred. Please try again later.',
+  }, 500);
+});
+
+// ============================================================================
+// Export
+// ============================================================================
+
+export function createWebWorker(
+  buildPlatform: (env: Env) => ControlPlatform<Env> = buildCloudflareWebPlatform,
+) {
+  return {
+  async fetch(request: Request, env: Env, ctx: PlatformExecutionContext): Promise<Response> {
+    const platform = buildPlatform(env);
+    const bindings = platform.bindings;
+    const requestBindings = {
+      ...bindings,
+      DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
+      PLATFORM: platform,
+    } as Env & {
+      DEPLOYMENT_PROVIDER_REGISTRY?: ControlPlatform<Env>['services']['deploymentProviders'];
+      PLATFORM?: ControlPlatform<Env>;
+    };
+
+    // Validate environment on first request (cached for subsequent requests)
+    const envValidationError = envGuard(bindings as unknown as Record<string, unknown>);
+
+    // Return error for critical config issues (except health check)
+    const url = new URL(request.url);
+    if (envValidationError && url.pathname !== '/health') {
+      return new Response(JSON.stringify({
+        error: 'Configuration Error',
+        message: 'Server is misconfigured. Please contact administrator.',
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Defensive host gate: this worker is intended for the admin domain only,
+    // plus service-binding internal calls.
+    const hostname = url.hostname;
+    if (
+      hostname !== platform.config.adminDomain &&
+      hostname !== 'internal' &&
+      !hostname.endsWith('.workers.dev') &&
+      !isSelfHostLoopback(hostname) &&
+      !isSelfHostInternalHostname(hostname)
+    ) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    return app.fetch(request, requestBindings, ctx);
+  },
+
+  // Scheduled jobs (cron)
+  async scheduled(controller: PlatformScheduledController, env: Env): Promise<void> {
+    const platform = buildPlatform(env);
+    const bindings = platform.bindings;
+    const cron = controller.cron;
+    const errors: Array<{ job: string; error: string }> = [];
+
+    if (cron === '*/15 * * * *') {
+      try {
+        // Re-verify active custom domains and remove expired/failed routing automatically.
+        const summary = await runCustomDomainReverification(bindings, { batchSize: 200 });
+        logInfo('custom-domain reverification completed', { module: 'cron', ...{
+          cron,
+          ...summary,
+        } });
+
+        // Reconcile domains stuck in intermediate states (double-failure recovery)
+        const reconSummary = await reconcileStuckDomains(bindings);
+        logInfo('stuck-domain reconciliation completed', { module: 'cron', ...{
+          cron,
+          ...reconSummary,
+        } });
+      } catch (error) {
+        errors.push({
+          job: 'custom-domains',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+    }
+
+    // Hourly maintenance window: keep batch small to stay within cron execution limits.
+    if (cron === '0 * * * *') {
+      try {
+        const sessionSummary = await cleanupDeadSessions(bindings);
+        logInfo('dead session cleanup completed', { module: 'cron', ...{
+          cron,
+          marked_dead: sessionSummary.markedDead,
+          cutoff_time: sessionSummary.cutoffTime,
+          startup_cutoff: sessionSummary.startupCutoff,
+        } });
+      } catch (error) {
+        errors.push({
+          job: 'sessions.cleanup-dead',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      try {
+        const gcSummary = await runSnapshotGcBatch(bindings, { maxWorkspaces: 5 });
+        logInfo('snapshot GC batch completed', { module: 'cron', ...{
+          cron,
+          ...gcSummary,
+        } });
+      } catch (error) {
+        errors.push({
+          job: 'snapshot-gc',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      try {
+        const orphanSummary = await runR2OrphanedObjectGcBatch(bindings, {
+          dryRun: false,
+          minAgeMinutes: 24 * 60,
+          listLimit: 200,
+          maxDeletes: 200,
+        });
+        if (!orphanSummary.skipped) {
+          logInfo('r2 orphaned object GC batch completed', { module: 'cron', ...{ cron, ...orphanSummary } });
+        }
+      } catch (error) {
+        errors.push({
+          job: 'r2-orphaned-object-gc',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+    }
+
+    await runCommonEnvScheduledMaintenance({ env: bindings, cron, errors });
+
+    if (errors.length > 0) {
+      logError('scheduled job failures', { cron, errors }, { module: 'cron' });
+      // Ensure failures are visible in cron monitoring, without impacting request traffic.
+      throw new Error('scheduled job failures');
+    }
+  },
+  };
+}
+
+export const webWorker = createWebWorker();
+
+export default webWorker;

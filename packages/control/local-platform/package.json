@@ -1,0 +1,34 @@
+{
+  "name": "@takos/control-local-platform",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@takos/actions-engine": "workspace:*",
+    "@takos/common": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.7.0",
+    "pg": "^8.20.0",
+    "redis": "^5.11.0",
+    "zod": "^3.25.32"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./bootstrap": "./src/bootstrap.ts",
+    "./runtime": "./src/runtime.ts",
+    "./web": "./src/web.ts",
+    "./dispatch": "./src/dispatch.ts",
+    "./runtime-host": "./src/runtime-host.ts",
+    "./executor-host": "./src/executor-host.ts",
+    "./browser-host": "./src/browser-host.ts",
+    "./worker": "./src/worker.ts",
+    "./oci-orchestrator": "./src/oci-orchestrator.ts",
+    "./run-smoke": "./src/run-smoke.ts",
+    "./run-smoke-proxyless": "./src/run-smoke-proxyless.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "package.json"
+  ]
+}

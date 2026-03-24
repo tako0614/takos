@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "../../",
+    "baseUrl": "../../",
+    "paths": {
+      "@takos/control-agent/agent-runner": ["packages/agent-core/src/control-agent-runner.d.ts"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "../../packages/agent-core/src/control-agent-runner.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist/**",
+    "**/generated/**"
+  ]
+}

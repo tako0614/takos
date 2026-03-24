@@ -1,0 +1,2 @@
+-- Historical migration stub.
+-- Legacy service shape repair is now handled in package-owned bootstrap code.

@@ -1,0 +1,66 @@
+import { disposeLocalPlatformState } from './adapters/local.ts';
+import { runLocalSmoke } from './run-smoke.ts';
+
+type ProxyUsageResponse = {
+  counts?: Record<string, number>;
+};
+
+function executorHostBaseUrl(): string {
+  const raw = process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL?.trim();
+  if (raw) {
+    return raw.replace(/\/$/, '');
+  }
+  return 'http://executor-host:8790';
+}
+
+async function readProxyUsage(): Promise<Record<string, number>> {
+  const response = await fetch(`${executorHostBaseUrl()}/internal/proxy-usage`);
+  if (!response.ok) {
+    throw new Error(`Failed to read executor-host proxy usage: ${response.status}`);
+  }
+  const body = await response.json() as ProxyUsageResponse;
+  return body.counts ?? {};
+}
+
+function diffCounts(before: Record<string, number>, after: Record<string, number>): Record<string, number> {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const result: Record<string, number> = {};
+  for (const key of keys) {
+    result[key] = (after[key] ?? 0) - (before[key] ?? 0);
+  }
+  return result;
+}
+
+async function main() {
+  try {
+    const before = await readProxyUsage();
+    const run = await runLocalSmoke();
+    const after = await readProxyUsage();
+    const delta = diffCounts(before, after);
+
+    const forbidden = ['db', 'offload', 'do']
+      .map((key) => ({ key, value: delta[key] ?? 0 }))
+      .filter((entry) => entry.value !== 0);
+
+    if (forbidden.length > 0) {
+      throw new Error(`Proxyless smoke failed: forbidden proxy usage detected ${JSON.stringify(forbidden)}`);
+    }
+
+    console.log(JSON.stringify({
+      ...run,
+      proxyless: true,
+      proxyUsageDelta: delta,
+    }, null, 2));
+  } finally {
+    await disposeLocalPlatformState();
+  }
+}
+
+main().catch((error) => {
+  if (error instanceof Error) {
+    console.error(error.stack ?? error.message);
+  } else {
+    console.error(String(error));
+  }
+  process.exit(1);
+});

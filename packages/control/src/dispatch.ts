@@ -1,0 +1,218 @@
+// Canonical entrypoint for the takos-dispatch worker.
+// Owns tenant-domain fetch wiring; shared routing logic lives outside this path.
+import { selectHttpEndpointFromHttpEndpointSet } from './application/services/routing/index.ts';
+import type { RoutingStore } from './application/services/routing/types';
+import type {
+  DurableNamespaceBinding,
+  KvStoreBinding,
+  PlatformExecutionContext,
+} from './shared/types/bindings.ts';
+import { validateDispatchEnv, createEnvGuard } from './shared/utils/validate-env';
+import { logError } from './shared/utils/logger';
+import { buildCloudflareDispatchPlatform } from './platform/adapters/cloudflare.ts';
+import type { ControlPlatform } from './platform/types.ts';
+
+type ServiceBinding = {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+};
+
+interface DispatchNamespace {
+  get(name: string): ServiceBinding;
+}
+
+function buildForwardedRequestToBase(baseUrl: string, request: Request, headers: Headers): Request {
+  const sourceUrl = new URL(request.url);
+  const targetUrl = new URL(baseUrl);
+  const basePath = targetUrl.pathname.endsWith('/')
+    ? targetUrl.pathname.slice(0, -1)
+    : targetUrl.pathname;
+  const sourcePath = sourceUrl.pathname.startsWith('/')
+    ? sourceUrl.pathname
+    : `/${sourceUrl.pathname}`;
+  targetUrl.pathname = `${basePath}${sourcePath}` || '/';
+  targetUrl.search = sourceUrl.search;
+  return new Request(targetUrl.toString(), {
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: 'manual',
+  });
+}
+
+export interface DispatchEnv {
+  HOSTNAME_ROUTING?: KvStoreBinding;
+  ROUTING_DO?: DurableNamespaceBinding;
+  ROUTING_DO_PHASE?: string;
+  ROUTING_STORE?: RoutingStore;
+  DISPATCHER: DispatchNamespace;
+  ADMIN_DOMAIN: string;
+}
+
+// Cached environment validation guard.
+const envGuard = createEnvGuard(validateDispatchEnv);
+
+export function createDispatchWorker(
+  buildPlatform: (env: DispatchEnv) => ControlPlatform<DispatchEnv> = buildCloudflareDispatchPlatform,
+) {
+  return {
+  async fetch(request: Request, env: DispatchEnv, ctx: PlatformExecutionContext): Promise<Response> {
+    const platform = buildPlatform(env);
+    const envError = envGuard(platform.bindings as unknown as Record<string, unknown>);
+    if (envError) {
+      return new Response(JSON.stringify({
+        error: 'Configuration Error',
+        message: 'Dispatch worker is misconfigured. Please contact administrator.',
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const url = new URL(request.url);
+
+    if (url.pathname === '/health' && request.method === 'GET') {
+      return new Response(JSON.stringify({ status: 'ok', service: 'takos-dispatch' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Service-binding calls use hostname "internal"; use X-Forwarded-Host only in that case.
+    const forwardedHost = request.headers.get('X-Forwarded-Host');
+    const hostnameRaw = url.hostname === 'internal' && forwardedHost ? forwardedHost : url.hostname;
+    const hostname = hostnameRaw.trim().toLowerCase();
+
+    if (hostname === platform.config.adminDomain) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    try {
+      const resolved = await platform.services.routing.resolveHostname(hostname, ctx);
+      const target = resolved.target;
+
+      if (!target) {
+        return new Response(JSON.stringify({
+          error: 'Not found',
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const headers = new Headers(request.headers);
+      headers.delete('X-Forwarded-Host');
+      headers.delete('X-Tenant-Worker');
+      headers.delete('X-Tenant-Endpoint');
+      headers.delete('X-Takos-Internal');
+      headers.set('X-Forwarded-Host', hostname);
+      headers.set('X-Takos-Internal', '1');
+
+      if (target.type === 'http-endpoint-set') {
+        const endpoint = selectHttpEndpointFromHttpEndpointSet(target.endpoints, url.pathname, request.method);
+        if (!endpoint) {
+          logError(`Routing misconfigured for hostname: ${hostname}`, undefined, { module: 'dispatch' });
+          return new Response(JSON.stringify({
+            error: 'Service unavailable',
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        headers.set('X-Tenant-Endpoint', endpoint.name);
+        if (endpoint.target.kind === 'http-url') {
+          const upstreamRequest = buildForwardedRequestToBase(endpoint.target.baseUrl, request, headers);
+          return await fetch(upstreamRequest);
+        }
+
+        const routeRef = endpoint.target.ref;
+        if (!routeRef) {
+          return new Response(JSON.stringify({
+            error: 'Local service target not configured',
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        headers.set('X-Tenant-Worker', routeRef);
+        const userWorker = platform.services.serviceRegistry?.get(routeRef);
+        if (!userWorker) {
+          return new Response(JSON.stringify({
+            error: 'Local service target not configured',
+            worker: routeRef,
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        const workerRequest = new Request(request.url, {
+          method: request.method,
+          headers,
+          body: request.body,
+          redirect: 'manual',
+        });
+        return await userWorker.fetch(workerRequest);
+      }
+
+      const routeRef = platform.services.routing.selectRouteRef(target, url.pathname, request.method);
+      if (!routeRef) {
+        logError(`Routing misconfigured for hostname: ${hostname}`, undefined, { module: 'dispatch' });
+        return new Response(JSON.stringify({
+          error: 'Service unavailable',
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      headers.set('X-Tenant-Worker', routeRef);
+
+      const userWorker = platform.services.serviceRegistry?.get(routeRef);
+      if (!userWorker) {
+        return new Response(JSON.stringify({
+          error: 'Local service target not configured',
+          worker: routeRef,
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const workerRequest = new Request(request.url, {
+        method: request.method,
+        headers,
+        body: request.body,
+        redirect: 'manual',
+      });
+
+      return await userWorker.fetch(workerRequest);
+    } catch (error) {
+      logError('error', error, { module: 'dispatch' });
+
+      const errorMessage = error instanceof Error ? error.message : '';
+      const errorName = error instanceof Error ? error.name : '';
+      const isNotFound =
+        errorMessage.includes('Worker not found') ||
+        errorMessage.includes('not found') ||
+        errorName === 'WorkerNotFound';
+
+      if (isNotFound) {
+        return new Response(JSON.stringify({
+          error: 'Tenant worker not found',
+          message: 'The tenant worker may be provisioning or has been deleted',
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        error: 'Dispatch failed',
+        message: 'An error occurred while routing to the tenant',
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  },
+  };
+}
+
+export const dispatchWorker = createDispatchWorker();
+
+export default dispatchWorker;

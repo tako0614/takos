@@ -1,0 +1,348 @@
+import { Hono, type Context } from 'hono';
+import { z } from 'zod';
+import type { Env, User } from '../../shared/types';
+import {
+  badRequest,
+  getRequestedSpaceIdentifier,
+  notFound,
+  requireWorkspaceAccess,
+} from './shared/helpers';
+import { zValidator } from './zod-validator';
+import {
+  ALLOWED_SHORTCUT_RESOURCE_TYPES,
+  createShortcut,
+  deleteShortcut,
+  isShortcutResourceType,
+  listShortcuts,
+  type ShortcutResourceType,
+  updateShortcut,
+} from '../../application/services/identity/shortcuts';
+import {
+  listShortcutGroups,
+  getShortcutGroup,
+  createShortcutGroup,
+  updateShortcutGroup,
+  deleteShortcutGroup,
+  addItemToGroup,
+  removeItemFromGroup,
+  type ShortcutItem,
+} from '../../application/services/identity/shortcut-groups';
+// ---------------------------------------------------------------------------
+// Zod schemas
+// ---------------------------------------------------------------------------
+
+const createShortcutSchema = z.object({
+  name: z.string(),
+  resourceType: z.string(),
+  resourceId: z.string(),
+  icon: z.string().optional(),
+});
+
+const updateShortcutSchema = z.object({
+  name: z.string().optional(),
+  icon: z.string().optional(),
+  position: z.number().optional(),
+});
+
+const reorderSchema = z.object({
+  order: z.array(z.string()),
+});
+
+const shortcutItemSchema = z.object({
+  type: z.string(),
+  label: z.string(),
+  serviceId: z.string().optional(),
+  resourceId: z.string().optional(),
+  url: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const createGroupSchema = z.object({
+  name: z.string(),
+  icon: z.string().optional(),
+  items: z.array(shortcutItemSchema).optional(),
+});
+
+const updateGroupSchema = z.object({
+  name: z.string().optional(),
+  icon: z.string().optional(),
+  items: z.array(shortcutItemSchema).optional(),
+});
+
+const addGroupItemSchema = z.object({
+  type: z.enum(['service', 'ui', 'd1', 'r2', 'kv', 'link']),
+  label: z.string(),
+  serviceId: z.string().optional(),
+  resourceId: z.string().optional(),
+  url: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+type ShortcutContext = Context<{ Bindings: Env; Variables: { user: User } }>;
+
+// Helper to resolve workspace context. Header-based workspace selection must pass membership checks.
+async function getWorkspaceId(c: ShortcutContext): Promise<string | Response> {
+  const spaceIdentifier = getRequestedSpaceIdentifier(c);
+  if (spaceIdentifier) {
+    const user = c.get('user');
+    const access = await requireWorkspaceAccess(c, spaceIdentifier, user.id);
+    if (access instanceof Response) return access;
+    return access.workspace.id;
+  }
+  // Default to user's own account
+  const user = c.get('user');
+  return user.id;
+}
+
+ 
+export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
+
+  // List shortcuts for current workspace/user
+  .get('/', async (c) => {
+    const user = c.get('user');
+    const workspaceId = await getWorkspaceId(c);
+    if (workspaceId instanceof Response) return workspaceId;
+    const results = await listShortcuts(c.env.DB, user.id, workspaceId);
+    return c.json({ shortcuts: results });
+  })
+
+  // Create shortcut
+  .post('/',
+    zValidator('json', createShortcutSchema),
+    async (c) => {
+    const user = c.get('user');
+    const workspaceId = await getWorkspaceId(c);
+    if (workspaceId instanceof Response) return workspaceId;
+
+    const body = c.req.valid('json') as {
+      name: string;
+      resourceType: ShortcutResourceType;
+      resourceId: string;
+      icon?: string;
+    };
+
+    if (!body.name || !body.resourceType || !body.resourceId) {
+      return badRequest(c, 'Name, resourceType, and resourceId are required');
+    }
+
+    if (!isShortcutResourceType(body.resourceType)) {
+      return badRequest(c, `Invalid resourceType. Allowed values: ${ALLOWED_SHORTCUT_RESOURCE_TYPES.join(', ')}`);
+    }
+
+    if (body.resourceType === 'link') {
+      try {
+        const u = new URL(body.resourceId);
+        if (!['http:', 'https:'].includes(u.protocol)) {
+          return badRequest(c, 'Invalid URL scheme. Only http and https are allowed.');
+        }
+      } catch {
+        return badRequest(c, 'Invalid URL');
+      }
+    }
+
+    const created = await createShortcut(c.env.DB, user.id, workspaceId, body);
+    return c.json(created, 201);
+  })
+
+  // Update shortcut
+  .put('/:id',
+    zValidator('json', updateShortcutSchema),
+    async (c) => {
+    const user = c.get('user');
+    const workspaceId = await getWorkspaceId(c);
+    if (workspaceId instanceof Response) return workspaceId;
+    const id = c.req.param('id');
+
+    const body = c.req.valid('json');
+
+    const updated = await updateShortcut(c.env.DB, user.id, workspaceId, id, body);
+    if (!updated) {
+      return badRequest(c, 'No fields to update');
+    }
+
+    return c.json({ success: true });
+  })
+
+  // Delete shortcut
+  .delete('/:id', async (c) => {
+    const user = c.get('user');
+    const workspaceId = await getWorkspaceId(c);
+    if (workspaceId instanceof Response) return workspaceId;
+    const id = c.req.param('id');
+
+    await deleteShortcut(c.env.DB, user.id, workspaceId, id);
+
+    return c.json({ success: true });
+  })
+
+  // Reorder shortcuts (batch update positions)
+  .post('/reorder',
+    zValidator('json', reorderSchema),
+    async (c) => {
+    const user = c.get('user');
+    const workspaceId = await getWorkspaceId(c);
+    if (workspaceId instanceof Response) return workspaceId;
+
+    const body = c.req.valid('json');
+
+    // Update each shortcut's position
+    for (let i = 0; i < body.order.length; i++) {
+      await updateShortcut(c.env.DB, user.id, workspaceId, body.order[i], { position: i });
+    }
+
+    return c.json({ success: true });
+  });
+
+/**
+ * Shortcut Groups API Routes
+ *
+ * GET    /api/spaces/:spaceId/shortcuts/groups - List groups
+ * POST   /api/spaces/:spaceId/shortcuts/groups - Create group
+ * GET    /api/spaces/:spaceId/shortcuts/groups/:groupId - Get group
+ * PATCH  /api/spaces/:spaceId/shortcuts/groups/:groupId - Update group
+ * DELETE /api/spaces/:spaceId/shortcuts/groups/:groupId - Delete group
+ * POST   /api/spaces/:spaceId/shortcuts/groups/:groupId/items - Add item
+ * DELETE /api/spaces/:spaceId/shortcuts/groups/:groupId/items/:itemId - Remove item
+ */
+
+ 
+export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: User } }>()
+
+  // List shortcut groups
+  .get('/spaces/:spaceId/shortcuts/groups', async (c) => {
+    const { spaceId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    if (access instanceof Response) return access;
+
+    const groups = await listShortcutGroups(c.env.DB, access.workspace.id);
+
+    return c.json({ data: groups });
+  })
+
+  // Create shortcut group
+  .post('/spaces/:spaceId/shortcuts/groups',
+    zValidator('json', createGroupSchema),
+    async (c) => {
+    const { spaceId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
+    if (access instanceof Response) return access;
+
+    const body = c.req.valid('json');
+
+    if (!body.name) {
+      return badRequest(c, 'name is required');
+    }
+
+    const group = await createShortcutGroup(c.env.DB, access.workspace.id, {
+      name: body.name,
+      icon: body.icon,
+      items: body.items as ShortcutItem[] | undefined,
+    });
+
+    return c.json({ data: group }, 201);
+  })
+
+  // Get shortcut group
+  .get('/spaces/:spaceId/shortcuts/groups/:groupId', async (c) => {
+    const { spaceId, groupId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    if (access instanceof Response) return access;
+
+    const group = await getShortcutGroup(c.env.DB, access.workspace.id, groupId);
+
+    if (!group) {
+      return notFound(c, 'Shortcut group');
+    }
+
+    return c.json({ data: group });
+  })
+
+  // Update shortcut group
+  .patch('/spaces/:spaceId/shortcuts/groups/:groupId',
+    zValidator('json', updateGroupSchema),
+    async (c) => {
+    const { spaceId, groupId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
+    if (access instanceof Response) return access;
+
+    const body = c.req.valid('json');
+
+    const group = await updateShortcutGroup(c.env.DB, access.workspace.id, groupId, {
+      name: body.name,
+      icon: body.icon,
+      items: body.items as ShortcutItem[] | undefined,
+    });
+
+    if (!group) {
+      return notFound(c, 'Shortcut group (or managed by takopack)');
+    }
+
+    return c.json({ data: group });
+  })
+
+  // Delete shortcut group
+  .delete('/spaces/:spaceId/shortcuts/groups/:groupId', async (c) => {
+    const { spaceId, groupId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin']);
+    if (access instanceof Response) return access;
+
+    const deleted = await deleteShortcutGroup(c.env.DB, access.workspace.id, groupId);
+
+    if (!deleted) {
+      return notFound(c, 'Shortcut group (or managed by takopack)');
+    }
+
+    return c.json({ success: true });
+  })
+
+  // Add item to group
+  .post('/spaces/:spaceId/shortcuts/groups/:groupId/items',
+    zValidator('json', addGroupItemSchema),
+    async (c) => {
+    const { spaceId, groupId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
+    if (access instanceof Response) return access;
+
+    const body = c.req.valid('json');
+
+    if (!body.type || !body.label) {
+      return badRequest(c, 'type and label are required');
+    }
+
+    const item = await addItemToGroup(c.env.DB, access.workspace.id, groupId, body as Omit<ShortcutItem, 'id'>);
+
+    if (!item) {
+      return notFound(c, 'Shortcut group (or managed by takopack)');
+    }
+
+    return c.json({ data: item }, 201);
+  })
+
+  // Remove item from group
+  .delete('/spaces/:spaceId/shortcuts/groups/:groupId/items/:itemId', async (c) => {
+    const { spaceId, groupId, itemId } = c.req.param();
+    const user = c.get('user');
+
+    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
+    if (access instanceof Response) return access;
+
+    const removed = await removeItemFromGroup(c.env.DB, access.workspace.id, groupId, itemId);
+
+    if (!removed) {
+      return notFound(c, 'Shortcut group or item (or managed by takopack)');
+    }
+
+    return c.json({ success: true });
+  });

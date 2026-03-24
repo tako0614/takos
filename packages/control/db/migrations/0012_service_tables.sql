@@ -1,0 +1,2 @@
+-- Historical migration stub.
+-- Canonical service tables are now defined by the package schema and local bootstrap shape checks.

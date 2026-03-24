@@ -1,0 +1,15 @@
+{
+  "name": "@takos/control-db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json",
+    "./migrations": "./migrations"
+  },
+  "files": [
+    "src",
+    "migrations",
+    "package.json"
+  ]
+}

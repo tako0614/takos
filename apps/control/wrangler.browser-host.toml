@@ -1,0 +1,67 @@
+# takos-browser-host Worker configuration
+# Hosts BrowserSessionContainer (CF Containers sidecar for takos-browser).
+# Called via BROWSER_HOST service binding from takos (main worker).
+#
+# The browser container runs Playwright + Chromium for persistent browser sessions.
+#
+# OSS-safe deployment template. Replace placeholder bucket names and service
+# names to match your deployment.
+
+name = "takos-browser-host"
+main = "src/browser-host.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+
+[observability]
+enabled = true
+
+# Container DO binding
+[[durable_objects.bindings]]
+name = "BROWSER_CONTAINER"
+class_name = "BrowserSessionContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BrowserSessionContainer"]
+
+# Container configuration — standard-2: 1 vCPU / 6 GiB (Chromium requires 1GB+ RAM)
+# Image is built from apps/browser/Dockerfile with monorepo root as context.
+[[containers]]
+class_name = "BrowserSessionContainer"
+image = "../browser/Dockerfile"
+image_build_context = "../.."
+instance_type = "standard-2"
+max_instances = 25
+
+# R2 for browser checkpoints (Phase 3 — declared ahead)
+[[r2_buckets]]
+binding = "BROWSER_CHECKPOINTS"
+bucket_name = "takos-browser-checkpoints"
+
+# Service binding to takos-worker for egress
+[[services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker"
+
+[env.staging]
+name = "takos-browser-host-staging"
+workers_dev = true
+
+[[env.staging.durable_objects.bindings]]
+name = "BROWSER_CONTAINER"
+class_name = "BrowserSessionContainer"
+
+[[env.staging.containers]]
+class_name = "BrowserSessionContainer"
+image = "../browser/Dockerfile"
+image_build_context = "../.."
+instance_type = "standard-2"
+max_instances = 5
+
+[[env.staging.r2_buckets]]
+binding = "BROWSER_CHECKPOINTS"
+bucket_name = "takos-browser-checkpoints-staging"
+
+[[env.staging.services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker-staging"

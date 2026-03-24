@@ -1,0 +1,311 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: takos
+      POSTGRES_USER: takos
+      POSTGRES_PASSWORD: takos
+    ports:
+      - "${TAKOS_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - takos-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U takos -d takos"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${TAKOS_REDIS_PORT:-6379}:6379"
+    volumes:
+      - takos-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${TAKOS_MINIO_PORT:-19000}:9000"
+      - "${TAKOS_MINIO_CONSOLE_PORT:-19001}:9001"
+    volumes:
+      - takos-minio:/data
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/.minio.sys/format.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set takos http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do sleep 1; done
+        mc mb --ignore-existing takos/${S3_BUCKET}
+
+  oci-orchestrator:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_OCI_ORCHESTRATOR_PORT}
+      OCI_ORCHESTRATOR_DATA_DIR: ${OCI_ORCHESTRATOR_DATA_DIR:-/var/lib/takos/control/oci-orchestrator}
+      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+    command: ["pnpm", "local:oci-orchestrator"]
+    ports:
+      - "${TAKOS_OCI_ORCHESTRATOR_PORT}:${TAKOS_OCI_ORCHESTRATOR_PORT}"
+    volumes:
+      - takos-control-data:/var/lib/takos/control
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  control-web:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_CONTROL_WEB_PORT}
+      ADMIN_DOMAIN: ${TAKOS_ADMIN_DOMAIN}
+      TENANT_BASE_DOMAIN: ${TAKOS_TENANT_BASE_DOMAIN}
+      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+    command: ["pnpm", "local:web"]
+    ports:
+      - "${TAKOS_CONTROL_WEB_PORT}:${TAKOS_CONTROL_WEB_PORT}"
+    volumes:
+      - takos-control-data:/var/lib/takos/control
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  control-dispatch:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      control-web:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_CONTROL_DISPATCH_PORT}
+      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+      TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
+    command: ["pnpm", "local:dispatch"]
+    ports:
+      - "${TAKOS_CONTROL_DISPATCH_PORT}:${TAKOS_CONTROL_DISPATCH_PORT}"
+    volumes:
+      - takos-control-data:/var/lib/takos/control
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  control-worker:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      control-web:
+        condition: service_healthy
+      runtime-host:
+        condition: service_started
+      executor-host:
+        condition: service_started
+      oci-orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+      TAKOS_LOCAL_RUNTIME_HOST_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}/
+      TAKOS_LOCAL_EXECUTOR_HOST_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}/
+      TAKOS_LOCAL_WORKER_POLL_INTERVAL_MS: ${TAKOS_CONTROL_WORKER_POLL_INTERVAL_MS:-250}
+      TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS: ${TAKOS_CONTROL_WORKER_SCHEDULED_INTERVAL_MS:-60000}
+      TAKOS_LOCAL_WORKER_HEARTBEAT_FILE: ${TAKOS_CONTROL_WORKER_HEARTBEAT_FILE:-/var/lib/takos/control/worker-heartbeat.json}
+      TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS: ${TAKOS_CONTROL_WORKER_HEARTBEAT_TTL_MS:-120000}
+    command: ["pnpm", "local:worker"]
+    volumes:
+      - takos-control-data:/var/lib/takos/control
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const fs=require('node:fs'); const path=process.env.TAKOS_LOCAL_WORKER_HEARTBEAT_FILE || '/var/lib/takos/control/worker-heartbeat.json'; const ttl=Number(process.env.TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS || '120000'); try { const age=Date.now()-fs.statSync(path).mtimeMs; process.exit(age <= ttl ? 0 : 1); } catch { process.exit(1); }\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  browser-host:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_BROWSER_HOST_PORT}
+      TAKOS_LOCAL_BROWSER_URL: ${TAKOS_LOCAL_BROWSER_URL}
+    command: ["pnpm", "local:browser-host"]
+    ports:
+      - "${TAKOS_BROWSER_HOST_PORT}:${TAKOS_BROWSER_HOST_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_BROWSER_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  runtime-host:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      control-web:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_RUNTIME_HOST_PORT}
+      ADMIN_DOMAIN: ${TAKOS_ADMIN_DOMAIN}
+      TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
+      TAKOS_LOCAL_RUNTIME_URL: ${TAKOS_LOCAL_RUNTIME_URL}
+      PROXY_BASE_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}
+    command: ["pnpm", "local:runtime-host"]
+    ports:
+      - "${TAKOS_RUNTIME_HOST_PORT}:${TAKOS_RUNTIME_HOST_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  executor-host:
+    build:
+      context: .
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      runtime-host:
+        condition: service_healthy
+      browser-host:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: ${TAKOS_EXECUTOR_HOST_PORT}
+      TAKOS_LOCAL_RUNTIME_HOST_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}/
+      TAKOS_LOCAL_BROWSER_HOST_URL: http://browser-host:${TAKOS_BROWSER_HOST_PORT}/
+      TAKOS_LOCAL_EXECUTOR_URL: ${TAKOS_LOCAL_EXECUTOR_URL}
+      PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
+      CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
+    command: ["pnpm", "local:executor-host"]
+    ports:
+      - "${TAKOS_EXECUTOR_HOST_PORT}:${TAKOS_EXECUTOR_HOST_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  runtime:
+    build:
+      context: .
+      dockerfile: apps/runtime/Dockerfile
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      control-web:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: 8080
+      TAKOS_API_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}
+    ports:
+      - "${TAKOS_RUNTIME_PORT}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  executor:
+    build:
+      context: .
+      dockerfile: apps/executor/Dockerfile
+    depends_on:
+      executor-host:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: 8080
+      PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
+      CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
+      TAKOS_ALLOW_NO_LLM: ${TAKOS_ALLOW_NO_LLM:-1}
+    ports:
+      - "${TAKOS_EXECUTOR_PORT}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  browser:
+    build:
+      context: .
+      dockerfile: apps/browser/Dockerfile
+    depends_on:
+      browser-host:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    environment:
+      PORT: 8080
+    ports:
+      - "${TAKOS_BROWSER_PORT}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/internal/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  takos-postgres:
+  takos-redis:
+  takos-minio:
+  takos-control-data:

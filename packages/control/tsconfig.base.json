@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["packages/control/src/*"],
+      "@/services/*": ["packages/control/src/application/services/*"],
+      "@/routes/*": ["packages/control/src/server/routes/*"],
+      "@/middleware/*": ["packages/control/src/server/middleware/*"],
+      "@/tools/*": ["packages/control/src/application/tools/*"],
+      "@/durable-objects/*": ["packages/control/src/runtime/durable-objects/*"],
+      "@/queues/*": ["packages/control/src/runtime/queues/*"],
+      "@/runner/*": ["packages/control/src/runtime/runner/*"],
+      "@/worker/*": ["packages/control/src/runtime/worker/*"],
+      "@/container-hosts/*": ["packages/control/src/runtime/container-hosts/*"],
+      "@/indexer/*": ["packages/control/src/runtime/indexer/*"],
+      "@/db": ["packages/control/src/infra/db/index.ts"],
+      "@/db/*": ["packages/control/src/infra/db/*"],
+      "@/types": ["packages/control/src/shared/types/index.ts"],
+      "@/types/*": ["packages/control/src/shared/types/*"],
+      "@/utils/*": ["packages/control/src/shared/utils/*"],
+      "@takos/actions-engine": ["packages/actions-engine/src/index.ts"],
+      "@takos/actions-engine/*": ["packages/actions-engine/src/*"],
+      "@takos/common": ["packages/common/src/index.ts"],
+      "@takos/common/*": ["packages/common/src/*"]
+    }
+  }
+}

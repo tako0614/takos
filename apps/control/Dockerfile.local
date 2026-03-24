@@ -1,0 +1,27 @@
+ARG PNPM_VERSION=9.15.4
+FROM node:20-slim
+
+ARG PNPM_VERSION
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+RUN npm install -g pnpm@${PNPM_VERSION}
+
+WORKDIR /workspace
+
+COPY package.json ./
+COPY .npmrc ./
+COPY pnpm-workspace.yaml ./
+COPY pnpm-lock.yaml ./
+COPY tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/control ./apps/control
+COPY scripts ./scripts
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @takos/common build
+RUN pnpm --filter @takos/actions-engine build
+RUN pnpm --filter @takos/cloudflare-compat build
+
+ENV NODE_ENV=production
+
+WORKDIR /workspace/apps/control

@@ -1,0 +1,166 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useI18n } from '../../providers/I18nProvider';
+import { Button } from '../../components/ui/Button';
+import { ConsentLayout, ConsentLogo } from './ConsentLayout';
+import { ScopeList } from './ScopeList';
+import { LoadingScreen } from '../../components/common/LoadingScreen';
+
+/** Validate redirect URL before navigation (defense-in-depth). */
+function safeRedirect(url: string): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      window.location.href = url;
+      return;
+    }
+  } catch { /* invalid URL */ }
+  console.error('Blocked redirect to unsafe URL:', url.slice(0, 100));
+}
+
+interface ConsentData {
+  status: 'consent_required';
+  client: { name: string; logo_uri: string | null };
+  user: { email: string };
+  scopes: { identity: string[]; resources: string[] };
+  csrf_token: string;
+  params: {
+    client_id: string;
+    redirect_uri: string;
+    scope: string;
+    state: string;
+    code_challenge: string;
+    code_challenge_method: string;
+  };
+}
+
+type ContextResponse =
+  | ConsentData
+  | { status: 'auto_approved'; redirect_url: string }
+  | { status: 'error_redirect'; redirect_url: string }
+  | { status: 'unauthenticated' }
+  | { error: string; error_description?: string };
+
+export function OAuthConsentView() {
+  const { t } = useI18n();
+  const [consentData, setConsentData] = useState<ConsentData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const search = window.location.search;
+    fetch(`/api/oauth/authorize/context${search}`, { credentials: 'include' })
+      .then(async (res) => {
+        const data = await res.json() as ContextResponse;
+
+        if ('error' in data) {
+          setError(data.error_description || data.error);
+          return;
+        }
+
+        if (data.status === 'unauthenticated') {
+          const returnTo = `/oauth/authorize${search}`;
+          window.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
+          return;
+        }
+
+        if (data.status === 'auto_approved' || data.status === 'error_redirect') {
+          safeRedirect(data.redirect_url);
+          return;
+        }
+
+        if (data.status === 'consent_required') {
+          setConsentData(data);
+        }
+      })
+      .catch(() => setError('Failed to load authorization data'));
+  }, []);
+
+  const handleDecision = useCallback(async (action: 'allow' | 'deny') => {
+    if (!consentData) return;
+    setSubmitting(true);
+
+    try {
+      const res = await fetch('/api/oauth/authorize/decision', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          csrf_token: consentData.csrf_token,
+          ...consentData.params,
+        }),
+      });
+
+      const data = await res.json() as { redirect_url?: string; error?: string };
+
+      if (data.redirect_url) {
+        safeRedirect(data.redirect_url);
+        return;
+      }
+
+      if (data.error) {
+        setError(data.error);
+        setSubmitting(false);
+      }
+    } catch {
+      setError('Failed to submit decision');
+      setSubmitting(false);
+    }
+  }, [consentData]);
+
+  if (error) {
+    return (
+      <ConsentLayout>
+        <ConsentLogo />
+        <h1 className="text-lg font-bold text-[var(--color-error)] mb-2">{t('oauthConsentError')}</h1>
+        <p className="text-sm text-[var(--color-text-tertiary)]">{error}</p>
+      </ConsentLayout>
+    );
+  }
+
+  if (!consentData) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <ConsentLayout>
+      <ConsentLogo src={consentData.client.logo_uri} />
+      <h1 className="text-lg font-bold text-[var(--color-text-primary)] mb-1">
+        {consentData.client.name}
+      </h1>
+      <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
+        {consentData.user.email} {t('oauthConsentLoggedInAs')}
+      </p>
+      <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+        <strong className="text-[var(--color-text-primary)]">{consentData.client.name}</strong>
+        {t('oauthConsentRequesting')}
+      </p>
+
+      <div className="mb-4">
+        <ScopeList
+          identity={consentData.scopes.identity}
+          resources={consentData.scopes.resources}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <Button
+          variant="secondary"
+          className="flex-1"
+          disabled={submitting}
+          onClick={() => handleDecision('deny')}
+        >
+          {t('oauthConsentDeny')}
+        </Button>
+        <Button
+          variant="primary"
+          className="flex-1"
+          isLoading={submitting}
+          onClick={() => handleDecision('allow')}
+        >
+          {t('oauthConsentAllow')}
+        </Button>
+      </div>
+    </ConsentLayout>
+  );
+}

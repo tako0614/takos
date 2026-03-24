@@ -1,0 +1,247 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { rpc } from '../../lib/rpc';
+import { Icons } from '../../lib/Icons';
+import { useI18n } from '../../providers/I18nProvider';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { MessageBubble } from '../chat/MessageBubble';
+import type { Message } from '../../types';
+
+type SharedThreadPayload = {
+  token: string;
+  share: {
+    mode: 'public' | 'password';
+    expires_at: string | null;
+    created_at: string;
+  };
+  thread: {
+    id: string;
+    title: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    sequence: number;
+    created_at: string;
+  }>;
+};
+
+function formatIso(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+export function SharedThreadPage({ token }: { token: string }) {
+  const { t } = useI18n();
+  const [loading, setLoading] = useState(true);
+  const [requiresPassword, setRequiresPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<SharedThreadPayload | null>(null);
+
+  const mappedMessages: Message[] = useMemo(() => {
+    if (!data) return [];
+    return data.messages.map((m): Message => ({
+      id: m.id,
+      thread_id: data.thread.id,
+      role: m.role,
+      content: m.content,
+      metadata: '',
+      created_at: m.created_at,
+    }));
+  }, [data]);
+
+  const loadShare = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setRequiresPassword(false);
+    try {
+      const res = await rpc.public['thread-shares'][':token'].$get({ param: { token } });
+      if (res.status === 401) {
+        const body = await res.json().catch(() => ({})) as { requires_password?: boolean; error?: string };
+        if (body.requires_password) {
+          setRequiresPassword(true);
+          setData(null);
+          return;
+        }
+        setError(body.error || 'Unauthorized');
+        setData(null);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        setError(body.error || 'Not found');
+        setData(null);
+        return;
+      }
+      const payload = await res.json() as SharedThreadPayload;
+      setData(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load share');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const unlock = useCallback(async () => {
+    const pw = password;
+    if (!pw.trim()) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await rpc.public['thread-shares'][':token'].access.$post({
+        param: { token },
+        json: { password: pw },
+      });
+      if (res.status === 401) {
+        setRequiresPassword(true);
+        setError(null);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        setError(body.error || 'Failed to unlock');
+        return;
+      }
+      const payload = await res.json() as SharedThreadPayload;
+      setData(payload);
+      setRequiresPassword(false);
+      setPassword('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unlock');
+    } finally {
+      setLoading(false);
+    }
+  }, [password, token]);
+
+  useEffect(() => {
+    loadShare();
+  }, [loadShare]);
+
+  if (loading && !data && !requiresPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-900">
+        <Icons.Loader className="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400" />
+      </div>
+    );
+  }
+
+  if (requiresPassword) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
+              <Icons.Lock className="w-5 h-5 text-zinc-600 dark:text-zinc-200" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                {t('passwordRequired') || 'Password required'}
+              </h1>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                {t('enterPasswordToView') || 'Enter the password to view this shared thread.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t('password') || 'Password'}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') unlock();
+              }}
+            />
+            <Button
+              variant="primary"
+              onClick={unlock}
+              disabled={loading || !password.trim()}
+              isLoading={loading}
+              className="w-full"
+            >
+              {t('unlock') || 'Unlock'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={loadShare}
+              disabled={loading}
+              className="w-full"
+            >
+              {t('refresh') || 'Refresh'}
+            </Button>
+          </div>
+
+          {error && (
+            <div className="mt-4 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <Icons.AlertTriangle className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+          </div>
+          <h1 className="mt-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {t('notFound') || 'Not found'}
+          </h1>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            {error || (t('shareNotAvailable') || 'This share is not available.')}
+          </p>
+          <div className="mt-4">
+            <Button variant="secondary" onClick={loadShare}>
+              {t('refresh') || 'Refresh'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-zinc-900">
+      <div className="border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-4xl mx-auto px-4 py-5">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+            {data.thread.title || 'Untitled Thread'}
+          </h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Share: {data.share.mode}</span>
+            {data.share.expires_at && <span>Expires: {formatIso(data.share.expires_at)}</span>}
+            <span>Updated: {formatIso(data.thread.updated_at)}</span>
+          </div>
+          {error && (
+            <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto">
+        {mappedMessages.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            {t('noMessages') || 'No messages.'}
+          </div>
+        ) : (
+          mappedMessages.map((m) => <MessageBubble key={m.id} message={m} />)
+        )}
+      </div>
+    </div>
+  );
+}
+

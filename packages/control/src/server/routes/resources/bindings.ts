@@ -1,0 +1,156 @@
+import { Hono } from 'hono';
+import { generateId, now } from '../../../shared/utils';
+import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/helpers';
+import {
+  checkResourceAccess,
+  createServiceBinding,
+  deleteServiceBinding,
+  getResourceById,
+  getResourceByName,
+} from '../../../application/services/resources';
+import { getDb, services } from '../../../infra/db';
+import { eq, and } from 'drizzle-orm';
+import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
+import { forbidden, notFound, conflict, internalError } from '../../../shared/utils/error-response';
+
+const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
+
+.post('/:id/bind', async (c) => {
+  const user = c.get('user');
+  const resourceId = c.req.param('id');
+  const body = await parseJsonBody<{
+    service_id: string;
+    binding_name: string;
+    config?: Record<string, unknown>;
+  }>(c);
+
+  if (!body) {
+    return badRequest(c, 'Invalid JSON body');
+  }
+
+  const resource = await getResourceById(c.env.DB, resourceId);
+
+  if (!resource) {
+    return notFound(c, 'Resource');
+  }
+
+  const hasAccess = resource.owner_id === user.id ||
+    await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
+
+  if (!hasAccess) {
+    return forbidden(c);
+  }
+
+  const db = getDb(c.env.DB);
+  const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
+  if (!principalId) {
+    return internalError(c, 'User principal not found');
+  }
+  const service = await db.select().from(services).where(
+    and(eq(services.id, body.service_id), eq(services.accountId, principalId))
+  ).get();
+
+  if (!service) {
+    return notFound(c, 'Service');
+  }
+
+  const id = generateId();
+  const timestamp = now();
+  const bindingType = resource.type === 'worker' ? 'service' : resource.type;
+
+  try {
+    await createServiceBinding(c.env.DB, {
+      id,
+      service_id: body.service_id,
+      resource_id: resourceId,
+      binding_name: body.binding_name,
+      binding_type: bindingType,
+      config: body.config || {},
+      created_at: timestamp,
+    });
+
+    return c.json({
+      binding: {
+        id,
+        service_id: body.service_id,
+        resource_id: resourceId,
+        binding_name: body.binding_name,
+        binding_type: bindingType,
+        config: JSON.stringify(body.config || {}),
+        created_at: timestamp,
+      }
+    }, 201);
+  } catch (err) {
+    if (String(err).includes('UNIQUE constraint')) {
+      return conflict(c, 'Binding name already exists for this service');
+    }
+    throw err;
+  }
+})
+
+.delete('/:id/bind/:serviceId', async (c) => {
+  const user = c.get('user');
+  const resourceId = c.req.param('id');
+  const serviceId = c.req.param('serviceId');
+  const db = getDb(c.env.DB);
+  const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
+  if (!principalId) {
+    return internalError(c, 'User principal not found');
+  }
+
+  const resource = await getResourceById(c.env.DB, resourceId);
+  if (!resource) {
+    return notFound(c, 'Resource');
+  }
+
+  const hasAccess = resource.owner_id === user.id ||
+    await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
+
+  if (!hasAccess) {
+    return forbidden(c);
+  }
+
+  const service = await db.select().from(services).where(
+    and(eq(services.id, serviceId), eq(services.accountId, principalId))
+  ).get();
+
+  if (!service) {
+    return notFound(c, 'Service');
+  }
+
+  await deleteServiceBinding(c.env.DB, resourceId, serviceId);
+
+  return c.json({ success: true });
+})
+
+.delete('/by-name/:name/bind/:serviceId', async (c) => {
+  const user = c.get('user');
+  const resourceName = decodeURIComponent(c.req.param('name'));
+  const serviceId = c.req.param('serviceId');
+  const db = getDb(c.env.DB);
+  const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
+  if (!principalId) {
+    return internalError(c, 'User principal not found');
+  }
+
+  const resource = await getResourceByName(c.env.DB, user.id, resourceName);
+  if (!resource) {
+    return notFound(c, 'Resource');
+  }
+
+  const resourceId = resource._internal_id;
+
+  const service = await db.select().from(services).where(
+    and(eq(services.id, serviceId), eq(services.accountId, principalId))
+  ).get();
+
+  if (!service) {
+    return notFound(c, 'Service');
+  }
+
+  await deleteServiceBinding(c.env.DB, resourceId, serviceId);
+
+  return c.json({ success: true });
+});
+
+export default resourcesBindings;

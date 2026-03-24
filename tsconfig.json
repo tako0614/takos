@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "isolatedModules": true,
+    "noEmit": true,
+    "sourceMap": true
+  },
+  "references": [
+    { "path": "./packages/common" },
+    { "path": "./packages/actions-engine" },
+    { "path": "./packages/agent-core" },
+    { "path": "./packages/control/agent" },
+    { "path": "./packages/control/core" },
+    { "path": "./packages/control/hosts" },
+    { "path": "./packages/control/local-platform" },
+    { "path": "./packages/runtime-service" },
+    { "path": "./packages/executor-service" },
+    { "path": "./packages/browser-service" },
+    { "path": "./apps/control" },
+    { "path": "./apps/runtime" },
+    { "path": "./apps/cli" },
+    { "path": "./apps/executor" },
+    { "path": "./apps/docs-site" },
+    { "path": "./apps/browser" }
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/dist"
+  ]
+}

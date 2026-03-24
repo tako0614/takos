@@ -1,0 +1,26 @@
+{
+  "name": "@takos/executor-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@takos/agent-core": "workspace:*",
+    "@takos/common": "workspace:*",
+    "@takos/control-agent": "workspace:*",
+    "hono": "^4.7.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  },
+  "files": [
+    "src",
+    "package.json"
+  ]
+}

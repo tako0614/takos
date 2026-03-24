@@ -1,0 +1,90 @@
+import { Hono } from 'hono';
+import { checkRepoAccess } from '../../../../application/services/source/repos';
+import type { AuthenticatedRouteEnv } from '../../shared/helpers';
+import { notFound, internalError, gone } from '../../../../shared/utils/error-response';
+import {
+  deleteWorkflowArtifactById,
+  getWorkflowArtifactById,
+  listWorkflowArtifactsForRun,
+} from '../../../../application/services/platform/workflow-artifacts';
+
+export default new Hono<AuthenticatedRouteEnv>()
+  .get('/repos/:repoId/actions/runs/:runId/artifacts', async (c) => {
+    const user = c.get('user');
+    const repoId = c.req.param('repoId');
+    const runId = c.req.param('runId');
+    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
+    if (!repoAccess) {
+      return notFound(c, 'Repository');
+    }
+
+    const artifacts = await listWorkflowArtifactsForRun(c.env, repoId, runId);
+    if (!artifacts) {
+      return notFound(c, 'Run');
+    }
+
+    return c.json({
+      artifacts: artifacts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        size_bytes: a.sizeBytes,
+        mime_type: a.mimeType,
+        expires_at: a.expiresAt,
+        created_at: a.createdAt,
+      })),
+    });
+  })
+  .get('/repos/:repoId/actions/artifacts/:artifactId', async (c) => {
+    const user = c.get('user');
+    const repoId = c.req.param('repoId');
+    const artifactId = c.req.param('artifactId');
+    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
+    if (!repoAccess) {
+      return notFound(c, 'Repository');
+    }
+
+    const artifact = await getWorkflowArtifactById(c.env, repoId, artifactId);
+
+    if (!artifact) {
+      return notFound(c, 'Artifact');
+    }
+
+    if (artifact.expiresAt && new Date(artifact.expiresAt) < new Date()) {
+      return gone(c, 'Artifact has expired');
+    }
+
+    if (!c.env.GIT_OBJECTS) {
+      return internalError(c, 'Storage not configured');
+    }
+
+    const object = await c.env.GIT_OBJECTS.get(artifact.r2Key);
+    if (!object) {
+      return notFound(c, 'Artifact file');
+    }
+
+    const headers = new Headers();
+    headers.set('Content-Type', artifact.mimeType || 'application/octet-stream');
+    if (artifact.sizeBytes) {
+      headers.set('Content-Length', String(artifact.sizeBytes));
+    }
+    headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(artifact.name)}"`);
+    headers.set('Cache-Control', 'private, max-age=3600');
+
+    return new Response(object.body as ReadableStream, { headers });
+  })
+  .delete('/repos/:repoId/actions/artifacts/:artifactId', async (c) => {
+    const user = c.get('user');
+    const repoId = c.req.param('repoId');
+    const artifactId = c.req.param('artifactId');
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
+    if (!repoAccess) {
+      return notFound(c, 'Repository');
+    }
+
+    const artifact = await deleteWorkflowArtifactById(c.env, c.env.GIT_OBJECTS || null, repoId, artifactId);
+    if (!artifact) {
+      return notFound(c, 'Artifact');
+    }
+
+    return c.json({ deleted: true });
+  });

@@ -1,0 +1,43 @@
+# Node / package managers
+node_modules/
+.pnpm-store/
+.pnp/
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/
+.vite/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Tooling / runtime state
+.wrangler/
+.takos-local/
+apps/control/.takos-local/
+apps/control/.takos-self-host/
+apps/control/.takos-server/
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# App-local dev vars
+apps/control/.dev.vars*
+
+# Logs / temp / OS
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+.DS_Store
+Thumbs.db
