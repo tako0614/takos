@@ -27,7 +27,11 @@ describe('platform adapters', () => {
         tenantBaseDomain: String(bindings.TENANT_BASE_DOMAIN),
       }),
       createPlatformServices({
-        routingBindings: {},
+        routing: {
+          resolveHostname: vi.fn(async () => ({ target: null, tombstone: false, source: 'store' as const })),
+          selectDeploymentTarget: vi.fn(() => null),
+          selectRouteRef: vi.fn(() => null),
+        },
       }),
     );
 

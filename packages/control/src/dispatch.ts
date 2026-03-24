@@ -17,7 +17,7 @@ type ServiceBinding = {
 };
 
 interface DispatchNamespace {
-  get(name: string): ServiceBinding;
+  get(name: string, options?: { deploymentId?: string }): ServiceBinding;
 }
 
 function buildForwardedRequestToBase(baseUrl: string, request: Request, headers: Headers): Request {
@@ -151,8 +151,9 @@ export function createDispatchWorker(
         return await userWorker.fetch(workerRequest);
       }
 
-      const routeRef = platform.services.routing.selectRouteRef(target, url.pathname, request.method);
-      if (!routeRef) {
+      const deploymentTarget = platform.services.routing.selectDeploymentTarget(target, url.pathname, request.method);
+      const routeRef = deploymentTarget?.routeRef ?? null;
+      if (!routeRef || !deploymentTarget) {
         logError(`Routing misconfigured for hostname: ${hostname}`, undefined, { module: 'dispatch' });
         return new Response(JSON.stringify({
           error: 'Service unavailable',
@@ -162,8 +163,15 @@ export function createDispatchWorker(
         });
       }
       headers.set('X-Tenant-Worker', routeRef);
+      if (deploymentTarget.deploymentId) {
+        headers.set('X-Tenant-Deployment', deploymentTarget.deploymentId);
+      } else {
+        headers.delete('X-Tenant-Deployment');
+      }
 
-      const userWorker = platform.services.serviceRegistry?.get(routeRef);
+      const userWorker = platform.services.serviceRegistry?.get(routeRef, {
+        deploymentId: deploymentTarget.deploymentId,
+      });
       if (!userWorker) {
         return new Response(JSON.stringify({
           error: 'Local service target not configured',

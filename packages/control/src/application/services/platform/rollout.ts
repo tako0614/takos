@@ -61,8 +61,10 @@ export class RolloutService {
 
     await this.updateRoutingWeights(params.hostname, {
       activeRef: params.activeDeploymentArtifactRef,
+      activeDeploymentId: null,
       activeWeight: 100 - firstStage.weight,
       canaryRef: params.newDeploymentArtifactRef,
+      canaryDeploymentId: deploymentId,
       canaryWeight: firstStage.weight,
     });
 
@@ -109,7 +111,7 @@ export class RolloutService {
     }
 
     const nextStage = state.stages[nextIndex];
-    const dep = await db.select({ artifactRef: deployments.artifactRef })
+    const dep = await db.select({ id: deployments.id, artifactRef: deployments.artifactRef })
       .from(deployments).where(eq(deployments.id, state.deploymentId)).get();
     if (!dep?.artifactRef) throw new Error('Deployment artifact not found');
 
@@ -118,8 +120,10 @@ export class RolloutService {
 
     await this.updateRoutingWeights(hostname, {
       activeRef: active.artifactRef,
+      activeDeploymentId: active.id,
       activeWeight: 100 - nextStage.weight,
       canaryRef: dep.artifactRef,
+      canaryDeploymentId: dep.id,
       canaryWeight: nextStage.weight,
     });
 
@@ -181,7 +185,7 @@ export class RolloutService {
 
   private async completeRollout(bundleDeploymentId: string, hostname: string, state: RolloutState): Promise<RolloutState> {
     const db = getDb(this.env.DB);
-    const dep = await db.select({ artifactRef: deployments.artifactRef })
+    const dep = await db.select({ id: deployments.id, artifactRef: deployments.artifactRef })
       .from(deployments).where(eq(deployments.id, state.deploymentId)).get();
 
     if (dep?.artifactRef) {
@@ -191,7 +195,7 @@ export class RolloutService {
         hostname,
         target: {
           type: 'deployments',
-          deployments: [{ routeRef: dep.artifactRef, weight: 100, status: 'active' }],
+          deployments: [{ routeRef: dep.artifactRef, weight: 100, deploymentId: dep.id, status: 'active' }],
         },
       });
     }
@@ -231,7 +235,7 @@ export class RolloutService {
         hostname,
         target: {
           type: 'deployments',
-          deployments: [{ routeRef: active.artifactRef, weight: 100, status: 'active' }],
+          deployments: [{ routeRef: active.artifactRef, weight: 100, deploymentId: active.id, status: 'active' }],
         },
       });
     } else {
@@ -267,15 +271,15 @@ export class RolloutService {
 
   private async getActiveDeployment(serviceId: string, excludeId: string) {
     const db = getDb(this.env.DB);
-    return db.select({ artifactRef: deployments.artifactRef })
+    return db.select({ id: deployments.id, artifactRef: deployments.artifactRef })
       .from(deployments).where(
         and(eq(deployments.serviceId, serviceId), eq(deployments.routingStatus, 'active'), ne(deployments.id, excludeId))
       ).get();
   }
 
   private async updateRoutingWeights(hostname: string, params: {
-    activeRef: string; activeWeight: number;
-    canaryRef: string; canaryWeight: number;
+    activeRef: string; activeDeploymentId?: string | null; activeWeight: number;
+    canaryRef: string; canaryDeploymentId?: string | null; canaryWeight: number;
   }): Promise<void> {
     await upsertHostnameRouting({
       env: this.env,
@@ -283,8 +287,18 @@ export class RolloutService {
       target: {
         type: 'deployments',
         deployments: [
-          { routeRef: params.activeRef, weight: params.activeWeight, status: 'active' },
-          { routeRef: params.canaryRef, weight: params.canaryWeight, status: 'canary' },
+          {
+            routeRef: params.activeRef,
+            weight: params.activeWeight,
+            ...(params.activeDeploymentId ? { deploymentId: params.activeDeploymentId } : {}),
+            status: 'active',
+          },
+          {
+            routeRef: params.canaryRef,
+            weight: params.canaryWeight,
+            ...(params.canaryDeploymentId ? { deploymentId: params.canaryDeploymentId } : {}),
+            status: 'canary',
+          },
         ],
       },
     });

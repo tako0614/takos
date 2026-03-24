@@ -10,6 +10,7 @@ Takos が parity の対象にしているのは次です。
 - tenant artifact は `worker-bundle`
 - tenant routing target は `service-ref` と `http-url`
 - deployment は `active`, `canary`, `rollback`, `archived` を持つ
+- weighted routing は `routeRef` だけでなく deployment identity も保持する
 - deployment ごとの snapshot
   - runtime config
   - bindings
@@ -58,6 +59,8 @@ local の URL forward は tenant worker の canonical path ではなく、主に
 - `takos-egress`
 
 `worker-bundle` の tenant service は local でも worker runtime で解決します。
+
+同じ `service-ref` を指す `active` / `canary` / `rollback` が並ぶ場合も、local は routing target に含まれる deployment identity を使って worker runtime を選びます。
 
 ## local でできないこと、差分が出うること
 

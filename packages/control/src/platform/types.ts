@@ -1,5 +1,10 @@
 import type { DeploymentProviderName } from '../application/services/deployment/types.ts';
-import type { ResolvedRouting, RoutingStore, RoutingTarget } from '../application/services/routing/types.ts';
+import type {
+  ResolvedRouting,
+  RoutingStore,
+  RoutingTarget,
+  WeightedDeploymentTarget,
+} from '../application/services/routing/types.ts';
 import type {
   AiBinding,
   DurableNamespaceBinding,
@@ -11,7 +16,7 @@ import type {
   VectorIndexBinding,
 } from '../shared/types/bindings.ts';
 
-export type PlatformSource = 'cloudflare' | 'local';
+export type PlatformSource = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'kubernetes';
 
 export type PlatformServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -35,9 +40,42 @@ export type OciPlatformDeployProviderConfig = {
   };
 };
 
+export type EcsPlatformDeployProviderConfig = {
+  name: 'ecs';
+  config: {
+    region: string;
+    clusterArn: string;
+    taskDefinitionFamily: string;
+    serviceArn?: string;
+    ecrRepositoryUri?: string;
+  };
+};
+
+export type CloudRunPlatformDeployProviderConfig = {
+  name: 'cloud-run';
+  config: {
+    projectId: string;
+    region: string;
+    serviceId?: string;
+    artifactRegistryRepo?: string;
+  };
+};
+
+export type KubernetesPlatformDeployProviderConfig = {
+  name: 'kubernetes';
+  config: {
+    namespace: string;
+    deploymentName?: string;
+    imageRegistry?: string;
+  };
+};
+
 export type PlatformDeployProviderConfig =
   | CloudflarePlatformDeployProviderConfig
-  | OciPlatformDeployProviderConfig;
+  | OciPlatformDeployProviderConfig
+  | EcsPlatformDeployProviderConfig
+  | CloudRunPlatformDeployProviderConfig
+  | KubernetesPlatformDeployProviderConfig;
 
 export type PlatformDeployProviderRegistry = {
   defaultName?: DeploymentProviderName;
@@ -59,6 +97,7 @@ export type PlatformConfig = {
 
 export type PlatformRoutingService = {
   resolveHostname(hostname: string, executionContext: PlatformExecutionContext): Promise<ResolvedRouting>;
+  selectDeploymentTarget(target: RoutingTarget, pathname: string, method: string): WeightedDeploymentTarget | null;
   selectRouteRef(target: RoutingTarget, pathname: string, method: string): string | null;
 };
 
@@ -113,7 +152,7 @@ export type PlatformServices = {
     renderPdf?: (html: string) => Promise<ArrayBuffer>;
   };
   serviceRegistry?: {
-    get(name: string): PlatformServiceBinding;
+    get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
   deploymentProviders?: PlatformDeployProviderRegistry;
 };

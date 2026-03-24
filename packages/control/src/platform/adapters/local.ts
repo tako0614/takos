@@ -6,8 +6,10 @@ import {
   createDeploymentProviderRegistry,
   createPlatformConfig,
   createPlatformServices,
+  createRoutingService,
 } from './shared.ts';
 import type { ControlPlatform, PlatformServiceBinding } from '../types.ts';
+import { resolveHostnameRouting } from '../../application/services/routing/index.ts';
 
 type PlatformEnvRecord = Record<string, unknown>;
 
@@ -22,8 +24,10 @@ function getServiceRegistry(env: PlatformEnvRecord) {
     return undefined;
   }
   return {
-    get(name: string) {
-      return (dispatcher as { get(name: string): PlatformServiceBinding }).get(name);
+    get(name: string, options?: { deploymentId?: string }) {
+      return (dispatcher as {
+        get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
+      }).get(name, options);
     },
   };
 }
@@ -59,7 +63,15 @@ function buildLocalPlatform<TBindings extends object>(env: TBindings & PlatformE
   });
 
   const services = createPlatformServices({
-    routingBindings: env,
+    routing: createRoutingService({
+      resolveHostname(hostname, executionContext) {
+        return resolveHostnameRouting({
+          env,
+          hostname,
+          executionCtx: executionContext,
+        });
+      },
+    }),
     sqlBinding: env.DB as Env['DB'] | undefined,
     routingStore: env.ROUTING_STORE as Env['ROUTING_STORE'] | undefined,
     hostnameRouting: env.HOSTNAME_ROUTING as Env['HOSTNAME_ROUTING'] | undefined,

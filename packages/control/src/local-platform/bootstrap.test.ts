@@ -472,6 +472,90 @@ describe('local bootstrap', () => {
     await expect(response.json()).resolves.toEqual({ worker: 'worker-demo-v2' });
   });
 
+  it('materializes canary worker bundles when weighted targets share a stable service route ref', async () => {
+    process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+      'hello.local': {
+        type: 'deployments',
+        deployments: [
+          { routeRef: 'worker-demo', deploymentId: 'deployment-demo-v1', weight: 1, status: 'active' },
+          { routeRef: 'worker-demo', deploymentId: 'deployment-demo-v2', weight: 99, status: 'canary' },
+        ],
+      },
+    });
+
+    const env = await createTakosWebEnv();
+    const db = getDb(env.DB);
+    await db.insert(accounts).values({
+      id: 'space-demo',
+      type: 'workspace',
+      status: 'active',
+      name: 'Space Demo',
+      slug: 'space-demo',
+    }).run();
+    await db.insert(services).values({
+      id: 'worker-demo',
+      accountId: 'space-demo',
+      serviceType: 'app',
+      status: 'active',
+      routeRef: 'worker-demo',
+      activeDeploymentId: 'deployment-demo-v1',
+    }).run();
+    await db.insert(deployments).values([
+      {
+        id: 'deployment-demo-v1',
+        serviceId: 'worker-demo',
+        accountId: 'space-demo',
+        version: 1,
+        artifactRef: 'worker-demo-v1',
+        bundleR2Key: 'deployments/worker-demo/1/bundle.js',
+        runtimeConfigSnapshotJson: '{}',
+        targetJson: JSON.stringify({ route_ref: 'worker-demo', endpoint: { kind: 'service-ref', ref: 'worker-demo' } }),
+        status: 'active',
+        routingStatus: 'active',
+        routingWeight: 1,
+      },
+      {
+        id: 'deployment-demo-v2',
+        serviceId: 'worker-demo',
+        accountId: 'space-demo',
+        version: 2,
+        artifactRef: 'worker-demo-v2',
+        bundleR2Key: 'deployments/worker-demo/2/bundle.js',
+        runtimeConfigSnapshotJson: '{}',
+        targetJson: JSON.stringify({ route_ref: 'worker-demo', endpoint: { kind: 'service-ref', ref: 'worker-demo' } }),
+        status: 'active',
+        routingStatus: 'canary',
+        routingWeight: 99,
+      },
+    ]).run();
+    await env.WORKER_BUNDLES?.put('deployments/worker-demo/1/bundle.js', `
+      export default {
+        async fetch() {
+          return new Response(JSON.stringify({ worker: 'worker-demo-v1' }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    `);
+    await env.WORKER_BUNDLES?.put('deployments/worker-demo/2/bundle.js', `
+      export default {
+        async fetch() {
+          return new Response(JSON.stringify({ worker: 'worker-demo-v2' }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    `);
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const fetch = await createLocalDispatchFetchForTests();
+    const response = await fetch(new Request('http://hello.local/api/demo'));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ worker: 'worker-demo-v2' });
+  });
+
   it('re-resolves stable service route refs when the active deployment pointer changes', async () => {
     process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
       'hello.local': {
