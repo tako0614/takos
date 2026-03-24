@@ -28,17 +28,29 @@ export interface AgentExecutorDispatchStub {
   dispatchStart(body: AgentExecutorDispatchPayload): Promise<AgentExecutorDispatchResult>;
 }
 
+export function resolveAgentExecutorServiceId(body: AgentExecutorDispatchPayload): string | null {
+  return body.serviceId?.trim() || body.workerId?.trim() || null;
+}
+
 export async function dispatchAgentExecutorStart(
   target: AgentExecutorDispatchTarget,
   body: AgentExecutorDispatchPayload,
   controlConfig: AgentExecutorControlConfig,
 ): Promise<AgentExecutorDispatchResult> {
+  const serviceId = resolveAgentExecutorServiceId(body);
+  if (!serviceId) {
+    return {
+      ok: false,
+      status: 400,
+      body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+    };
+  }
   await target.startAndWaitForPorts(8080);
 
   const startPayload: AgentExecutorStartPayload = {
     ...body,
-    workerId: body.workerId || body.serviceId || '',
-    serviceId: body.serviceId || body.workerId,
+    workerId: body.workerId || serviceId,
+    serviceId,
     ...controlConfig,
   };
 

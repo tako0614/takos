@@ -39,6 +39,7 @@ import { validateExecutorHostEnv, createEnvGuard } from '../../shared/utils/vali
 import {
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
+  resolveAgentExecutorServiceId,
   type AgentExecutorDispatchPayload,
   type AgentExecutorDispatchResult,
   type AgentExecutorControlConfig,
@@ -196,12 +197,20 @@ export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
   }
 
   async dispatchStart(body: AgentExecutorDispatchPayload): Promise<AgentExecutorDispatchResult> {
+    const serviceId = resolveAgentExecutorServiceId(body);
+    if (!serviceId) {
+      return {
+        ok: false,
+        status: 400,
+        body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+      };
+    }
     const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, {
       runId: body.runId,
-      serviceId: body.workerId,
+      serviceId,
     });
     const tokenMap: Record<string, ProxyTokenInfo> = {
-      [controlConfig.controlRpcToken]: { runId: body.runId, serviceId: body.workerId, capability: 'control' },
+      [controlConfig.controlRpcToken]: { runId: body.runId, serviceId, capability: 'control' },
     };
     await this.ctx.storage.put('proxyTokens', tokenMap);
     this.cachedTokens = new Map(Object.entries(tokenMap));
@@ -337,13 +346,27 @@ function claimsMatchRequestBody(
   body: Record<string, unknown>,
 ): boolean {
   const claimRunId = typeof claims.run_id === 'string' ? claims.run_id : null;
-  const claimWorkerId = typeof claims.worker_id === 'string' ? claims.worker_id : null;
+  const claimServiceId = typeof claims.service_id === 'string'
+    ? claims.service_id
+    : typeof claims.worker_id === 'string'
+      ? claims.worker_id
+      : null;
   const bodyRunId = typeof body.runId === 'string' ? body.runId : null;
-  const bodyWorkerId = typeof body.workerId === 'string' ? body.workerId : null;
+  const bodyServiceId = typeof body.serviceId === 'string'
+    ? body.serviceId
+    : typeof body.workerId === 'string'
+      ? body.workerId
+      : null;
 
   if (claimRunId && bodyRunId && claimRunId !== bodyRunId) return false;
-  if (claimWorkerId && bodyWorkerId && claimWorkerId !== bodyWorkerId) return false;
+  if (claimServiceId && bodyServiceId && claimServiceId !== bodyServiceId) return false;
   return true;
+}
+
+function readRunServiceId(body: Record<string, unknown>): string | null {
+  if (typeof body.serviceId === 'string' && body.serviceId.length > 0) return body.serviceId;
+  if (typeof body.workerId === 'string' && body.workerId.length > 0) return body.workerId;
+  return null;
 }
 
 function unauthorized(): Response {
@@ -954,9 +977,9 @@ async function handleQueueProxy(path: string, body: Record<string, unknown>, env
 }
 
 async function handleHeartbeat(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const { runId, workerId, leaseVersion } = body as { runId: string; workerId: string; leaseVersion?: number };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const { runId, leaseVersion } = body as { runId: string; leaseVersion?: number };
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
 
   try {
     const db = getDb(env.DB);
@@ -1036,17 +1059,15 @@ async function handleRunBootstrap(body: Record<string, unknown>, env: Env): Prom
 async function handleRunFail(body: Record<string, unknown>, env: Env): Promise<Response> {
   const {
     runId,
-    workerId,
     leaseVersion,
     error: errorMessage,
   } = body as {
     runId?: string;
-    workerId?: string;
     leaseVersion?: number;
     error?: string;
   };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
   if (typeof errorMessage !== 'string' || errorMessage.trim().length === 0) {
     return err('Missing error', 400);
   }
@@ -1073,9 +1094,9 @@ async function handleRunFail(body: Record<string, unknown>, env: Env): Promise<R
 }
 
 async function handleRunReset(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const { runId, workerId } = body as { runId: string; workerId: string };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const { runId } = body as { runId: string };
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
 
   try {
     const db = getDb(env.DB);
@@ -1133,13 +1154,12 @@ async function handleRunContext(body: Record<string, unknown>, env: Env): Promis
 }
 
 async function handleNoLlmComplete(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const { runId, workerId, response } = body as {
+  const { runId, response } = body as {
     runId?: string;
-    workerId?: string;
     response?: string;
   };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
   if (typeof response !== 'string' || response.trim().length === 0) {
     return err('Missing response', 400);
   }
@@ -1155,7 +1175,7 @@ async function handleNoLlmComplete(body: Record<string, unknown>, env: Env): Pro
     }).from(runs).where(eq(runs.id, runId)).get();
 
     if (!run) return err('Run not found', 404);
-    if (run.serviceId !== serviceId) return err('Run worker mismatch', 409);
+    if (run.serviceId !== serviceId) return err('Run service mismatch', 409);
 
     if (run.threadId) {
       await persistMessage(
@@ -1652,6 +1672,7 @@ export default {
       // Build claims-equivalent object for existing validation logic
       const claims: Record<string, unknown> = {
         run_id: tokenInfo.runId,
+        service_id: tokenInfo.serviceId,
         worker_id: tokenInfo.serviceId,
         proxy_capabilities: [tokenInfo.capability],
       };

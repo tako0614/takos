@@ -26,12 +26,18 @@ export function parseStartPayload(value: unknown): ParseResult<StartPayload> {
 
   const v = value as Record<string, unknown>;
 
-  // Validate required string fields
-  const requiredFields = ['runId', 'workerId'] as const;
-  for (const field of requiredFields) {
-    if (typeof v[field] !== 'string' || (v[field] as string).length === 0) {
-      return { ok: false, error: `Missing required field: ${field}` };
-    }
+  if (typeof v.runId !== 'string' || v.runId.length === 0) {
+    return { ok: false, error: 'Missing required field: runId' };
+  }
+
+  const serviceId = typeof v.serviceId === 'string' && v.serviceId.length > 0
+    ? v.serviceId
+    : typeof v.workerId === 'string' && v.workerId.length > 0
+      ? v.workerId
+      : undefined;
+
+  if (!serviceId) {
+    return { ok: false, error: 'Missing required field: serviceId or workerId' };
   }
 
   const controlRpcToken = typeof v.controlRpcToken === 'string' && v.controlRpcToken.length > 0
@@ -53,7 +59,8 @@ export function parseStartPayload(value: unknown): ParseResult<StartPayload> {
     ok: true,
     payload: {
       runId: v.runId as string,
-      workerId: v.workerId as string,
+      serviceId,
+      workerId: typeof v.workerId === 'string' && v.workerId.length > 0 ? v.workerId : serviceId,
       model: v.model as string | undefined,
       controlRpcToken,
       controlRpcBaseUrl: v.controlRpcBaseUrl as string | undefined,

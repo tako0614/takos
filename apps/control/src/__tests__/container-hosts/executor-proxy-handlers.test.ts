@@ -690,7 +690,7 @@ describe('handleHeartbeat', () => {
     const res = await handleHeartbeat({ workerId: 'w1' }, env);
     expect(res.status).toBe(400);
     const body = await res.json() as any;
-    expect(body.error).toContain('Missing runId or workerId');
+    expect(body.error).toContain('Missing runId or serviceId');
   });
 
   it('returns 400 when workerId is missing', async () => {

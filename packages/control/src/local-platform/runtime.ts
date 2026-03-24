@@ -361,13 +361,14 @@ function createLocalExecutorGatewayStub(executorServiceUrl: string | null = null
 
   return {
     async dispatchStart(body: AgentExecutorDispatchPayload) {
+      const serviceId = body.serviceId || body.workerId;
       const controlToken = crypto.randomUUID().replace(/-/g, '');
       const controlConfig: AgentExecutorControlConfig = {
         controlRpcBaseUrl: process.env.CONTROL_RPC_BASE_URL
           ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
         controlRpcToken: controlToken,
       };
-      tokens.set(controlToken, { runId: body.runId, serviceId: body.workerId, capability: 'control' });
+      tokens.set(controlToken, { runId: body.runId, serviceId, capability: 'control' });
 
       if (executorServiceUrl) {
         const response = await globalThis.fetch(buildServiceRequest(executorServiceUrl, '/start', {
@@ -375,6 +376,8 @@ function createLocalExecutorGatewayStub(executorServiceUrl: string | null = null
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...body,
+            serviceId,
+            workerId: body.workerId || serviceId,
             ...controlConfig,
           }),
         }));
@@ -392,7 +395,8 @@ function createLocalExecutorGatewayStub(executorServiceUrl: string | null = null
           ok: true,
           local: true,
           runId: body.runId,
-          workerId: body.workerId,
+          serviceId,
+          workerId: body.workerId || serviceId,
           ...controlConfig,
         }),
       };
@@ -432,6 +436,12 @@ function localExecutorUnauthorized(): Response {
 
 function localExecutorError(message: string, status = 500): Response {
   return jsonResponse({ error: message }, status);
+}
+
+function readRunServiceId(body: Record<string, unknown>): string | null {
+  if (typeof body.serviceId === 'string' && body.serviceId.length > 0) return body.serviceId;
+  if (typeof body.workerId === 'string' && body.workerId.length > 0) return body.workerId;
+  return null;
 }
 
 function getLocalExecutorGatewayBinding(env: LocalExecutorHostEnv, runId: string): LocalExecutorGatewayStub {
@@ -538,9 +548,9 @@ async function localHandleRunRecord(body: Record<string, unknown>, env: LocalExe
 
 async function localHandleHeartbeat(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.workerId === 'string' ? body.workerId : null;
+  const serviceId = readRunServiceId(body);
   const leaseVersion = typeof body.leaseVersion === 'number' ? body.leaseVersion : undefined;
-  if (!runId || !serviceId) return localExecutorError('Missing runId or workerId', 400);
+  if (!runId || !serviceId) return localExecutorError('Missing runId or serviceId', 400);
 
   const db = getDb(env.DB);
   const now = new Date().toISOString();
@@ -555,10 +565,10 @@ async function localHandleHeartbeat(body: Record<string, unknown>, env: LocalExe
 
 async function localHandleRunFail(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.workerId === 'string' ? body.workerId : null;
+  const serviceId = readRunServiceId(body);
   const leaseVersion = typeof body.leaseVersion === 'number' ? body.leaseVersion : undefined;
   const errorMessage = typeof body.error === 'string' ? body.error : null;
-  if (!runId || !serviceId) return localExecutorError('Missing runId or workerId', 400);
+  if (!runId || !serviceId) return localExecutorError('Missing runId or serviceId', 400);
   if (!errorMessage?.trim()) return localExecutorError('Missing error', 400);
 
   const db = getDb(env.DB);
@@ -574,8 +584,8 @@ async function localHandleRunFail(body: Record<string, unknown>, env: LocalExecu
 
 async function localHandleRunReset(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.workerId === 'string' ? body.workerId : null;
-  if (!runId || !serviceId) return localExecutorError('Missing runId or workerId', 400);
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return localExecutorError('Missing runId or serviceId', 400);
   const db = getDb(env.DB);
   await db.update(runs)
     .set({ status: 'queued', serviceId: null, serviceHeartbeat: null })
@@ -621,9 +631,9 @@ async function localHandleRunContext(body: Record<string, unknown>, env: LocalEx
 
 async function localHandleNoLlmComplete(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.workerId === 'string' ? body.workerId : null;
+  const serviceId = readRunServiceId(body);
   const response = typeof body.response === 'string' ? body.response : null;
-  if (!runId || !serviceId) return localExecutorError('Missing runId or workerId', 400);
+  if (!runId || !serviceId) return localExecutorError('Missing runId or serviceId', 400);
   if (!response?.trim()) return localExecutorError('Missing response', 400);
 
   const db = getDb(env.DB);
@@ -635,7 +645,7 @@ async function localHandleNoLlmComplete(body: Record<string, unknown>, env: Loca
   }).from(runs).where(eq(runs.id, runId)).get();
 
   if (!run) return localExecutorError('Run not found', 404);
-  if (run.serviceId !== serviceId) return localExecutorError('Run worker mismatch', 409);
+  if (run.serviceId !== serviceId) return localExecutorError('Run service mismatch', 409);
 
   if (run.threadId) {
     await persistMessage(
@@ -691,11 +701,9 @@ async function localHandleExecutorControlRpc(request: Request, env: LocalExecuto
     const bodyRunId = typeof (body as Record<string, unknown>).runId === 'string'
       ? (body as Record<string, unknown>).runId as string
       : null;
-    const bodyWorkerId = typeof (body as Record<string, unknown>).workerId === 'string'
-      ? (body as Record<string, unknown>).workerId as string
-      : null;
+    const bodyServiceId = readRunServiceId(body as Record<string, unknown>);
     if (bodyRunId && bodyRunId !== tokenInfo.runId) return localExecutorUnauthorized();
-    if (bodyWorkerId && bodyWorkerId !== tokenInfo.serviceId) return localExecutorUnauthorized();
+    if (bodyServiceId && bodyServiceId !== tokenInfo.serviceId) return localExecutorUnauthorized();
   }
 
   recordLocalExecutorProxyUsage(path);
@@ -754,9 +762,12 @@ async function buildLocalExecutorHostFetch(env: LocalExecutorHostEnv): Promise<L
 
     if (url.pathname === '/dispatch' && request.method === 'POST') {
       const body = await request.json().catch(() => null) as AgentExecutorDispatchPayload | null;
-      if (!body?.runId || !body.workerId) {
-        return localExecutorError('Missing runId', 400);
+      const serviceId = body?.serviceId || body?.workerId;
+      if (!body?.runId || !serviceId) {
+        return localExecutorError('Missing runId or serviceId', 400);
       }
+      body.serviceId = serviceId;
+      body.workerId = body.workerId || serviceId;
       const stub = getLocalExecutorGatewayBinding(env, body.runId);
       const result = await stub.dispatchStart(body);
       return new Response(result.body, { status: result.status });

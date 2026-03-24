@@ -4,6 +4,24 @@ type ControlRpcTokenSource = {
   tokenForPath(path: string): string;
 };
 
+type ServiceScopedPayload = {
+  runId: string;
+  serviceId?: string;
+  workerId?: string;
+};
+
+function normalizeServiceScopedPayload<T extends ServiceScopedPayload>(payload: T): T & { serviceId: string; workerId: string } {
+  const serviceId = payload.serviceId ?? payload.workerId;
+  if (!serviceId) {
+    throw new Error('Missing serviceId or workerId');
+  }
+  return {
+    ...payload,
+    serviceId,
+    workerId: payload.workerId ?? serviceId,
+  };
+}
+
 type ApiKeysResponse = {
   openai?: string | null;
   anthropic?: string | null;
@@ -210,8 +228,8 @@ export class ControlRpcClient {
     return parseJson<T>(response, path);
   }
 
-  async heartbeat(payload: { runId: string; workerId: string; leaseVersion?: number }, timeoutMs?: number): Promise<void> {
-    await this.post('/rpc/control/heartbeat', payload, timeoutMs);
+  async heartbeat(payload: { runId: string; serviceId?: string; workerId?: string; leaseVersion?: number }, timeoutMs?: number): Promise<void> {
+    await this.post('/rpc/control/heartbeat', normalizeServiceScopedPayload(payload), timeoutMs);
   }
 
   async getRunStatus(runId: string): Promise<ControlRpcRunStatus> {
@@ -219,12 +237,12 @@ export class ControlRpcClient {
     return result.status ?? null;
   }
 
-  async failRun(payload: { runId: string; workerId: string; leaseVersion?: number; error: string }): Promise<void> {
-    await this.post('/rpc/control/run-fail', payload);
+  async failRun(payload: { runId: string; serviceId?: string; workerId?: string; leaseVersion?: number; error: string }): Promise<void> {
+    await this.post('/rpc/control/run-fail', normalizeServiceScopedPayload(payload));
   }
 
-  async resetRun(payload: { runId: string; workerId: string }): Promise<void> {
-    await this.post('/rpc/control/run-reset', payload);
+  async resetRun(payload: { runId: string; serviceId?: string; workerId?: string }): Promise<void> {
+    await this.post('/rpc/control/run-reset', normalizeServiceScopedPayload(payload));
   }
 
   async fetchApiKeys(): Promise<{ openai?: string; anthropic?: string; google?: string }> {
@@ -252,8 +270,8 @@ export class ControlRpcClient {
     return this.post<ControlRpcRunBootstrap>('/rpc/control/run-bootstrap', { runId });
   }
 
-  async completeNoLlmRun(payload: { runId: string; workerId: string; response: string }): Promise<void> {
-    await this.post('/rpc/control/no-llm-complete', payload);
+  async completeNoLlmRun(payload: { runId: string; serviceId?: string; workerId?: string; response: string }): Promise<void> {
+    await this.post('/rpc/control/no-llm-complete', normalizeServiceScopedPayload(payload));
   }
 
   async getConversationHistory(payload: {

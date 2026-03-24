@@ -20,8 +20,22 @@ describe('parseStartPayload', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.payload.runId).toBe('run-123');
+      expect(result.payload.serviceId).toBe('worker-abc');
       expect(result.payload.workerId).toBe('worker-abc');
       expect(result.payload.controlRpcToken).toBe('tok_secret');
+    }
+  });
+
+  it('accepts serviceId without workerId and normalizes workerId for compatibility', () => {
+    const result = parseStartPayload({
+      runId: 'run-123',
+      serviceId: 'service-abc',
+      controlRpcToken: 'tok_secret',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.serviceId).toBe('service-abc');
+      expect(result.payload.workerId).toBe('service-abc');
     }
   });
 
@@ -107,7 +121,7 @@ describe('parseStartPayload', () => {
     const result = parseStartPayload({ runId: 'r', controlRpcToken: 'tok' });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toBe('Missing required field: workerId');
+      expect(result.error).toBe('Missing required field: serviceId or workerId');
     }
   });
 
@@ -115,7 +129,7 @@ describe('parseStartPayload', () => {
     const result = parseStartPayload({ runId: 'r', workerId: '', controlRpcToken: 'tok' });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toBe('Missing required field: workerId');
+      expect(result.error).toBe('Missing required field: serviceId or workerId');
     }
   });
 

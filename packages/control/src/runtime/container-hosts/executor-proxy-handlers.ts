@@ -439,9 +439,13 @@ export async function handleQueueProxy(path: string, body: Record<string, unknow
 }
 
 export async function handleHeartbeat(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const { runId, workerId } = body as { runId: string; workerId: string };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const runId = typeof body.runId === 'string' ? body.runId : null;
+  const serviceId = typeof body.serviceId === 'string'
+    ? body.serviceId
+    : typeof body.workerId === 'string'
+      ? body.workerId
+      : null;
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
 
   try {
     const db = getDb(env.DB);
@@ -458,9 +462,13 @@ export async function handleHeartbeat(body: Record<string, unknown>, env: Env): 
 }
 
 export async function handleRunReset(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const { runId, workerId } = body as { runId: string; workerId: string };
-  const serviceId = workerId;
-  if (!runId || !serviceId) return err('Missing runId or workerId', 400);
+  const runId = typeof body.runId === 'string' ? body.runId : null;
+  const serviceId = typeof body.serviceId === 'string'
+    ? body.serviceId
+    : typeof body.workerId === 'string'
+      ? body.workerId
+      : null;
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
 
   try {
     const db = getDb(env.DB);

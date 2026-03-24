@@ -166,7 +166,7 @@ describe('ControlRpcClient', () => {
       await client.heartbeat({ runId: 'run-1', workerId: 'w-1', leaseVersion: 2 });
 
       const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
-      expect(body).toEqual({ runId: 'run-1', workerId: 'w-1', leaseVersion: 2 });
+      expect(body).toEqual({ runId: 'run-1', serviceId: 'w-1', workerId: 'w-1', leaseVersion: 2 });
     });
   });
 

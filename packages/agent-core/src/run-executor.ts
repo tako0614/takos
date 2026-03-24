@@ -46,6 +46,7 @@ export type ExecuteRunFn = (
 
 export interface StartPayload {
   runId: string;
+  serviceId?: string;
   workerId: string;
   model?: string;
   leaseVersion?: number;
@@ -122,7 +123,7 @@ function buildNoLlmFallbackResponse(query: string): string {
 
 async function runNoLlmFastPath(
   controlRpc: ControlRpcClient,
-  payload: Pick<StartPayload, 'runId' | 'workerId'>,
+  payload: Pick<StartPayload, 'runId' | 'workerId' | 'serviceId'>,
   logger: RunExecutorOptions['logger'],
   tag: string,
 ): Promise<void> {
@@ -132,6 +133,7 @@ async function runNoLlmFastPath(
   logger.info(`[${tag}] Completing run ${payload.runId} via no-LLM fast path`);
   await controlRpc.completeNoLlmRun({
     runId: payload.runId,
+    serviceId: payload.serviceId ?? payload.workerId,
     workerId: payload.workerId,
     response,
   });
@@ -383,6 +385,7 @@ export async function executeRunInContainer(
   options: RunExecutorOptions,
 ): Promise<void> {
   const { runId, workerId, model, leaseVersion } = payload;
+  const serviceId = payload.serviceId ?? workerId;
   const { serviceName, logger } = options;
   const maxHeartbeatFailures = options.maxHeartbeatFailures ?? DEFAULT_MAX_HEARTBEAT_FAILURES;
   const runtimeConfig = options.runtimeConfig;
@@ -415,7 +418,7 @@ export async function executeRunInContainer(
   } catch (err) {
     logger.error(`[${tag}] Failed to fetch API keys for run ${runId}, aborting`, { error: err });
     try {
-      await controlRpc.resetRun({ runId, workerId });
+      await controlRpc.resetRun({ runId, serviceId, workerId });
     } catch { /* best-effort */ }
     throw err;
   }
@@ -424,13 +427,13 @@ export async function executeRunInContainer(
   if (!apiKeys.openai && !apiKeys.anthropic && !apiKeys.google) {
     if (isNoLlmFallbackAllowed(runtimeConfig)) {
       logger.warn(`[${tag}] No LLM API keys available for run ${runId}; continuing in no-LLM mode`);
-      await runNoLlmFastPath(controlRpc, { runId, workerId }, logger, tag);
+      await runNoLlmFastPath(controlRpc, { runId, serviceId, workerId }, logger, tag);
       return;
     } else {
     const msg = `No LLM API keys available for run ${runId}`;
     logger.error(`[${tag}] ${msg}`);
     try {
-      await controlRpc.resetRun({ runId, workerId });
+      await controlRpc.resetRun({ runId, serviceId, workerId });
     } catch { /* best-effort */ }
     throw new Error(msg);
     }
@@ -473,7 +476,7 @@ export async function executeRunInContainer(
     }
 
     try {
-      await controlRpc.heartbeat({ runId, workerId, leaseVersion }, HEARTBEAT_TIMEOUT_MS);
+      await controlRpc.heartbeat({ runId, serviceId, workerId, leaseVersion }, HEARTBEAT_TIMEOUT_MS);
       consecutiveFailures = 0;
       nextLogAt = 1;
     } catch (err) {
@@ -496,6 +499,7 @@ export async function executeRunInContainer(
         clearHeartbeat();
         await markRunFailedFromExecutor(controlRpc, {
           runId,
+          serviceId,
           workerId,
           leaseVersion,
           error: 'Heartbeat lost — executor marked run as failed',
@@ -559,7 +563,7 @@ export async function executeRunInContainer(
 
     // Reset only non-terminal runs for stale recovery.
     try {
-      await controlRpc.resetRun({ runId, workerId });
+      await controlRpc.resetRun({ runId, serviceId, workerId });
     } catch (resetErr) {
       logger.error(`[${tag}] Failed to reset run ${runId}`, { error: resetErr });
     }
