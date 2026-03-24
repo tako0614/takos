@@ -142,7 +142,9 @@ async function createSharedState() {
   };
 }
 
-let sharedPromise: Promise<SharedState> | null = createSharedState();
+// Resolve local storage/runtime inputs lazily so test and child-process callers
+// can override TAKOS_LOCAL_* env vars before the first platform access.
+let sharedPromise: Promise<SharedState> | null = null;
 const dispatchRegistries = new Set<TenantWorkerRuntimeRegistry>();
 
 let seeded = false;
@@ -168,7 +170,10 @@ async function ensureRoutingSeeded(): Promise<void> {
 
 async function getSharedState(): Promise<SharedState> {
   if (!sharedPromise) {
-    sharedPromise = createSharedState();
+    sharedPromise = createSharedState().catch((error) => {
+      sharedPromise = null;
+      throw error;
+    });
   }
   return sharedPromise;
 }

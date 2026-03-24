@@ -212,7 +212,6 @@ function toPgRawRows(result: QueryResult<Record<string, unknown>>): [string[], .
 
 function normalizeMigrationSql(fileName: string, sql: string): string {
   if (
-    fileName === '0005_accounts_head_snapshot_id.sql' ||
     fileName === '0011_service_registry_tables.sql' ||
     fileName === '0011_services_physical_tables.sql' ||
     fileName === '0012_service_tables.sql' ||
@@ -774,7 +773,18 @@ async function ensureServerMigrations(client: Client, migrationsDir: string): Pr
     );
     const transaction = await client.transaction('write');
     try {
-      await transaction.executeMultiple(sqliteMigrationSql);
+      for (const statement of splitSqlStatements(sqliteMigrationSql)) {
+        const normalizedStatement = stripLeadingSqlComments(statement);
+        if (!normalizedStatement) continue;
+        try {
+          await transaction.execute(normalizedStatement);
+        } catch (error) {
+          if (isRecoverableSqliteSchemaDuplication(error, normalizedStatement)) {
+            continue;
+          }
+          throw error;
+        }
+      }
       await transaction.execute({
         sql: 'INSERT INTO "_takos_self_host_migrations" (name) VALUES (?)',
         args: [fileName],
@@ -892,6 +902,24 @@ async function ensureSqliteServicesTableShape(client: Client): Promise<void> {
   await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`);
 }
 
+async function ensureSqliteAccountsTableShape(client: Client): Promise<void> {
+  if (!(await sqliteTableExists(client, 'accounts'))) return;
+
+  const columns = await getSqliteTableColumns(client, 'accounts');
+  const alterStatements: string[] = [];
+
+  if (!columns.has('security_posture')) {
+    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`);
+  }
+  if (!columns.has('head_snapshot_id')) {
+    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`);
+  }
+
+  for (const statement of alterStatements) {
+    await client.execute(statement);
+  }
+}
+
 async function postgresTableExists(pool: Pool, tableName: string): Promise<boolean> {
   const result = await pool.query(
     `SELECT 1
@@ -955,11 +983,30 @@ async function ensurePostgresServicesTableShape(pool: Pool): Promise<void> {
   await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`);
 }
 
+async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void> {
+  if (!(await postgresTableExists(pool, 'accounts'))) return;
+
+  const columns = await getPostgresTableColumns(pool, 'accounts');
+  const alterStatements: string[] = [];
+
+  if (!columns.has('security_posture')) {
+    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`);
+  }
+  if (!columns.has('head_snapshot_id')) {
+    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`);
+  }
+
+  for (const statement of alterStatements) {
+    await pool.query(statement);
+  }
+}
+
 export async function createSqliteD1Database(dbPath: string, migrationsDir: string): Promise<ServerD1Database> {
   await ensureParentDirectory(dbPath);
   const client = createClient({ url: pathToFileURL(dbPath).href });
   await ensureServerMigrations(client, migrationsDir);
   await ensureSqliteServicesTableShape(client);
+  await ensureSqliteAccountsTableShape(client);
 
   const runStatement = <T = Record<string, unknown>>(statement: D1PreparedStatement) => statement.run<T>();
   const session = {
@@ -1008,6 +1055,7 @@ export async function createPostgresD1Database(connectionString: string): Promis
   );
   await ensureServerPostgresMigrations(pool, migrationsDir);
   await ensurePostgresServicesTableShape(pool);
+  await ensurePostgresAccountsTableShape(pool);
   let transactionClient: PoolClient | null = null;
 
   async function getTransactionClient(): Promise<PoolClient> {

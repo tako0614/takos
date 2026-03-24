@@ -22,7 +22,7 @@ export function generateProxyToken(): string {
 
 export function buildAgentExecutorProxyConfig(
   env: AgentExecutorProxyConfigEnv,
-  _claims: { runId: string; workerId: string },
+  _claims: { runId: string; serviceId: string },
 ): AgentExecutorControlConfig {
   return {
     controlRpcBaseUrl: env.CONTROL_RPC_BASE_URL,

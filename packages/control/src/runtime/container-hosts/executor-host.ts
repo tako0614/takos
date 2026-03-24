@@ -174,7 +174,7 @@ type Env = AgentExecutorEnv;
 /** Token metadata stored alongside each random proxy token. */
 export interface ProxyTokenInfo {
   runId: string;
-  workerId: string;
+  serviceId: string;
   capability: ProxyCapability;
 }
 
@@ -196,9 +196,12 @@ export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
   }
 
   async dispatchStart(body: AgentExecutorDispatchPayload): Promise<AgentExecutorDispatchResult> {
-    const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, body);
+    const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, {
+      runId: body.runId,
+      serviceId: body.workerId,
+    });
     const tokenMap: Record<string, ProxyTokenInfo> = {
-      [controlConfig.controlRpcToken]: { runId: body.runId, workerId: body.workerId, capability: 'control' },
+      [controlConfig.controlRpcToken]: { runId: body.runId, serviceId: body.workerId, capability: 'control' },
     };
     await this.ctx.storage.put('proxyTokens', tokenMap);
     this.cachedTokens = new Map(Object.entries(tokenMap));
@@ -1649,7 +1652,7 @@ export default {
       // Build claims-equivalent object for existing validation logic
       const claims: Record<string, unknown> = {
         run_id: tokenInfo.runId,
-        worker_id: tokenInfo.workerId,
+        worker_id: tokenInfo.serviceId,
         proxy_capabilities: [tokenInfo.capability],
       };
 

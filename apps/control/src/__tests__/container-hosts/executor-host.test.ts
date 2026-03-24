@@ -145,10 +145,10 @@ function makeMockExecutorContainerNamespace(): any {
     getByName: vi.fn((runId: string) => ({
       verifyProxyToken: vi.fn(async (token: string) => {
         if (token === 'bindings-token') {
-          return { runId, workerId: 'worker-1', capability: 'bindings' };
+          return { runId, serviceId: 'worker-1', capability: 'bindings' };
         }
         if (token === 'control-token') {
-          return { runId, workerId: 'worker-1', capability: 'control' };
+          return { runId, serviceId: 'worker-1', capability: 'control' };
         }
         return null;
       }),
@@ -2054,7 +2054,7 @@ describe('run control proxy', () => {
             status: 'running',
             threadId: 'thread-1',
             sessionId: 'session-1',
-            workerId: 'worker-1',
+            serviceId: 'worker-1',
           }),
         }),
       }),

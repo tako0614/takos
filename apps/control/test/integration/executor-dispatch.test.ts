@@ -40,7 +40,7 @@ describe('dispatchAgentExecutorStart', () => {
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
     }, {
       runId: 'run-secret',
-      workerId: 'worker-secret',
+      serviceId: 'worker-secret',
     });
 
     expect(controlConfig.controlRpcToken).toBeTruthy();
@@ -61,7 +61,7 @@ describe('dispatchAgentExecutorStart', () => {
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
     }, {
       runId: 'run-secret',
-      workerId: 'worker-secret',
+      serviceId: 'worker-secret',
     });
 
     await dispatchAgentExecutorStart(

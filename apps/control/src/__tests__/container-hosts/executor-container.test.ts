@@ -75,14 +75,14 @@ describe('TakosAgentExecutorContainer', () => {
 
     const tokenMap = storage.get('proxyTokens') as Record<string, {
       runId: string;
-      workerId: string;
+      serviceId: string;
       capability: 'bindings' | 'control';
     }>;
     expect(tokenMap).toBeDefined();
     expect(Object.keys(tokenMap)).toHaveLength(1);
 
     const tokenInfos = Object.values(tokenMap);
-    expect(tokenInfos).toContainEqual({ runId: 'run-1', workerId: 'worker-1', capability: 'control' });
+    expect(tokenInfos).toContainEqual({ runId: 'run-1', serviceId: 'worker-1', capability: 'control' });
 
     for (const [token, info] of Object.entries(tokenMap)) {
       await expect(container.verifyProxyToken(token)).resolves.toEqual(info);
@@ -91,14 +91,14 @@ describe('TakosAgentExecutorContainer', () => {
 
   it('verifyProxyToken loads persisted tokens from storage and rejects unknown token', async () => {
     storage.set('proxyTokens', {
-      'persisted-token': { runId: 'run-old', workerId: 'worker-old', capability: 'bindings' },
+      'persisted-token': { runId: 'run-old', serviceId: 'worker-old', capability: 'bindings' },
     });
 
     const container = new TakosAgentExecutorContainer(ctx as any, env as any);
 
     await expect(container.verifyProxyToken('persisted-token')).resolves.toEqual({
       runId: 'run-old',
-      workerId: 'worker-old',
+      serviceId: 'worker-old',
       capability: 'bindings',
     });
     await expect(container.verifyProxyToken('unknown-token')).resolves.toBeNull();
