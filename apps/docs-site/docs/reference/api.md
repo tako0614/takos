@@ -1,254 +1,175 @@
 # API リファレンス
 
-Takos はすべての操作を REST API で提供します。アクセストークンを使って外部からプログラマティックに操作できます。
+<!-- docs:api-families seed-repositories,explore,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,pull-requests,app-deployments,browser-sessions,billing,auth,oauth -->
+
+::: tip Coverage
+このページは **route family 単位の current contract** をまとめています。Takos の public API は `/api/*` 配下で提供され、CLI の task domain もこの family 群にマップされます。
+:::
+
+## このリファレンスで依存してよい範囲
+
+- `/api/*` の family ごとの責務
+- auth mode と representative path
+- current API surface の読み分け
+
+## このリファレンスで依存してはいけない範囲
+
+- family 名だけを見て lower-level internal route まで current contract だと解釈すること
+- architecture や実装コードにある補助 route を、このページの代わりに採用判断へ使うこと
+- request / response の完全 wire schema がここに全部書かれていると期待すること
+
+## API の読み方
+
+Takos API は、1 endpoint ずつの一覧よりも family 単位の責務で読む方が迷いません。
+まず family を決め、次に auth mode と representative path を見ます。
 
 ## 認証
 
-### Personal Access Token (PAT)
-
-すべてのリクエストに `Authorization: Bearer <token>` ヘッダを付与します。
-
-```bash
-curl -H "Authorization: Bearer tak_pat_..." https://your-takos.example/api/me
-```
-
-#### トークンの作成
-
-1. Web UI: 設定 → Personal Access Tokens → 新規作成
-2. API:
-
-```bash
-curl -X POST https://your-takos.example/api/me/personal-access-tokens \
-  -H "Authorization: Bearer <existing-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-token", "scopes": "*"}'
-```
-
-レスポンス:
-
-```json
-{
-  "id": "tok_abc123",
-  "name": "my-token",
-  "token": "tak_pat_...",
-  "tokenPrefix": "tak_pat_abcd",
-  "scopes": "*",
-  "expiresAt": null,
-  "createdAt": "2026-03-25T00:00:00Z"
-}
-```
-
-`token` フィールドは作成時にのみ表示されます。DB には SHA256 ハッシュのみ保存されるため、再取得はできません。
-
-#### トークン形式
-
-| field | description |
-| --- | --- |
-| prefix | `tak_pat_` |
-| body | 32 バイトランダム (base64url) |
-| scopes | JSON 配列 or `"*"` (全権限) |
-| expiresAt | ISO8601 (null = 無期限) |
-
-### その他の認証方式
-
-| 方式 | ヘッダ | 用途 |
+| mode | 使い方 | 用途 |
 | --- | --- | --- |
-| Session Cookie | `Cookie: session_id=...` | ブラウザ |
-| PAT | `Authorization: Bearer tak_pat_...` | CLI / API クライアント |
-| OAuth Bearer | `Authorization: Bearer eyJ...` (JWT) | サードパーティアプリ |
-| Container Auth | `X-Takos-Session-Id` + `X-Takos-Internal: 1` | 内部ランタイム |
+| Session cookie | browser から `Cookie` | SPA / console |
+| PAT | `Authorization: Bearer tak_pat_...` | CLI / automation |
+| OAuth bearer | `Authorization: Bearer tak_oat_...` | third-party apps |
+| Internal binding | service binding + internal headers | worker 間通信 |
 
-## エンドポイント一覧
+PAT は `/api/me/personal-access-tokens` で管理します。
 
-Base URL: `https://your-takos.example/api`
+## Route families
 
-### ユーザー
+### Public / optional auth
 
-| Method | Path | Auth | Description |
+| family | auth | representative paths | purpose |
 | --- | --- | --- | --- |
-| GET | `/me` | required | 現在のユーザー情報 |
-| GET | `/me/settings` | required | ユーザー設定 |
-| PATCH | `/me/settings` | required | 設定更新 |
-| PATCH | `/me/username` | required | ユーザー名変更 |
-| GET | `/me/personal-access-tokens` | required | PAT 一覧 |
-| POST | `/me/personal-access-tokens` | required | PAT 作成 |
-| DELETE | `/me/personal-access-tokens/:id` | required | PAT 無効化 |
+| `seed-repositories` | none | `/api/seed-repositories` | 初回導入用 seed repo 一覧 |
+| `explore` | optional | `/api/explore/repos`, `/api/explore/catalog`, `/api/explore/users` | 公開 catalog / discover |
+| `profiles` | optional | `/api/users/:username`, `/api/users/:username/repos` | 公開 profile / repo view |
+| `public-share` | mixed | `/api/public/thread-shares/:token` | thread share の read / access grant |
+| `mcp` | mixed | `/api/mcp/oauth/callback`, `/api/mcp/servers` | MCP OAuth callback と MCP server 管理 |
+| `billing` | mixed | `/api/billing/webhook` | Stripe webhook |
+| `oauth` | session | `/api/oauth/authorize/context`, `/api/oauth/device/context` | consent UI 用 API |
 
-### ワークスペース
+### Authenticated families
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/spaces` | required | ワークスペース一覧 |
-| POST | `/spaces` | required | ワークスペース作成 |
-| GET | `/spaces/me` | required | 個人ワークスペース |
-| GET | `/spaces/:id` | required | ワークスペース詳細 |
-| PATCH | `/spaces/:id` | required | ワークスペース更新 |
-| DELETE | `/spaces/:id` | required | ワークスペース削除 |
-| GET | `/spaces/:id/members` | required | メンバー一覧 |
-| POST | `/spaces/:id/members` | required | メンバー追加 |
-| PATCH | `/spaces/:id/members/:memberId` | required | メンバーロール変更 |
-| DELETE | `/spaces/:id/members/:memberId` | required | メンバー削除 |
+| family | representative paths | purpose |
+| --- | --- | --- |
+| `setup` | `/api/setup/status`, `/api/setup/complete` | 初期セットアップ状態 |
+| `me` | `/api/me`, `/api/me/settings`, `/api/me/oauth/*`, `/api/me/personal-access-tokens` | current user / settings / PAT / OAuth client |
+| `spaces` | `/api/spaces`, `/api/spaces/:spaceId`, `/api/spaces/:spaceId/members` | workspace/space 基本 CRUD |
+| `spaces.storage` | `/api/spaces/:spaceId/storage/*` | file upload/download/list/bulk ops/file handlers |
+| `spaces.common-env` | `/api/spaces/:spaceId/common-env` | 共通 env の read/write/delete |
+| `spaces.stores` | `/api/spaces/:spaceId/stores`, `/api/spaces/:spaceId/store-registry/*` | store / registry / install flows |
+| `shortcuts` | `/api/shortcuts`, `/api/spaces/:spaceId/shortcuts/groups` | shortcut と group 管理 |
+| `services` | `/api/services`, `/api/services/:id` | service CRUD と runtime 管理 |
+| `custom-domains` | `/api/services/:id/custom-domains/*` | custom domain verify / SSL refresh |
+| `resources` | `/api/resources`, `/api/resources/:id/*` | resource CRUD / access / tokens / D1 / R2 |
+| `apps` | `/api/apps`, `/api/apps/:id`, `/api/apps/:id/client-key` | builtin/custom app listing |
+| `threads` | `/api/spaces/:spaceId/threads`, `/api/threads/:id/messages`, `/api/threads/:id/share` | thread / message / share |
+| `runs` | `/api/threads/:threadId/runs`, `/api/runs/:id`, `/api/runs/:id/sse`, `/api/runs/:id/ws` | run 実行・event stream・artifact |
+| `search` | `/api/spaces/:spaceId/search`, `/api/spaces/:spaceId/search/quick` | semantic / quick search |
+| `index` | `/api/spaces/:spaceId/index`, `/api/spaces/:spaceId/graph` | indexing / graph 系 |
+| `memories` | `/api/spaces/:spaceId/memories`, `/api/spaces/:spaceId/reminders` | memory / reminder |
+| `skills` | `/api/spaces/:spaceId/skills`, `/api/workspaces/:workspaceId/skills` | skill catalog / custom skill |
+| `sessions` | `/api/sessions/:sessionId/*` | session health / resume / discard / heartbeat |
+| `git` | `/api/spaces/:spaceId/git/*` | space-scoped git 操作 |
+| `repos` | `/api/spaces/:spaceId/repos`, `/api/repos/:repoId/*` | repo CRUD / tree/blob/commits/branches/releases/actions |
+| `pull-requests` | `/api/repos/:repoId/pulls/*` | PR / review 系 |
+| `agent-tasks` | `/api/spaces/:spaceId/agent-tasks`, `/api/agent-tasks/:id/plan` | task orchestration |
+| `notifications` | `/api/notifications`, `/api/notifications/sse`, `/api/notifications/ws` | notification list / SSE / WS |
+| `app-deployments` | `/api/spaces/:spaceId/app-deployments`, `/rollback`, `/rollout/*` | app deploy / rollback / rollout control |
+| `browser-sessions` | `/api/spaces/:spaceId/browser-sessions`, `/api/browser-sessions/:id/*` | browser session lifecycle |
+| `billing` | `/api/billing`, `/api/billing/usage`, `/api/billing/subscribe`, `/api/billing/invoices/*` | current account billing |
+| `auth` | `/api/auth/me`, `/api/auth/profile`, `/api/auth/logout` | authenticated auth/profile actions |
 
-### リポジトリ
+## Representative operation models
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/repos` | optional | リポジトリ一覧 |
-| POST | `/repos` | required | リポジトリ作成 |
-| GET | `/repos/:id` | optional | リポジトリ詳細 |
-| PATCH | `/repos/:id` | required | リポジトリ更新 |
-| DELETE | `/repos/:id` | required | リポジトリ削除 |
-| POST | `/repos/:id/star` | required | スター追加 |
-| DELETE | `/repos/:id/star` | required | スター削除 |
+### `spaces`
 
-### Git
+`spaces` family は workspace/space を起点にした surface です。
+基本 CRUD だけでなく、次の subresource を current contract に含みます。
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/git/repos/:id/commits` | optional | コミット一覧 |
-| GET | `/git/repos/:id/branches` | optional | ブランチ一覧 |
-| GET | `/git/repos/:id/objects/:sha` | optional | Git オブジェクト取得 |
+- members
+- repos bootstrap
+- storage
+- common env
+- stores
+- store registry
 
-### スレッド (会話)
+### `runs`
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/spaces/:spaceId/threads` | required | スレッド一覧 |
-| POST | `/spaces/:spaceId/threads` | required | スレッド作成 |
-| GET | `/threads/:id` | required | スレッド詳細 |
-| POST | `/threads/:id/messages` | required | メッセージ送信 |
-| PATCH | `/threads/:id` | required | スレッド更新 |
-| DELETE | `/threads/:id` | required | スレッド削除 |
-| GET | `/threads/:id/timeline` | required | タイムライン |
+`runs` family は request/response だけでなく stream surface も持ちます。
+状態変化を追うときは `/api/runs/:id/sse` または `/api/runs/:id/ws` を使います。
 
-### Run (エージェント実行)
+### `services`
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/threads/:threadId/runs` | required | Run 一覧 |
-| POST | `/threads/:threadId/runs` | required | Run 開始 |
-| GET | `/runs/:id` | required | Run 詳細・状態 |
-| GET | `/runs/:id/timeline` | required | 実行タイムライン |
-| PATCH | `/runs/:id` | required | Run 操作 (cancel 等) |
+`services` family は service/runtime surface の current public route family です。
+codebase や UI に `worker` という語が残る場面がありますが、API path の正本は `/api/services` として読みます。
 
-### アーティファクト
+### `repos`
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/artifacts/:id` | required | アーティファクト取得 |
-| POST | `/artifacts` | required | アーティファクト作成 |
-| DELETE | `/artifacts/:id` | required | アーティファクト削除 |
+`repos` family は repo CRUD に加えて、tree/blob/history、releases、actions、pull requests への入口でもあります。
+Takos CLI で `repo` domain が広い責務を持つのはこのためです。
 
-### MCP サーバー
+### `app-deployments`
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/mcp/servers` | required | 登録済み MCP サーバー一覧 |
-| POST | `/mcp/servers` | required | MCP サーバー登録 |
-| GET | `/mcp/servers/:id` | required | MCP サーバー詳細 |
-| PATCH | `/mcp/servers/:id` | required | MCP サーバー更新 (有効/無効) |
-| DELETE | `/mcp/servers/:id` | required | MCP サーバー削除 |
+`app-deployments` family は repo-local app deploy の public/current API です。
+主説明面は `services/:id/deployments` ではなく `/api/spaces/:spaceId/app-deployments` です。
 
-### Store (ActivityPub)
+主要 endpoint:
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/spaces/:id/stores` | required | ローカルストア一覧 |
-| POST | `/spaces/:id/stores` | required | ストア作成 |
-| GET | `/spaces/:id/store-registry` | required | リモートストア一覧 |
-| POST | `/spaces/:id/store-registry` | required | リモートストア登録 |
-| POST | `/spaces/:id/store-registry/:entryId/install` | required | リモートリポジトリインストール |
+- `POST /api/spaces/:spaceId/app-deployments`
+- `GET /api/spaces/:spaceId/app-deployments`
+- `GET /api/spaces/:spaceId/app-deployments/:appDeploymentId`
+- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback`
+- `GET /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout`
+- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause`
+- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume`
+- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort`
+- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote`
 
-### スキル
+## implementation note
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/skills` | required | 公式スキルカタログ |
-| GET | `/workspaces/:id/skills` | required | ワークスペーススキル一覧 |
-| POST | `/workspaces/:id/skills` | required | カスタムスキル作成 |
-| PATCH | `/workspaces/:id/skills/:name` | required | スキル更新 |
-| DELETE | `/workspaces/:id/skills/:name` | required | スキル削除 |
+deploy family は current public surface ですが、today の implementation gap は [Deploy System](/specs/deploy-system) に従って読みます。
+このリファレンスは route family の存在と役割を示すものであり、end-to-end availability の保証は implementation note を優先してください。
 
-### Seed Repositories
+## Examples
 
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/seed-repositories` | none | 推奨パッケージ一覧 |
-
-### 公開
-
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| GET | `/explore/repos` | optional | 公開リポジトリ探索 |
-| GET | `/explore/repos/trending` | optional | トレンド |
-| GET | `/users/:username` | optional | ユーザープロフィール |
-
-## レスポンス形式
-
-### 成功
-
-```json
-{
-  "id": "...",
-  "name": "...",
-  ...
-}
-```
-
-### エラー
-
-```json
-{
-  "error": "Not Found",
-  "code": "NOT_FOUND",
-  "message": "Resource not found"
-}
-```
-
-| Status | Description |
-| --- | --- |
-| 401 | 認証なし / トークン無効 |
-| 402 | 課金クォータ超過 |
-| 403 | 権限不足 |
-| 404 | リソースが存在しない |
-| 409 | 競合 (重複等) |
-| 500 | サーバーエラー |
-
-## 使用例
-
-### ワークスペースのスレッド一覧を取得
+### current user を取得
 
 ```bash
 curl -H "Authorization: Bearer tak_pat_..." \
-  https://your-takos.example/api/spaces/ws_abc123/threads
+  https://your-takos.example/api/me
 ```
 
-### メッセージを送信してエージェントを実行
-
-```bash
-# 1. スレッド作成
-THREAD=$(curl -s -X POST \
-  -H "Authorization: Bearer tak_pat_..." \
-  -H "Content-Type: application/json" \
-  -d '{"title": "API test"}' \
-  https://your-takos.example/api/spaces/ws_abc123/threads)
-
-THREAD_ID=$(echo $THREAD | jq -r '.id')
-
-# 2. メッセージ送信 + Run 開始
-curl -X POST \
-  -H "Authorization: Bearer tak_pat_..." \
-  -H "Content-Type: application/json" \
-  -d '{"content": "What files are in this workspace?"}' \
-  https://your-takos.example/api/threads/$THREAD_ID/messages
-```
-
-### MCP サーバーを登録
+### thread を作成
 
 ```bash
 curl -X POST \
   -H "Authorization: Bearer tak_pat_..." \
   -H "Content-Type: application/json" \
-  -d '{"name": "my-tools", "url": "https://my-mcp-server.example/mcp"}' \
-  https://your-takos.example/api/mcp/servers
+  -d '{"title":"debug"}' \
+  https://your-takos.example/api/spaces/ws_123/threads
 ```
+
+### app deploy を開始
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer tak_pat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"repo_id":"repo_123","ref":"main","ref_type":"branch"}' \
+  https://your-takos.example/api/spaces/ws_123/app-deployments
+```
+
+### run event を SSE で追う
+
+```bash
+curl -N \
+  -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/runs/run_123/sse
+```
+
+## 次に読むページ
+
+- [Deploy System](/specs/deploy-system)
+- [CLI command reference](/reference/commands)
+- [用語集](/reference/glossary)

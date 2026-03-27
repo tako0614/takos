@@ -1,49 +1,149 @@
 # 用語集
 
-## Workspace / Space
+この用語集は、Takos Docs を読むうえで最低限ぶれやすい語だけを揃えるためのものです。
+仕様上の意味を優先し、実装の細部や列挙の網羅はここでは扱いません。
 
-所有・隔離の最上位単位。public surface では workspace、internal では space が canonical。
+## Docs ラベル
 
-## Repo
+### Current contract
+
+利用者が依存してよい documented public surface。
+manifest, CLI, API, example がこの語で示す対象を優先して読む。
+
+### Implementation note
+
+current contract と実装 wiring の差分を示す注記。
+「今日たまたま動くもの」の案内ではなく、差分の説明として読む。
+
+### Public surface
+
+利用者・運用者・組み込み側が直接触る面。
+`.takos/app.yml`、`takos` CLI、`/api/*` family などを含む。
+
+### Internal model
+
+control plane / provider / runtime の内部構造を説明する面。
+重要でも public contract とは限らない。
+
+## 中核概念
+
+### Workspace / Space
+
+所有・隔離の最上位単位。
+public surface では `workspace`、internal model では `space` が主に使われる。
+
+### Repo
 
 source と workflow artifact の起点。
+deploy の source provenance を決める単位。
 
-## Worker
+### Worker
 
 public surface での deployable unit。
+manifest では `spec.services.*.type: worker` が current contract で、API family の正本は `/api/services`。
 
-## Service
+### Service
 
-internal model での実行単位。current public manifest では worker service が正本。
+internal model での実行単位。
+public manifest では worker service がその入口になる。
 
-## Route
+### Resource
 
-service への入り口。
+service が利用する backing capability。
+D1, R2, KV, Queue などを manifest で宣言する。
 
-## Resource
+### Binding
 
-service が利用する backing capability。D1, R2, KV など。
+service に resource や他 service を渡す名前付き接続。
 
-## Binding
+## Deploy
 
-service へ resource や他 service を渡す名前付き接続。
+### App Manifest (`.takos/app.yml`)
 
-## Thread
+`kind: App` の single-document YAML。
+service / resource / route / OAuth / MCP / file handler を宣言する current contract。
+
+### App Deployment
+
+repo/ref から manifest と artifact provenance を束ねて作成される deploy の単位。
+public API family は `/api/spaces/:spaceId/app-deployments`。
+
+### Rollout
+
+app deployment を段階的に公開する制御。
+pause / resume / abort / promote の操作を持つ。
+
+### Rollback
+
+前の app deployment へ戻す操作。
+データや schema の自動巻き戻しまで意味しない。
+
+### Workflow Artifact
+
+`.takos/workflows/` 配下の workflow が出力する build 成果物。
+app deployment が参照する artifact provenance の正本。
+
+## AI 実行
+
+### Thread
 
 継続する対話や作業コンテキスト。
 
-## Run
+### Run
 
 thread 上の 1 回の実行。
+stream surface を持つ。
 
-## Artifact
+### Artifact
 
 run の結果物。
+コード、設定、文書、レポートなどを含む。
 
-## Provider
+## 認証
 
-deploy backend の種類。cloudflare や oci など。
+### PAT (Personal Access Token)
 
-## Tenant runtime
+CLI / automation 用の bearer token。
 
-deploy された artifact が実際にリクエストを処理する面。
+### Managed Token
+
+deploy された app が Takos API を呼ぶための Takos-managed token。
+権限は manifest 側の scope 宣言で制御する。
+
+### OAuth Client
+
+Takos API へアクセスする third-party app の登録単位。
+
+### Scope
+
+OAuth / managed token が要求・付与する権限の粒度。
+
+## 配布と連携
+
+### Store
+
+ActivityPub ベースのリポジトリ発見・配布メカニズム。
+
+### MCP (Model Context Protocol)
+
+repo や app がツール surface を公開するための主要 protocol。
+manifest の `spec.mcpServers` で宣言する。
+
+### File Handler
+
+storage/file 系 UI から app を開く contract。
+
+## 実行基盤
+
+### Control Plane
+
+API, deploy, routing, run lifecycle, resource 管理を担当する Takos の制御面。
+
+### Tenant Runtime
+
+deploy された artifact が実際に request を処理する実行面。
+
+### Provider
+
+deploy backend の種類。
+Cloudflare と local などの差分は operations / architecture で扱う。

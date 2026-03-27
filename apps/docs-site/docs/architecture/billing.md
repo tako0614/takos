@@ -4,19 +4,19 @@ Takos の課金システムの設計と仕組みをまとめます。
 
 ## 概要
 
-Takos は使用量ベースの課金モデルを採用しています。テナント (Space) ごとにプランが紐づき、プランに応じた無料枠と従量課金が適用されます。使用量はメーターで計測され、クォータを超過すると書き込み系の API が制限されます。
+Takos は使用量ベースの課金モデルを採用しています。課金アカウントはユーザー (Account) 単位で紐づき、プランに応じた無料枠と従量課金が適用されます。使用量はメーターで計測され、クォータを超過すると書き込み系の API が制限されます。
 
 ## プラン
 
-Space に紐づく課金プランは次の 3 種類です。
+課金アカウントに紐づくプランは次の 3 種類です。
 
-| プラン | 説明 |
-| --- | --- |
-| free | 無料枠。個人の検証・小規模利用向け |
-| pro | 個人向け有料プラン。より多くのリソースと高い上限 |
-| scale | チーム向けプラン。大規模利用に対応 |
+| プラン ID | 表示名 | 課金モデル | 説明 |
+| --- | --- | --- | --- |
+| `plan_free` | Free | 無料 | 無料枠。個人の検証・小規模利用向け |
+| `plan_plus` | Plus | サブスクリプション | 個人向け有料プラン。Stripe Checkout で契約 |
+| `plan_payg` | Pay As You Go | プリペイド残高 | 従量課金プラン。クレジットを購入して残高から消費 |
 
-プランは Space 単位で 1 つだけ保持します。プランの変更は Stripe Billing Portal 経由、または API から行えます。
+プランはユーザーの課金アカウント (`billingAccounts.accountId`) 単位で 1 つ保持します。プランの変更は Stripe Billing Portal 経由、または API から行えます。
 
 ## メータータイプ
 
@@ -24,11 +24,16 @@ Space に紐づく課金プランは次の 3 種類です。
 
 | メーター | 説明 |
 | --- | --- |
-| `vector_search_count` | セマンティック検索のリクエスト回数 |
-| `embedding_count` | エンベディング生成の回数 |
-| `exec_seconds` | セッション実行時間 (秒単位) |
-| `wfp_requests` | Worker リクエスト数 |
 | `llm_tokens_input` | AI エージェントのトークン使用量 (入力) |
+| `llm_tokens_output` | AI エージェントのトークン使用量 (出力) |
+| `embedding_count` | エンベディング生成の回数 |
+| `vector_search_count` | セマンティック検索のリクエスト回数 |
+| `exec_seconds` | セッション実行時間 (秒単位) |
+| `browser_seconds` | ブラウザ自動化の実行時間 (秒単位) |
+| `web_search_count` | Web 検索のリクエスト回数 |
+| `r2_storage_gb_month` | R2 ストレージ使用量 (GB/月) |
+| `wfp_requests` | Worker リクエスト数 |
+| `queue_messages` | キューメッセージ数 |
 
 メーターの値は Analytics Engine に書き込まれ、定期的に集計されます。集計結果は Control Plane の DB に保存され、課金ゲートの判定に使われます。
 
@@ -52,7 +57,7 @@ Content-Type: application/json
 {
   "error": "quota_exceeded",
   "meter": "exec_seconds",
-  "plan": "free",
+  "plan": "plan_free",
   "message": "プランの上限に達しました。プランをアップグレードしてください。"
 }
 ```
@@ -63,31 +68,40 @@ Content-Type: application/json
 
 課金の決済と管理には Stripe を使用しています。
 
-### Checkout Session
+### Plus サブスクリプション
 
-新規プラン契約や有料プランへのアップグレード時には、Stripe Checkout Session を作成してユーザーを Stripe のホスト型決済ページへリダイレクトします。
+Plus プランへのアップグレードは Stripe Checkout Session を作成し、ユーザーを Stripe のホスト型決済ページへリダイレクトします。
 
 ```
-POST /api/billing/checkout
-{
-  "spaceId": "sp_xxx",
-  "plan": "pro"
-}
+POST /api/billing/subscribe
 → { "url": "https://checkout.stripe.com/c/pay_xxx" }
 ```
 
+リクエストボディは不要です。認証済みユーザーの課金アカウントに対して checkout を作成します。
+
+### Pay As You Go クレジット購入
+
+PayG プランではクレジットパックを購入して残高をチャージします。
+
+```
+POST /api/billing/credits/checkout
+{ "pack_id": "pack_xxx" }
+→ { "url": "https://checkout.stripe.com/c/pay_xxx" }
+```
+
+利用可能なパックは `GET /api/billing` の `topup_packs` で取得できます。
+
 ### Webhook
 
-Stripe からのイベントは `/api/billing/webhook` エンドポイントで受信します。主要なイベントは次のとおりです。
+Stripe からのイベントは `/api/billing/webhook` エンドポイントで受信します。処理するイベントは次のとおりです。
 
 | イベント | 処理 |
 | --- | --- |
-| `checkout.session.completed` | プランのアクティベーション |
-| `customer.subscription.updated` | プラン変更の反映 |
-| `customer.subscription.deleted` | プランの解約処理 |
-| `invoice.payment_failed` | 支払い失敗の通知・猶予期間の開始 |
+| `checkout.session.completed` | Plus のアクティベーション、または PayG クレジットの加算 |
+| `invoice.paid` | サブスクリプション期間の更新 |
+| `customer.subscription.deleted` | プランの解約処理 (残高があれば PayG へ、なければ Free へダウングレード) |
 
-Webhook の署名検証は Stripe SDK の `constructEvent` で行い、不正なリクエストは拒否します。
+Webhook の署名検証は HMAC-SHA256 で行い、不正なリクエストは拒否します。
 
 ### Billing Portal
 
@@ -95,11 +109,24 @@ Webhook の署名検証は Stripe SDK の `constructEvent` で行い、不正な
 
 ```
 POST /api/billing/portal
-{
-  "spaceId": "sp_xxx"
-}
 → { "url": "https://billing.stripe.com/p/session/xxx" }
 ```
+
+リクエストボディは不要です。認証済みユーザーの Stripe Customer ID から portal session を作成します。
+
+## API エンドポイント一覧
+
+| エンドポイント | メソッド | 説明 |
+| --- | --- | --- |
+| `/api/billing` | GET | 課金アカウント概要 (プラン、残高、利用可能アクション、パック一覧) |
+| `/api/billing/usage` | GET | 当月使用量 (メーター別の units と cost_cents) |
+| `/api/billing/subscribe` | POST | Plus サブスクリプション checkout 作成 |
+| `/api/billing/credits/checkout` | POST | PayG クレジットパック checkout 作成 |
+| `/api/billing/portal` | POST | Stripe Billing Portal session 作成 |
+| `/api/billing/invoices` | GET | 請求書一覧 |
+| `/api/billing/invoices/:id/pdf` | GET | 請求書 PDF ダウンロード |
+| `/api/billing/invoices/:id/send` | POST | 請求書メール送信 |
+| `/api/billing/webhook` | POST | Stripe Webhook 受信 |
 
 ## クォータ超過時の動作
 
@@ -108,6 +135,6 @@ POST /api/billing/portal
 1. **ソフトリミット到達** — 使用量がプラン上限の 80% に達すると、API レスポンスヘッダーに警告を付与する (`X-Quota-Warning: approaching`)
 2. **ハードリミット到達** — 使用量がプラン上限に達すると、書き込み系 API が `402 Payment Required` で拒否される
 3. **読み取りは継続可能** — GET / HEAD リクエストはクォータ超過時も引き続き利用できる
-4. **猶予期間** — 支払い失敗時は一定期間の猶予を設け、その間はサービスを維持する
+4. **解約時のフォールバック** — サブスクリプション解約時、残高があれば PayG に、なければ Free にダウングレードする
 
 クォータはリセット周期 (日次または月次) で自動リセットされます。リセットタイミングはメーターごとに定義されます。

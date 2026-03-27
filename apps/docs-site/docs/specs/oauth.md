@@ -3,7 +3,7 @@
 Revision: 2026-03-26 r1
 Status: 確定仕様
 
-Takos の OAuth 実装は **OAuth 2.1** (RFC 9101 系) に準拠し、サードパーティアプリおよび CLI からの安全な API アクセスを提供します。
+Takos の OAuth 実装は **OAuth 2.1** (draft-ietf-oauth-v2-1) に準拠し、サードパーティアプリおよび CLI からの安全な API アクセスを提供します。
 
 関連ドキュメント:
 
@@ -341,14 +341,14 @@ Content-Type: application/json
 
 ```yaml
 apiVersion: takos.dev/v1alpha1
-kind: Package
+kind: App
 metadata:
   name: my-dashboard
 spec:
   version: "1.0.0"
   oauth:
-    client_name: My Dashboard
-    redirect_uris:
+    clientName: My Dashboard
+    redirectUris:
       - /callback
     scopes:
       - openid
@@ -507,6 +507,7 @@ Authorization: Bearer <user_token>
 | `/oauth/register` | POST | 動的クライアント登録 |
 | `/oauth/introspect` | POST | トークンイントロスペクション |
 | `/oauth/revoke` | POST | トークン取り消し (RFC 7009) |
+| `/oauth/userinfo` | GET | UserInfo エンドポイント (OpenID Connect) |
 | `/.well-known/openid-configuration` | GET | OpenID Connect Discovery |
 | `/.well-known/oauth-authorization-server` | GET | OAuth Authorization Server Metadata |
 
@@ -521,6 +522,7 @@ Authorization: Bearer <user_token>
   "registration_endpoint": "https://takos.dev/oauth/register",
   "introspection_endpoint": "https://takos.dev/oauth/introspect",
   "revocation_endpoint": "https://takos.dev/oauth/revoke",
+  "userinfo_endpoint": "https://takos.dev/oauth/userinfo",
   "scopes_supported": [
     "openid", "profile", "email",
     "spaces:read", "spaces:write",
@@ -537,6 +539,6 @@ Authorization: Bearer <user_token>
     "urn:ietf:params:oauth:grant-type:device_code"
   ],
   "code_challenge_methods_supported": ["S256"],
-  "token_endpoint_auth_methods_supported": ["none", "client_secret_post"]
+  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"]
 }
 ```

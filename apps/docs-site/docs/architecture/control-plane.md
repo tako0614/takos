@@ -1,184 +1,143 @@
 # Control Plane
 
-Takos の制御層。テナントのアプリ管理、リソースプロビジョニング、デプロイメント制御、使用量計測を行う。
+::: tip Status
+このページは current implementation の構成を説明します。ここでいう control plane は Takos の web/API worker、dispatch、background worker、container host 群をまとめたものです。
+:::
 
-## 構成
+## 役割
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Control Plane (Cloudflare Worker)                       │
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ API Routes   │  │ Cron Triggers│  │ Queue Consumer │  │
-│  │              │  │              │  │               │  │
-│  │ /apps        │  │ reconcile    │  │ deploy jobs   │  │
-│  │ /releases    │  │ usage collect│  │               │  │
-│  │ /promotions  │  │ orphan GC    │  │               │  │
-│  │ /rollback    │  │ operations   │  │               │  │
-│  │ /usage       │  │ cleanup      │  │               │  │
-│  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘  │
-│         │                 │                   │          │
-│  ┌──────▼─────────────────▼───────────────────▼───────┐  │
-│  │              Application Services                   │  │
-│  │                                                     │  │
-│  │  ReleaseService      DeployService                  │  │
-│  │  ResourceService     RolloutService                 │  │
-│  │  MeteringService     PlanService                    │  │
-│  │  MigrationService    QuotaService                   │  │
-│  └──────────────────────┬─────────────────────────────┘  │
-│                         │                                │
-│  ┌──────────────────────▼─────────────────────────────┐  │
-│  │              Infrastructure                         │  │
-│  │                                                     │  │
-│  │  D1 (control DB)    R2 (bundle storage)             │  │
-│  │  Analytics Engine    CF API (D1/R2/KV/Workers)      │  │
-│  └─────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+Takos control plane は次を担当します。
+
+- browser/CLI からの `/api/*` request
+- auth / OAuth / billing / setup
+- app deployment と rollout
+- repo / resource / skill / notification / session の管理
+- runtime-host / executor-host / browser-host との連携
+
+## 実行コンポーネント
+
+```text
+browser / CLI
+  -> takos (web/API worker)
+     -> app services / DB / queues / R2 / DO
+     -> takos-dispatch
+     -> takos-worker (egress / background)
+     -> takos-runtime-host
+        -> takos-executor-host
+        -> takos-browser-host
 ```
 
-## データベース
+main worker (`takos`) は `takos-dispatch`、`takos-worker`、`takos-runtime-host` に直接の service binding を持ちます。`takos-executor-host` と `takos-browser-host` は main worker から直接接続せず、runtime-host や worker を経由して到達します。
 
-Control plane の全状態は D1 に保存する。
+### `takos`
 
-### テーブル一覧
+`wrangler.toml` で定義される main worker です。役割:
 
-| テーブル | 用途 | 主キー |
-|---------|------|--------|
-| `apps` | アプリ登録 | id |
-| `app_environments` | デプロイ先環境 | id |
-| `releases` | 不変の配布物 | id |
-| `app_resources` | テナントリソース (D1/R2/KV) | id |
-| `installations` | Release の CF Worker version 実体 | id |
-| `tracks` | rollout 状態管理 | id |
-| `operations` | mutation 操作の idempotency | id |
-| `space_plans` | テナントの課金プラン | space_id |
-| `app_quotas` | App ごとの quota 設定 | app_environment_id |
-| `usage_records` | 1時間ごとの使用量 | id |
-| `usage_monthly` | 月次使用量集計 | id |
+- SPA + `/api/*`
+- session / PAT / OAuth
+- setup
+- billing webhook 以外の billing UI API
+- route registration と control-plane cron
 
-詳細なスキーマは [Release System](./release-system.md) と [Resource Governance](./resource-governance.md) を参照。
+### `takos-dispatch`
 
-## Cron Triggers
+tenant hostname routing を受け持つ dispatch worker です。WFP dispatch namespace と Routing DO を使って tenant request を正しい runtime へ渡します。
 
-| スケジュール | ハンドラ | 用途 |
-|-------------|---------|------|
-| `* * * * *` (毎分) | reconcileRollouts | rolling_out 状態の track を進行/停止 |
-| `5 * * * *` (毎時 :05) | collectUsage | 各 App の使用量を CF API から収集 |
-| `0 0 * * *` (毎日 00:00) | gcOrphanedResources | 7日超の orphaned resource を削除 |
-| `0 0 * * *` (毎日 00:00) | cleanupOperations | 24時間超の operations レコードを削除 |
-| `0 1 1 * *` (毎月 1日 01:00) | aggregateMonthly | 月次 usage 集計 + 古い hourly records 削除 |
+### `takos-worker`
 
-## Provider Abstraction
+background worker です。役割:
 
-Cloudflare 固有の操作は provider 層に閉じ込める。
+- run queue
+- index queue
+- workflow queue
+- deployment queue
+- egress proxy
+- background cron / recovery
 
-```
-Application Service (provider-agnostic)
-  │
-  ├─ ResourceService.create(type: 'd1', name: '...')
-  │    └─ CloudflareResourceProvider.createD1Database(name)
-  │
-  ├─ DeployService.uploadVersion(script, bundle)
-  │    └─ CloudflareDeployProvider.uploadWorkerVersion(...)
-  │
-  └─ DeployService.setTrafficSplit(stable: 95, candidate: 5)
-       └─ CloudflareDeployProvider.createDeployment(percentages)
-```
+### container host 群
 
-これにより:
+| worker | role |
+| --- | --- |
+| `takos-runtime-host` | runtime container の host |
+| `takos-executor-host` | agent executor container の host |
+| `takos-browser-host` | browser automation container の host |
 
-- ローカル開発時は mock provider で動作
-- テスト時は provider 層を差し替え可能
-- 将来の provider 追加 (OCI 等) に対応可能
+host worker は request の入口であると同時に、container から control plane へ戻る proxy contract の境界でもあります。
 
-## Request Flow
+## API surface
 
-### テナント Worker へのリクエスト
+current API router は route family 単位で次をまとめます。
 
-```
-Client
-  ↓ HTTPS
-CF Edge (Routes / Custom Domains)
-  ↓
-Dispatch Worker (platform outbound worker)
-  ├─ hostname → Worker script name 解決
-  ├─ rate limit check (KV)
-  ├─ dispatch to tenant Worker version
-  │   ├─ stable (95%) or candidate (5%) ← CF native traffic split
-  │   └─ tenant Worker が response 返却
-  ├─ waitUntil: health record (Analytics Engine)
-  └─ response to client
-```
+- public/optional auth: explore, profiles, public share, MCP callback
+- authenticated console APIs: me, spaces, repos, resources, threads, runs, skills, sessions, notifications
+- operator APIs: services, custom domains, app deployments, billing
+- session-auth SPA APIs: OAuth consent
 
-### Control Plane API へのリクエスト
+詳しくは [API リファレンス](/reference/api) を参照してください。
 
-```
-Client (CLI or API)
-  ↓ HTTPS
-CF Edge
-  ↓
-Control Plane Worker
-  ├─ Auth middleware (session / API key)
-  ├─ Route matching (Hono)
-  ├─ Application Service 呼び出し
-  │   ├─ D1 操作
-  │   ├─ R2 操作 (bundle upload/download)
-  │   └─ CF API 呼び出し (resource provisioning)
-  └─ JSON response
+## 永続化の構成
+
+control plane の state は D1 schema group に分かれています。
+
+| schema group | responsibility |
+| --- | --- |
+| Accounts | account, membership, profile, follow/block/mute |
+| Auth | auth session, PAT, service token |
+| Billing | billing account, plan, usage event, usage rollup, transaction |
+| Repos | repository, commit/blob/tree, releases, PR, workflow sync |
+| Agents | thread, message, run, artifact, memory, skill, agent task |
+| Services | service, binding, common env links |
+| OAuth | client, consent, token, auth code, MCP OAuth state |
+| Platform | resource, session, notification, shortcut, infra endpoint |
+| Workflows | workflow run, job, step, secret, artifact |
+| Workers | app, deployment, custom domain, runtime setting, managed token |
+
+この構成は old docs の `app_environments` / `tracks` / `space_plans` 中心モデルとは異なります。現在の docs では schema group と責務のほうを正本として扱います。
+
+## Request flow
+
+### browser / CLI -> API
+
+```text
+client
+  -> takos
+  -> auth middleware
+  -> route family
+  -> application service
+  -> D1 / R2 / queues / service bindings
 ```
 
-## Locking
+### tenant / agent runtime
 
-### Mutation lock
-
-同一 App Environment に対する同時 mutation は 1 つまで。
-
-```sql
--- 楽観的ロック (tracks テーブル)
-UPDATE tracks SET state = 'rolling_out', updated_at = ?
-WHERE app_environment_id = ? AND state = 'idle'
--- affected rows = 0 → 409 Conflict
+```text
+client or agent
+  -> takos / takos-dispatch
+  -> runtime-host / executor-host / browser-host
+  -> container
+  -> proxy back to takos or takos-worker when needed
 ```
 
-### Reconcile lock
+この構成により、runtime の compute と control-plane の stateful API を分離しています。
 
-Cron Trigger の並行実行を防ぐ。
+## Queue と stream
 
-```sql
--- 楽観的ロック (tracks テーブル)
-UPDATE tracks SET updated_at = ?
-WHERE id = ? AND updated_at = ?
--- affected rows = 0 → 別の reconcile worker が処理中、skip
-```
+Takos は queue と DO ベースの notifier を併用します。
 
-### Publish lock
+- queue: run, index, workflow, deployment
+- DO stream: run notifier, notification notifier
+- DO infra: session, routing, git push lock
+- container DO: runtime, executor, browser
 
-同一 App への同時 publish は DB の unique constraint で排他。
+`/api/runs/:id/sse` と `/api/notifications/sse` は current public stream surface です。
 
-```sql
--- UNIQUE(app_pk, version_code) on releases table
--- 同一 versionCode の INSERT は constraint violation → 409
-```
+## Locking / state management
 
-## Durable Objects
+current implementation は「単一の `tracks` テーブル」に依存しません。代わりに次の単位で状態を持ちます。
 
-Control Plane は以下の Durable Object を使用します。
+- app deployment state
+- rollout state
+- service / worker deployment state
+- resource / binding / common env reconcile state
+- DO-local session / proxy token state
 
-| DO | 用途 | 状態 |
-| --- | --- | --- |
-| `SessionDO` | リアルタイムセッション管理 | ✅ 稼働中 |
-| `RunNotifierDO` | Agent run のイベントストリーミング (SSE/WS) | ✅ 稼働中 |
-| `NotificationNotifierDO` | 汎用通知ストリーミング | ⚠️ サーバー側のみ、フロントクライアント未実装 |
-| `RateLimiterDO` | レートリミット (auth 系) | ✅ 稼働中 |
-| `RoutingDO` | ホスト名ルーティングキャッシュ | ✅ 稼働中 |
-| `GitPushLockDO` | Git push の排他制御 | ✅ 稼働中 |
-| `BrowserSessionContainer` | ブラウザコンテナ管理 (takos-computer) | ✅ 稼働中 |
-| `TakosAgentExecutorContainer` | エグゼキュータコンテナ管理 (takos-computer) | ✅ 稼働中 |
-
-### RunNotifierDO
-
-Agent run の実行イベント (thinking, tool_call, tool_result, message, completed 等) をリアルタイムにクライアントに配信します。リングバッファで最新イベントを保持し、SSE または WebSocket でストリーミングします。
-
-### NotificationNotifierDO
-
-汎用的な通知配信基盤。リングバッファ実装は完了していますが、フロントエンドの WebSocket クライアントは未実装です。
+operator が見るべき詳細は [Release System](./release-system.md) と [Resource Governance](./resource-governance.md) を参照してください。

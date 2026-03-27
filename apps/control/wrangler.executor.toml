@@ -1,0 +1,139 @@
+# takos-executor-host Worker configuration
+# Hosts TakosAgentExecutorContainer (CF Containers sidecar for agent runs).
+# Called from takos-worker or takos-runtime-host through service bindings.
+#
+# OSS-safe deployment template. Replace placeholder IDs, bucket names, and
+# worker names before deploying.
+
+name = "takos-executor-host"
+main = "src/executor-host.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+
+[observability]
+enabled = true
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "TakosAgentExecutorContainer"
+
+[[durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+script_name = "takos"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TakosAgentExecutorContainer"]
+
+[[containers]]
+class_name = "TakosAgentExecutorContainer"
+image = "../../../takos-computer/apps/executor/Dockerfile"
+image_build_context = "../../.."
+instance_type = "standard-2"
+max_instances = 25
+
+[[d1_databases]]
+binding = "DB"
+database_name = "takos-control-db"
+database_id = "replace-with-d1-database-id"
+
+[[r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload"
+
+[[r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects"
+
+[[queues.producers]]
+queue = "takos-index-jobs"
+binding = "INDEX_QUEUE"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings"
+
+[ai]
+binding = "AI"
+
+[[services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker"
+
+[[services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host"
+
+[[services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host"
+
+[[services]]
+binding = "TAKOS_CONTROL"
+service = "takos"
+
+[vars]
+ADMIN_DOMAIN = "admin.example.com"
+CONTROL_RPC_BASE_URL = "https://your-executor-host.workers.dev"
+
+[env.staging]
+name = "takos-executor-host-staging"
+workers_dev = true
+
+[env.staging.vars]
+ADMIN_DOMAIN = "test.takos.jp"
+CONTROL_RPC_BASE_URL = "https://takos-executor-host-staging.example.workers.dev"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "TakosAgentExecutorContainer"
+
+[[env.staging.durable_objects.bindings]]
+name = "RUN_NOTIFIER"
+class_name = "RunNotifierDO"
+script_name = "takos-staging"
+
+[[env.staging.containers]]
+class_name = "TakosAgentExecutorContainer"
+image = "../../../takos-computer/apps/executor/Dockerfile"
+image_build_context = "../../.."
+instance_type = "standard-2"
+max_instances = 10
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "takos-control-staging-db-2"
+database_id = "replace-with-staging-d1-database-id"
+
+[[env.staging.r2_buckets]]
+binding = "TAKOS_OFFLOAD"
+bucket_name = "takos-offload-staging"
+
+[[env.staging.r2_buckets]]
+binding = "GIT_OBJECTS"
+bucket_name = "takos-git-objects-staging"
+
+[[env.staging.queues.producers]]
+queue = "takos-index-jobs-staging"
+binding = "INDEX_QUEUE"
+
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "takos-embeddings-staging"
+
+[[env.staging.services]]
+binding = "TAKOS_EGRESS"
+service = "takos-worker-staging"
+
+[[env.staging.services]]
+binding = "RUNTIME_HOST"
+service = "takos-runtime-host-staging"
+
+[[env.staging.services]]
+binding = "BROWSER_HOST"
+service = "takos-browser-host-staging"
+
+[[env.staging.services]]
+binding = "TAKOS_CONTROL"
+service = "takos-staging"
