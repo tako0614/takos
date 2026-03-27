@@ -74,11 +74,11 @@ importers:
         version: 2.8.2
     devDependencies:
       '@types/node':
-        specifier: ^20.14.0
-        version: 20.19.30
+        specifier: ^22.0.0
+        version: 22.19.7
       '@vitest/coverage-v8':
         specifier: ^2.1.0
-        version: 2.1.9(vitest@2.1.9(@types/node@20.19.30)(lightningcss@1.30.2))
+        version: 2.1.9(vitest@2.1.9(@types/node@22.19.7)(lightningcss@1.30.2))
       tsup:
         specifier: ^8.1.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
@@ -87,7 +87,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.0
-        version: 2.1.9(@types/node@20.19.30)(lightningcss@1.30.2)
+        version: 2.1.9(@types/node@22.19.7)(lightningcss@1.30.2)
 
   apps/control:
     dependencies:
@@ -112,9 +112,6 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
-      '@tailwindcss/vite':
-        specifier: ^4.1.18
-        version: 4.1.18(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
       '@takos/actions-engine':
         specifier: workspace:*
         version: link:../../packages/actions-engine
@@ -124,9 +121,6 @@ importers:
       '@takos/common':
         specifier: workspace:*
         version: link:../../packages/common
-      '@takos/control-hosts':
-        specifier: workspace:*
-        version: link:../../packages/control/hosts
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20260118.0)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0)(@opentelemetry/api@1.9.0)(@prisma/client@7.3.0(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.9.3))
@@ -182,6 +176,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260118.0
         version: 4.20260118.0
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
       '@takos/control-local-platform':
         specifier: workspace:*
         version: link:../../packages/control/local-platform
@@ -474,31 +471,6 @@ importers:
       '@takos/control-core':
         specifier: workspace:*
         version: link:../core
-
-  packages/control/hosts:
-    dependencies:
-      '@cloudflare/containers':
-        specifier: ^0.1.1
-        version: 0.1.1
-      '@takos/actions-engine':
-        specifier: workspace:*
-        version: link:../../actions-engine
-      '@takos/cloudflare-compat':
-        specifier: workspace:*
-        version: link:../../cloudflare-compat
-      '@takos/common':
-        specifier: workspace:*
-        version: link:../../common
-      drizzle-orm:
-        specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260118.0)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0)(@opentelemetry/api@1.9.0)(@prisma/client@7.3.0(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))
-      hono:
-        specifier: '>=4.12.4'
-        version: 4.12.8
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
 
   packages/control/infra-pkg: {}
 
@@ -1093,9 +1065,6 @@ packages:
 
   '@chevrotain/utils@10.5.0':
     resolution: {integrity: sha512-hBzuU5+JjB2cqNZyszkDHZgOSrUUT8V3dhgRl8Q9Gp6dAj/H5+KILGjbhDpc3Iy9qmqlm/akuOI2ut9VUtzJxQ==}
-
-  '@cloudflare/containers@0.1.1':
-    resolution: {integrity: sha512-YTdobRTnTlUOUPMFemufH367A9Z8pDfZ+UboYMLbGpO0VlvEXZDiioSmXPQMHld2vRtkL31mcRii3bcbQU6fdw==}
 
   '@cloudflare/kv-asset-handler@0.4.2':
     resolution: {integrity: sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ==}
@@ -6853,8 +6822,6 @@ snapshots:
   '@chevrotain/utils@10.5.0':
     optional: true
 
-  '@cloudflare/containers@0.1.1': {}
-
   '@cloudflare/kv-asset-handler@0.4.2': {}
 
   '@cloudflare/puppeteer@1.0.4':
@@ -8517,7 +8484,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 20.19.30
+      '@types/node': 22.19.7
     optional: true
 
   '@types/caseless@0.12.5': {}
@@ -8567,7 +8534,7 @@ snapshots:
   '@types/request@2.48.13':
     dependencies:
       '@types/caseless': 0.12.5
-      '@types/node': 20.19.30
+      '@types/node': 22.19.7
       '@types/tough-cookie': 4.0.5
       form-data: 2.5.5
 
@@ -8584,11 +8551,11 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 20.19.30
+      '@types/node': 22.19.7
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 20.19.30
+      '@types/node': 22.19.7
     optional: true
 
   '@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)':
@@ -8716,6 +8683,24 @@ snapshots:
       test-exclude: 7.0.2
       tinyrainbow: 1.2.0
       vitest: 2.1.9(@types/node@20.19.30)(lightningcss@1.30.2)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@vitest/coverage-v8@2.1.9(vitest@2.1.9(@types/node@22.19.7)(lightningcss@1.30.2))':
+    dependencies:
+      '@ampproject/remapping': 2.3.0
+      '@bcoe/v8-coverage': 0.2.3
+      debug: 4.4.3
+      istanbul-lib-coverage: 3.2.2
+      istanbul-lib-report: 3.0.1
+      istanbul-lib-source-maps: 5.0.6
+      istanbul-reports: 3.2.0
+      magic-string: 0.30.21
+      magicast: 0.3.5
+      std-env: 3.10.0
+      test-exclude: 7.0.2
+      tinyrainbow: 1.2.0
+      vitest: 2.1.9(@types/node@22.19.7)(lightningcss@1.30.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -10830,7 +10815,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 20.19.30
+      '@types/node': 22.19.7
       long: 5.3.2
 
   proxy-addr@2.0.7:
