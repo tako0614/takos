@@ -78,7 +78,7 @@ export type ToolCategory =
   | 'deploy'     // deploy_frontend
   | 'runtime'    // runtime_exec, runtime_status
   | 'storage'    // kv_*, d1_*, r2_*, create_*
-  | 'workspace'  // workspace_env_*, custom_tool_*, skill_*, takopack_*
+  | 'workspace'  // workspace_env_*, custom_tool_*, skill_*
   | 'web'        // web_fetch
   | 'memory'     // remember, recall, set_reminder
   | 'artifact'   // create_artifact

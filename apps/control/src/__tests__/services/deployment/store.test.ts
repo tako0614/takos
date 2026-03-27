@@ -10,7 +10,7 @@ vi.mock('@/db', async (importOriginal) => ({
 }));
 
 import { toApiDeployment } from '@/services/deployment/store';
-import type { PrismaDeployment } from '@/services/deployment/store';
+import type { DeploymentRow } from '@/services/deployment/store';
 
 function createDrizzleMock() {
   const getMock = vi.fn();
@@ -38,8 +38,8 @@ function createDrizzleMock() {
 }
 
 describe('toApiDeployment', () => {
-  it('maps prisma deployment to API deployment format', () => {
-    const prismaDeployment = {
+  it('maps deployment row to API deployment format', () => {
+    const deploymentRow = {
       id: 'dep-1',
       serviceId: 'w-1',
       accountId: 'space-1',
@@ -74,9 +74,9 @@ describe('toApiDeployment', () => {
       completedAt: '2026-01-01T00:01:00.000Z',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:01:00.000Z',
-    } as unknown as PrismaDeployment;
+    } as unknown as DeploymentRow;
 
-    const result = toApiDeployment(prismaDeployment);
+    const result = toApiDeployment(deploymentRow);
 
     expect(result.id).toBe('dep-1');
     expect(result.service_id).toBe('w-1');
@@ -98,7 +98,7 @@ describe('toApiDeployment', () => {
   });
 
   it('handles null dates', () => {
-    const prismaDeployment = {
+    const deploymentRow = {
       id: 'dep-1',
       serviceId: 'w-1',
       accountId: 'space-1',
@@ -133,9 +133,9 @@ describe('toApiDeployment', () => {
       completedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    } as unknown as PrismaDeployment;
+    } as unknown as DeploymentRow;
 
-    const result = toApiDeployment(prismaDeployment);
+    const result = toApiDeployment(deploymentRow);
 
     expect(result.service_id).toBe('w-1');
     expect(result.rolled_back_at).toBeNull();

@@ -2,7 +2,7 @@ import type { ToolContext } from '../../types';
 import { getDb, sessionRepos, sessions } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { validatePath } from '../../../../shared/utils/path-validation';
-import { callRuntimeRequest } from '../../../services/execution/runtime';
+import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler';
 import { buildContainerUnavailableMessage } from '../container/availability';
 
 export function requireContainer(context: ToolContext): void {

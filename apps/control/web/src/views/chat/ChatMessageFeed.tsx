@@ -1,5 +1,5 @@
 import { useMemo, type RefObject } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import type { Message, SessionDiff } from '../../types';
 import { Icons } from '../../lib/Icons';
 import type { ChatStreamingState } from './types';

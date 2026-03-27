@@ -1,7 +1,7 @@
-import { useState, useCallback, type ReactNode } from 'react';
-import { useI18n } from '../providers/I18nProvider';
+import { useState, useCallback } from 'react';
+import { useI18n } from '../store/i18n';
 import { useToast } from './useToast';
-import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import { useConfirmDialog } from '../store/confirm-dialog';
 import type { StorageFile } from '../types';
 
 interface UseStorageActionsParams {
@@ -34,8 +34,6 @@ interface UseStorageActionsResult {
   openRenameModal: (file: StorageFile) => void;
   closeRenameModal: () => void;
   handleRename: () => Promise<void>;
-  // Confirm dialog
-  singleDeleteDialog: ReactNode;
 }
 
 export function useStorageActions({
@@ -48,7 +46,7 @@ export function useStorageActions({
 }: UseStorageActionsParams): UseStorageActionsResult {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { confirm, DialogComponent: singleDeleteDialog } = useConfirmDialog();
+  const { confirm } = useConfirmDialog();
 
   // File viewer state
   const [viewingFile, setViewingFile] = useState<StorageFile | null>(null);
@@ -187,6 +185,5 @@ export function useStorageActions({
     openRenameModal,
     closeRenameModal,
     handleRename,
-    singleDeleteDialog,
   };
 }

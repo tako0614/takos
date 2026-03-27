@@ -113,7 +113,7 @@ export async function ensureNotificationSettings(dbBinding: D1Database, userId: 
         await db.insert(notificationSettings).values({
           accountId: userId, mutedUntil: null, createdAt: ts, updatedAt: ts,
         });
-      } catch { /* race condition: already exists */ }
+      } catch (err) { console.warn('[notifications/service] insert notification settings skipped (non-critical, likely race condition)', err); }
     }
   } catch (err) {
     if (isMissingTableError(err)) {

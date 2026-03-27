@@ -14,6 +14,27 @@ import type {
   PlatformSource,
 } from '../types.ts';
 
+export type PlatformEnvRecord = Record<string, unknown>;
+
+export function getString(env: PlatformEnvRecord, key: string): string | undefined {
+  const value = env[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+export function getServiceRegistry(env: PlatformEnvRecord) {
+  const dispatcher = env.DISPATCHER;
+  if (!dispatcher || typeof dispatcher !== 'object') {
+    return undefined;
+  }
+  return {
+    get(name: string, options?: { deploymentId?: string }) {
+      return (dispatcher as {
+        get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
+      }).get(name, options);
+    },
+  };
+}
+
 type PlatformConfigInput = {
   adminDomain?: string;
   tenantBaseDomain?: string;
@@ -43,6 +64,7 @@ type PlatformServiceInputs = {
     get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
   deploymentProviders?: PlatformDeployProviderRegistry;
+  sseNotifier?: PlatformServices['sseNotifier'];
 };
 
 export function createPlatformConfig(input: PlatformConfigInput): PlatformConfig {
@@ -120,6 +142,7 @@ export function createPlatformServices(input: PlatformServiceInputs): PlatformSe
     documents: input.documents ?? {},
     serviceRegistry: input.serviceRegistry,
     deploymentProviders: input.deploymentProviders,
+    sseNotifier: input.sseNotifier,
   };
 }
 

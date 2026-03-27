@@ -1,24 +1,23 @@
 import React from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal';
 import { ChatSearchModal } from '../../views/chat/ChatSearchModal';
 import { AgentModal } from '../../views/AgentModal';
-import { useModals } from '../../contexts/ModalContext';
-import { useNavigation } from '../../contexts/NavigationContext';
-import { useAuth } from '../../contexts/AuthContext';
+import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal';
+import { useNavigation } from '../../store/navigation';
+import { useAuth } from '../../hooks/useAuth';
 
 interface AppModalsProps {
   onCreateSpace: (name: string, description: string) => Promise<void>;
 }
 
 export function AppModals({ onCreateSpace }: AppModalsProps) {
-  const {
-    showCreateSpace,
-    setShowCreateSpace,
-    showAgentModal,
-    setShowAgentModal,
-    showSearch,
-    setShowSearch,
-  } = useModals();
+  const showCreateSpace = useAtomValue(showCreateSpaceAtom);
+  const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
+  const showAgentModal = useAtomValue(showAgentModalAtom);
+  const setShowAgentModal = useSetAtom(showAgentModalAtom);
+  const showSearch = useAtomValue(showSearchAtom);
+  const setShowSearch = useSetAtom(showSearchAtom);
 
   const {
     navigate,
@@ -27,6 +26,7 @@ export function AppModals({ onCreateSpace }: AppModalsProps) {
   } = useNavigation();
 
   const { spaces } = useAuth();
+  const resolvedSpaceId = selectedSpaceId ?? preferredSpaceId;
 
   return (
     <>
@@ -37,9 +37,9 @@ export function AppModals({ onCreateSpace }: AppModalsProps) {
         />
       )}
 
-      {showSearch && (selectedSpaceId ?? preferredSpaceId) && (
+      {showSearch && resolvedSpaceId && (
         <ChatSearchModal
-          spaceId={(selectedSpaceId ?? preferredSpaceId)!}
+          spaceId={resolvedSpaceId}
           onSelectResult={(threadId) => {
             setShowSearch(false);
             navigate({

@@ -6,7 +6,7 @@ import { validateAuthorizationRequest, generateAuthorizationCode, buildErrorRedi
 import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent';
 import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session';
 import type { PublicRouteEnv } from '../shared/route-auth';
-import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser } from './helpers';
+import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser } from './request-utils';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';

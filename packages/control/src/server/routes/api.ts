@@ -14,7 +14,7 @@ import spacesStores from './spaces/stores';
 import spacesStoreRegistry from './spaces/store-registry';
 import seedRepositories from './seed-repositories';
 import threads from './threads';
-import runs from './runs';
+import runs from './runs/runs-routes';
 import search from './search';
 import indexRoutes from './index';
 import memories from './memories';
@@ -36,12 +36,14 @@ import me from './me';
 import setup from './setup';
 import agentTasks from './agent-tasks';
 import authApi from './auth-api';
-import billingRoutes, { billingWebhookHandler } from './billing';
+import billingRoutes, { billingWebhookHandler } from './billing/billing-routes';
 import publicShare from './public-share';
 import mcpRoutes from './mcp';
 import appDeployments from './app-deployments';
 import oauthConsentApi from './oauth-consent-api';
 import browserSessions from './browser-sessions';
+import { createRunSseRouter } from './runs/sse';
+import { createNotificationSseRouter } from './notifications-sse';
 import { requireAnyAuth } from '../middleware/oauth-auth';
 // Local type to mirror app Variables
 export type ApiVariables = BillingVariables & {
@@ -349,6 +351,7 @@ export function createApiRouter({
   registerAppApiRoutes(apiRouter);
   apiRouter.route('/', threads); // Threads routes at /api/spaces/:id/threads and /api/threads/:id
   apiRouter.route('/', runs); // Runs routes at /api/threads/:id/runs, /api/runs/:id, and /api/artifacts/:id
+  apiRouter.route('/runs', createRunSseRouter()); // SSE route at /api/runs/:id/sse (Node.js WebSocket alternative)
   apiRouter.route('/', search); // Search routes at /api/spaces/:id/search
   apiRouter.route('/', indexRoutes); // Index routes at /api/spaces/:id/index and /api/spaces/:id/graph
   apiRouter.route('/', memories); // Memory routes for memories and reminders
@@ -358,6 +361,7 @@ export function createApiRouter({
   apiRouter.route('/', repos); // Repository management routes
   apiRouter.route('/', agentTasks); // Agent task routes
   apiRouter.route('/', notifications); // Notifications routes at /api/notifications
+  apiRouter.route('/notifications', createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
   // gitStoreRoutes removed — migrated to Smart HTTP + repos/git.ts
   apiRouter.route('/', pullRequests); // Pull request routes for code review
   apiRouter.route('/', appDeployments); // App deployment routes at /api/spaces/:id/app-deployments

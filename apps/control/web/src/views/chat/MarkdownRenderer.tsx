@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { toSafeHref } from '../../lib/safeHref';
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copy = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      setCopyFailed(false);
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
       copyTimerRef.current = setTimeout(() => { setCopied(false); copyTimerRef.current = null; }, 2000);
-    } catch (err) { console.error('Failed to copy:', err); }
+    } catch (err) {
+      console.debug('Failed to copy to clipboard:', err);
+      setCopyFailed(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => { setCopyFailed(false); copyTimerRef.current = null; }, 2000);
+    }
   }, []);
   useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
 
@@ -25,9 +32,11 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           className="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center gap-1"
           onClick={() => copy(code)}
           type="button"
-          aria-label={copied ? t('copied') || 'Copied' : t('copyCode') || 'Copy code'}
+          aria-label={copyFailed ? t('copyFailed') || 'Copy failed' : copied ? t('copied') || 'Copied' : t('copyCode') || 'Copy code'}
         >
-          {copied ? (
+          {copyFailed ? (
+            <span className="text-xs text-red-600 dark:text-red-400">{t('copyFailed') || 'Copy failed'}</span>
+          ) : copied ? (
             <>
               <Icons.Check className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
               <span className="text-xs text-zinc-700 dark:text-zinc-300">{t('copied') || 'Copied!'}</span>

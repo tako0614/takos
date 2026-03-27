@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TranslationKey } from '../providers/I18nProvider';
+import type { TranslationKey } from '../store/i18n';
 import { rpcJson } from '../lib/rpc';
 import type { Message } from '../types';
 
@@ -68,7 +68,6 @@ export function useMessagePolling({
       if (showError) {
         setError(t('failedToLoadMessages' as TranslationKey) || 'Failed to load messages');
       }
-      console.error('Failed to fetch messages:', err);
     } finally {
       if (messageFetchAbortRef.current === controller) {
         messageFetchAbortRef.current = null;

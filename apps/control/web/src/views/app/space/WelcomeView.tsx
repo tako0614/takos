@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useI18n, type TranslationKey } from '../../../providers/I18nProvider';
+import { useI18n, type TranslationKey } from '../../../store/i18n';
 import { Icons } from '../../../lib/Icons';
 import { useFileAttachment } from '../../../hooks/useFileAttachment';
 import type { Space } from '../../../types';

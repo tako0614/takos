@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { requireWorkspaceAccess, badRequest, notFound, internalError, type BaseVariables } from './shared/route-auth';
+import { requireSpaceAccess, badRequest, notFound, internalError, type BaseVariables } from './shared/route-auth';
 import { createAppDeploymentService } from '../../application/services/platform/app-deployments';
 import { RolloutService } from '../../application/services/platform/rollout';
 import { zValidator } from './zod-validator';
@@ -30,7 +30,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post('/spaces/:spaceId/app-deployments', zValidator('json', createAppDeploymentSchema), async (c) => {
     const spaceId = c.req.param('spaceId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -53,7 +53,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .get('/spaces/:spaceId/app-deployments', async (c) => {
     const spaceId = c.req.param('spaceId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_LIST_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_LIST_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -69,7 +69,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_GET_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_GET_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -86,7 +86,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_ROLLBACK_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_ROLLBACK_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -106,7 +106,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_GET_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_GET_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -122,7 +122,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -142,7 +142,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -162,7 +162,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -182,7 +182,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_DEPLOY_ROLES);
     if (access instanceof Response) return access;
 
     try {
@@ -202,7 +202,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const appDeploymentId = c.req.param('appDeploymentId');
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_REMOVE_ROLES);
+    const access = await requireSpaceAccess(c, spaceId, user.id, APP_DEPLOYMENT_REMOVE_ROLES);
     if (access instanceof Response) return access;
 
     try {

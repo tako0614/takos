@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { TranslationKey } from '../providers/I18nProvider';
+import type { TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type { Message, Run } from '../types';
 import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata';
@@ -133,8 +133,8 @@ export function useChatMessages({
           });
           await rpcJson(titleRes);
           onUpdateTitle(title);
-        } catch (titleErr) {
-          console.warn('Failed to update thread title:', titleErr);
+        } catch {
+          // Title update is best-effort; ignore failures
         }
       }
 

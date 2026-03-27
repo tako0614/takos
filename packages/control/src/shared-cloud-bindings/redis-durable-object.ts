@@ -16,8 +16,14 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
   if (redisClientState?.url !== redisUrl) {
     if (redisClientState) {
       void redisClientState.clientPromise
-        .then((client) => client.quit().catch(() => undefined))
-        .catch(() => undefined);
+        .then((client) => client.quit().catch((err) => {
+          console.warn('[redis-durable-object] Failed to quit stale Redis client', err);
+          return undefined;
+        }))
+        .catch((err) => {
+          console.warn('[redis-durable-object] Failed to resolve stale Redis client for quit', err);
+          return undefined;
+        });
     }
     redisClientState = {
       url: redisUrl,
@@ -32,8 +38,14 @@ export async function disposeRedisDurableObjectClient(): Promise<void> {
   const state = redisClientState;
   redisClientState = null;
   await state.clientPromise
-    .then((client) => client.quit().catch(() => undefined))
-    .catch(() => undefined);
+    .then((client) => client.quit().catch((err) => {
+      console.warn('[redis-durable-object] Failed to quit Redis client during dispose', err);
+      return undefined;
+    }))
+    .catch((err) => {
+      console.warn('[redis-durable-object] Failed to resolve Redis client for dispose', err);
+      return undefined;
+    });
 }
 
 function storageHashKey(prefix: string, instanceId: string): string {

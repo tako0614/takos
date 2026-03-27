@@ -1,4 +1,4 @@
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import type { Worker } from '../../../types';
 import { getWorkerDisplayHostname, getWorkerUrl } from '../utils/workerUtils';
 

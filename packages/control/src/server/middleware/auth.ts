@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import type { Env, User } from '../../shared/types';
 import { getDb, sessions } from '../../infra/db';
 import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../application/services/identity/session';
-import { getCachedUser, isValidUserId } from '../../shared/utils/user-cache';
+import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache';
 import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
 import { AppError, AuthenticationError, InternalError } from '@takos/common/errors';

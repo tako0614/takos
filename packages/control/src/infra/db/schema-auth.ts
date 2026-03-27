@@ -1,5 +1,4 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
-import { nowIso } from './schema-helpers';
 
 // 16. AuthService
 export const authServices = sqliteTable('auth_services', {
@@ -8,7 +7,7 @@ export const authServices = sqliteTable('auth_services', {
   domain: text('domain').notNull().unique(),
   apiKeyHash: text('api_key_hash').notNull(),
   allowedRedirectUris: text('allowed_redirect_uris'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxDomain: index('idx_auth_services_domain').on(table.domain),
   idxApiKeyHash: index('idx_auth_services_api_key_hash').on(table.apiKeyHash),
@@ -22,7 +21,7 @@ export const authSessions = sqliteTable('auth_sessions', {
   userAgent: text('user_agent'),
   ipAddress: text('ip_address'),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxTokenHash: index('idx_auth_sessions_token_hash').on(table.tokenHash),
   idxExpiresAt: index('idx_auth_sessions_expires_at').on(table.expiresAt),
@@ -52,7 +51,7 @@ export const serviceTokens = sqliteTable('service_tokens', {
   tokenHash: text('token_hash').notNull().unique(),
   permissions: text('permissions'),
   expiresAt: text('expires_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   accountId: text('account_id'),
 }, (table) => ({
   idxTokenHash: index('idx_service_tokens_token_hash').on(table.tokenHash),

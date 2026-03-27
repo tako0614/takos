@@ -8,7 +8,7 @@ import {
   validateRef,
   resolveAndValidateWorkDir,
   requireRepoParams,
-} from './validation-helpers.js';
+} from './repo-validation.js';
 import { isBoundaryViolationError } from '../../shared/errors.js';
 import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
 import { ErrorCodes } from '@takos/common/errors';

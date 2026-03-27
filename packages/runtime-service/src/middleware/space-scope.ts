@@ -3,9 +3,6 @@ import { forbidden } from '@takos/common/middleware/hono';
 
 export const SPACE_SCOPE_MISMATCH_ERROR = 'Token workspace scope does not match requested workspace';
 
-/** @deprecated Use {@link SPACE_SCOPE_MISMATCH_ERROR} instead. */
-export const WORKSPACE_SCOPE_MISMATCH_ERROR = SPACE_SCOPE_MISMATCH_ERROR;
-
 export function getSpaceIdFromPath(c: Context): string | null {
   const pathParts = c.req.path.split('/').filter(Boolean);
   if (pathParts[0] !== 'repos' || pathParts.length < 3) {
@@ -17,9 +14,6 @@ export function getSpaceIdFromPath(c: Context): string | null {
   }
   return spaceId;
 }
-
-/** @deprecated Use {@link getSpaceIdFromPath} instead. */
-export const getWorkspaceIdFromPath = getSpaceIdFromPath;
 
 function isProvidedSpaceId(spaceId: unknown): boolean {
   return spaceId !== undefined && spaceId !== null && spaceId !== '';
@@ -35,15 +29,9 @@ export function getSpaceIdFromBody(c: Context, field: 'spaceId' | 'space_id'): s
   return isNonEmptyString(spaceId) ? spaceId : null;
 }
 
-/** @deprecated Use {@link getSpaceIdFromBody} instead. */
-export const getWorkspaceIdFromBody = getSpaceIdFromBody;
-
 export function collectRequestedSpaceIds(spaceIds: readonly unknown[]): string[] {
   return [...new Set(spaceIds.filter(isNonEmptyString))];
 }
-
-/** @deprecated Use {@link collectRequestedSpaceIds} instead. */
-export const collectRequestedWorkspaceIds = collectRequestedSpaceIds;
 
 export function getScopedSpaceId(c: Context): string | undefined {
   const payload = c.get('serviceToken');
@@ -55,9 +43,6 @@ export function getScopedSpaceId(c: Context): string | undefined {
     : undefined;
 }
 
-/** @deprecated Use {@link getScopedSpaceId} instead. */
-export const getScopedWorkspaceId = getScopedSpaceId;
-
 export function hasSpaceScopeMismatch(c: Context, spaceId: unknown): boolean {
   if (!isProvidedSpaceId(spaceId)) {
     return false;
@@ -65,9 +50,6 @@ export function hasSpaceScopeMismatch(c: Context, spaceId: unknown): boolean {
   const scopedSpaceId = getScopedSpaceId(c);
   return typeof scopedSpaceId === 'string' && scopedSpaceId !== spaceId;
 }
-
-/** @deprecated Use {@link hasSpaceScopeMismatch} instead. */
-export const hasWorkspaceScopeMismatch = hasSpaceScopeMismatch;
 
 export function hasAnySpaceScopeMismatch(c: Context, spaceIds: readonly unknown[]): boolean {
   for (const spaceId of spaceIds) {
@@ -77,9 +59,6 @@ export function hasAnySpaceScopeMismatch(c: Context, spaceIds: readonly unknown[
   }
   return false;
 }
-
-/** @deprecated Use {@link hasAnySpaceScopeMismatch} instead. */
-export const hasAnyWorkspaceScopeMismatch = hasAnySpaceScopeMismatch;
 
 /**
  * Creates a Hono middleware that enforces space scope by extracting
@@ -114,6 +93,3 @@ export function enforceSpaceScopeMiddleware(
     await next();
   };
 }
-
-/** @deprecated Use {@link enforceSpaceScopeMiddleware} instead. */
-export const enforceWorkspaceScopeMiddleware = enforceSpaceScopeMiddleware;

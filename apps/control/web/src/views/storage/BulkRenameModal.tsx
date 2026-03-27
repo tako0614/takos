@@ -1,4 +1,4 @@
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';

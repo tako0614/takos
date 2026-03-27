@@ -48,6 +48,7 @@ import {
 import { extractBearerToken } from '../../shared/utils';
 import { constantTimeEqual } from '../../shared/utils/hash';
 import { logError } from '../../shared/utils/logger';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
 
 // Sub-module imports — utilities, auth, run state, control RPC, proxy handlers
 import {
@@ -188,30 +189,23 @@ export default {
     // Validate environment on first request (cached).
     const envError = envGuard(env as unknown as Record<string, unknown>);
     if (envError) {
-      return new Response(JSON.stringify({
-        error: 'Configuration Error',
+      return errorJsonResponse('Configuration Error', 503, {
         message: 'Executor host is misconfigured. Please contact administrator.',
-      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      });
     }
 
     const url = new URL(request.url);
     const path = url.pathname;
 
     if (path === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ status: 'ok', service: 'takos-executor-host' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ status: 'ok', service: 'takos-executor-host' });
     }
 
     if (path === '/internal/proxy-usage' && request.method === 'GET') {
-      return new Response(JSON.stringify({
+      return jsonResponse({
         status: 'ok',
         service: 'takos-executor-host',
         counts: getProxyUsageSnapshot(),
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -222,7 +216,7 @@ export default {
       const { runId } = body;
 
       if (!runId) {
-        return new Response(JSON.stringify({ error: 'Missing runId' }), { status: 400 });
+        return errorJsonResponse('Missing runId', 400);
       }
 
       const stub = env.EXECUTOR_CONTAINER.getByName(runId);

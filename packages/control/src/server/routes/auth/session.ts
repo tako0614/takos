@@ -15,7 +15,7 @@ import {
   cleanupUserSessions,
 } from '../../../application/services/identity/auth-utils';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
-import { sanitizeReturnTo, provisionGoogleOAuthUser } from './utils';
+import { sanitizeReturnTo, provisionGoogleOAuthUser } from './provisioning';
 import { errorPage } from './html';
 import { getDb } from '../../../infra/db';
 import { accounts, authIdentities } from '../../../infra/db/schema';

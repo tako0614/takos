@@ -4,7 +4,7 @@
  */
 
 import { and, eq, desc } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings';
+import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
 import { generateId, now } from '../../../shared/utils';
 import {

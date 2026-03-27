@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   getStorageItem,
@@ -16,7 +16,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { accountStorageFiles } from '../../../infra/db/schema';
 import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
-import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-helpers';
+import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Content read endpoint ---
@@ -27,7 +27,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
@@ -57,7 +57,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -95,7 +95,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
@@ -156,7 +156,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('file_id is required');
     }
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const file = await getStorageItem(c.env.DB, access.space.id, fileId);
@@ -186,7 +186,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const path = c.req.valid('query').path || '/';
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {

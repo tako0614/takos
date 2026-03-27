@@ -9,7 +9,7 @@
 
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Env, User } from '../../shared/types';
-import { getCachedUser, isValidUserId } from '../../shared/utils/user-cache';
+import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache';
 import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
 
 type GitAuthVariables = {

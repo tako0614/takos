@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { validateClientCredentials } from '../../../application/services/oauth/client';
 import { getRefreshToken, revokeToken, verifyAccessToken } from '../../../application/services/oauth/token';
-import { tryLogOAuthEvent, getBodyValue, type FormBody } from './helpers';
+import { tryLogOAuthEvent, getBodyValue, type FormBody } from './request-utils';
 import type { PublicRouteEnv } from '../shared/route-auth';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 

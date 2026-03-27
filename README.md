@@ -9,10 +9,10 @@ packages.
 ## What Is In This Repo
 
 - `packages/control/*`: control-plane, host, and local-platform package trees
-- `packages/runtime-service`, `packages/executor-service`, `packages/browser-service`: service packages used by app wrappers and sibling repos
+- `packages/runtime-service`, `packages/executor-service`, `packages/browser-service`: service packages (executor-service and browser-service are self-contained deployable services; runtime-service is used by the apps/runtime wrapper)
 - `packages/common`, `packages/actions-engine`, `packages/agent-core`, `packages/cloudflare-compat`: shared libraries
 - `apps/control`: Cloudflare worker composition, frontend build, and deployment templates
-- `apps/runtime`, `apps/executor`, `apps/browser`: thin Node/container wrappers over the service packages
+- `apps/runtime`: thin Node/container wrapper over runtime-service
 - `apps/cli`: public CLI
 - `scripts/`: build, validation, and maintenance tooling
 

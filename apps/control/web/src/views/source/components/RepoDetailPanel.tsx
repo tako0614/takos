@@ -1,7 +1,7 @@
 import { Icons } from '../../../lib/Icons';
 import { formatDetailedRelativeDate, formatNumber } from '../../../lib/format';
 import type { SourceItem, SourceItemTakopack } from '../../../hooks/useSourceData';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 interface RepoDetailPanelProps {
   item: SourceItem;

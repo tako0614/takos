@@ -1,5 +1,5 @@
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { EmptyState } from '../common/EmptyState';
 import type { ActivityEvent } from '../../types/profile';
 

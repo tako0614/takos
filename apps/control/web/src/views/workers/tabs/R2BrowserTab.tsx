@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, Fragment } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../components/common/ConfirmDialog';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { Button } from '../../../components/ui/Button';
 import { rpc, rpcJson } from '../../../lib/rpc';
@@ -64,7 +64,7 @@ function getFiles(objects: R2Object[], prefix: string): R2Object[] {
 export function R2BrowserTab({ resource }: R2BrowserTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { confirm, DialogComponent } = useConfirmDialog();
+  const { confirm } = useConfirmDialog();
 
   const [objects, setObjects] = useState<R2Object[]>([]);
   const [prefix, setPrefix] = useState('');
@@ -395,7 +395,6 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
           </div>
         )}
       </div>
-      {DialogComponent}
     </div>
   );
 }

@@ -12,9 +12,9 @@ import { ForkModal } from './ForkModal';
 import { RepoDetailFiles } from './RepoDetailFiles';
 import { RepoDetailBranches } from './RepoDetailBranches';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
-import { useI18n } from '../../../providers/I18nProvider';
-import { rpc, rpcJson } from '../../../lib/rpc';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
+import { useI18n } from '../../../store/i18n';
+import { rpc, rpcJson, repoBlob } from '../../../lib/rpc';
 import { toSafeHref } from '../../../lib/safeHref';
 
 type TabType = 'code' | 'search' | 'commits' | 'branches' | 'pull-requests' | 'releases' | 'actions';
@@ -57,11 +57,7 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
 
       for (const filename of ['README.md', 'readme.md', 'README', 'readme.txt']) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const res = await (rpc.repos[':repoId'] as any).blob[':ref'].$get({
-            param: { repoId: repo.id, ref: currentBranch },
-            query: { path: filename },
-          });
+          const res = await repoBlob(repo.id, currentBranch, { path: filename });
           if (res.ok) {
             const data = await rpcJson<{ content?: string }>(res);
             if (data.content) {

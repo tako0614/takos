@@ -25,9 +25,9 @@
  */
 
 import type { Context } from 'hono';
-import type { SpaceAccess } from '../../shared/utils/space-access';
+import type { SpaceAccess } from '../../application/services/identity/space-access';
 import type { SpaceRole } from '../../shared/types';
-import { checkSpaceAccess } from '../../shared/utils/space-access';
+import { checkSpaceAccess } from '../../application/services/identity/space-access';
 import { AppError } from '@takos/common/errors';
 import type { ErrorCode } from '@takos/common/errors';
 

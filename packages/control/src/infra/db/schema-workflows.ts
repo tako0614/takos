@@ -1,5 +1,4 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { nowIso } from './schema-helpers';
 
 // 108. WorkflowArtifact
 export const workflowArtifacts = sqliteTable('workflow_artifacts', {
@@ -10,7 +9,7 @@ export const workflowArtifacts = sqliteTable('workflow_artifacts', {
   sizeBytes: integer('size_bytes'),
   mimeType: text('mime_type'),
   expiresAt: text('expires_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxRun: index('idx_workflow_artifacts_run_id').on(table.runId),
   idxExpiresAt: index('idx_workflow_artifacts_expires_at').on(table.expiresAt),
@@ -31,7 +30,7 @@ export const workflowJobs = sqliteTable('workflow_jobs', {
   completedAt: text('completed_at'),
   logsUrl: text('logs_url'),
   logsR2Key: text('logs_r2_key'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxStatus: index('idx_workflow_jobs_status').on(table.status),
   idxRun: index('idx_workflow_jobs_run_id').on(table.runId),
@@ -55,7 +54,7 @@ export const workflowRuns = sqliteTable('workflow_runs', {
   inputs: text('inputs'),
   runNumber: integer('run_number'),
   runAttempt: integer('run_attempt').notNull().default(1),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxWorkflow: index('idx_workflow_runs_workflow_id').on(table.workflowId),
   idxStatus: index('idx_workflow_runs_status').on(table.status),
@@ -71,7 +70,7 @@ export const workflowSecrets = sqliteTable('workflow_secrets', {
   repoId: text('repo_id').notNull(),
   name: text('name').notNull(),
   encryptedValue: text('encrypted_value').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at'),
 }, (table) => ({
   uniqRepoName: uniqueIndex('idx_workflow_secrets_repo_name').on(table.repoId, table.name),
@@ -92,7 +91,7 @@ export const workflowSteps = sqliteTable('workflow_steps', {
   errorMessage: text('error_message'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxJobNumber: index('idx_workflow_steps_job_number').on(table.jobId, table.number),
   idxJob: index('idx_workflow_steps_job_id').on(table.jobId),
@@ -107,7 +106,7 @@ export const workflows = sqliteTable('workflows', {
   content: text('content').notNull(),
   triggers: text('triggers'),
   parsedAt: text('parsed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text('updated_at'),
 }, (table) => ({
   uniqRepoPath: uniqueIndex('idx_workflows_repo_path').on(table.repoId, table.path),

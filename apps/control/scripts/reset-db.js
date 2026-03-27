@@ -3,7 +3,7 @@
 /**
  * Remote DB Reset Script
  * Resets remote D1 databases (staging/production) by deleting rows.
- * For local reset, use `pnpm db:reset` (prisma migrate reset + local D1 rebuild).
+ * For local reset, use `pnpm db:reset` (local D1 rebuild).
  *
  * Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]
  */

@@ -17,7 +17,7 @@ import { BadRequestError, InternalError, NotFoundError, ValidationError } from '
 import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
 import type { WorkflowBucket, StartRunOptions, WorkflowRunRecord } from './workflow-engine-types';
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import { toWorkflowJobDefinition, toRunRecord } from './workflow-engine-helpers';
+import { toWorkflowJobDefinition, toRunRecord } from './workflow-engine-converters';
 import { WORKFLOW_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { logWarn } from '../../../shared/utils/logger';
 

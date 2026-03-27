@@ -22,7 +22,6 @@ import type {
   WorkflowEngineConfig,
   StartRunOptions,
   WorkflowRunRecord,
-  WorkflowBucket,
   JobResult,
 } from './workflow-engine-types';
 
@@ -30,30 +29,9 @@ import { startRun, cancelRun, enqueueJob } from './workflow-run-lifecycle';
 import { onJobComplete, onJobStart, updateStepStatus } from './workflow-job-scheduler';
 import { storeJobLogs, createArtifact } from './workflow-storage';
 
-import type { D1Database } from '../../../shared/types/bindings.ts';
-
-export class WorkflowEngine {
-  private db: D1Database;
-  private bucket: WorkflowBucket;
-  private queue?: Queue<WorkflowJobQueueMessage>;
-
-  constructor(config: WorkflowEngineConfig) {
-    this.db = config.db;
-    this.bucket = config.bucket;
-    this.queue = config.queue;
-  }
-
-  /**
-   * Start a new workflow run
-   */
-  async startRun(options: StartRunOptions): Promise<WorkflowRunRecord> {
-    return startRun(this.db, this.bucket, this.queue, options);
-  }
-
-  /**
-   * Enqueue a job for execution
-   */
-  async enqueueJob(options: {
+export interface WorkflowEngine {
+  startRun(options: StartRunOptions): Promise<WorkflowRunRecord>;
+  enqueueJob(options: {
     runId: string;
     jobId: string;
     repoId: string;
@@ -63,69 +41,64 @@ export class WorkflowEngine {
     jobDefinition: WorkflowJobDefinition;
     env: Record<string, string>;
     secretIds: string[];
-  }): Promise<void> {
-    return enqueueJob(this.queue, options);
-  }
-
-  /**
-   * Handle job completion
-   */
-  async onJobComplete(jobId: string, result: JobResult): Promise<void> {
-    return onJobComplete(this.db, this.bucket, this.queue, jobId, result);
-  }
-
-  /**
-   * Cancel a running workflow
-   */
-  async cancelRun(runId: string): Promise<void> {
-    return cancelRun(this.db, runId);
-  }
-
-  /**
-   * Update job status when it starts running
-   */
-  async onJobStart(jobId: string, runnerId?: string, runnerName?: string): Promise<void> {
-    return onJobStart(this.db, jobId, runnerId, runnerName);
-  }
-
-  /**
-   * Update step status
-   */
-  async updateStepStatus(
+  }): Promise<void>;
+  onJobComplete(jobId: string, result: JobResult): Promise<void>;
+  cancelRun(runId: string): Promise<void>;
+  onJobStart(jobId: string, runnerId?: string, runnerName?: string): Promise<void>;
+  updateStepStatus(
     jobId: string,
     stepNumber: number,
     status: 'in_progress' | 'completed' | 'skipped',
     conclusion?: Conclusion,
     exitCode?: number,
     error?: string,
-  ): Promise<void> {
-    return updateStepStatus(this.db, jobId, stepNumber, status, conclusion, exitCode, error);
-  }
-
-  /**
-   * Store job logs in R2
-   */
-  async storeJobLogs(jobId: string, logs: string): Promise<string> {
-    return storeJobLogs(this.db, this.bucket, jobId, logs);
-  }
-
-  /**
-   * Create an artifact for a run
-   */
-  async createArtifact(options: {
+  ): Promise<void>;
+  storeJobLogs(jobId: string, logs: string): Promise<string>;
+  createArtifact(options: {
     runId: string;
     name: string;
     data: ArrayBuffer | Uint8Array | string;
     mimeType?: string;
     expiresInDays?: number;
-  }): Promise<{ id: string; r2Key: string }> {
-    return createArtifact(this.db, this.bucket, options);
-  }
+  }): Promise<{ id: string; r2Key: string }>;
 }
 
 /**
  * Create a workflow engine instance
  */
 export function createWorkflowEngine(config: WorkflowEngineConfig): WorkflowEngine {
-  return new WorkflowEngine(config);
+  const { db, bucket, queue } = config;
+  return {
+    startRun: (options: StartRunOptions) => startRun(db, bucket, queue, options),
+    enqueueJob: (options: {
+      runId: string;
+      jobId: string;
+      repoId: string;
+      ref: string;
+      sha: string;
+      jobKey: string;
+      jobDefinition: WorkflowJobDefinition;
+      env: Record<string, string>;
+      secretIds: string[];
+    }) => enqueueJob(queue as Queue<WorkflowJobQueueMessage>, options),
+    onJobComplete: (jobId: string, result: JobResult) => onJobComplete(db, bucket, queue, jobId, result),
+    cancelRun: (runId: string) => cancelRun(db, runId),
+    onJobStart: (jobId: string, runnerId?: string, runnerName?: string) => onJobStart(db, jobId, runnerId, runnerName),
+    updateStepStatus: (
+      jobId: string,
+      stepNumber: number,
+      status: 'in_progress' | 'completed' | 'skipped',
+      conclusion?: Conclusion,
+      exitCode?: number,
+      error?: string,
+    ) => updateStepStatus(db, jobId, stepNumber, status, conclusion, exitCode, error),
+    storeJobLogs: (jobId: string, logs: string) => storeJobLogs(db, bucket, jobId, logs),
+    createArtifact: (options: {
+      runId: string;
+      name: string;
+      data: ArrayBuffer | Uint8Array | string;
+      mimeType?: string;
+      expiresInDays?: number;
+    }) => createArtifact(db, bucket, options),
+  };
 }

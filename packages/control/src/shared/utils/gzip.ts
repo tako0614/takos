@@ -43,7 +43,7 @@ export async function gzipDecompressToString(
 
     totalDecompressedSize += value.length;
     if (totalDecompressedSize > maxDecompressedBytes) {
-      try { reader.cancel(); } catch { /* ignore */ }
+      try { reader.cancel(); } catch (err) { console.warn('[gzip] failed to cancel reader after size limit exceeded (non-critical)', err); }
       throw new Error(
         `Decompressed content exceeds limit (${Math.round(maxDecompressedBytes / 1024 / 1024)}MiB)`
       );

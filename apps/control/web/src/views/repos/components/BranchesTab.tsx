@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Icons } from '../../../lib/Icons';
 import type { Branch } from '../../../types';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { formatDetailedRelativeDate } from '../../../lib/format';
 
 interface BranchWithCommit extends Branch {

@@ -20,7 +20,7 @@ import { getSession, getSessionIdFromCookie } from '../../application/services/i
 import { getDb } from '../../infra/db';
 import { accounts } from '../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { isValidLogoUrl, mapDbUser, tryLogOAuthEvent } from './oauth/helpers';
+import { isValidLogoUrl, mapDbUser, tryLogOAuthEvent } from './oauth/request-utils';
 import {
   getDeviceAuthorizationByUserCode,
   approveDeviceAuthorization,

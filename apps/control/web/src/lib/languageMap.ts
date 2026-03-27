@@ -59,7 +59,6 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   '.patch': 'diff',
   '.vue': 'html',
   '.svelte': 'html',
-  '.prisma': 'graphql',
 };
 
 export function detectLanguage(fileName: string): string {

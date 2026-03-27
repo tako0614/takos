@@ -4,13 +4,13 @@ import { getDb, runs, runEvents, infoUnits, nodes, edges, sessionRepos, reposito
 import { eq, and, asc } from 'drizzle-orm';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { getRunEventsAfterFromR2 } from '../offload/run-events';
-import { CHARS_PER_TOKEN } from '../agent';
 import { logWarn } from '../../../shared/utils/logger';
 
 
 const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 const MAX_INFO_UNIT_TOKENS = 2048;
 const MAX_EVENT_TEXT_CHARS = 4000;
+const CHARS_PER_TOKEN = 4;
 
 type RunEventRecord = {
   id: number;

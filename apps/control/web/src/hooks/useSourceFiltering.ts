@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useI18n } from '../providers/I18nProvider';
+import { useI18n } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import { getPersonalSpace, getSpaceIdentifier } from '../lib/spaces';
 import type { Space } from '../types';

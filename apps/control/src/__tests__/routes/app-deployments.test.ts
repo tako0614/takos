@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Env } from '@/types';
 
 const mocks = vi.hoisted(() => ({
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   deployFromRepoRef: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -50,7 +50,7 @@ function makeEnv(): Partial<Env> {
 describe('app deployment routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
   });
 
   it('lists deployments for an authorized user', async () => {

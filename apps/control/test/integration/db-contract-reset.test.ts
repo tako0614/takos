@@ -9,7 +9,6 @@ const docsCandidates = [
 const docsDatabasePath = docsCandidates.find((candidate) => existsSync(candidate));
 const docsDatabase = docsDatabasePath ? readFileSync(docsDatabasePath, 'utf8') : '';
 const appRoot = resolve(import.meta.dirname, '../..');
-const prismaSchema = readFileSync(resolve(appRoot, 'db/prisma/schema.prisma'), 'utf8');
 const baselineSql = readFileSync(resolve(appRoot, 'db/migrations/0001_baseline.sql'), 'utf8');
 
 const requiredTables = [
@@ -152,14 +151,6 @@ function extractBaselineTableBlock(source: string, table: string): string {
   throw new Error(`Missing baseline table block for ${table}`);
 }
 
-function extractPrismaModelBlock(source: string, table: string): string {
-  const match = source.match(new RegExp(`[\\s\\S]*model\\s+\\w+\\s+\\{([\\s\\S]*?)@@map\\("${table}"\\)[\\s\\S]*?\\n\\}`));
-  if (!match) {
-    throw new Error(`Missing Prisma model block for ${table}`);
-  }
-  return match[1];
-}
-
 function expectDocsTable(table: string): void {
   if (table === 'service_runtimes') {
     expect(docsDatabase).toMatch(/CREATE TABLE (service_runtimes|infra_workers)\s*\(/);
@@ -170,10 +161,6 @@ function expectDocsTable(table: string): void {
     return;
   }
   expect(docsDatabase).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
-}
-
-function expectPrismaTable(table: string): void {
-  expect(prismaSchema).toContain(`@@map("${table}")`);
 }
 
 function expectBaselineTable(table: string): void {
@@ -189,10 +176,9 @@ function expectBaselineTable(table: string): void {
 }
 
 describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
-  it('keeps the reset-critical tables aligned across docs, Prisma, and baseline SQL', () => {
+  it('keeps the reset-critical tables aligned across docs and baseline SQL', () => {
     for (const table of requiredTables) {
       expectDocsTable(table);
-      expectPrismaTable(table);
       expectBaselineTable(table);
     }
   });
@@ -200,7 +186,6 @@ describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
   it('keeps unified account tables present in all sources', () => {
     for (const table of unifiedAccountTables) {
       expectBaselineTable(table);
-      expectPrismaTable(table);
       expectDocsTable(table);
     }
   });
@@ -208,14 +193,12 @@ describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
   it('documents the canonical table inventory that previously drifted out of the database reference', () => {
     for (const table of docsInventoryTables) {
       expectDocsTable(table);
-      expectPrismaTable(table);
       expectBaselineTable(table);
     }
   });
 
-  it('removes legacy tables from docs, Prisma, and baseline SQL', () => {
+  it('removes legacy tables from docs and baseline SQL', () => {
     for (const table of forbiddenTables) {
-      expect(prismaSchema).not.toContain(`@@map("${table}")`);
       expect(baselineSql).not.toContain(`CREATE TABLE "${table}"`);
       expect(docsDatabase).not.toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
     }
@@ -228,13 +211,6 @@ describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
   });
 
   it('uses snapshot deployment columns and normalized bundle asset references', () => {
-    expect(prismaSchema).toContain('runtime_config_snapshot_json');
-    expect(prismaSchema).toContain('bindings_snapshot_encrypted');
-    expect(prismaSchema).toContain('env_vars_snapshot_encrypted');
-    expect(prismaSchema).not.toContain('completed_steps');
-    expect(prismaSchema).toContain('bundle_format');
-    expect(prismaSchema).toContain('bundle_meta_json');
-
     expect(baselineSql).toContain('"runtime_config_snapshot_json"');
     expect(baselineSql).toContain('"bindings_snapshot_encrypted"');
     expect(baselineSql).toContain('"env_vars_snapshot_encrypted"');
@@ -247,15 +223,13 @@ describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
     expect(docsDatabase).toContain('bundle_meta_json');
   });
 
-  it('keeps critical column contracts aligned across docs, Prisma, and baseline SQL', () => {
+  it('keeps critical column contracts aligned across docs and baseline SQL', () => {
     for (const [table, columns] of Object.entries(criticalColumns)) {
       const docsBlock = extractDocsTableBlock(docsDatabase, table);
-      const prismaBlock = extractPrismaModelBlock(prismaSchema, table);
       const baselineBlock = extractBaselineTableBlock(baselineSql, table);
 
       for (const column of columns) {
         expect(docsBlock).toContain(column);
-        expect(prismaBlock).toContain(column);
         expect(baselineBlock).toContain(column);
       }
     }

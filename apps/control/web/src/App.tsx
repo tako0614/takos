@@ -1,7 +1,7 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { LoadingScreen } from './components/common/LoadingScreen';
-import { ToastProvider } from './components/common/Toast';
-import { ConfirmDialogProvider } from './providers/ConfirmDialogProvider';
+import { ToastRenderer } from './components/common/Toast';
+import { ConfirmDialogRenderer } from './components/common/ConfirmDialog';
 import { SetupPage } from './views/SetupPage';
 import { LoginPage } from './views/app/AuthViews';
 import { AuthenticatedRoutes } from './views/AuthenticatedRoutes';
@@ -9,15 +9,15 @@ import { AppModals } from './components/layout/AppModals';
 import { rpc, rpcJson } from './lib/rpc';
 import { getErrorMessage } from './lib/errors';
 import { getSpaceIdentifier } from './lib/spaces';
-import { useI18n } from './providers/I18nProvider';
-import { useRouter } from './hooks/useRouter';
+import { useI18n } from './store/i18n';
+
 import { useAppRouteResolver } from './hooks/useAppRouteResolver';
 import type { Space } from './types';
 
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ModalProvider, useModals } from './contexts/ModalContext';
-import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
-import { MobileHeaderProvider } from './contexts/MobileHeaderContext';
+import { useAuth } from './hooks/useAuth';
+import { useSetAtom } from 'jotai';
+import { showCreateSpaceAtom } from './store/modal';
+import { useNavigation, useNavigationSync } from './store/navigation';
 
 import { SourcePage } from './views/source/SourcePage';
 import { RepoDetailPage } from './views/repos/RepoDetailPage';
@@ -41,7 +41,7 @@ function AppContent() {
     redirectToLogin,
   } = useAuth();
 
-  const { setShowCreateSpace } = useModals();
+  const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
 
   const {
     route,
@@ -179,35 +179,26 @@ function AppContent() {
 }
 
 function AppWithProviders() {
-  const { spaces, spacesLoaded } = useAuth();
-  const { route, navigate, replace } = useRouter();
+  const { fetchUser } = useAuth();
 
-  return (
-    <NavigationProvider
-      spaces={spaces}
-      spacesLoaded={spacesLoaded}
-      route={route}
-      navigate={navigate}
-      replace={replace}
-    >
-      <ModalProvider>
-        <MobileHeaderProvider>
-          <AppContent />
-        </MobileHeaderProvider>
-      </ModalProvider>
-    </NavigationProvider>
-  );
+  // Sync useRouter + breakpoint state into navigation atoms (replaces NavigationProvider)
+  useNavigationSync();
+
+  // Initialize auth state on mount (replaces AuthProvider)
+  useEffect(() => {
+    fetchUser();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <AppContent />;
 }
 
 function App() {
   return (
-    <ToastProvider>
-      <ConfirmDialogProvider>
-        <AuthProvider>
-          <AppWithProviders />
-        </AuthProvider>
-      </ConfirmDialogProvider>
-    </ToastProvider>
+    <>
+      <AppWithProviders />
+      <ConfirmDialogRenderer />
+      <ToastRenderer />
+    </>
   );
 }
 

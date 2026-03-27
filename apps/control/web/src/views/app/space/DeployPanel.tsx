@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { rpc, rpcJson } from '../../../lib/rpc';
 import type { TranslationKey } from '../../../i18n';
@@ -13,8 +13,6 @@ import { ResourceDetailContainer } from '../../workers/detail/ResourceDetailCont
 import { CreateResourceModal } from '../../workers/modals/CreateResourceModal';
 import { useSpaceWorkers } from '../../../hooks/useSpaceWorkers';
 import { useSpaceResources } from '../../../hooks/useSpaceResources';
-
-import { TakopackSection } from '../../hub/TakopackSection';
 
 interface DeployPanelProps {
   spaceId: string;
@@ -35,7 +33,6 @@ type DeployNavSection = (typeof DEPLOY_NAV_SECTIONS)[number];
 const DEPLOY_SECTION_META: Record<DeployNavSection, { icon: ReactNode; labelKey: TranslationKey }> = {
   workers: { icon: <Icons.Server className="w-3.5 h-3.5" />, labelKey: 'workers' },
   resources: { icon: <Icons.Database className="w-3.5 h-3.5" />, labelKey: 'resources' },
-  takopack: { icon: <Icons.Package className="w-3.5 h-3.5" />, labelKey: 'takopack' },
 };
 
 const SECTIONS: { id: DeploySection; icon: ReactNode; labelKey: TranslationKey }[] = DEPLOY_NAV_SECTIONS.map((id) => ({
@@ -59,8 +56,6 @@ export function DeployPanel({
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-
-  const [selectedTakopackSpaceId, setSelectedTakopackSpaceId] = useState<string | null>(spaceId);
 
   const { cfWorkers: workers = [], setCfWorkers, loadingCfWorkers: loadingWorkers, refreshWorkers, deleteWorker } = useSpaceWorkers(spaceId);
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
@@ -193,18 +188,6 @@ export function DeployPanel({
             )}
           </>
         );
-
-      case 'takopack': {
-        return (
-          <>
-            <TakopackSection
-              spaces={spaces}
-              selectedSpaceId={selectedTakopackSpaceId}
-              setSelectedSpaceId={setSelectedTakopackSpaceId}
-            />
-          </>
-        );
-      }
 
       default:
         return null;

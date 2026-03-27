@@ -34,8 +34,8 @@ vi.mock('@/services/oauth/token', () => ({
   revokeToken: mocks.revokeToken,
 }));
 
-vi.mock('@/routes/oauth/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/oauth/helpers')>();
+vi.mock('@/routes/oauth/request-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/routes/oauth/request-utils')>();
   return {
     ...actual,
     tryLogOAuthEvent: mocks.tryLogOAuthEvent,

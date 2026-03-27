@@ -241,7 +241,6 @@ describe('runWithSimpleLoop', () => {
 
   it('throws when total run timeout is exceeded', async () => {
     // Use fake timers to control Date.now() and simulate timeout
-    const realDateNow = Date.now;
     let callCount = 0;
     // First call returns base time (runStartTime), second call returns time far in the future
     vi.spyOn(Date, 'now').mockImplementation(() => {

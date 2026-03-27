@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { badRequest, notFound, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
-import { checkThreadAccess } from '../../application/services/threads/threads';
+import { checkThreadAccess } from '../../application/services/threads/thread-service';
 import {
   createThreadShare,
   listThreadShares,

@@ -2,7 +2,7 @@
  * Runtime Client -- Typed HTTP client for runtime communication.
  *
  * Consolidates `runtimeJson()` and `runtimeDelete()` patterns from
- * workflow-helpers.ts into a cohesive client interface.
+ * workflow-runtime-client.ts into a cohesive client interface.
  *
  * Both functions follow the same pattern:
  * 1. Build a request body with `space_id` injected
@@ -21,7 +21,7 @@ import { logWarn } from '@/shared/utils/logger';
  * Typed HTTP client for communicating with the runtime host.
  *
  * Encapsulates the `runtimeJson` and `runtimeDelete` helper functions
- * from workflow-helpers.ts behind a class interface with typed convenience
+ * from workflow-runtime-client.ts behind a class interface with typed convenience
  * methods for common operations (start/complete/delete jobs).
  *
  * @example
@@ -51,7 +51,7 @@ export class RuntimeClient {
   /**
    * Send a JSON request to the runtime host and return the parsed response.
    *
-   * Mirrors `runtimeJson()` from workflow-helpers.ts:
+   * Mirrors `runtimeJson()` from workflow-runtime-client.ts:
    * - Injects `space_id` into the request body
    * - Delegates to `callRuntimeRequest`
    * - Throws on non-OK responses with the error text
@@ -83,7 +83,7 @@ export class RuntimeClient {
   /**
    * Send a DELETE request to the runtime host.
    *
-   * Mirrors `runtimeDelete()` from workflow-helpers.ts:
+   * Mirrors `runtimeDelete()` from workflow-runtime-client.ts:
    * - Injects `space_id` into the request body
    * - Delegates to `callRuntimeRequest` with `DELETE` method
    * - Swallows errors and 404 responses (logs a warning instead)

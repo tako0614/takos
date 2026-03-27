@@ -24,7 +24,8 @@ async function sqliteTableExists(client: Client, tableName: string): Promise<boo
 }
 
 async function getSqliteTableColumns(client: Client, tableName: string): Promise<Set<string>> {
-  const result = await client.execute(`PRAGMA table_info("${tableName}")`);
+  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
+  const result = await client.execute(`PRAGMA table_info("${safeName}")`);
   return new Set(result.rows.map((row) => String(row.name)));
 }
 

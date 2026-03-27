@@ -24,9 +24,9 @@ const mocks = vi.hoisted(() => ({
   updateSkillEnabled: vi.fn(),
   updateSkillByName: vi.fn(),
   updateSkillEnabledByName: vi.fn(),
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   getDb: vi.fn(),
-  getWorkspaceOperationPolicy: vi.fn(),
+  getSpaceOperationPolicy: vi.fn(),
 }));
 
 vi.mock('@/services/source/skills', () => ({
@@ -50,7 +50,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -59,7 +59,7 @@ vi.mock('@/db', () => ({
 }));
 
 vi.mock('@/tools/tool-policy', () => ({
-  getWorkspaceOperationPolicy: () => ({
+  getSpaceOperationPolicy: () => ({
     allowed_roles: ['owner', 'admin', 'editor', 'viewer'],
   }),
 }));
@@ -105,7 +105,7 @@ describe('skills routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
   });
 
   describe('GET /api/spaces/:spaceId/skills', () => {
@@ -125,7 +125,7 @@ describe('skills routes', () => {
     });
 
     it('returns 404 when workspace access denied', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue(
+      mocks.requireSpaceAccess.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),
       );
 

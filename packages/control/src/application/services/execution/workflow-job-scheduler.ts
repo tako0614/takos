@@ -13,7 +13,7 @@ import { buildWorkflowDispatchEnv } from '../actions';
 import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
 import type { WorkflowBucket, JobResult, DependencyState } from './workflow-engine-types';
-import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-helpers';
+import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-converters';
 import { finalizeRunIfComplete, enqueueJob, getSecretIds } from './workflow-run-lifecycle';
 
 // ---------------------------------------------------------------------------

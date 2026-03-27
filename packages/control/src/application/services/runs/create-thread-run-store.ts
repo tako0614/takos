@@ -5,8 +5,8 @@ import { eq, and, gt, inArray, count, isNull, isNotNull } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../identity/principals';
 import { isInvalidArrayBufferError } from '../../../shared/utils/db-guards';
 import {
-  asPrismaRunRow,
-  prismaRunToApi,
+  asRunRow,
+  runRowToApi,
   type D1CountRow,
   type RunHierarchyNode,
   type SpaceModelLookup,
@@ -291,7 +291,7 @@ async function getRunResponseFallback(
     LIMIT 1
   `).bind(runId).first<Record<string, unknown>>();
 
-  return row ? prismaRunToApi(asPrismaRunRow(row)) : null;
+  return row ? runRowToApi(asRunRow(row)) : null;
 }
 
 export async function getRunResponse(
@@ -306,7 +306,7 @@ export async function getRunResponse(
         .where(eq(runs.id, runId))
         .get();
       if (!row) return null;
-      return prismaRunToApi(asPrismaRunRow({
+      return runRowToApi(asRunRow({
         id: row.id,
         threadId: row.threadId,
         spaceId: row.accountId,

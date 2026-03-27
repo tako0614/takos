@@ -91,6 +91,7 @@ export const common = {
 
     // Markdown
     copyCode: 'コードをコピー',
+    copyFailed: 'コピーに失敗しました',
 
     // Navigation
     store: 'ストア',

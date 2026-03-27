@@ -5,7 +5,7 @@ import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   listResourcesForWorkspace: vi.fn(),
   listResourcesForUser: vi.fn(),
   listResourcesByType: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('@/routes/shared/helpers', async () => {
   const actual = await vi.importActual<typeof import('@/routes/shared/helpers')>('@/routes/shared/helpers');
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -126,7 +126,7 @@ describe('resources workspace query membership guard (issue 023)', () => {
   });
 
   it('rejects non-members before querying workspace resources', async () => {
-    mocks.requireWorkspaceAccess.mockResolvedValue(
+    mocks.requireSpaceAccess.mockResolvedValue(
       new Response(
         JSON.stringify({ error: 'Workspace not found or access denied' }),
         {
@@ -144,7 +144,7 @@ describe('resources workspace query membership guard (issue 023)', () => {
   });
 
   it('returns resources only after workspace membership check passes', async () => {
-    mocks.requireWorkspaceAccess.mockResolvedValue({
+    mocks.requireSpaceAccess.mockResolvedValue({
       workspace: {
         id: 'workspace-2',
         name: 'Workspace 2',

@@ -98,9 +98,6 @@ export async function requireSpaceAccess(
   return access;
 }
 
-/** @deprecated Use {@link requireSpaceAccess} instead. */
-export const requireWorkspaceAccess = requireSpaceAccess;
-
 export function getRequestedSpaceIdentifier(c: AnyAppContext): string | null {
   const value = c.req.header('X-Takos-Space-Id');
   if (!value) return null;

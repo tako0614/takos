@@ -4,7 +4,7 @@ import type { Env, User } from '@/types';
 import { createMockEnv, MockR2Bucket } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   createFileRecord: vi.fn(),
   uploadPendingFileContent: vi.fn(),
   getStorageItem: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -58,7 +58,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 describe('workspace storage upload transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
     mocks.createFileRecord.mockResolvedValue({
       file: { id: 'file-1' },
       r2Key: 'ws-storage/ws-1/file-1',

@@ -1,5 +1,4 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { nowIso } from './schema-helpers';
 
 // 35. Edge
 export const edges = sqliteTable('edges', {
@@ -10,7 +9,7 @@ export const edges = sqliteTable('edges', {
   type: text('type').notNull(),
   weight: real('weight').notNull().default(1.0),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxType: index('idx_edges_type').on(table.type),
   idxTarget: index('idx_edges_target_id').on(table.targetId),
@@ -35,7 +34,7 @@ const fileHandlersTable = sqliteTable('file_handlers', {
   serviceHostname: text('service_hostname').notNull(),
   name: text('name').notNull(),
   openPath: text('open_path').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxAccount: index('idx_file_handlers_account_id').on(table.accountId),
 }));
@@ -103,7 +102,7 @@ export const moderationAuditLogs = sqliteTable('moderation_audit_logs', {
   actionType: text('action_type').notNull(),
   reason: text('reason'),
   details: text('details').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxTargetTypeId: index('idx_moderation_audit_logs_target_type_id').on(table.targetType, table.targetId),
   idxReport: index('idx_moderation_audit_logs_report_id').on(table.reportId),
@@ -120,7 +119,7 @@ export const nodes = sqliteTable('nodes', {
   refId: text('ref_id').notNull(),
   label: text('label'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxType: index('idx_nodes_type').on(table.type),
   idxRefId: index('idx_nodes_ref_id').on(table.refId),
@@ -133,8 +132,8 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
   type: text('type').notNull(),
   channel: text('channel').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   pk: primaryKey({ columns: [table.accountId, table.type, table.channel] }),
   idxType: index('idx_notification_preferences_type').on(table.type),
@@ -146,8 +145,8 @@ export const notificationPreferences = sqliteTable('notification_preferences', {
 export const notificationSettings = sqliteTable('notification_settings', {
   accountId: text('account_id').primaryKey(),
   mutedUntil: text('muted_until'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 });
 
 // 58. Notification
@@ -160,7 +159,7 @@ export const notifications = sqliteTable('notifications', {
   body: text('body'),
   data: text('data').notNull().default('{}'),
   readAt: text('read_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
   emailStatus: text('email_status').notNull().default('skipped'),
   emailAttempts: integer('email_attempts').notNull().default(0),
   emailSentAt: text('email_sent_at'),
@@ -187,8 +186,8 @@ export const reports = sqliteTable('reports', {
   autoFlagged: integer('auto_flagged', { mode: 'boolean' }).notNull().default(false),
   internalNotes: text('internal_notes'),
   resolvedAt: text('resolved_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxTargetTypeId: index('idx_reports_target_type_id').on(table.targetType, table.targetId),
   idxStatus: index('idx_reports_status').on(table.status),
@@ -205,7 +204,7 @@ export const resourceAccess = sqliteTable('resource_access', {
   accountId: text('account_id').notNull(),
   permission: text('permission').notNull().default('read'),
   grantedByAccountId: text('granted_by_account_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqResourceAccount: uniqueIndex('idx_resource_access_resource_account').on(table.resourceId, table.accountId),
   idxResource: index('idx_resource_access_resource_id').on(table.resourceId),
@@ -223,7 +222,7 @@ export const resourceAccessTokens = sqliteTable('resource_access_tokens', {
   expiresAt: text('expires_at'),
   lastUsedAt: text('last_used_at'),
   createdBy: text('created_by').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxTokenHash: index('idx_resource_access_tokens_token_hash').on(table.tokenHash),
   idxResource: index('idx_resource_access_tokens_resource_id').on(table.resourceId),
@@ -246,8 +245,8 @@ export const resources = sqliteTable('resources', {
   lastUsedAt: text('last_used_at'),
   manifestKey: text('manifest_key'),
   orphanedAt: text('orphaned_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxType: index('idx_resources_type').on(table.type),
   idxStatus: index('idx_resources_status').on(table.status),
@@ -266,7 +265,7 @@ export const sessionFiles = sqliteTable('session_files', {
   hash: text('hash').notNull(),
   size: integer('size').notNull().default(0),
   operation: text('operation').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqSessionPath: uniqueIndex('idx_session_files_session_path').on(table.sessionId, table.path),
   idxSession: index('idx_session_files_session_id').on(table.sessionId),
@@ -280,7 +279,7 @@ export const sessionRepos = sqliteTable('session_repos', {
   branch: text('branch'),
   mountPath: text('mount_path').notNull(),
   isPrimary: integer('is_primary', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqSessionRepo: uniqueIndex('idx_session_repos_session_repo').on(table.sessionId, table.repoId),
   uniqSessionMount: uniqueIndex('idx_session_repos_session_mount').on(table.sessionId, table.mountPath),
@@ -300,8 +299,8 @@ export const sessions = sqliteTable('sessions', {
   lastHeartbeat: text('last_heartbeat'),
   repoId: text('repo_id'),
   branch: text('branch'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxUserAccount: index('idx_sessions_user_account_id').on(table.userAccountId),
   idxStatus: index('idx_sessions_status').on(table.status),
@@ -337,8 +336,8 @@ export const shortcutGroups = sqliteTable('shortcut_groups', {
   name: text('name').notNull(),
   icon: text('icon'),
   bundleDeploymentId: text('bundle_deployment_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxAccount: index('idx_shortcut_groups_account_id').on(table.accountId),
 }));
@@ -353,8 +352,8 @@ export const shortcuts = sqliteTable('shortcuts', {
   name: text('name').notNull(),
   icon: text('icon'),
   position: integer('position').notNull().default(0),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqUserResourceTypeId: uniqueIndex('idx_shortcuts_user_resource_type_id').on(table.userAccountId, table.resourceType, table.resourceId),
   idxUser: index('idx_shortcuts_user_account_id').on(table.userAccountId),
@@ -372,7 +371,7 @@ export const uiExtensions = sqliteTable('ui_extensions', {
   bundleR2Key: text('bundle_r2_key').notNull(),
   sidebarJson: text('sidebar_json'),
   bundleDeploymentId: text('bundle_deployment_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqAccountPath: uniqueIndex('idx_ui_extensions_account_path').on(table.accountId, table.path),
   idxAccount: index('idx_ui_extensions_account_id').on(table.accountId),
@@ -385,7 +384,7 @@ export const dlqEntries = sqliteTable('dlq_entries', {
   messageBody: text('message_body'),
   error: text('error'),
   retryCount: integer('retry_count'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 });
 
 // 115. StoreRegistry — tracks remote ActivityPub stores known to this instance
@@ -406,8 +405,8 @@ export const storeRegistry = sqliteTable('store_registry', {
   subscriptionEnabled: integer('subscription_enabled', { mode: 'boolean' }).notNull().default(false),
   lastFetchedAt: text('last_fetched_at'),
   lastOutboxCheckedAt: text('last_outbox_checked_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxAccount: index('idx_store_registry_account_id').on(table.accountId),
   uniqAccountActor: uniqueIndex('idx_store_registry_account_actor').on(table.accountId, table.actorUrl),
@@ -429,7 +428,7 @@ export const storeRegistryUpdates = sqliteTable('store_registry_updates', {
   published: text('published'),
   seen: integer('seen', { mode: 'boolean' }).notNull().default(false),
   rawJson: text('raw_json'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxRegistry: index('idx_store_registry_updates_registry').on(table.registryEntryId),
   idxAccount: index('idx_store_registry_updates_account').on(table.accountId),

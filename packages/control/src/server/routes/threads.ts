@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, ThreadStatus, MessageRole } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
+import { badRequest, notFound, internalError, parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {
@@ -11,7 +11,7 @@ import {
   listThreads,
   updateThread,
   updateThreadStatus,
-} from '../../application/services/threads/threads';
+} from '../../application/services/threads/thread-service';
 import {
   createThreadShare,
   listThreadShares,
@@ -34,7 +34,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const { status: statusQuery } = c.req.valid('query');
   const status = statusQuery as ThreadStatus | undefined;
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const threadsList = await listThreads(c.env.DB, access.space.id, { status });
@@ -57,7 +57,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const limit = parseLimit(validatedQuery.limit, 20, 100);
   const offset = parseOffset(validatedQuery.offset);
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
   const resolvedSpaceId = access.space.id;
 
@@ -82,7 +82,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const spaceId = c.req.param('spaceId');
   const body = c.req.valid('json');
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     spaceId,
     user.id,

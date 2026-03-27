@@ -17,12 +17,12 @@ const checks = [
   {
     name: 'package to app source dependency',
     files: /^packages\//,
-    pattern: /\bapps\/(?:control|runtime|executor|browser)\/src\b/g,
+    pattern: /\bapps\/(?:control|runtime)\/src\b/g,
   },
   {
     name: 'app script/test deep package source import',
-    files: /^apps\/(?:control|runtime|executor|browser)\/(?:(?:src\/__tests__|test|scripts)\/|src\/.*\.test\.)/,
-    pattern: /\bpackages\/(?:control|runtime-service|executor-service|browser-service)\/src\b/g,
+    files: /^apps\/(?:control|runtime)\/(?:(?:src\/__tests__|test|scripts)\/|src\/.*\.test\.)/,
+    pattern: /\bpackages\/(?:control|runtime-service)\/src\b/g,
   },
 ];
 const appWrapperChecks = [
@@ -48,16 +48,6 @@ const appWrapperChecks = [
   {
     appRoot: 'apps/runtime/src',
     pkgRoot: 'packages/runtime-service/src',
-    allow: new Set(['index.ts']),
-  },
-  {
-    appRoot: 'apps/executor/src',
-    pkgRoot: 'packages/executor-service/src',
-    allow: new Set(['index.ts']),
-  },
-  {
-    appRoot: 'apps/browser/src',
-    pkgRoot: 'packages/browser-service/src',
     allow: new Set(['index.ts']),
   },
 ];

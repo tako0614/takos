@@ -33,7 +33,10 @@ export class GitPushLockDO {
   }
 
   private async acquire(request: Request): Promise<Response> {
-    const body = await request.json().catch(() => ({})) as { token?: string; leaseMs?: number };
+    const body = await request.json().catch((err) => {
+      console.warn('[git-push-lock] Failed to parse acquire request body, using defaults', err);
+      return {};
+    }) as { token?: string; leaseMs?: number };
     const token = typeof body.token === 'string' && body.token.length > 0
       ? body.token
       : crypto.randomUUID();
@@ -54,7 +57,10 @@ export class GitPushLockDO {
   }
 
   private async release(request: Request): Promise<Response> {
-    const body = await request.json().catch(() => ({})) as { token?: string };
+    const body = await request.json().catch((err) => {
+      console.warn('[git-push-lock] Failed to parse release request body, using defaults', err);
+      return {};
+    }) as { token?: string };
     if (typeof body.token !== 'string' || body.token.length === 0) {
       return jsonResponse({ error: 'token is required' }, 400);
     }

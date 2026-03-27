@@ -16,7 +16,7 @@ vi.mock('@/db', async (importOriginal) => {
   };
 });
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   listThreadMessages: mocks.listThreadMessages,
 }));
 

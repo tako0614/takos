@@ -1,7 +1,11 @@
 import type { Env } from '../../../shared/types';
 import { normalizeEnvName } from './crypto';
 import type { CommonEnvReconcileTrigger } from './reconcile-jobs';
-import { CommonEnvRepository } from './repository';
+import {
+  listServiceLinks,
+  getService,
+  updateLinkRuntime,
+} from './repository';
 import { resolveServiceCommonEnvState } from '../platform/worker-desired-state';
 
 function errorMessage(error: unknown): string {
@@ -9,20 +13,7 @@ function errorMessage(error: unknown): string {
 }
 
 export class CommonEnvReconciler {
-  constructor(
-    private readonly env: Env,
-    private readonly repo: CommonEnvRepository
-  ) {}
-
-  private async listServiceLinks(spaceId: string, serviceId: string) {
-    const repo = this.repo as CommonEnvRepository & {
-      listServiceLinks?: (spaceId: string, serviceId: string) => Promise<Array<{ id: string; env_name: string; source: string; sync_state: string; sync_reason: string | null; }>>;
-      listWorkerLinks?: (spaceId: string, workerId: string) => Promise<Array<{ id: string; env_name: string; source: string; sync_state: string; sync_reason: string | null; }>>;
-    };
-    return repo.listServiceLinks?.(spaceId, serviceId)
-      ?? repo.listWorkerLinks?.(spaceId, serviceId)
-      ?? [];
-  }
+  constructor(private readonly env: Env) {}
 
   async markServiceLinksApplyFailed(params: {
     spaceId: string;
@@ -30,7 +21,7 @@ export class CommonEnvReconciler {
     targetKeys?: Set<string>;
     error: unknown;
   }): Promise<void> {
-    const rows = await this.listServiceLinks(params.spaceId, params.serviceId);
+    const rows = await listServiceLinks(this.env, params.spaceId, params.serviceId);
     const targetKeys = params.targetKeys && params.targetKeys.size > 0
       ? new Set(Array.from(params.targetKeys.values()).map((key) => normalizeEnvName(key)))
       : null;
@@ -41,7 +32,7 @@ export class CommonEnvReconciler {
     for (const row of rows) {
       const key = normalizeEnvName(row.env_name);
       if (targetKeys && !targetKeys.has(key)) continue;
-      await this.repo.updateLinkRuntime({
+      await updateLinkRuntime(this.env, {
         rowId: row.id,
         syncState: 'error',
         syncReason: 'apply_failed',
@@ -60,7 +51,7 @@ export class CommonEnvReconciler {
   ): Promise<void> {
     void options?.trigger;
 
-    const service = await this.repo.getService(spaceId, serviceId);
+    const service = await getService(this.env, spaceId, serviceId);
     if (!service) return;
 
     const targetKeys = options?.targetKeys && options.targetKeys.size > 0
@@ -68,7 +59,7 @@ export class CommonEnvReconciler {
       : null;
 
     const resolved = await resolveServiceCommonEnvState(this.env, spaceId, serviceId);
-    const linkRows = targetKeys ? await this.listServiceLinks(spaceId, serviceId) : [];
+    const linkRows = targetKeys ? await listServiceLinks(this.env, spaceId, serviceId) : [];
     const rowIdToKey = new Map(linkRows.map((row) => [row.id, normalizeEnvName(row.env_name)]));
 
     for (const update of resolved.commonEnvUpdates) {
@@ -79,7 +70,7 @@ export class CommonEnvReconciler {
         }
       }
 
-      await this.repo.updateLinkRuntime(update);
+      await updateLinkRuntime(this.env, update);
     }
   }
 

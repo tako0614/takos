@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
+import { requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import {
   createSkill,
@@ -83,7 +83,7 @@ async function listSkillsHandler(c: SkillsContext) {
   const user = c.get('user');
   const scopeId = getScopeId(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_LIST_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_LIST_ROLES);
   if (access instanceof Response) return access;
 
   const skillsList = await listSkills(c.env.DB, access.space.id);
@@ -106,7 +106,7 @@ async function createSkillHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const body = await validateJson(c, createSkillSchema);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -144,7 +144,7 @@ async function getSkillByNameHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillName = getSkillNameParam(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
   if (access instanceof Response) return access;
 
   const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
@@ -163,7 +163,7 @@ async function getSkillByIdHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillId = getSkillIdParam(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
   if (access instanceof Response) return access;
 
   const skill = await getSkill(c.env.DB, access.space.id, skillId);
@@ -183,7 +183,7 @@ async function updateSkillByNameHandler(c: SkillsContext) {
   const skillName = getSkillNameParam(c);
   const body = await validateJson(c, updateSkillSchema);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -234,7 +234,7 @@ async function updateSkillByIdHandler(c: SkillsContext) {
   const skillId = getSkillIdParam(c);
   const body = await validateJson(c, updateSkillSchema);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -285,7 +285,7 @@ async function patchSkillByNameHandler(c: SkillsContext) {
   const skillName = getSkillNameParam(c);
   const body = await validateJson(c, patchSkillSchema);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -312,7 +312,7 @@ async function patchSkillByIdHandler(c: SkillsContext) {
   const skillId = getSkillIdParam(c);
   const body = await validateJson(c, patchSkillSchema);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -338,7 +338,7 @@ async function deleteSkillByNameHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillName = getSkillNameParam(c);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -363,7 +363,7 @@ async function deleteSkillByIdHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillId = getSkillIdParam(c);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     scopeId,
     user.id,
@@ -387,7 +387,7 @@ async function skillContextHandler(c: SkillsContext) {
   const user = c.get('user');
   const scopeId = getScopeId(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_CONTEXT_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_CONTEXT_ROLES);
   if (access instanceof Response) return access;
 
   const catalog = await listSkillContext(c.env.DB, access.space.id, getSkillLocaleInput(c));
@@ -403,7 +403,7 @@ async function listOfficialSkillsHandler(c: SkillsContext) {
   const user = c.get('user');
   const scopeId = getScopeId(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
   if (access instanceof Response) return access;
 
   const catalog = await listOfficialSkillsCatalog(c.env.DB, access.space.id, getSkillLocaleInput(c));
@@ -415,7 +415,7 @@ async function getOfficialSkillHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillId = getSkillIdParam(c);
 
-  const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
+  const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
   if (access instanceof Response) return access;
 
   const skill = await getOfficialSkillCatalogEntry(c.env.DB, access.space.id, skillId, getSkillLocaleInput(c));

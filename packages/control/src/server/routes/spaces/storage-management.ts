@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   listStorageFiles,
@@ -17,7 +17,7 @@ import { getDb } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema';
 import { BadRequestError, NotFoundError } from '@takos/common/errors';
-import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-helpers';
+import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   .use('/:spaceId/storage/bulk-delete', storageBulkLimiter.middleware())
@@ -30,7 +30,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const db = getDb(c.env.DB);
@@ -77,7 +77,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const { path: queryPath } = c.req.valid('query');
     const path = queryPath || '/';
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const result = await listStorageFiles(c.env.DB, access.space.id, path);
@@ -92,7 +92,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -124,7 +124,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const file = await getStorageItem(c.env.DB, access.space.id, fileId);
@@ -142,7 +142,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -176,7 +176,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -227,7 +227,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -273,7 +273,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -320,7 +320,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,

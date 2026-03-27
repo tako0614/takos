@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Branch } from '../../../types';
 import { Icons } from '../../../lib/Icons';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 interface RepoDetailBranchesProps {
   branches: Branch[];

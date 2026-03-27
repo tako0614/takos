@@ -1,7 +1,7 @@
 import { useRef, useId, useEffect, useCallback, type ReactNode, type TouchEvent } from 'react';
 import { Icons } from '../../lib/Icons';
 import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 
 interface MobileDrawerProps {
   isOpen: boolean;

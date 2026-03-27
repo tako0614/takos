@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Icons } from '../../../lib/Icons';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
+import { useI18n } from '../../../store/i18n';
 import {
   type WorkflowRunSummary,
   type WorkflowRunDetail,

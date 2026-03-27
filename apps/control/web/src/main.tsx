@@ -1,8 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import { useAtomValue, useSetAtom } from 'jotai';
 import App from './App';
-import { I18nProvider } from './providers/I18nProvider';
-import { ThemeProvider } from './providers/ThemeProvider';
+import { resolvedThemeAtom, systemThemeAtom } from './store/theme';
 import './styles.css';
 
 if (import.meta.env.PROD && import.meta.env.MODE !== 'staging-debug') {
@@ -14,6 +14,27 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'staging-debug') {
   console.error = noop;
 }
 
+/** Syncs the resolved theme to `data-theme` on `<html>` and listens for OS color-scheme changes. */
+function ThemeSync() {
+  const resolved = useAtomValue(resolvedThemeAtom);
+  const setSystemTheme = useSetAtom(systemThemeAtom);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', resolved);
+  }, [resolved]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [setSystemTheme]);
+
+  return null;
+}
+
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
@@ -22,10 +43,7 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <StrictMode>
-    <ThemeProvider>
-      <I18nProvider>
-        <App />
-      </I18nProvider>
-    </ThemeProvider>
+    <ThemeSync />
+    <App />
   </StrictMode>
 );

@@ -14,14 +14,14 @@ import type { ControlPlatform } from '../../platform/types.ts';
 // Lazy imports to keep cold-start fast — only load what's needed per invocation.
 
 export function createWorkerRuntime(
-  buildPlatform: (env: Env) => ControlPlatform<Env> = buildWorkersWorkerPlatform,
+  buildPlatform: (env: Env) => ControlPlatform<Env> | Promise<ControlPlatform<Env>> = buildWorkersWorkerPlatform,
 ) {
   return {
   // ---------------------------------------------------------------------------
   // fetch: egress proxy (service-binding only, no public routes)
   // ---------------------------------------------------------------------------
   async fetch(request: Request, env: Env): Promise<Response> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const runtimeBindings = {
       ...platform.bindings,
       DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
@@ -38,7 +38,7 @@ export function createWorkerRuntime(
   // queue: unified dispatcher
   // ---------------------------------------------------------------------------
   async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const bindings = {
       ...platform.bindings,
       DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
@@ -99,7 +99,7 @@ export function createWorkerRuntime(
   // scheduled: stale run recovery (from runner)
   // ---------------------------------------------------------------------------
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const bindings = {
       ...platform.bindings,
       DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,

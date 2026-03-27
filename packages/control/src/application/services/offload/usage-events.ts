@@ -70,7 +70,7 @@ async function readSegmentObject(obj: R2ObjectBody): Promise<PersistedUsageEvent
       if (typeof parsed.units !== 'number' || !Number.isFinite(parsed.units)) continue;
       if (typeof parsed.created_at !== 'string') continue;
       out.push(parsed);
-    } catch { /* ignored - skip malformed lines */ }
+    } catch (_err) { /* ignored - skip malformed lines */ }
   }
   return out;
 }

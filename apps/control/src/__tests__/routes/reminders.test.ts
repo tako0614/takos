@@ -4,7 +4,7 @@ import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   listReminders: vi.fn(),
   getReminderById: vi.fn(),
   createReminder: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -78,7 +78,7 @@ describe('reminders routes', () => {
 
   describe('GET /api/spaces/:spaceId/reminders', () => {
     it('returns reminders list for a workspace', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1' },
         member: { role: 'owner' },
       });
@@ -104,7 +104,7 @@ describe('reminders routes', () => {
     });
 
     it('returns error when workspace access is denied', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue(
+      mocks.requireSpaceAccess.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Workspace not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
@@ -123,7 +123,7 @@ describe('reminders routes', () => {
     });
 
     it('passes status filter and limit to service', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1' },
         member: { role: 'viewer' },
       });
@@ -201,7 +201,7 @@ describe('reminders routes', () => {
 
   describe('POST /api/spaces/:spaceId/reminders', () => {
     it('creates a reminder and returns 201', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1' },
         member: { role: 'editor' },
       });
@@ -240,7 +240,7 @@ describe('reminders routes', () => {
     });
 
     it('rejects empty content', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1' },
         member: { role: 'editor' },
       });
@@ -265,7 +265,7 @@ describe('reminders routes', () => {
     });
 
     it('rejects invalid trigger_type', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1' },
         member: { role: 'editor' },
       });

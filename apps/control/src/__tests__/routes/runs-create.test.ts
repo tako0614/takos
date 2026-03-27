@@ -13,7 +13,7 @@ vi.mock('@/db', async (importOriginal) => {
   return { ...actual, getDb: mocks.getDb };
 });
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   checkThreadAccess: mocks.checkThreadAccess,
 }));
 

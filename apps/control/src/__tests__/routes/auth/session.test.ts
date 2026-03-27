@@ -38,7 +38,7 @@ vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof imp
   getDb: mocks.getDb,
 }));
 
-vi.mock('@/routes/auth/utils', () => ({
+vi.mock('@/routes/auth/provisioning', () => ({
   sanitizeReturnTo: mocks.sanitizeReturnTo,
   provisionGoogleOAuthUser: mocks.provisionGoogleOAuthUser,
 }));

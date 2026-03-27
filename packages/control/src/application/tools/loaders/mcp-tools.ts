@@ -175,7 +175,9 @@ export async function loadMcpTools(
               try {
                 return await callClient.callTool(sdkToolName, args, signal);
               } finally {
-                await callClient.close().catch(() => {});
+                await callClient.close().catch((e) => {
+                  logError('MCP call client close failed (non-critical)', e, { module: 'mcp' });
+                });
               }
             } finally {
               clearTimeout(timer);
@@ -188,7 +190,9 @@ export async function loadMcpTools(
       if (server.sourceType === 'external') {
         clients.set(server.name, client);
       } else {
-        await client.close().catch(() => {});
+        await client.close().catch((e) => {
+          logError('MCP client close failed (non-critical)', e, { module: 'mcp' });
+        });
       }
     } catch (err) {
       logError(`Failed to load tools from server "${server.name}"`, err, { module: 'mcp' });

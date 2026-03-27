@@ -32,20 +32,25 @@ async function closeRedisClient(client: RedisClient): Promise<void> {
   };
   if (typedClient.isOpen === false) return;
   if (typedClient.close) {
-    await Promise.resolve(typedClient.close()).catch(() => undefined);
+    await Promise.resolve(typedClient.close()).catch((e) => {
+      console.warn('Redis client close failed (non-critical):', e);
+    });
     return;
   }
   try {
     typedClient.destroy?.();
-  } catch {
-    // Ignore already-closed sockets during local smoke cleanup.
+  } catch (e) {
+    // Already-closed sockets during local smoke cleanup are expected.
+    console.warn('Redis client destroy failed (non-critical):', e);
   }
 }
 
 async function getRedisClient(redisUrl: string): Promise<RedisClient> {
   if (redisClientState?.url !== redisUrl) {
     if (redisClientState) {
-      void redisClientState.clientPromise.then((client) => closeRedisClient(client)).catch(() => undefined);
+      void redisClientState.clientPromise.then((client) => closeRedisClient(client)).catch((e) => {
+        console.warn('Failed to close previous Redis client (non-critical):', e);
+      });
     }
 
     redisClientState = {
@@ -61,7 +66,9 @@ export async function disposeRedisClient(): Promise<void> {
   if (!redisClientState) return;
   const state = redisClientState;
   redisClientState = null;
-  await state.clientPromise.then((client) => closeRedisClient(client)).catch(() => undefined);
+  await state.clientPromise.then((client) => closeRedisClient(client)).catch((e) => {
+    console.warn('Failed to dispose Redis client (non-critical):', e);
+  });
 }
 
 export function resetRedisClientForTests(): void {
@@ -131,7 +138,9 @@ export function createRedisQueue<T = unknown>(redisUrl: string, queueName: strin
     },
   };
 
-  void ensureLoaded().catch(() => undefined);
+  void ensureLoaded().catch((e) => {
+    console.warn('Redis queue initial load failed (non-critical):', e);
+  });
 
   return queue as unknown as LocalQueue<T>;
 }

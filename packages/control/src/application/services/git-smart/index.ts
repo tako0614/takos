@@ -5,7 +5,24 @@
  */
 
 // --- Types ---
-export * from './types';
+export type {
+  GitObjectType,
+  TreeEntry,
+  GitSignature,
+  GitCommit,
+  GitTree,
+  GitBlob,
+  GitBranch,
+  GitTag,
+  GitCommitIndex,
+  GitRepoFork,
+  GitRepoRemote,
+  CreateCommitParams,
+  RefUpdateResult,
+  MergeConflictType,
+  MergeConflict,
+} from './types';
+export { FILE_MODES, SHA1_PATTERN, isValidSha } from './types';
 
 // --- Core object operations ---
 export {

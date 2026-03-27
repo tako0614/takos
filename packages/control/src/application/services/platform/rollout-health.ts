@@ -1,4 +1,4 @@
-import type { KvStoreBinding } from '../../../shared/types/bindings';
+import type { KvStoreBinding } from '../../../shared/types/bindings.ts';
 
 const BUCKET_DURATION_MS = 60_000; // 1-minute buckets
 

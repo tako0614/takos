@@ -14,7 +14,6 @@ import {
   isWindows,
   setSecurePermissions,
 } from './config-session-io.js';
-import type { SessionFile } from './config-session-io.js';
 
 
 /**

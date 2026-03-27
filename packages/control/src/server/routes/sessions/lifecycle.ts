@@ -7,7 +7,7 @@ import {
   createRuntimeSessionManager,
   type SessionInitResult,
 } from '../../../application/services/sync';
-import { requireWorkspaceAccess } from '../shared/route-auth';
+import { requireSpaceAccess } from '../shared/route-auth';
 import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import { toSessionSnakeCase } from './shared';
 import type { SessionContext } from './shared';
@@ -54,7 +54,7 @@ export async function startSession(
   const user = c.get('user');
   const spaceId = c.req.param('spaceId') || c.req.param('workspaceId');
   if (!spaceId) throw new BadRequestError('Missing spaceId');
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     spaceId,
     user.id,
@@ -157,7 +157,7 @@ export async function stopSession(
   }
 
   const session = toSessionSnakeCase(sessionRow);
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     session.space_id,
     user.id,
@@ -269,7 +269,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     throw new NotFoundError('Session');
   }
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     sessionRow.accountId,
     user.id,

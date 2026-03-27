@@ -1,5 +1,6 @@
 import { getDb, runEvents } from '../../../infra/db';
 import type { Env } from '../../../shared/types';
+import type { PlatformServices } from '../../../platform/types.ts';
 import { now } from '../../../shared/utils';
 import {
   buildRunNotifierEmitPayload,
@@ -8,6 +9,14 @@ import {
   type RunNotifierEmitPayload,
 } from '../run-notifier';
 import { logWarn } from '../../../shared/utils/logger';
+
+// ---------------------------------------------------------------------------
+// SSE notifier accessor
+// ---------------------------------------------------------------------------
+
+function getSseNotifier(env: Env): PlatformServices['sseNotifier'] | undefined {
+  return (env as unknown as Record<string, unknown>).SSE_NOTIFIER as PlatformServices['sseNotifier'] | undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Persist a run event to D1 (when not using R2 offload)
@@ -73,6 +82,20 @@ export async function persistAndEmitEvent(
     );
   } catch (notifyErr) {
     logWarn(`Failed to notify WebSocket about ${type}`, { module: 'services/execution/run-events', detail: notifyErr });
+  }
+
+  // Also emit via SSE notifier for Node.js / k8s environments
+  const sseNotifier = getSseNotifier(env);
+  if (sseNotifier) {
+    try {
+      sseNotifier.emit(`run:${runId}`, {
+        type,
+        data,
+        event_id: eventId ?? undefined,
+      });
+    } catch (sseErr) {
+      logWarn(`Failed to emit SSE event for ${type}`, { module: 'services/execution/run-events', detail: sseErr });
+    }
   }
 }
 

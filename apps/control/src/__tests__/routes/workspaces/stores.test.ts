@@ -4,7 +4,7 @@ import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   listActivityPubStoresForWorkspace: vi.fn(),
   createActivityPubStore: vi.fn(),
   updateActivityPubStore: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -60,7 +60,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 describe('workspace activitypub stores routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({
+    mocks.requireSpaceAccess.mockResolvedValue({
       workspace: { id: 'ws-1' },
       member: { role: 'owner' },
     });

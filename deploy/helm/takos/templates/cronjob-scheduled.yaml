@@ -1,0 +1,39 @@
+{{- if .Values.controlWorker.cronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "takos.fullname" . }}-scheduled
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduled
+spec:
+  schedule: {{ .Values.controlWorker.cronJob.schedule | default "*/5 * * * *" | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: scheduled-trigger
+              image: curlimages/curl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  curl -sf -X POST \
+                    "http://{{ include "takos.fullname" . }}-control-web:{{ .Values.controlWeb.port }}/internal/scheduled?cron={{ .Values.controlWorker.cronJob.cron | default "*/15 * * * *" | urlquery }}" \
+                    -H "Content-Type: application/json" \
+                    --max-time 120
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 50m
+                  memory: 32Mi
+{{- end }}

@@ -4,7 +4,7 @@ import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { asPrismaRunRow, prismaRunToApi } from '../../../application/services/runs/shared';
+import { asRunRow, runRowToApi } from '../../../application/services/runs/shared';
 
 export type RunAccessResult = {
   run: Run;
@@ -24,7 +24,7 @@ export async function checkRunAccess(
     return null;
   }
 
-  const run = prismaRunToApi(asPrismaRunRow({ ...row, spaceId: row.accountId }));
+  const run = runRowToApi(asRunRow({ ...row, spaceId: row.accountId }));
   const access = await checkSpaceAccess(db, run.space_id, userId, requiredRole);
   if (!access) {
     return null;

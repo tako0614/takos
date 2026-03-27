@@ -4,7 +4,7 @@ import { eq, and, notInArray } from 'drizzle-orm';
 import { isValidWorkflowJobQueueMessage } from '../../shared/types';
 import { logError, logWarn } from '../../shared/utils/logger';
 import type { WorkflowQueueEnv, WorkflowEngineBucket } from './workflow-types';
-import { buildSkippedStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-helpers';
+import { buildSkippedStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-runtime-client';
 import { emitWorkflowEvent } from './workflow-events';
 
 // ---------------------------------------------------------------------------

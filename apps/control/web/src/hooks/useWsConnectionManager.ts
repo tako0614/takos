@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import type { TranslationKey } from '../providers/I18nProvider';
+import type { TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type { Run } from '../types';
 import { parseTimelineEventId } from '../views/chat/timeline';

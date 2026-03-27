@@ -6,7 +6,7 @@ import { formatDetailedRelativeDate } from '../../../lib/format';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 type PRStatus = 'open' | 'merged' | 'closed' | 'all';
 

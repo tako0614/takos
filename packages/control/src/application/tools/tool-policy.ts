@@ -564,12 +564,6 @@ export function getSpaceOperationPolicy(operationId: SpaceOperationId): SpaceOpe
   return SPACE_OPERATION_POLICIES[operationId];
 }
 
-/** @deprecated Use {@link getSpaceOperationPolicy} instead. */
-export const getWorkspaceOperationPolicy = getSpaceOperationPolicy;
-
-/** @deprecated Use {@link SPACE_OPERATION_POLICIES} instead. */
-export const WORKSPACE_OPERATION_POLICIES = SPACE_OPERATION_POLICIES;
-
 export function getToolPolicyMetadata(tool: ToolDefinition | string): ToolPolicyMetadata {
   const name = typeof tool === 'string' ? tool : tool.name;
   const registered = BUILTIN_TOOL_POLICY_METADATA[name];

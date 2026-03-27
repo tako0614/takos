@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => {
     slugifyServiceName: slugifyWorkerName,
     WORKSPACE_WORKER_LIMITS: { maxWorkers: 20 },
     WORKSPACE_SERVICE_LIMITS: { maxServices: 20 },
-    requireWorkspaceAccess: vi.fn(),
+    requireSpaceAccess: vi.fn(),
     deleteHostnameRouting: vi.fn(),
     resolveHostnameRouting: vi.fn(),
     upsertHostnameRouting: vi.fn(),
@@ -71,7 +71,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -166,7 +166,7 @@ describe('services base routes', () => {
 
   describe('GET /api/services/space/:spaceId', () => {
     it('returns services for the specified workspace', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-1', name: 'My Space' },
         member: { role: 'owner' },
       });
@@ -188,7 +188,7 @@ describe('services base routes', () => {
     });
 
     it('returns error when workspace access is denied', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue(
+      mocks.requireSpaceAccess.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Workspace not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
@@ -255,7 +255,7 @@ describe('services base routes', () => {
     });
 
     it('respects space_id to scope service creation to a workspace', async () => {
-      mocks.requireWorkspaceAccess.mockResolvedValue({
+      mocks.requireSpaceAccess.mockResolvedValue({
         workspace: { id: 'ws-2' },
         member: { role: 'admin' },
       });

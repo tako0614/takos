@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { getRepositoryById } from '../../../application/services/identity/spaces';
 import { getDb } from '../../../infra/db';
 import { eq, desc } from 'drizzle-orm';
@@ -13,7 +13,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceIdentifier = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceIdentifier,
       user.id,

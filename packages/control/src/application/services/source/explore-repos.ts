@@ -10,7 +10,7 @@ import {
   queryReposWithAccount,
   countRepos,
   buildExploreResult,
-} from './explore-helpers';
+} from './source-exploration';
 
 export async function listExploreRepos(
   dbBinding: Env['DB'],

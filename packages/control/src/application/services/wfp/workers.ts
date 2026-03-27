@@ -209,7 +209,7 @@ export async function getWorkerSettings(ctx: WfpContext, workerName: string): Pr
 
 /**
  * Create or update a worker with WASM module support.
- * Used for deploying workers that require Prisma/WASM (like yurucommu).
+ * Used for deploying workers that require WASM modules (like yurucommu).
  */
 export async function createWorkerWithWasm(
   ctx: WfpContext,

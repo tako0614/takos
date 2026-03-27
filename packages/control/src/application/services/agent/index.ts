@@ -1,8 +1,34 @@
-export * from './types';
+export type {
+  AgentContext,
+  ToolCall,
+  ToolResult,
+  AgentMessage,
+  AgentTool,
+  AgentConfig,
+  AgentEventType,
+  AgentEvent,
+} from './types';
 export { AgentRunner, executeRun } from './runner';
 export { D1CheckpointSaver } from './langgraph-agent';
-export * from './model-catalog';
-export * from './thread-context';
+export type { ModelProvider, ModelOption, AgentTier, SupportedModelId } from './model-catalog';
+export {
+  OPENAI_MODELS,
+  SUPPORTED_MODEL_IDS,
+  DEFAULT_MODEL_ID,
+  normalizeModelId,
+  getModelProvider,
+  TIER_CONFIG,
+  getTierFromModel,
+  getContextWindowForModel,
+} from './model-catalog';
+export type { RetrievedThreadMessage } from './thread-context';
+export {
+  THREAD_MESSAGE_VECTOR_KIND,
+  DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB,
+  queryRelevantThreadMessages,
+  indexThreadContext,
+  buildThreadContextSystemMessage,
+} from './thread-context';
 export {
   AGENT_DISABLED_BUILTIN_TOOLS,
   isToolAllowedForAgent,
@@ -12,15 +38,9 @@ export { shouldResetRunToQueuedOnContainerError } from './run-lifecycle';
 export {
   type LLMConfig,
   LLMClient,
-  CHARS_PER_TOKEN,
   VALID_PROVIDERS,
   createLLMClient,
   createMultiModelClient,
   createLLMClientFromEnv,
   getProviderFromModel,
 } from './llm';
-
-// Multi-agent exports
-export { AgentOrchestrator, type OrchestratorInput, type OrchestratorOutput } from './orchestrator';
-export { ToolExecutionWorker, type ToolExecutionInput, type ToolExecutionOutput } from './tool-worker';
-export { DelegationCoordinator, type DelegationInput, type DelegationOutput, type DelegationTask } from './delegation-coordinator';

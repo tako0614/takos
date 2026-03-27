@@ -1,0 +1,22 @@
+{
+  "name": "@takos/control-platform",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "../src/platform/index.ts",
+    "./accessors": "../src/platform/accessors.ts",
+    "./context": "../src/platform/context.ts",
+    "./types": "../src/platform/types.ts",
+    "./adapters/node": "../src/platform/adapters/node.ts",
+    "./adapters/shared": "../src/platform/adapters/shared.ts",
+    "./adapters/workers": "../src/platform/adapters/workers.ts",
+    "./providers/cloudflare/pdf-render": "../src/platform/providers/cloudflare/pdf-render.ts",
+    "./providers/cloudflare/resources": "../src/platform/providers/cloudflare/resources.ts",
+    "./providers/cloudflare/wfp": "../src/platform/providers/cloudflare/wfp.ts",
+    "./providers/node/pdf-render": "../src/platform/providers/node/pdf-render.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "package.json"
+  ]
+}

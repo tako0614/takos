@@ -24,7 +24,7 @@ new_sqlite_classes = ["TakosAgentExecutorContainer"]
 # Container configuration — basic: 0.25 vCPU / 1 GiB, up to 100 instances
 [[containers]]
 class_name = "TakosAgentExecutorContainer"
-image = "../executor/Dockerfile"
+image = "../../packages/executor-service/Dockerfile"
 image_build_context = "../.."
 instance_type = "basic"
 max_instances = 100
@@ -110,7 +110,7 @@ script_name = "takos-staging"
 
 [[env.staging.containers]]
 class_name = "TakosAgentExecutorContainer"
-image = "../executor/Dockerfile"
+image = "../../packages/executor-service/Dockerfile"
 image_build_context = "../.."
 instance_type = "standard-1"
 max_instances = 10

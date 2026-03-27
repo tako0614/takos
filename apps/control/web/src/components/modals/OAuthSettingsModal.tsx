@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 import { Modal } from '../ui/Modal';
 import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs';

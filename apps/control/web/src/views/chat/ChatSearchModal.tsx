@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
 import { Input } from '../../components/ui/Input';

@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 /** Minimal shape needed by resolveCompositeOutputs (avoids circular import). */
-export interface ActionOutputDef {
+export interface ActionOutputDefinition {
   description?: string;
   value?: string;
 }
@@ -174,7 +174,7 @@ export function resolveWith(
 }
 
 export function resolveCompositeOutputs(
-  outputs: Record<string, ActionOutputDef> | undefined,
+  outputs: Record<string, ActionOutputDefinition> | undefined,
   context: InterpolationContext
 ): Record<string, string> {
   const resolved: Record<string, string> = {};

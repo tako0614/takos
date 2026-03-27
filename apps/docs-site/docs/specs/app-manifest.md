@@ -179,7 +179,7 @@ metadata:
 spec:
   type: container
   pluginConfig:
-    dockerfile: apps/browser/Dockerfile
+    dockerfile: packages/browser-service/Dockerfile
     port: 8080
     instanceType: standard-2
     maxInstances: 25
@@ -364,7 +364,7 @@ metadata:
 spec:
   type: container
   pluginConfig:
-    dockerfile: apps/browser/Dockerfile
+    dockerfile: packages/browser-service/Dockerfile
     port: 8080
     instanceType: standard-2
     maxInstances: 25
@@ -376,7 +376,7 @@ metadata:
 spec:
   type: container
   pluginConfig:
-    dockerfile: apps/executor/Dockerfile
+    dockerfile: packages/executor-service/Dockerfile
     port: 8080
     instanceType: basic
     maxInstances: 100

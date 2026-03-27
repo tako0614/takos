@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
-import { type TranslationKey } from '../providers/I18nProvider';
+import { type TranslationKey } from '../store/i18n';
 
 export interface UseFileAttachmentOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;

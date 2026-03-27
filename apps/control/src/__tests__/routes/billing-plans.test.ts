@@ -39,7 +39,7 @@ const stripeMocks = vi.hoisted(() => ({
   sendInvoice: vi.fn(),
 }));
 
-const prismaMocks = vi.hoisted(() => ({
+const dbMocks = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
 
@@ -63,7 +63,7 @@ vi.mock('@/services/billing/stripe', () => ({
 }));
 
 vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: prismaMocks.getDb,
+  getDb: dbMocks.getDb,
 }));
 
 import billingRoutes, {
@@ -103,7 +103,7 @@ function createApp(user: User) {
 describe('billing plan management routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMocks.getDb.mockReturnValue({
+    dbMocks.getDb.mockReturnValue({
       billingAccount: {
         update: vi.fn().mockResolvedValue(undefined),
         findFirst: vi.fn().mockResolvedValue(null),
@@ -339,7 +339,7 @@ describe('billing plan management routes', () => {
         })),
       };
     }
-    prismaMocks.getDb.mockReturnValue(createDrizzleDbMock());
+    dbMocks.getDb.mockReturnValue(createDrizzleDbMock());
     stripeMocks.verifyWebhookSignature.mockResolvedValue({
       event: {
         type: 'checkout.session.completed',
@@ -420,7 +420,7 @@ describe('billing plan management routes', () => {
         })),
       };
     }
-    prismaMocks.getDb.mockReturnValue(createDrizzleDbMock());
+    dbMocks.getDb.mockReturnValue(createDrizzleDbMock());
     stripeMocks.verifyWebhookSignature.mockResolvedValue({
       event: {
         type: 'checkout.session.completed',
@@ -517,7 +517,7 @@ describe('billing plan management routes', () => {
         })),
       };
     }
-    prismaMocks.getDb.mockReturnValue(createDrizzleDbMock());
+    dbMocks.getDb.mockReturnValue(createDrizzleDbMock());
     stripeMocks.verifyWebhookSignature.mockResolvedValue({
       event: {
         type: 'customer.subscription.deleted',

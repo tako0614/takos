@@ -1,4 +1,4 @@
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const { t, lang, setLang } = useI18n();

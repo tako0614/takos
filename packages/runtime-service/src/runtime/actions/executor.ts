@@ -16,7 +16,7 @@ import {
   type ActionRuns,
   type ActionOutputDefinition,
 } from './composite-executor.js';
-import { appendOutput, buildCombinedResult } from './action-result-helpers.js';
+import { appendOutput, buildCombinedResult } from './action-result-converter.js';
 import { parseKeyValueFile, parsePathFile } from './file-parsers.js';
 import {
   fetchMarketplaceRepo,

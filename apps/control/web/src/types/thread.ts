@@ -56,7 +56,8 @@ export type AgentTaskStatus = 'planned' | 'in_progress' | 'blocked' | 'completed
 
 export type AgentTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
-export interface AgentTask {
+/** Core DB-mapped properties for an agent task. */
+export interface AgentTaskBase {
   id: string;
   space_id: string;
   created_by: string | null;
@@ -74,6 +75,10 @@ export interface AgentTask {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Enriched agent task returned from list/detail API endpoints. */
+export interface AgentTask extends AgentTaskBase {
   thread_title?: string | null;
   latest_run?: AgentTaskRunSummary | null;
   resume_target?: AgentTaskResumeTarget | null;

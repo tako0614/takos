@@ -9,22 +9,14 @@ import {
   normalizeEnvName,
 } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
-import type { CommonEnvRepository } from './repository';
+import { listSpaceEnvRows } from './repository';
 import { assertSpaceCommonEnvKeyAllowed, getChanges } from './link-state';
-import { getDb, accountEnvVars } from '../../../infra/db';
+import { accountEnvVars } from '../../../infra/db';
+import { db, runInTransaction } from './db-helpers';
 
 export interface SpaceEnvDeps {
   env: Env;
-  repo: CommonEnvRepository;
   txManager: D1TransactionManager;
-}
-
-function db(deps: SpaceEnvDeps) {
-  return getDb(deps.env.DB);
-}
-
-function runInTransaction<T>(deps: SpaceEnvDeps, fn: () => Promise<T>): Promise<T> {
-  return deps.txManager.runInTransaction(fn);
 }
 
 export async function listSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string): Promise<Array<{
@@ -33,7 +25,7 @@ export async function listSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string): P
   value: string;
   updatedAt: string;
 }>> {
-  const rows = await deps.repo.listSpaceEnvRows(spaceId);
+  const rows = await listSpaceEnvRows(deps.env, spaceId);
   const out: Array<{ name: string; secret: boolean; value: string; updatedAt: string }> = [];
   const dedupe = new Set<string>();
 

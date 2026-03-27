@@ -40,7 +40,7 @@ export function createPersistentDurableObjectNamespace(
         state.ids.push(key);
         void flushRegistry();
       }
-    });
+    }).catch((err) => console.warn('persistent-durable-objects: failed to load/flush registry on get', err));
     return originalGet(id as Parameters<typeof originalGet>[0]);
   };
   namespace.getByName = (name: string) => namespace.get(namespace.idFromName(name));
@@ -50,7 +50,7 @@ export function createPersistentDurableObjectNamespace(
       const stub = factory?.(id) ?? createInMemoryDurableObjectNamespace().getByName(id);
       namespaces.set(id, stub);
     }
-  });
+  }).catch((err) => console.warn('persistent-durable-objects: failed to pre-load registry', err));
 
   return namespace as InMemoryDurableObjectNamespace;
 }

@@ -224,13 +224,15 @@ async function removeEscapingSymlinks(dir: string, boundary: string): Promise<vo
         const isWithinBoundary = target !== null
           && (target === resolvedBoundary || target.startsWith(resolvedBoundary + path.sep));
         if (!isWithinBoundary) {
-          await fs.unlink(entryPath).catch(() => {});
+          await fs.unlink(entryPath).catch((e) => {
+            console.warn('Failed to unlink escaping symlink (non-critical):', entryPath, e);
+          });
         }
       } else if (lstats.isDirectory()) {
         await removeEscapingSymlinks(entryPath, boundary);
       }
-    } catch {
-      // Skip entries we cannot stat
+    } catch (e) {
+      console.warn('Failed to stat entry during symlink cleanup (non-critical):', entryPath, e);
     }
   }
 }

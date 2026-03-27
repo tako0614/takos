@@ -1,5 +1,5 @@
 import type { Env } from '../../../../shared/types';
-import { createCloudflareApiClient } from '../../../../platform/providers/cloudflare/api-client.ts';
+import { createCloudflareApiClient } from '../../cloudflare/api-client.ts';
 import { logError } from '../../../../shared/utils/logger';
 
 export async function createCloudflareCustomHostname(

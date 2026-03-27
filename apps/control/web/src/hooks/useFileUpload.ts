@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useI18n } from '../providers/I18nProvider';
+import { useI18n } from '../store/i18n';
 import { useToast } from './useToast';
 
 interface UseFileUploadParams {

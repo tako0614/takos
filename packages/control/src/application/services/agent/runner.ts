@@ -12,6 +12,9 @@
  *   - skills.ts           : skill loading, resolution, and context
  *   - simple-loop.ts      : simple LLM loop and no-LLM fallback
  *   - execute-run.ts      : queue consumer entry point
+ *   - llm-manager.ts      : LLM client initialization, model selection, API key management
+ *   - skill-manager.ts    : skill plan resolution, catalog management, locale processing
+ *   - memory-manager.ts   : memory runtime integration, memory graph processing
  */
 
 import type { RunStatus, Env } from '../../../shared/types';
@@ -19,11 +22,9 @@ import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { AgentContext, AgentConfig, AgentEvent, AgentMessage, ToolCall } from './types';
 import type { ToolExecutorLike } from '../../tools/executor';
-import { LLMClient, createMultiModelClient, getProviderFromModel, type ModelProvider } from './llm';
 import { RunCancelledError } from './run-lifecycle';
 import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
 import { runLangGraphRunner } from './langgraph-runner';
-import type { SkillCatalogEntry, SkillSelection, SkillContext } from './skills';
 import { getAgentConfig } from './runner-config';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { RunTerminalPayload } from '../run-notifier';
@@ -35,26 +36,25 @@ import {
   handleFailedRun,
   type RunLifecycleDeps,
 } from './run-lifecycle';
-import { buildToolCatalogContent } from './prompts';
+import { buildToolCatalogContent } from './prompt-builder';
 import { buildBudgetedSystemPrompt, LANE_PRIORITY, LANE_MAX_TOKENS, type PromptLane } from './prompt-budget';
 
 // Extracted modules
 import type { ToolExecution } from './runner-types';
 import { sanitizeErrorMessage } from './runner-types';
 import { autoCloseSession as autoCloseSessionImpl } from './session-closer';
-import {
-  emitSkillLoadOutcome,
-  type SkillLoadResult,
-} from './skills';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
-import { AgentMemoryRuntime } from '../memory-graph/runtime';
-import type { AgentMemoryBackend } from '../memory-graph/runtime';
 import { RemoteToolExecutor } from './remote-tool-executor';
 import {
   buildDelegationSystemMessage,
   buildDelegationUserMessage,
   getDelegationPacketFromRunInput,
 } from './delegation';
+
+// Manager functions and state
+import { createLLMState, type LLMState } from './llm-manager';
+import { createSkillState, resolveAndApplySkills, buildSkillPlan, type SkillState, type SkillManagerDeps } from './skill-manager';
+import { createMemoryState, bootstrapMemory, finalizeMemory, type MemoryState, type MemoryManagerDeps } from './memory-manager';
 
 // Re-export from split modules for backward compatibility
 export {
@@ -133,7 +133,7 @@ export interface AgentRunnerIo {
     agentType: string;
     history: AgentMessage[];
     availableToolNames: string[];
-  }): Promise<SkillLoadResult>;
+  }): Promise<import('./skills').SkillLoadResult>;
   getMemoryActivation(input: { spaceId: string }): Promise<import('../memory-graph/types').ActivationResult>;
   finalizeMemoryOverlay(input: {
     runId: string;
@@ -164,20 +164,10 @@ export interface AgentRunnerIo {
 export class AgentRunner {
   private db: SqlDatabaseBinding;
   private env: Env;
-  private openAiKey: string | undefined;
-  private anthropicKey: string | undefined;
-  private googleKey: string | undefined;
-  private llmClient: LLMClient | undefined;
   private context: AgentContext;
   private config: AgentConfig;
   private toolExecutor: ToolExecutorLike | undefined;
   private totalUsage = { inputTokens: 0, outputTokens: 0 };
-  private availableSkills: SkillCatalogEntry[] = [];
-  private selectedSkills: SkillSelection[] = [];
-  private activatedSkills: SkillContext[] = [];
-  private skillLocale: 'ja' | 'en' = 'en';
-  private aiModel: string;
-  private modelProvider: ModelProvider;
   private abortSignal?: AbortSignal;
   private toolCallCount = 0;
   private totalToolCalls = 0;
@@ -187,8 +177,14 @@ export class AgentRunner {
 
   private toolExecutions: ToolExecution[] = [];
   private eventState: EventEmitterState;
-  private memoryRuntime?: AgentMemoryRuntime;
   private runIo: AgentRunnerIo;
+
+  // Manager state
+  private llm: LLMState;
+  private skillState: SkillState;
+  private skillDeps: SkillManagerDeps;
+  private memoryState: MemoryState;
+  private memoryDeps: MemoryManagerDeps;
 
   constructor(
     env: Env,
@@ -207,31 +203,23 @@ export class AgentRunner {
     this.db = db;
     this.context = context;
     this.config = getAgentConfig(agentType, env);
-    this.aiModel = aiModel;
-    this.modelProvider = getProviderFromModel(aiModel);
     this.abortSignal = options.abortSignal;
     this.runIo = options.runIo;
     this.eventState = createEventEmitterState();
 
-    this.openAiKey = apiKey || env.OPENAI_API_KEY;
-    this.anthropicKey = env.ANTHROPIC_API_KEY;
-    this.googleKey = env.GOOGLE_API_KEY;
+    this.llm = createLLMState({ apiKey, env, aiModel });
 
-    const providerKeyMap: Record<ModelProvider, string | undefined> = {
-      openai: this.openAiKey,
-      anthropic: this.anthropicKey,
-      google: this.googleKey,
+    this.skillState = createSkillState();
+    this.skillDeps = {
+      runIo: options.runIo,
+      runId: context.runId,
+      threadId: context.threadId,
+      spaceId: context.spaceId,
+      agentType,
     };
-    const providerKey = providerKeyMap[this.modelProvider];
 
-    if (providerKey) {
-      this.llmClient = createMultiModelClient({
-        apiKey: providerKey,
-        model: aiModel,
-        anthropicApiKey: this.anthropicKey,
-        googleApiKey: this.googleKey,
-      });
-    }
+    this.memoryState = createMemoryState();
+    this.memoryDeps = { db, env, context, runIo: options.runIo };
   }
 
   // ── Tool executor initialization ──────────────────────────────────
@@ -423,7 +411,7 @@ export class AgentRunner {
       runId: this.context.runId,
       threadId: this.context.threadId,
       spaceId: this.context.spaceId,
-      aiModel: this.aiModel,
+      aiModel: this.llm.aiModel,
     });
   }
 
@@ -449,29 +437,6 @@ export class AgentRunner {
     parentRunId: string | null;
   }> {
     return this.runIo.getRunRecord({ runId: this.context.runId });
-  }
-
-  private async resolveSkillPlan(history: AgentMessage[]): Promise<SkillLoadResult> {
-    return this.runIo.resolveSkillPlan({
-      runId: this.context.runId,
-      threadId: this.context.threadId,
-      spaceId: this.context.spaceId,
-      agentType: this.config.type,
-      history,
-      availableToolNames: this.toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
-    });
-  }
-
-  private createMemoryBackend(): AgentMemoryBackend | undefined {
-    return {
-      bootstrap: () => this.runIo.getMemoryActivation({ spaceId: this.context.spaceId }),
-      finalize: ({ claims, evidence }) => this.runIo.finalizeMemoryOverlay({
-        runId: this.context.runId,
-        spaceId: this.context.spaceId,
-        claims,
-        evidence,
-      }),
-    };
   }
 
   // ── Lifecycle delegation ──────────────────────────────────────────
@@ -506,11 +471,9 @@ export class AgentRunner {
     history: AgentMessage[];
   }> {
     await this.throwIfCancelled('before-start');
-    const canUseLangGraph = this.modelProvider === 'openai'
-      && !!this.openAiKey;
-    const engine = !this.llmClient
+    const engine: 'langgraph' | 'simple' | 'none' = !this.llm.client
       ? 'none'
-      : canUseLangGraph
+      : this.llm.modelProvider === 'openai' && !!this.llm.openAiKey
         ? 'langgraph'
         : 'simple';
 
@@ -520,9 +483,9 @@ export class AgentRunner {
       engine,
     });
 
-    if (!this.llmClient) {
+    if (!this.llm.client) {
       await this.emitEvent('thinking', {
-        message: `Warning: No API key configured for ${this.modelProvider} (model: ${this.aiModel}). Running in limited mode without LLM.`,
+        message: `Warning: No API key configured for ${this.llm.modelProvider} (model: ${this.llm.aiModel}). Running in limited mode without LLM.`,
         warning: true,
       });
     }
@@ -530,7 +493,7 @@ export class AgentRunner {
     await this.initToolExecutor();
 
     const history = await this.getConversationHistory();
-    if (!this.llmClient) {
+    if (!this.llm.client) {
       await this.throwIfCancelled('before-execution');
       return { engine, history };
     }
@@ -564,35 +527,11 @@ export class AgentRunner {
           : null,
       });
     }
-    const skillResult = await this.resolveSkillPlan(history);
 
-    this.skillLocale = skillResult.skillLocale;
-    this.availableSkills = skillResult.availableSkills;
-    this.selectedSkills = skillResult.selectedSkills;
-    this.activatedSkills = skillResult.activatedSkills;
-
-    await emitSkillLoadOutcome(skillResult, this.emitEvent.bind(this));
+    await resolveAndApplySkills(this.skillDeps, this.skillState, history, this.toolExecutor, this.emitEvent.bind(this));
 
     // Initialize memory runtime and wire observer + idempotency into tool executor
-    try {
-      this.memoryRuntime = new AgentMemoryRuntime(
-        this.db,
-        this.context,
-        this.env,
-        this.createMemoryBackend(),
-      );
-      await this.memoryRuntime.bootstrap();
-      if (this.toolExecutor) {
-        const observer = this.memoryRuntime.createToolObserver();
-        this.toolExecutor.setObserver(observer);
-      }
-    } catch (err) {
-      logWarn('Memory runtime initialization failed, continuing without memory', {
-        module: 'services/agent/runner',
-        detail: err,
-      });
-      this.memoryRuntime = undefined;
-    }
+    await bootstrapMemory(this.memoryDeps, this.memoryState, this.toolExecutor);
 
     await this.throwIfCancelled('before-execution');
 
@@ -602,23 +541,17 @@ export class AgentRunner {
   // ── Engine execution ──────────────────────────────────────────────
 
   private async runWithLangGraph(history: AgentMessage[]): Promise<void> {
-    if (!this.openAiKey) {
+    if (!this.llm.openAiKey) {
       throw new AuthenticationError('API key is required for LangGraph');
     }
     if (!this.toolExecutor) {
       throw new InternalError('Tool executor not initialized');
     }
     await runLangGraphRunner({
-      apiKey: this.openAiKey,
-      model: this.aiModel,
+      apiKey: this.llm.openAiKey,
+      model: this.llm.aiModel,
       systemPrompt: this.config.systemPrompt,
-      skillPlan: {
-        locale: this.skillLocale,
-        availableSkills: this.availableSkills,
-        selectableSkills: this.availableSkills.filter((skill) => skill.availability !== 'unavailable'),
-        selectedSkills: this.selectedSkills,
-        activatedSkills: this.activatedSkills,
-      },
+      skillPlan: buildSkillPlan(this.skillState),
       history,
       threadId: this.context.threadId,
       runId: this.context.runId,
@@ -635,30 +568,31 @@ export class AgentRunner {
       spaceId: this.context.spaceId,
       shouldCancel: this.checkCancellation.bind(this),
       abortSignal: this.abortSignal,
-      memoryRuntime: this.memoryRuntime ?? undefined,
+      memoryRuntime: this.memoryState.runtime,
     });
   }
 
   private async runSimpleLoop(): Promise<void> {
-    if (!this.llmClient) {
+    const llmClient = this.llm.client;
+    if (!llmClient) {
       throw new InternalError('No LLM client available');
     }
     await runWithSimpleLoop({
       env: this.env,
       config: this.config,
-      llmClient: this.llmClient,
+      llmClient,
       toolExecutor: this.toolExecutor,
-      skillLocale: this.skillLocale,
-      availableSkills: this.availableSkills,
-      selectedSkills: this.selectedSkills,
-      activatedSkills: this.activatedSkills,
+      skillLocale: this.skillState.locale,
+      availableSkills: this.skillState.availableSkills,
+      selectedSkills: this.skillState.selectedSkills,
+      activatedSkills: this.skillState.activatedSkills,
       spaceId: this.context.spaceId,
       abortSignal: this.abortSignal,
       toolExecutions: this.toolExecutions,
       totalUsage: this.totalUsage,
       toolCallCount: this.toolCallCount,
       totalToolCalls: this.totalToolCalls,
-      memoryRuntime: this.memoryRuntime ?? undefined,
+      memoryRuntime: this.memoryState.runtime,
       throwIfCancelled: (ctx) => this.throwIfCancelled(ctx),
       emitEvent: (type, data) => this.emitEvent(type, data),
       addMessage: (msg, meta) => this.addMessage(msg, meta),
@@ -705,17 +639,7 @@ export class AgentRunner {
       const executor = this.toolExecutor;
 
       // Finalize memory runtime (flush overlay claims to DB)
-      if (this.memoryRuntime) {
-        try {
-          await this.memoryRuntime.finalize();
-        } catch (err) {
-          logWarn('Memory runtime finalize failed during cleanup', {
-            module: 'services/agent/runner',
-            detail: err,
-          });
-        }
-        this.memoryRuntime = undefined;
-      }
+      await finalizeMemory(this.memoryState);
 
       this.toolExecutor = undefined;
       await executor?.cleanup();

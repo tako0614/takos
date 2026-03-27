@@ -30,13 +30,8 @@ import { browserExtractHandler } from '@/tools/builtin/browser/handlers/extract'
 import { browserHtmlHandler } from '@/tools/builtin/browser/handlers/html';
 import { browserCloseHandler } from '@/tools/builtin/browser/handlers/close';
 import {
-  BROWSER_OPEN,
   BROWSER_GOTO,
   BROWSER_ACTION,
-  BROWSER_SCREENSHOT,
-  BROWSER_EXTRACT,
-  BROWSER_HTML,
-  BROWSER_CLOSE,
   BROWSER_TOOL_DEFINITIONS,
 } from '@/tools/builtin/browser/definitions';
 import {

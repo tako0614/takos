@@ -3,7 +3,7 @@
  * into the local workspace by creating a local repo and cloning via git smart HTTP.
  */
 
-import type { D1Database } from '../../../shared/types/bindings';
+import type { D1Database } from '../../../shared/types/bindings.ts';
 import { generateId, now, sanitizeRepoName } from '../../../shared/utils';
 import { getDb, repositories } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, type DragEvent } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { useSpaceStorage } from '../../hooks/useSpaceStorage';
 import { Icons } from '../../lib/Icons';
 import type { StorageFile, Space } from '../../types';
@@ -284,9 +284,6 @@ export function StoragePage({
         onRename={bulk.handleBulkRename}
         renaming={bulk.bulkRenaming}
       />
-
-      {actions.singleDeleteDialog}
-      {bulk.DialogComponent}
     </div>
   );
 }

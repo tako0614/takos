@@ -2,6 +2,13 @@ type BrowserBinding = {
   connect(): Promise<{ webSocketDebuggerUrl: string }>;
 };
 
+/** Runtime type guard that checks whether the page object exposes a `pdf` method. */
+function hasPdfMethod(
+  page: object,
+): page is { pdf: (opts?: { format?: string; printBackground?: boolean }) => Promise<ArrayBuffer> } {
+  return 'pdf' in page && typeof (page as Record<string, unknown>).pdf === 'function';
+}
+
 export async function renderPdfWithCloudflareBrowser(
   browserBinding: BrowserBinding,
   html: string,
@@ -13,12 +20,10 @@ export async function renderPdfWithCloudflareBrowser(
     const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 60_000 });
 
-    const pdfCapable = page as unknown as { pdf?: (opts?: unknown) => Promise<ArrayBuffer> };
-    const pdfFn = pdfCapable.pdf;
-    if (typeof pdfFn !== 'function') {
+    if (!hasPdfMethod(page)) {
       throw new Error('PDF export not supported by browser runtime');
     }
-    return pdfFn.call(page, { format: 'A4', printBackground: true });
+    return page.pdf({ format: 'A4', printBackground: true });
   } finally {
     await browser.close();
   }

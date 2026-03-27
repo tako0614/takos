@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './useToast';
-import { useI18n } from '../providers/I18nProvider';
+import { useI18n } from '../store/i18n';
 import { getErrorMessage } from '@takos/common/errors';
-import { useConfirmDialog } from '../providers/ConfirmDialogProvider';
+import { useConfirmDialog } from '../store/confirm-dialog';
 import type { CustomTool } from '../types';
 
 interface UseCustomToolsOptions {

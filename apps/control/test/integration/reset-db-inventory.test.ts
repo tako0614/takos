@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const appRoot = resolve(import.meta.dirname, '../..');
-const prismaSchema = readFileSync(resolve(appRoot, 'db/prisma/schema.prisma'), 'utf8');
+const baselineSql = readFileSync(resolve(appRoot, 'db/migrations/0001_baseline.sql'), 'utf8');
 const resetDbScript = readFileSync(resolve(appRoot, 'scripts/reset-db.js'), 'utf8');
 const resetDbShellScript = readFileSync(resolve(appRoot, 'scripts/reset-db.sh'), 'utf8');
 const offloadBackfillScript = readFileSync(resolve(appRoot, 'scripts/offload-backfill.ts'), 'utf8');
@@ -14,8 +14,8 @@ const packageJson = JSON.parse(readFileSync(resolve(appRoot, 'package.json'), 'u
   scripts?: Record<string, string>;
 };
 
-function parsePrismaTables(source: string): string[] {
-  return [...new Set([...source.matchAll(/@@map\("([^"]+)"\)/g)].map((match) => match[1]))].sort();
+function parseBaselineTables(source: string): string[] {
+  return [...new Set([...source.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1]))].sort();
 }
 
 function parseQuotedArray(source: string, constName: string): string[] {
@@ -32,8 +32,8 @@ function parseDropTables(source: string): string[] {
 }
 
 describe('reset DB inventory', () => {
-  it('keeps reset-db.js aligned with the canonical Prisma table inventory', () => {
-    const prismaTables = parsePrismaTables(prismaSchema);
+  it('keeps reset-db.js aligned with the canonical baseline SQL table inventory', () => {
+    const baselineTables = parseBaselineTables(baselineSql);
     const resetTables = parseQuotedArray(resetDbScript, 'TABLES');
 
     expect(resetDbScript).toContain("const ACCOUNT_TABLE = 'accounts';");
@@ -41,7 +41,7 @@ describe('reset DB inventory', () => {
     expect(resetTables).toHaveLength(new Set(resetTables).size);
 
     const fullInventory = [...resetTables, 'accounts'].sort();
-    expect(fullInventory).toEqual(prismaTables);
+    expect(fullInventory).toEqual(baselineTables);
   });
 
   it('preserves only accounts by default', () => {
@@ -50,7 +50,7 @@ describe('reset DB inventory', () => {
     expect(resetDbScript).not.toContain('principals');
   });
 
-  it('keeps db:reset on the Prisma-managed local path and remote via reset-db.js', () => {
+  it('keeps db:reset on the Drizzle-managed local path and remote via reset-db.js', () => {
     expect(packageJson.scripts?.['db:reset']).toBe('pnpm db:rebuild:local');
     expect(packageJson.scripts?.['db:reset:local']).toBe('pnpm db:rebuild:local');
     expect(packageJson.scripts?.['db:reset:staging']).toBe('node scripts/reset-db.js --env staging');
@@ -75,8 +75,8 @@ describe('reset DB inventory', () => {
     expect(createOauthClientSql).not.toContain('workspaces:read');
   });
 
-  it('keeps drop_all.sql aligned with the canonical Prisma table inventory', () => {
-    const prismaTables = parsePrismaTables(prismaSchema);
+  it('keeps drop_all.sql aligned with the canonical baseline SQL table inventory', () => {
+    const baselineTables = parseBaselineTables(baselineSql);
     const dropTables = parseDropTables(dropAllSql);
 
     expect(dropTables).toHaveLength(new Set(dropTables).size);
@@ -85,6 +85,6 @@ describe('reset DB inventory', () => {
     const dropTablesWithoutMigrations = dropTables
       .filter((table) => table !== 'd1_migrations')
       .sort();
-    expect(dropTablesWithoutMigrations).toEqual(prismaTables);
+    expect(dropTablesWithoutMigrations).toEqual(baselineTables);
   });
 });

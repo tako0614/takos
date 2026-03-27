@@ -7,7 +7,7 @@ import type {
   ReminderPriority,
 } from '../../shared/types';
 import { checkSpaceAccess } from '../../shared/utils';
-import { forbidden, notFound, internalError, parseLimit, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
+import { forbidden, notFound, internalError, parseLimit, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import {
   listReminders,
@@ -30,7 +30,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) {
       return access;
     }
@@ -78,7 +78,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) {
       return access;
     }

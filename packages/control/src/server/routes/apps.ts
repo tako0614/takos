@@ -8,7 +8,7 @@ import {
   forbidden,
   getRequestedSpaceIdentifier,
   parseJsonBody,
-  requireWorkspaceAccess,
+  requireSpaceAccess,
 } from './shared/route-auth';
 import { getDb } from '../../infra/db';
 import { apps as appsTable, accounts } from '../../infra/db/schema';
@@ -74,7 +74,7 @@ function getSpaceIdentifierFromAccount(account: { slug: string | null; type?: st
 
 async function resolveAppsSpaceScope(
   c: { req: { header: (name: string) => string | undefined } },
-  requireAccess: () => ReturnType<typeof requireWorkspaceAccess>,
+  requireAccess: () => ReturnType<typeof requireSpaceAccess>,
 ): Promise<{ identifier: string; spaceId: string } | Response | null> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c as Parameters<typeof getRequestedSpaceIdentifier>[0]);
   if (!spaceIdentifier) {
@@ -108,7 +108,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     const db = getDb(c.env.DB);
     const spaceScope = await resolveAppsSpaceScope(
       c,
-      () => requireWorkspaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
+      () => requireSpaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
     if (spaceScope instanceof Response) {
       return spaceScope;
@@ -198,7 +198,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     const db = getDb(c.env.DB);
     const spaceScope = await resolveAppsSpaceScope(
       c,
-      () => requireWorkspaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
+      () => requireSpaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
     if (spaceScope instanceof Response) {
       return spaceScope;

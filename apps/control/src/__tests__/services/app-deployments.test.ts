@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => {
     validateDeployProducerJob: vi.fn(),
     appManifestToBundleDocs: vi.fn(),
     buildParsedPackageFromDocs: vi.fn(),
-    buildParsedPackageFromParts: vi.fn(),
     extractBuildSourcesFromManifestJson: vi.fn(),
     installResolvedPackage: vi.fn(),
     bucketGet,
@@ -49,10 +48,6 @@ vi.mock('@/services/source/app-manifest', () => ({
   buildParsedPackageFromDocs: mocks.buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson: mocks.extractBuildSourcesFromManifestJson,
   selectAppManifestPathFromRepo: (entries: ReadonlyArray<string>) => entries[0] || null,
-}));
-
-vi.mock('@/services/takopack/manifest', () => ({
-  buildParsedPackageFromParts: mocks.buildParsedPackageFromParts,
 }));
 
 vi.mock('@/services/platform/bundle-deployment-orchestrator', () => ({
@@ -106,11 +101,6 @@ describe('AppDeploymentService', () => {
       manifestYaml: 'apiVersion: takos.dev/v1alpha1\nkind: Package\n',
       normalizedFiles: new Map(),
       checksums: new Map(),
-    });
-    mocks.buildParsedPackageFromParts.mockReturnValue({
-      manifest: { meta: { name: 'test', appId: 'test', version: '1.0.0', createdAt: '' }, manifestVersion: 'vnext-infra-v1alpha1', objects: [] },
-      files: new Map(),
-      applyReport: [],
     });
     // Create Drizzle-compatible mock for workflow queries
     {

@@ -18,6 +18,7 @@ import { extractBearerToken } from '../../shared/utils';
 import { constantTimeEqual } from '../../shared/utils/hash';
 import { validateRuntimeHostEnv, createEnvGuard } from '../../shared/utils/validate-env';
 import { logError, logWarn } from '../../shared/utils/logger';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
 
 interface RuntimeContainerStub {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -151,10 +152,7 @@ export async function buildRuntimeForwardRequest(
 }
 
 function unauthorized(): Response {
-  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return errorJsonResponse('Unauthorized', 401);
 }
 
 // Cached environment validation guard.
@@ -165,20 +163,16 @@ export default {
     // Validate environment on first request (cached).
     const envError = envGuard(env as unknown as Record<string, unknown>);
     if (envError) {
-      return new Response(JSON.stringify({
-        error: 'Configuration Error',
+      return errorJsonResponse('Configuration Error', 503, {
         message: 'Runtime host is misconfigured. Please contact administrator.',
-      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      });
     }
 
     const url = new URL(request.url);
     const path = url.pathname;
 
     if (path === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ status: 'ok', service: 'takos-runtime-host' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ status: 'ok', service: 'takos-runtime-host' });
     }
 
     // /forward/* — proxy endpoints called by the runtime container
@@ -193,10 +187,7 @@ export default {
 
       if (!env.TAKOS_WEB) {
         logError('TAKOS_WEB service binding not configured', undefined, { module: 'runtime-host' });
-        return new Response(JSON.stringify({ error: 'Internal configuration error' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorJsonResponse('Internal configuration error', 500);
       }
 
       // /forward/cli-proxy/* — CLI proxy requests from the container
@@ -234,10 +225,7 @@ export default {
         }));
       }
 
-      return new Response(JSON.stringify({ error: 'Not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorJsonResponse('Not found', 404);
     }
 
     // Route all other requests to the singleton runtime container instance.

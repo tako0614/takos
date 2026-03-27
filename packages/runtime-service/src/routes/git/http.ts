@@ -221,8 +221,8 @@ export async function resolveRepoGitDir(
       return { error: notFound(c, 'Repository not found') };
     }
   } catch (err) {
-    const error = err as NodeJS.ErrnoException;
-    if (error.code === 'ENOENT') {
+    const errCode = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+    if (errCode === 'ENOENT') {
       return { error: notFound(c, 'Repository not found') };
     }
     throw err;
@@ -290,8 +290,8 @@ async function fileExists(filePath: string): Promise<boolean> {
     await fsPromises.access(filePath, fs.constants.F_OK);
     return true;
   } catch (err) {
-    const error = err as NodeJS.ErrnoException;
-    if (error.code === 'ENOENT') {
+    const errCode = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+    if (errCode === 'ENOENT') {
       return false;
     }
     throw err;
@@ -427,11 +427,12 @@ app.put('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
       await fsPromises.rename(tempPath, objectPath);
     } catch (err) {
       await fsPromises.rm(tempPath, { force: true }).catch(() => undefined);
-      const error = err as NodeJS.ErrnoException;
-      if (error.message === LFS_UPLOAD_TOO_LARGE_ERROR) {
+      const errMessage = err instanceof Error ? err.message : undefined;
+      const errCode = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+      if (errMessage === LFS_UPLOAD_TOO_LARGE_ERROR) {
         return c.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'LFS object too large' } }, 413);
       }
-      if (error.code === 'EEXIST') {
+      if (errCode === 'EEXIST') {
         return c.body(null, 200);
       }
       throw err;
@@ -457,8 +458,8 @@ app.get('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
         return notFound(c, 'LFS object not found');
       }
     } catch (err) {
-      const error = err as NodeJS.ErrnoException;
-      if (error.code === 'ENOENT') {
+      const errCode = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+      if (errCode === 'ENOENT') {
         return notFound(c, 'LFS object not found');
       }
       throw err;

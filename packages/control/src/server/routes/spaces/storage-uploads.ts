@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   getStorageItem,
@@ -12,7 +12,7 @@ import {
   PRESIGN_EXPIRY_SECONDS,
 } from '../../../application/services/source/space-storage';
 import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
-import { requireOAuthScope, handleStorageError } from './storage-helpers';
+import { requireOAuthScope, handleStorageError } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Create file with content ---
@@ -27,7 +27,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -70,7 +70,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -124,7 +124,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -167,7 +167,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,

@@ -8,6 +8,7 @@ import type {
   R2Bucket,
   Queue,
 } from '../../shared/types/bindings.ts';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
 import type {
   DbEnv,
   StorageEnv,
@@ -80,23 +81,15 @@ export type ProxyCapability = 'bindings' | 'control';
 // ---------------------------------------------------------------------------
 
 export function unauthorized(): Response {
-  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return errorJsonResponse('Unauthorized', 401);
 }
 
 export function ok(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return jsonResponse(data);
 }
 
 export function err(message: string, status = 500): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return errorJsonResponse(message, status);
 }
 
 // ---------------------------------------------------------------------------

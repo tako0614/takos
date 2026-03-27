@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
-import { useI18n, type TranslationKey } from '../providers/I18nProvider';
+import { useI18n, type TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type {
   Message,
@@ -195,8 +195,7 @@ export function useChatSession({
         }
 
         void ws.loadPendingSessionDiff(data.pendingSessionDiff);
-      } catch (err) {
-        console.error('Failed to initialize chat session:', err);
+      } catch {
         polling.setError(t('failedToLoad' as TranslationKey) || 'Failed to load messages');
       }
     };

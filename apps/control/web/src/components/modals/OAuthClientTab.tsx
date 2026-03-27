@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { OAuthClientDev } from './OAuthSettingsModal';
-import { useI18n } from '../../providers/I18nProvider';
-import { useConfirmDialog } from '../../providers/ConfirmDialogProvider';
+import { useI18n } from '../../store/i18n';
+import { useConfirmDialog } from '../../store/confirm-dialog';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { formatShortDate } from '../../lib/format';
 import { Icons } from '../../lib/Icons';

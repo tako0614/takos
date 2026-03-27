@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import { createGitService } from '../../application/services/source/git';
 import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
@@ -33,7 +33,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
     throw new BadRequestError('Invalid JSON body');
   }
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     spaceId,
     user.id,
@@ -73,7 +73,7 @@ git.get('/spaces/:spaceId/git/log', async (c) => {
   const limit = parseLimit(c.req.query('limit'), 50, 100);
   const offset = parseOffset(c.req.query('offset'));
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const gitService = resolveGitService(c);
@@ -99,7 +99,7 @@ git.get('/spaces/:spaceId/git/commits/:commitId', async (c) => {
   const spaceId = c.req.param('spaceId');
   const commitId = c.req.param('commitId');
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const gitService = resolveGitService(c);
@@ -130,7 +130,7 @@ git.get('/spaces/:spaceId/git/diff/:commitId', async (c) => {
   const spaceId = c.req.param('spaceId');
   const commitId = c.req.param('commitId');
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const gitService = resolveGitService(c);
@@ -168,7 +168,7 @@ git.post('/spaces/:spaceId/git/restore', async (c) => {
     throw new BadRequestError('Invalid JSON body');
   }
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     spaceId,
     user.id,
@@ -205,7 +205,7 @@ git.get('/spaces/:spaceId/git/history/:path', async (c) => {
   const path = c.req.param('path');
   const limit = parseLimit(c.req.query('limit'), 20, 100);
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const gitService = resolveGitService(c);

@@ -1,7 +1,7 @@
 import type { AgentConfig } from './types';
 import type { Env } from '../../../shared/types';
 import { BUILTIN_TOOLS } from '../../tools/builtin';
-import { SYSTEM_PROMPTS } from './prompts';
+import { SYSTEM_PROMPTS } from './prompt-builder';
 import { logWarn } from '../../../shared/utils/logger';
 import {
   AGENT_ITERATION_TIMEOUT_MS,

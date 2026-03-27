@@ -44,6 +44,7 @@ export { D1CheckpointSaver } from './langgraph-checkpointer';
 // Import what we need for the functions that remain in this file
 import { extractMessageText, throwIfAborted, type LangGraphEvent } from './langgraph-tools';
 import { createLangGraphAgent, type AgentStateType } from './langgraph-graph';
+import type { DbMessageOutput } from './message-utils';
 
 // ── Runner ──────────────────────────────────────────────────────────────
 
@@ -240,14 +241,6 @@ export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
         });
     }
   });
-}
-
-/** Shape of a message row to be written back to the database. */
-interface DbMessageOutput {
-  role: string;
-  content: string;
-  tool_calls?: string;
-  tool_call_id?: string;
 }
 
 export function langChainMessageToDb(msg: BaseMessage): DbMessageOutput {

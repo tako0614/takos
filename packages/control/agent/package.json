@@ -1,0 +1,16 @@
+{
+  "name": "@takos/control-agent",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@takos/control-core": "workspace:*"
+  },
+  "exports": {
+    ".": "../src/application/services/agent/index.ts",
+    "./public-runner": "../src/application/services/agent/runner.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "package.json"
+  ]
+}

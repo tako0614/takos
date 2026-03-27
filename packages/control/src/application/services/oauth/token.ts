@@ -15,7 +15,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, lt, isNull } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
 
-type PrismaOAuthTokenModel = typeof oauthTokens.$inferSelect;
+type OAuthTokenRow = typeof oauthTokens.$inferSelect;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
   return toIsoString(value);
@@ -44,7 +44,7 @@ export function buildAuthorizationCodeTokenFamily(codeId: string): string {
   return `${AUTHORIZATION_CODE_TOKEN_FAMILY_PREFIX}${codeId}`;
 }
 
-function toApiToken(row: PrismaOAuthTokenModel): OAuthToken {
+function toApiToken(row: OAuthTokenRow): OAuthToken {
   return {
     id: row.id,
     token_type: row.tokenType as OAuthTokenType,

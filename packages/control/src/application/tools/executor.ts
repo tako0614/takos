@@ -6,8 +6,6 @@ import { ToolResolver, createToolResolver, type ToolResolverOptions } from './re
 import { CapabilityRegistry } from './capability-registry';
 import { CircuitBreaker, type CircuitStats } from './circuit-breaker';
 import { resolveAllowedCapabilities } from '../services/platform/capabilities';
-import { getRequiredCapabilitiesForTool } from './capabilities';
-import { canRoleAccessTool, filterToolsForRole } from './tool-policy';
 import { buildToolDescriptor } from './descriptor-builder';
 import type { ToolObserver } from '../services/memory-graph/types';
 import { checkIdempotency, completeOperation } from './idempotency';
@@ -15,58 +13,14 @@ import { logError, logInfo, logWarn } from '../../shared/utils/logger';
 import { MAX_TOOL_OUTPUT_SIZE, MAX_PARALLEL_TOOL_EXECUTIONS } from '../../shared/config/limits';
 import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from '../../shared/config/timeouts';
 
-export const ErrorCodes = {
-  CONFIGURATION_ERROR: 'E_CONFIG',
-  PERMISSION_DENIED: 'E_PERMISSION',
-  UNAUTHORIZED: 'E_UNAUTHORIZED',
-  NOT_FOUND: 'E_NOT_FOUND',
-  INVALID_PATH: 'E_INVALID_PATH',
-  VALIDATION_ERROR: 'E_VALIDATION',
-  INVALID_INPUT: 'E_INVALID_INPUT',
-  MISSING_REQUIRED: 'E_MISSING_REQUIRED',
-  INVALID_ARGUMENT: 'E_INVALID_ARGUMENT',
-  TIMEOUT: 'E_TIMEOUT',
-  NETWORK_ERROR: 'E_NETWORK',
-  SERVICE_UNAVAILABLE: 'E_SERVICE_UNAVAILABLE',
-  RATE_LIMITED: 'E_RATE_LIMITED',
-  INTERNAL_ERROR: 'E_INTERNAL',
-} as const;
+// Re-export error-classifier types so existing consumers keep working
+export { ErrorCodes, ToolError } from './tool-error-classifier';
+export type { ErrorCode, ErrorSeverity } from './tool-error-classifier';
 
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
-
-export type ErrorSeverity = 'fatal' | 'retriable' | 'user_error';
-
-const ERROR_SEVERITY_MAP: Record<ErrorCode, ErrorSeverity> = {
-  [ErrorCodes.CONFIGURATION_ERROR]: 'fatal',
-  [ErrorCodes.PERMISSION_DENIED]: 'fatal',
-  [ErrorCodes.UNAUTHORIZED]: 'fatal',
-  [ErrorCodes.NOT_FOUND]: 'fatal',
-  [ErrorCodes.INVALID_PATH]: 'fatal',
-  [ErrorCodes.VALIDATION_ERROR]: 'fatal',
-  [ErrorCodes.INVALID_INPUT]: 'user_error',
-  [ErrorCodes.MISSING_REQUIRED]: 'user_error',
-  [ErrorCodes.INVALID_ARGUMENT]: 'user_error',
-  [ErrorCodes.TIMEOUT]: 'retriable',
-  [ErrorCodes.NETWORK_ERROR]: 'retriable',
-  [ErrorCodes.SERVICE_UNAVAILABLE]: 'retriable',
-  [ErrorCodes.RATE_LIMITED]: 'retriable',
-  [ErrorCodes.INTERNAL_ERROR]: 'retriable',
-};
-
-export class ToolError extends Error {
-  constructor(
-    message: string,
-    public readonly code: ErrorCode,
-    public readonly cause?: Error
-  ) {
-    super(message);
-    this.name = 'ToolError';
-  }
-
-  get severity(): ErrorSeverity {
-    return ERROR_SEVERITY_MAP[this.code] || 'retriable';
-  }
-}
+// Extracted modules
+import { classifyError, SEVERITY_HINTS } from './tool-error-classifier';
+import { assertToolPermission, filterAccessibleTools } from './tool-permission';
+import { ToolCircuitBreaker } from './tool-circuit-breaker';
 
 export interface ToolExecutorLike {
   execute(toolCall: ToolCall): Promise<ToolResult>;
@@ -74,57 +28,6 @@ export interface ToolExecutorLike {
   readonly mcpFailedServers: string[];
   setObserver(observer: ToolObserver): void;
   cleanup(): void | Promise<void>;
-}
-
-function classifyError(error: Error): { severity: ErrorSeverity; code?: ErrorCode } {
-  if (error instanceof ToolError) {
-    return { severity: error.severity, code: error.code };
-  }
-
-  const codeMatch = error.message.match(/\[(E_[A-Z_]+)\]/);
-  if (codeMatch) {
-    const code = codeMatch[1] as ErrorCode;
-    if (code in ERROR_SEVERITY_MAP) {
-      return { severity: ERROR_SEVERITY_MAP[code], code };
-    }
-  }
-
-  // Fallback: pattern matching on error message for legacy support
-  const lowerError = error.message.toLowerCase();
-
-  const fatalPatterns = [
-    'not configured',
-    'permission denied',
-    'unauthorized',
-    'not found',
-    'invalid path',
-    'does not exist',
-    'access denied',
-  ];
-
-  for (const pattern of fatalPatterns) {
-    if (lowerError.includes(pattern)) {
-      return { severity: 'fatal' };
-    }
-  }
-
-  const userErrorPatterns = [
-    'invalid',
-    'required',
-    'missing',
-    'malformed',
-    'expected',
-    'must be',
-    'cannot be empty',
-  ];
-
-  for (const pattern of userErrorPatterns) {
-    if (lowerError.includes(pattern)) {
-      return { severity: 'user_error' };
-    }
-  }
-
-  return { severity: 'retriable' };
 }
 
 // 10MB per tool output — with MAX_PARALLEL_EXECUTIONS=5, worst-case total is
@@ -205,39 +108,11 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-function getAllRequiredCapabilities(tool: { name: string; required_capabilities?: string[] }): string[] {
-  return Array.from(new Set([
-    ...getRequiredCapabilitiesForTool(tool.name),
-    ...(tool.required_capabilities || []),
-  ]));
-}
-
-function canRoleAccessExposedTool(
-  role: ToolContext['role'],
-  tool: { required_roles?: string[] },
-): boolean {
-  if (!tool.required_roles || tool.required_roles.length === 0) {
-    return true;
-  }
-  if (!role) {
-    return false;
-  }
-  return tool.required_roles.includes(role);
-}
-
-function canUseToolCapabilities(
-  capabilities: readonly string[],
-  tool: { name: string; required_capabilities?: string[] },
-): boolean {
-  const granted = new Set(capabilities);
-  return getAllRequiredCapabilities(tool).every((cap) => granted.has(cap));
-}
-
 export class ToolExecutor implements ToolExecutorLike {
   private resolver: ToolResolver;
   private context: ToolContext;
   private sessionState: SessionState;
-  private circuitBreaker: CircuitBreaker;
+  private circuitBreaker: ToolCircuitBreaker;
   private toolExecutionTimeoutMs: number;
   private parallelExecutionCount = 0;
   private observer: ToolObserver | null = null;
@@ -257,7 +132,7 @@ export class ToolExecutor implements ToolExecutorLike {
     this.resolver = resolver;
     this.context = context;
     this.sessionState = sessionState;
-    this.circuitBreaker = circuitBreaker || new CircuitBreaker();
+    this.circuitBreaker = new ToolCircuitBreaker(circuitBreaker || new CircuitBreaker());
     this.toolExecutionTimeoutMs = toolExecutionTimeoutMs || AGENT_TOOL_EXECUTION_TIMEOUT_MS;
     this.observer = null;
   }
@@ -271,13 +146,10 @@ export class ToolExecutor implements ToolExecutorLike {
   }
 
   async execute(toolCall: ToolCall): Promise<ToolResult> {
-    const canExecute = this.circuitBreaker.canExecute(toolCall.name);
-    if (!canExecute.allowed) {
-      return {
-        tool_call_id: toolCall.id,
-        output: '',
-        error: canExecute.reason || `Tool "${toolCall.name}" is temporarily unavailable`,
-      };
+    // --- Circuit-breaker guard ---
+    const blocked = this.circuitBreaker.guard(toolCall.id, toolCall.name);
+    if (blocked) {
+      return blocked;
     }
 
     const startTime = Date.now();
@@ -312,31 +184,8 @@ export class ToolExecutor implements ToolExecutorLike {
         };
       }
 
-      if (executionContext.role && !canRoleAccessTool(executionContext.role, tool.definition)) {
-        throw new ToolError(
-          `Permission denied for tool "${toolCall.name}": workspace role "${executionContext.role}" cannot use this workspace operation`,
-          ErrorCodes.PERMISSION_DENIED
-        );
-      }
-
-      if (!canRoleAccessExposedTool(executionContext.role, tool.definition)) {
-        throw new ToolError(
-          `Permission denied for tool "${toolCall.name}": workspace role "${executionContext.role}" is not allowed`,
-          ErrorCodes.PERMISSION_DENIED
-        );
-      }
-
-      const requiredCapabilities = getAllRequiredCapabilities(tool.definition);
-      if (requiredCapabilities.length > 0) {
-        const granted = new Set(executionContext.capabilities || []);
-        const missing = requiredCapabilities.filter((cap) => !granted.has(cap));
-        if (missing.length > 0) {
-          throw new ToolError(
-            `Permission denied for tool "${toolCall.name}": missing capabilities: ${missing.join(', ')}`,
-            ErrorCodes.PERMISSION_DENIED
-          );
-        }
-      }
+      // --- Permission checks (delegated) ---
+      assertToolPermission(toolCall.name, tool.definition, executionContext);
 
       // Idempotency guard for side-effect tools
       if (this.sideEffectTools.has(toolCall.name) && this.db) {
@@ -388,7 +237,9 @@ export class ToolExecutor implements ToolExecutorLike {
           return result;
         } catch (sideEffectError) {
           const errMsg = sideEffectError instanceof Error ? sideEffectError.message : String(sideEffectError);
-          await completeOperation(this.db!, operationId, '', errMsg).catch(() => {});
+          await completeOperation(this.db!, operationId, '', errMsg).catch((opErr) => {
+            logWarn('Failed to complete operation record after tool error (non-critical)', { module: 'tools', error: opErr, operationId });
+          });
           throw sideEffectError;
         }
       }
@@ -422,9 +273,8 @@ export class ToolExecutor implements ToolExecutorLike {
       const classification = classifyError(errorInstance);
       const errorSeverity = classification.severity;
 
-      if (errorSeverity === 'retriable') {
-        this.circuitBreaker.recordFailure(toolCall.name, errorMessage);
-      }
+      // --- Circuit-breaker failure recording (delegated) ---
+      this.circuitBreaker.recordClassifiedFailure(toolCall.name, errorInstance);
 
       const toolContext = JSON.stringify({
         tool: toolCall.name,
@@ -435,10 +285,6 @@ export class ToolExecutor implements ToolExecutorLike {
       });
 
       const codePrefix = classification.code ? `[${classification.code}] ` : '';
-      const SEVERITY_HINTS: Record<string, string> = {
-        fatal: ' (This error cannot be resolved by retrying)',
-        user_error: ' (Please check your input parameters)',
-      };
       const severityHint = SEVERITY_HINTS[errorSeverity] ?? ' (This may be a temporary issue, consider retrying)';
 
       logError(`Tool execution error: ${errorMessage}`, { context: toolContext, stack: errorInstance.stack }, { module: 'tools/executor' });
@@ -474,11 +320,7 @@ export class ToolExecutor implements ToolExecutorLike {
   }
 
   resetCircuitBreaker(toolName?: string): void {
-    if (toolName) {
-      this.circuitBreaker.reset(toolName);
-    } else {
-      this.circuitBreaker.resetAll();
-    }
+    this.circuitBreaker.reset(toolName);
   }
 
   async executeAll(toolCalls: ToolCall[]): Promise<ToolResult[]> {
@@ -532,9 +374,11 @@ export class ToolExecutor implements ToolExecutorLike {
   }
 
   getAvailableTools() {
-    return filterToolsForRole(this.resolver.getAvailableTools(), this.context.role)
-      .filter((tool) => canRoleAccessExposedTool(this.context.role, tool))
-      .filter((tool) => canUseToolCapabilities(this.context.capabilities || [], tool));
+    return filterAccessibleTools(
+      this.resolver.getAvailableTools(),
+      this.context.role,
+      this.context.capabilities || [],
+    );
   }
 
   get mcpFailedServers(): string[] {

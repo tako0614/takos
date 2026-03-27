@@ -2,8 +2,8 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Icons } from '../../../lib/Icons';
 import { useToast } from '../../../hooks/useToast';
 import { formatShortDate } from '../../../lib/format';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
+import { useI18n } from '../../../store/i18n';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Card } from '../../../components/ui/Card';
@@ -126,7 +126,6 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
       closeModal();
       fetchReleases();
     } catch (err) {
-      console.error('Failed to save release:', err);
       showToast('error', err instanceof Error ? err.message : t('failedToSaveRelease'));
     } finally {
       setSaving(false);
@@ -148,8 +147,7 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
       });
       await rpcJson(res);
       fetchReleases();
-    } catch (err) {
-      console.error('Failed to delete release:', err);
+    } catch {
       showToast('error', t('failedToDeleteRelease'));
     }
   };

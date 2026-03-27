@@ -1,0 +1,13 @@
+{
+  "name": "@takos/control-infra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./db": "../src/infra/db/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "package.json"
+  ]
+}

@@ -1,7 +1,7 @@
 import type { Run, RunStatus } from '../../../shared/types';
 import { toIsoString } from '../../../shared/utils';
 
-export type PrismaRunRow = {
+export type RunRow = {
   id: string;
   threadId: string;
   spaceId: string;
@@ -71,11 +71,11 @@ export const runSelect = {
   createdAt: true,
 } as const;
 
-export function asPrismaRunRow(row: Record<string, unknown>): PrismaRunRow {
-  return row as unknown as PrismaRunRow;
+export function asRunRow(row: Record<string, unknown>): RunRow {
+  return row as unknown as RunRow;
 }
 
-export function prismaRunToApi(row: PrismaRunRow): Run {
+export function runRowToApi(row: RunRow): Run {
   const rootThreadId = row.rootThreadId ?? row.threadId;
   const rootRunId = row.rootRunId ?? row.id;
   const serviceId = row.serviceId ?? row.workerId ?? null;

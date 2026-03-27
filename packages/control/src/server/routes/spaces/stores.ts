@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   badRequest,
   notFound,
-  requireWorkspaceAccess,
+  requireSpaceAccess,
   type AuthenticatedRouteEnv,
 } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
@@ -26,7 +26,7 @@ const storeBodySchema = z.object({
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/stores', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     if (access instanceof Response) return access;
 
     try {
@@ -51,7 +51,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', storeBodySchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -89,7 +89,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', storeBodySchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -125,7 +125,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     })
   .delete('/:spaceId/stores/:storeSlug', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     try {

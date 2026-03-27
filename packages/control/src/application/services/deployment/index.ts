@@ -5,6 +5,3 @@ export { DeploymentService, createDeploymentService, buildDeploymentArtifactRef 
 export type { DeploymentEnv } from './service';
 export type { DeployState, Deployment, DeploymentEvent, CreateDeploymentInput, RollbackInput } from './types';
 export { rollbackDeploymentSteps } from './rollback';
-
-// Multi-agent exports
-export { DeploymentExecutorAgent, type DeploymentInput as DeploymentAgentInput, type DeploymentOutput as DeploymentAgentOutput } from './executor-agent';

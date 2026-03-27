@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, requireWorkspaceAccess } from '../shared/route-auth';
+import { parseJsonBody, requireSpaceAccess } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
@@ -51,7 +51,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   }
 
   const repo = toApiRepositoryFromDb(repoData);
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     repo.space_id,
     user.id,
@@ -198,7 +198,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
 
   const repo = toApiRepositoryFromDb(repoData);
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     repo.space_id,
     user.id,

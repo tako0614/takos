@@ -46,6 +46,14 @@ export type TenantWorkerRuntimeFactoryOptions = {
   bundleCacheRoot?: string | null;
   persistRoot?: string | null;
   serviceTargets?: ServiceTargetMap;
+  /** PostgreSQL pool for pgvector-backed Vectorize bindings. */
+  pgPool?: { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
+  /** OpenAI API key for AI bindings (auto-injected to all tenant workers). */
+  openAiApiKey?: string;
+  /** OpenAI-compatible base URL for AI bindings. */
+  openAiBaseUrl?: string;
+  /** OTEL collector endpoint for Analytics Engine bindings. */
+  otelEndpoint?: string;
 };
 
 export type TenantWorkerRuntimeRegistry = {

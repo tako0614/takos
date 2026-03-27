@@ -47,10 +47,8 @@ vi.mock('@/shared/utils/logger', () => ({
   logError: vi.fn(),
 }));
 
+import { ok, err, classifyProxyError } from '@/container-hosts/executor-utils';
 import {
-  ok,
-  err,
-  classifyProxyError,
   handleDbProxy,
   handleR2Proxy,
   handleNotifierProxy,

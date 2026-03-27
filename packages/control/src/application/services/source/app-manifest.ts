@@ -20,7 +20,6 @@ export {
 // Re-export bundle generation and packaging
 export {
   appManifestToBundleDocs,
-  appManifestToTakopackObjects,
   buildBundlePackageData,
   buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson,

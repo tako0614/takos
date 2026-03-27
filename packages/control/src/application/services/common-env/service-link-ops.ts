@@ -5,7 +5,8 @@ import type { D1TransactionManager } from '../../../shared/utils/db-transaction'
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
 import {
-  CommonEnvRepository,
+  listServiceLinks,
+  listSpaceCommonEnvNames,
   type LinkSource,
   type ServiceLinkRow,
   type SyncState,
@@ -20,30 +21,16 @@ import {
   type TakosBuiltinStatus,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
-import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+import { serviceCommonEnvLinks } from '../../../infra/db';
+import { db, runInTransaction } from './db-helpers';
 
 export interface ServiceLinkDeps {
   env: Env;
-  repo: CommonEnvRepository;
   txManager: D1TransactionManager;
 }
 
-function db(deps: ServiceLinkDeps) {
-  return getDb(deps.env.DB);
-}
-
-function runInTransaction<T>(deps: ServiceLinkDeps, fn: () => Promise<T>): Promise<T> {
-  return deps.txManager.runInTransaction(fn);
-}
-
 export async function listServiceLinksFromRepo(deps: ServiceLinkDeps, spaceId: string, serviceId: string): Promise<ServiceLinkRow[]> {
-  const repo = deps.repo as CommonEnvRepository & {
-    listServiceLinks?: (spaceId: string, serviceId: string) => Promise<ServiceLinkRow[]>;
-    listWorkerLinks?: (spaceId: string, workerId: string) => Promise<ServiceLinkRow[]>;
-  };
-  return repo.listServiceLinks?.(spaceId, serviceId)
-    ?? repo.listWorkerLinks?.(spaceId, serviceId)
-    ?? [];
+  return listServiceLinks(deps.env, spaceId, serviceId);
 }
 
 export async function ensureRequiredServiceLinks(deps: ServiceLinkDeps, params: {
@@ -106,7 +93,7 @@ export async function listServiceCommonEnvLinks(deps: ServiceLinkDeps, spaceId: 
   const rows = await listServiceLinksFromRepo(deps, spaceId, serviceId);
   const effective = getEffectiveLinks(rows);
   const commonNameSet = new Set(
-    (await deps.repo.listSpaceCommonEnvNames(spaceId)).map((name) => normalizeEnvName(name))
+    (await listSpaceCommonEnvNames(deps.env, spaceId)).map((name) => normalizeEnvName(name))
   );
   const builtinStatuses = await listTakosBuiltinStatuses({
     env: deps.env,

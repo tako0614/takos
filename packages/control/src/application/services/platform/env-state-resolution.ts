@@ -1,8 +1,11 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { InternalError, ConflictError } from '@takos/common/errors';
 import { decrypt, type EncryptedData } from '../../../shared/utils/crypto';
-import type { ReconcileUpdate } from '../common-env/repository';
-import { CommonEnvRepository } from '../common-env/repository';
+import {
+  type ReconcileUpdate,
+  listSpaceEnvRows,
+  listServiceLinks,
+} from '../common-env/repository';
 import {
   createBindingFingerprint,
   decryptCommonEnvValue,
@@ -57,10 +60,9 @@ export async function decryptServiceEnvRow(
 
 async function loadSpaceCommonEnvMap(
   env: DesiredStateEnv,
-  repo: CommonEnvRepository,
   spaceId: string
 ): Promise<Map<string, CommonEnvValue>> {
-  const rows = await repo.listSpaceEnvRows(spaceId);
+  const rows = await listSpaceEnvRows(env, spaceId);
   const out = new Map<string, CommonEnvValue>();
 
   for (const row of rows) {
@@ -114,7 +116,6 @@ export async function resolveServiceCommonEnvState(
   commonEnvUpdates: ReconcileUpdate[];
 }> {
   const encryptionKey = requireEncryptionKey(env);
-  const repo = new CommonEnvRepository(env);
   const db = getDb(env.DB);
 
   const envRows = await db.select({
@@ -152,8 +153,8 @@ export async function resolveServiceCommonEnvState(
     });
   }
 
-  const linkRows = await repo.listServiceLinks(spaceId, serviceId);
-  const commonMap = await loadSpaceCommonEnvMap(env, repo, spaceId);
+  const linkRows = await listServiceLinks(env, spaceId, serviceId);
+  const commonMap = await loadSpaceCommonEnvMap(env, spaceId);
   const effectiveLinks = getEffectiveLinks(linkRows);
   const updates: ReconcileUpdate[] = [];
 

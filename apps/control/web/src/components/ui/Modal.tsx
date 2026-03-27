@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode, type HTMLAttributes } from 'react';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 

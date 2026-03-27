@@ -14,7 +14,7 @@ import { createMultiModelClient, getProviderFromModel, DEFAULT_MODEL_ID, normali
 import { getDb, prReviews, prComments } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import * as gitStore from '../git-smart';
-import { decodeBlobContent, formatUnifiedDiff } from '../../../shared/utils/diff';
+import { decodeBlobContent, formatUnifiedDiff } from '../../../shared/utils/unified-diff';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 

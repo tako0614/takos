@@ -16,7 +16,7 @@ import {
   resolveAccountOwner,
   parseCatalogTags,
   computeTrendingScore,
-} from './explore-helpers';
+} from './source-exploration';
 
 export async function listCatalogItems(
   dbBinding: Env['DB'],

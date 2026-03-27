@@ -53,7 +53,10 @@ export async function fetchRemoteRefs(
   const response = await fetch(infoRefsUrl, { headers });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
+    const body = await response.text().catch((err) => {
+      console.warn('[fetch-refs] Failed to read error response body from remote git server', err);
+      return '';
+    });
     throw new Error(
       `Failed to fetch refs from ${normalizedUrl}: HTTP ${response.status}${body ? ` — ${body.slice(0, 200)}` : ''}`,
     );

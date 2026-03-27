@@ -38,7 +38,7 @@ import {
   buildSkippedStepResultsFromDb,
   failJobWithResults,
   markJobFailed,
-} from '@/queues/workflow-helpers';
+} from '@/queues/workflow-runtime-client';
 import type { WorkflowQueueEnv } from '@/queues/workflow-types';
 
 // ---------------------------------------------------------------------------

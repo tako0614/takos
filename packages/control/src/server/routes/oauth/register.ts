@@ -10,7 +10,7 @@ import {
   validateRegistrationToken,
 } from '../../../application/services/oauth/client';
 import { isAccessTokenValid, verifyAccessToken } from '../../../application/services/oauth/token';
-import { tryLogOAuthEvent } from './helpers';
+import { tryLogOAuthEvent } from './request-utils';
 import type { PublicRouteEnv } from '../shared/route-auth';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 

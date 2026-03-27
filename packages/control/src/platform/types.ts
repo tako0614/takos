@@ -155,6 +155,11 @@ export type PlatformServices = {
     get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
   deploymentProviders?: PlatformDeployProviderRegistry;
+  /** SSE-based event notifier for Node.js environments (WebSocket alternative). */
+  sseNotifier?: {
+    emit(channel: string, event: { type: string; data: unknown; event_id?: number }): void;
+    subscribe(channel: string, lastEventId?: number): ReadableStream<Uint8Array>;
+  };
 };
 
 export type ControlPlatform<TBindings = unknown> = {

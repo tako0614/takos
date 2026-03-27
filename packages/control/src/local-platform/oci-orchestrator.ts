@@ -6,6 +6,8 @@ import type { Context, Next } from 'hono';
 import { z } from 'zod';
 import { logInfo, logError } from '../shared/utils/logger.ts';
 import { serveNodeFetch } from './fetch-server.ts';
+import type { ContainerBackend } from './container-backend.ts';
+import { DockerContainerBackend } from './docker-container-backend.ts';
 
 type OciServiceStatus = 'deployed' | 'removed' | 'routing-only';
 
@@ -48,163 +50,14 @@ type OciOrchestratorState = {
   services: Record<string, OciServiceRecord>;
 };
 
-const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
 const DOCKER_NETWORK = process.env.TAKOS_DOCKER_NETWORK || 'takos-containers';
 const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_POLL_INTERVAL_MS = 1_000;
 
-// ─── Docker Engine API client via Unix socket ───
-
-function dockerRequest(
-  method: string,
-  apiPath: string,
-  body?: unknown,
-): Promise<{ status: number; body: unknown }> {
-  return new Promise((resolve, reject) => {
-    const options: http.RequestOptions = {
-      socketPath: DOCKER_SOCKET,
-      path: apiPath,
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
-    const req = http.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf8');
-        let parsed: unknown = raw;
-        try { parsed = JSON.parse(raw); } catch { /* raw text */ }
-        resolve({ status: res.statusCode ?? 0, body: parsed });
-      });
-    });
-    req.on('error', reject);
-    if (body !== undefined) {
-      req.write(JSON.stringify(body));
-    }
-    req.end();
-  });
-}
-
-// Stream-based request for docker pull (returns chunked progress)
-function dockerRequestStream(
-  method: string,
-  apiPath: string,
-  body?: unknown,
-): Promise<{ status: number }> {
-  return new Promise((resolve, reject) => {
-    const options: http.RequestOptions = {
-      socketPath: DOCKER_SOCKET,
-      path: apiPath,
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
-    const req = http.request(options, (res) => {
-      // Consume the stream to completion
-      res.on('data', () => {});
-      res.on('end', () => {
-        resolve({ status: res.statusCode ?? 0 });
-      });
-    });
-    req.on('error', reject);
-    if (body !== undefined) {
-      req.write(JSON.stringify(body));
-    }
-    req.end();
-  });
-}
-
-async function dockerPull(imageRef: string): Promise<void> {
-  // Parse image ref into fromImage and tag
-  const parts = imageRef.split(':');
-  const tag = parts.length > 1 ? parts[parts.length - 1] : 'latest';
-  const fromImage = parts.length > 1 ? parts.slice(0, -1).join(':') : imageRef;
-  const result = await dockerRequestStream(
-    'POST',
-    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
-  );
-  if (result.status !== 200) {
-    throw new Error(`Docker pull failed with status ${result.status}`);
-  }
-}
-
-async function dockerCreate(
-  name: string,
-  imageRef: string,
-  exposedPort: number,
-  envVars: string[],
-  network: string,
-): Promise<string> {
-  const result = await dockerRequest('POST', `/containers/create?name=${encodeURIComponent(name)}`, {
-    Image: imageRef,
-    Env: envVars,
-    ExposedPorts: { [`${exposedPort}/tcp`]: {} },
-    HostConfig: {
-      NetworkMode: network,
-    },
-  });
-  if (result.status !== 201) {
-    throw new Error(`Docker create failed with status ${result.status}: ${JSON.stringify(result.body)}`);
-  }
-  return (result.body as { Id: string }).Id;
-}
-
-async function dockerStart(containerId: string): Promise<void> {
-  const result = await dockerRequest('POST', `/containers/${containerId}/start`);
-  if (result.status !== 204 && result.status !== 304) {
-    throw new Error(`Docker start failed with status ${result.status}`);
-  }
-}
-
-async function dockerStop(containerId: string, timeoutSeconds = 10): Promise<void> {
-  const result = await dockerRequest('POST', `/containers/${containerId}/stop?t=${timeoutSeconds}`);
-  if (result.status !== 204 && result.status !== 304) {
-    // Container may already be stopped
-    if (result.status === 404) return;
-    throw new Error(`Docker stop failed with status ${result.status}`);
-  }
-}
-
-async function dockerRemove(containerId: string): Promise<void> {
-  const result = await dockerRequest('DELETE', `/containers/${containerId}?force=true`);
-  if (result.status !== 204 && result.status !== 404) {
-    throw new Error(`Docker remove failed with status ${result.status}`);
-  }
-}
-
-async function dockerLogs(containerId: string, tail = 100): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const options: http.RequestOptions = {
-      socketPath: DOCKER_SOCKET,
-      path: `/containers/${containerId}/logs?stdout=1&stderr=1&tail=${tail}&timestamps=1`,
-      method: 'GET',
-    };
-    const req = http.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        const raw = Buffer.concat(chunks);
-        // Docker multiplexed stream: 8-byte header per frame
-        // Strip headers for clean log output
-        const lines: string[] = [];
-        let offset = 0;
-        while (offset < raw.length) {
-          if (offset + 8 > raw.length) break;
-          const size = raw.readUInt32BE(offset + 4);
-          offset += 8;
-          if (offset + size > raw.length) break;
-          lines.push(raw.subarray(offset, offset + size).toString('utf8'));
-          offset += size;
-        }
-        resolve(lines.join(''));
-      });
-    });
-    req.on('error', reject);
-    req.end();
-  });
-}
+// ─── Health-check polling (works for both Docker and k8s via IP/hostname) ───
 
 async function pollHealthCheck(
-  containerName: string,
+  host: string,
   port: number,
   healthPath: string,
   timeoutMs: number,
@@ -216,7 +69,7 @@ async function pollHealthCheck(
     try {
       const result = await new Promise<number>((resolve, reject) => {
         const req = http.request(
-          { hostname: containerName, port, path: normalizedPath, method: 'GET', timeout: 5000 },
+          { hostname: host, port, path: normalizedPath, method: 'GET', timeout: 5000 },
           (res) => {
             res.on('data', () => {});
             res.on('end', () => resolve(res.statusCode ?? 0));
@@ -236,7 +89,7 @@ async function pollHealthCheck(
 }
 
 function containerName(spaceId: string, routeRef: string): string {
-  // Sanitize for Docker container naming
+  // Sanitize for container / pod naming
   return `takos-${spaceId}-${routeRef}`.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 128);
 }
 
@@ -351,19 +204,29 @@ function createAuthMiddleware() {
   };
 }
 
-async function stopAndRemoveContainer(record: OciServiceRecord, spaceId: string, routeRef: string): Promise<void> {
-  if (!record.container_id) return;
-  try {
-    await dockerStop(record.container_id);
-    await dockerRemove(record.container_id);
-    await appendServiceLog(spaceId, routeRef, `CONTAINER_REMOVED ${record.container_id}`);
-  } catch (err) {
-    logError(`Failed to stop/remove container ${record.container_id}`, err, { module: 'oci-orchestrator' });
-  }
+// ─── Options for app creation ───
+
+export interface OciOrchestratorAppOptions {
+  /** Container backend to use.  Defaults to DockerContainerBackend. */
+  backend?: ContainerBackend;
 }
 
-export function createLocalOciOrchestratorApp(): Hono {
+// ─── App factory ───
+
+export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOptions): Hono {
+  const backend: ContainerBackend = options?.backend ?? new DockerContainerBackend();
   const app = new Hono();
+
+  async function stopAndRemoveContainer(record: OciServiceRecord, spaceId: string, routeRef: string): Promise<void> {
+    if (!record.container_id) return;
+    try {
+      await backend.stop(record.container_id);
+      await backend.remove(record.container_id);
+      await appendServiceLog(spaceId, routeRef, `CONTAINER_REMOVED ${record.container_id}`);
+    } catch (err) {
+      logError(`Failed to stop/remove container ${record.container_id}`, err, { module: 'oci-orchestrator' });
+    }
+  }
 
   app.use('*', createAuthMiddleware());
 
@@ -412,38 +275,50 @@ export function createLocalOciOrchestratorApp(): Hono {
 
         // Also try removing by name in case state was out of sync
         try {
-          const inspectResult = await dockerRequest('GET', `/containers/${encodeURIComponent(cName)}/json`);
-          if (inspectResult.status === 200) {
-            const existingId = (inspectResult.body as { Id: string }).Id;
-            await dockerStop(existingId);
-            await dockerRemove(existingId);
-          }
-        } catch { /* container doesn't exist, fine */ }
+          await backend.stop(cName);
+          await backend.remove(cName);
+        } catch (err) { console.warn('[oci-orchestrator] stop/remove pre-existing container by name failed (non-critical)', err); }
 
         await appendServiceLog(payload.space_id, routeRef, `PULLING ${imageRef}`);
-        await dockerPull(imageRef);
+        await backend.pullImage(imageRef);
 
         await appendServiceLog(payload.space_id, routeRef, `CREATING container ${cName}`);
-        newContainerId = await dockerCreate(cName, imageRef, exposedPort, [], DOCKER_NETWORK);
+        const createResult = await backend.createAndStart({
+          imageRef,
+          name: cName,
+          exposedPort,
+          network: DOCKER_NETWORK,
+          labels: {
+            'takos.space-id': payload.space_id,
+            'takos.route-ref': routeRef,
+            'takos.deployment-id': payload.deployment_id,
+          },
+        });
+        newContainerId = createResult.containerId;
 
-        await appendServiceLog(payload.space_id, routeRef, `STARTING container ${newContainerId.slice(0, 12)}`);
-        await dockerStart(newContainerId);
+        await appendServiceLog(payload.space_id, routeRef, `STARTED container ${newContainerId.slice(0, 12)}`);
+
+        // Determine the hostname for health-checking and endpoint resolution.
+        // For Docker, we use the container name (DNS on the Docker network).
+        // For k8s (or any backend that provides a pod IP), we use the IP.
+        const containerIp = await backend.getContainerIp(newContainerId);
+        const healthHost = containerIp ?? cName;
 
         // Poll health check
-        await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${cName}:${exposedPort}${healthPath}`);
-        const healthy = await pollHealthCheck(cName, exposedPort, healthPath, HEALTH_TIMEOUT_MS);
+        await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${healthHost}:${exposedPort}${healthPath}`);
+        const healthy = await pollHealthCheck(healthHost, exposedPort, healthPath, HEALTH_TIMEOUT_MS);
 
         if (!healthy) {
           await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK failed, removing container`);
-          await dockerStop(newContainerId);
-          await dockerRemove(newContainerId);
+          await backend.stop(newContainerId);
+          await backend.remove(newContainerId);
           return c.json({
             error: 'Container health check failed',
             details: `Health check at ${healthPath} did not pass within ${HEALTH_TIMEOUT_MS / 1000}s`,
           }, 503);
         }
 
-        resolvedEndpoint = { kind: 'http-url', base_url: `http://${cName}:${exposedPort}` };
+        resolvedEndpoint = { kind: 'http-url', base_url: `http://${healthHost}:${exposedPort}` };
         await appendServiceLog(payload.space_id, routeRef, `DEPLOYED container ${newContainerId.slice(0, 12)} → ${resolvedEndpoint.base_url}`);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -451,9 +326,9 @@ export function createLocalOciOrchestratorApp(): Hono {
         // Clean up partially created container
         if (newContainerId) {
           try {
-            await dockerStop(newContainerId);
-            await dockerRemove(newContainerId);
-          } catch { /* best effort */ }
+            await backend.stop(newContainerId);
+            await backend.remove(newContainerId);
+          } catch (err) { console.warn('[oci-orchestrator] cleanup of partially created container failed (non-critical)', err); }
         }
         return c.json({
           error: 'Container deployment failed',
@@ -533,7 +408,7 @@ export function createLocalOciOrchestratorApp(): Hono {
       return c.json({ error: 'Service not found' }, 404);
     }
 
-    // Stop and remove the Docker container if present
+    // Stop and remove the container if present
     if (record.container_id) {
       await stopAndRemoveContainer(record, query.data.space_id, routeRef);
     }
@@ -568,11 +443,11 @@ export function createLocalOciOrchestratorApp(): Hono {
       return c.json({ error: 'Service not found' }, 404);
     }
 
-    // Fetch Docker container logs if container is running
+    // Fetch container logs if container is running
     let containerLogText = '';
     if (record.container_id && record.status === 'deployed') {
       try {
-        containerLogText = await dockerLogs(record.container_id, tailCount);
+        containerLogText = await backend.getLogs(record.container_id, tailCount);
       } catch {
         // Container may not be running
       }
@@ -640,14 +515,18 @@ export function createLocalOciOrchestratorApp(): Hono {
   return app;
 }
 
-export async function createLocalOciOrchestratorFetchForTests(): Promise<(request: Request) => Promise<Response>> {
-  const app = createLocalOciOrchestratorApp();
+export async function createLocalOciOrchestratorFetchForTests(
+  options?: OciOrchestratorAppOptions,
+): Promise<(request: Request) => Promise<Response>> {
+  const app = createLocalOciOrchestratorApp(options);
   return (request: Request) => Promise.resolve(app.fetch(request));
 }
 
-export async function startLocalOciOrchestratorServer(): Promise<void> {
+export async function startLocalOciOrchestratorServer(
+  options?: OciOrchestratorAppOptions,
+): Promise<void> {
   const port = resolvePort();
-  const app = createLocalOciOrchestratorApp();
+  const app = createLocalOciOrchestratorApp(options);
   await serveNodeFetch({
     fetch: app.fetch.bind(app),
     port,
@@ -656,6 +535,7 @@ export async function startLocalOciOrchestratorServer(): Promise<void> {
         module: 'local_oci_orchestrator',
         port,
         dataDir: resolveDataDir(),
+        backend: options?.backend?.constructor?.name ?? 'DockerContainerBackend',
       });
     },
   });

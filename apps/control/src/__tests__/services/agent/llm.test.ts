@@ -16,7 +16,6 @@ import {
   createLLMClient,
   createMultiModelClient,
   createLLMClientFromEnv,
-  CHARS_PER_TOKEN,
   VALID_PROVIDERS,
 } from '@/services/agent/llm';
 
@@ -209,10 +208,6 @@ describe('createLLMClientFromEnv', () => {
 });
 
 describe('constants', () => {
-  it('exports CHARS_PER_TOKEN as 4', () => {
-    expect(CHARS_PER_TOKEN).toBe(4);
-  });
-
   it('exports VALID_PROVIDERS containing openai, anthropic, google', () => {
     expect(VALID_PROVIDERS).toEqual(['openai', 'anthropic', 'google']);
   });

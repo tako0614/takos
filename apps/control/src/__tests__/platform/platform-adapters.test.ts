@@ -52,8 +52,8 @@ describe('platform adapters', () => {
     expect(platform.services.documents.renderPdf).toBeTypeOf('function');
   });
 
-  it('attaches OCI deploy provider in the node adapter', () => {
-    const platform = buildNodeWebPlatform({
+  it('attaches OCI deploy provider in the node adapter', async () => {
+    const platform = await buildNodeWebPlatform({
       ...minimalBindings,
       OCI_ORCHESTRATOR_URL: 'http://oci-orchestrator.internal/deploy',
       OCI_ORCHESTRATOR_TOKEN: 'oci-token',

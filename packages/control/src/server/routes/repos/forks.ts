@@ -3,7 +3,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { Repository } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, conflict, internalError, notFound, requireWorkspaceAccess } from '../shared/route-auth';
+import { badRequest, conflict, internalError, notFound, requireSpaceAccess } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
@@ -36,7 +36,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   }
 
   if (sourceRepoData.visibility === 'private') {
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       sourceRepoData.accountId,
       user.id,
@@ -50,7 +50,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   let resolvedTargetSpaceId: string;
 
   if (targetSpaceId) {
-    const targetAccess = await requireWorkspaceAccess(
+    const targetAccess = await requireSpaceAccess(
       c,
       targetSpaceId,
       user.id,

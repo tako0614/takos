@@ -1,0 +1,16 @@
+﻿import { Hono } from 'hono';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import resourcesAccess from './access';
+import resourcesBase from './base';
+import resourcesBindings from './bindings';
+import resourcesD1 from './d1';
+import resourcesR2 from './r2';
+import resourcesTokens from './tokens';
+
+export default new Hono<AuthenticatedRouteEnv>()
+  .route('/', resourcesBase)
+  .route('/', resourcesAccess)
+  .route('/', resourcesBindings)
+  .route('/', resourcesD1)
+  .route('/', resourcesR2)
+  .route('/', resourcesTokens);

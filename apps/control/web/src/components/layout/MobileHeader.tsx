@@ -1,5 +1,5 @@
 import { Icons } from '../../lib/Icons';
-import { useMobileHeader } from '../../contexts/MobileHeaderContext';
+import { useMobileHeader } from '../../store/mobile-header';
 
 interface MobileHeaderProps {
   onOpenMenu: () => void;

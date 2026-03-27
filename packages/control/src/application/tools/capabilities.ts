@@ -6,53 +6,46 @@ import type { StandardCapabilityId } from '../services/platform/capabilities';
  * Only the "standard" capabilities are mapped here.
  * Tool-specific policy (e.g. tool-policy.ts disabling infra tools) remains separate.
  */
+const TOOL_CAPABILITIES: Record<string, StandardCapabilityId[]> = {
+  // Outbound HTTP
+  'web_fetch': ['egress.http'],
+  'browser_open': ['egress.http'],
+  'browser_goto': ['egress.http'],
+
+  // Container session file operations map to repository read/write.
+  'file_read': ['repo.read'],
+  'file_list': ['repo.read'],
+  'repo_list': ['repo.read'],
+  'repo_status': ['repo.read'],
+  'repo_switch': ['repo.read'],
+
+  'create_repository': ['repo.write'],
+  'repo_fork': ['repo.write'],
+  'container_commit': ['repo.write'],
+  'file_write': ['repo.write'],
+  'file_write_binary': ['repo.write'],
+  'file_delete': ['repo.write'],
+  'file_mkdir': ['repo.write'],
+  'file_rename': ['repo.write'],
+  'file_copy': ['repo.write'],
+
+  // Content search can read workspace file blobs from R2 when available.
+  'search': ['storage.read'],
+  'workspace_files_list': ['storage.read'],
+  'workspace_files_read': ['storage.read'],
+
+  'workspace_files_write': ['storage.write'],
+  'workspace_files_create': ['storage.write'],
+  'workspace_files_mkdir': ['storage.write'],
+  'workspace_files_delete': ['storage.write'],
+  'workspace_files_rename': ['storage.write'],
+  'workspace_files_move': ['storage.write'],
+
+  // MCP server management requires outbound HTTP to communicate with OAuth servers.
+  'mcp_add_server': ['egress.http'],
+  'domain_verify': ['egress.http'],
+};
+
 export function getRequiredCapabilitiesForTool(toolName: string): StandardCapabilityId[] {
-  switch (toolName) {
-    case 'web_fetch':
-    case 'browser_open':
-    case 'browser_goto':
-      return ['egress.http'];
-
-    // Container session file operations map to repository read/write.
-    case 'file_read':
-    case 'file_list':
-    case 'repo_list':
-    case 'repo_status':
-    case 'repo_switch':
-      return ['repo.read'];
-
-    case 'create_repository':
-    case 'repo_fork':
-    case 'container_commit':
-    case 'file_write':
-    case 'file_write_binary':
-    case 'file_delete':
-    case 'file_mkdir':
-    case 'file_rename':
-    case 'file_copy':
-      return ['repo.write'];
-
-    // Content search can read workspace file blobs from R2 when available.
-    case 'search':
-    // falls through — Workspace storage file access
-    case 'workspace_files_list':
-    case 'workspace_files_read':
-      return ['storage.read'];
-
-    case 'workspace_files_write':
-    case 'workspace_files_create':
-    case 'workspace_files_mkdir':
-    case 'workspace_files_delete':
-    case 'workspace_files_rename':
-    case 'workspace_files_move':
-      return ['storage.write'];
-
-    // MCP server management requires outbound HTTP to communicate with OAuth servers.
-    case 'mcp_add_server':
-    case 'domain_verify':
-      return ['egress.http'];
-
-    default:
-      return [];
-  }
+  return TOOL_CAPABILITIES[toolName] ?? [];
 }
