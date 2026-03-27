@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Resource } from '../../../shared/types';
-import { badRequest, parseLimit, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseLimit, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
@@ -72,7 +73,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!resource.cf_name) {
-    return badRequest(c, 'R2 bucket not provisioned');
+    throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
   const prefix = c.req.query('prefix') || undefined;
@@ -122,7 +123,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!resource.cf_name) {
-    return badRequest(c, 'R2 bucket not provisioned');
+    throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
   try {
@@ -161,7 +162,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!resource.cf_name) {
-    return badRequest(c, 'R2 bucket not provisioned');
+    throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
   try {

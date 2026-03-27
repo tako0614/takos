@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { badRequest, parseJsonBody } from '../../shared/route-auth';
+import { parseJsonBody } from '../../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import { getDb } from '../../../../infra/db';
 import { workflowSecrets } from '../../../../infra/db/schema';
@@ -45,7 +46,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const body = await parseJsonBody<{ value: string }>(c);
 
     if (!body || !body.value) {
-      return badRequest(c, 'Secret value is required');
+      throw new BadRequestError( 'Secret value is required');
     }
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
@@ -54,8 +55,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
-      return badRequest(
-        c,
+      throw new BadRequestError(
         'Secret name must be uppercase letters, numbers, and underscores, starting with a letter or underscore'
       );
     }

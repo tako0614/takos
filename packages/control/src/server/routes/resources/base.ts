@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ResourceType } from '../../../shared/types';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import {
   checkResourceAccess,
@@ -57,8 +58,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor', 'viewer'],
       'Workspace not found or access denied',
       404
-    );
-    if (access instanceof Response) return access;
+    );
 
     const resourceList = await listResourcesForWorkspace(dbBinding, user.id, access.space.id);
 
@@ -140,7 +140,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!['d1', 'r2', 'worker', 'kv', 'vectorize', 'assets'].includes(resourceType)) {
-    return badRequest(c, 'Invalid resource type');
+    throw new BadRequestError( 'Invalid resource type');
   }
 
   const resourceList = await listResourcesByType(dbBinding, user.id, resourceType);
@@ -194,11 +194,11 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!body.name?.trim()) {
-    return badRequest(c, 'name is required');
+    throw new BadRequestError( 'name is required');
   }
 
   if (!['d1', 'r2', 'kv', 'vectorize'].includes(body.type)) {
-    return badRequest(c, 'Invalid resource type');
+    throw new BadRequestError( 'Invalid resource type');
   }
 
   let spaceId = body.space_id?.trim() || '';
@@ -211,8 +211,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions',
       403
-    );
-    if (access instanceof Response) return access;
+    );
     spaceId = access.space.id;
   } else {
     // Default to user's own account
@@ -293,7 +292,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   });
 
   if (!updated) {
-    return badRequest(c, 'No valid updates provided');
+    throw new BadRequestError( 'No valid updates provided');
   }
 
   return c.json({ resource: updated });

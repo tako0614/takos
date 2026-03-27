@@ -9,7 +9,7 @@ import {
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, errorResponse, notFound } from '../shared/route-auth';
+import { BadRequestError, NotFoundError, AppError, ErrorCodes } from '@takos/common/errors';
 import { checkRunAccess } from './access';
 import {
   persistAndEmitEvent,
@@ -74,7 +74,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
 
     const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     return c.json({
@@ -89,11 +89,11 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
 
     const access = await checkRunAccess(c.env.DB, runId, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     if (RUN_TERMINAL_STATUSES.has(access.run.status)) {
-      return badRequest(c, 'Run is already finished');
+      throw new BadRequestError('Run is already finished');
     }
 
     const db = getDb(c.env.DB);
@@ -114,12 +114,12 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       const lastEventId = Number.parseInt((c.req.valid('query' as never) as { last_event_id?: string }).last_event_id ?? '0', 10);
 
       if (!Number.isFinite(lastEventId) || lastEventId < 0) {
-        return badRequest(c, 'Invalid last_event_id');
+        throw new BadRequestError('Invalid last_event_id');
       }
 
       const access = await checkRunAccess(c.env.DB, runId, user.id);
       if (!access) {
-        return notFound(c, 'Run');
+        throw new NotFoundError('Run');
       }
 
       const observation = await loadRunObservation(c.env, runId, access.run.status, lastEventId);
@@ -136,11 +136,11 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
 
     const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     if (c.req.header('Upgrade') !== 'websocket') {
-      return errorResponse(c, 426, 'Expected WebSocket upgrade');
+      throw new AppError('Expected WebSocket upgrade', ErrorCodes.BAD_REQUEST, 426);
     }
 
     const namespace = c.env.RUN_NOTIFIER as unknown as RunNotifierNamespace;
@@ -163,12 +163,12 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const lastEventId = Number.parseInt(rawCursor, 10);
 
     if (!Number.isFinite(lastEventId) || lastEventId < 0) {
-      return badRequest(c, 'Invalid last_event_id');
+      throw new BadRequestError('Invalid last_event_id');
     }
 
     const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     const observation = await loadRunObservation(c.env, runId, access.run.status, lastEventId);
@@ -186,7 +186,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
 
     const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     const db = getDb(c.env.DB);
@@ -218,11 +218,11 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
 
       const access = await checkRunAccess(c.env.DB, runId, user.id, ['owner', 'admin', 'editor']);
       if (!access) {
-        return notFound(c, 'Run');
+        throw new NotFoundError('Run');
       }
 
       if (!VALID_ARTIFACT_TYPES.has(body.type)) {
-        return badRequest(c, 'Invalid artifact type');
+        throw new BadRequestError('Invalid artifact type');
       }
 
       const db = getDb(c.env.DB);
@@ -251,12 +251,12 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     const artifactRow = await db.select().from(artifacts).where(eq(artifacts.id, artifactId)).get();
 
     if (!artifactRow) {
-      return notFound(c, 'Artifact');
+      throw new NotFoundError('Artifact');
     }
 
     const access = await checkSpaceAccess(c.env.DB, artifactRow.accountId, user.id);
     if (!access) {
-      return notFound(c, 'Artifact');
+      throw new NotFoundError('Artifact');
     }
 
     return c.json({

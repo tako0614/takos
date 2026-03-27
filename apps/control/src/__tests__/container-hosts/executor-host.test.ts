@@ -7,11 +7,6 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('@takos/control-hosts/container-runtime', () => ({
-  Container: class {},
-  HostContainerRuntime: class {},
-}));
-
 vi.mock('@/db', () => ({
   getDb: vi.fn(),
 }));

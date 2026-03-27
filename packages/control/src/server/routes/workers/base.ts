@@ -62,7 +62,6 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   const spaceId = c.req.param('spaceId');
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
 
   const workersList = await listServicesForSpace(c.env.DB, access.space.id);
 
@@ -91,7 +90,6 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
     resolvedSpaceId = access.space.id;
   } else {
     // Default to user's own account

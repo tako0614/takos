@@ -2,6 +2,7 @@ import { createClient } from 'redis';
 import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/types.ts';
 import type { QueueBinding } from '../shared/types/bindings.ts';
 import type { LocalQueue, LocalQueueRecord } from './queue-runtime.ts';
+import { logWarn } from '../shared/utils/logger.ts';
 
 type QueueRecord<T = unknown> = LocalQueueRecord<T>;
 
@@ -33,7 +34,7 @@ async function closeRedisClient(client: RedisClient): Promise<void> {
   if (typedClient.isOpen === false) return;
   if (typedClient.close) {
     await Promise.resolve(typedClient.close()).catch((e) => {
-      console.warn('Redis client close failed (non-critical):', e);
+      logWarn('Redis client close failed (non-critical)', { module: 'redis-bindings', error: e instanceof Error ? e.message : String(e) });
     });
     return;
   }
@@ -41,7 +42,7 @@ async function closeRedisClient(client: RedisClient): Promise<void> {
     typedClient.destroy?.();
   } catch (e) {
     // Already-closed sockets during local smoke cleanup are expected.
-    console.warn('Redis client destroy failed (non-critical):', e);
+    logWarn('Redis client destroy failed (non-critical)', { module: 'redis-bindings', error: e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -49,7 +50,7 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
   if (redisClientState?.url !== redisUrl) {
     if (redisClientState) {
       void redisClientState.clientPromise.then((client) => closeRedisClient(client)).catch((e) => {
-        console.warn('Failed to close previous Redis client (non-critical):', e);
+        logWarn('Failed to close previous Redis client (non-critical)', { module: 'redis-bindings', error: e instanceof Error ? e.message : String(e) });
       });
     }
 
@@ -67,7 +68,7 @@ export async function disposeRedisClient(): Promise<void> {
   const state = redisClientState;
   redisClientState = null;
   await state.clientPromise.then((client) => closeRedisClient(client)).catch((e) => {
-    console.warn('Failed to dispose Redis client (non-critical):', e);
+    logWarn('Failed to dispose Redis client (non-critical)', { module: 'redis-bindings', error: e instanceof Error ? e.message : String(e) });
   });
 }
 
@@ -139,7 +140,7 @@ export function createRedisQueue<T = unknown>(redisUrl: string, queueName: strin
   };
 
   void ensureLoaded().catch((e) => {
-    console.warn('Redis queue initial load failed (non-critical):', e);
+    logWarn('Redis queue initial load failed (non-critical)', { module: 'redis-bindings', error: e instanceof Error ? e.message : String(e) });
   });
 
   return queue as unknown as LocalQueue<T>;

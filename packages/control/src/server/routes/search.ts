@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { badRequest, parseJsonBody, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseJsonBody, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import {
   quickSearchPaths,
   searchWorkspace,
@@ -157,16 +158,13 @@ search.post('/spaces/:spaceId/search', async (c) => {
   const body = await parseJsonBody<SearchRequestBody>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) {
-    return access;
-  }
 
   if (!body.query || body.query.trim().length === 0) {
-    return badRequest(c, 'Query is required');
+    throw new BadRequestError('Query is required');
   }
 
   return resolveCachedSearchResponse(c, {
@@ -203,9 +201,6 @@ search.get('/spaces/:spaceId/search/quick', async (c) => {
   const query = c.req.query('q');
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) {
-    return access;
-  }
 
   if (!query || query.length < 2) {
     return c.json({ results: [] });

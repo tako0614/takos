@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import {
   checkResourceAccess,
   createServiceBinding,
@@ -25,7 +26,7 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   }>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError( 'Invalid JSON body');
   }
 
   const resource = await getResourceById(c.env.DB, resourceId);

@@ -36,6 +36,13 @@ export interface ToolExecutorLike {
 // Keep this aligned with runner-config default (5 minutes) unless explicitly overridden.
 // AGENT_TOOL_EXECUTION_TIMEOUT_MS imported from shared/config/timeouts
 
+/**
+ * Local withTimeout variant that supports an onTimeout callback, used to abort
+ * the tool-execution AbortController on timeout. The shared
+ * `shared/utils/with-timeout` does not support this callback, so we keep a
+ * local copy here. If the shared version gains an onTimeout hook in the future,
+ * this should be replaced.
+ */
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,

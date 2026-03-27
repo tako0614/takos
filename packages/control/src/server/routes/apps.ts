@@ -2,14 +2,11 @@ import { Hono } from 'hono';
 import type { Env, User } from '../../shared/types';
 import { generateId, now } from '../../shared/utils';
 import {
-  badRequest,
-  unauthorized,
-  notFound,
-  forbidden,
   getRequestedSpaceIdentifier,
   parseJsonBody,
   requireSpaceAccess,
 } from './shared/route-auth';
+import { BadRequestError, AuthenticationError, NotFoundError, AuthorizationError } from '@takos/common/errors';
 import { getDb } from '../../infra/db';
 import { apps as appsTable, accounts } from '../../infra/db/schema';
 import { services } from '../../infra/db/schema-services';
@@ -75,16 +72,13 @@ function getSpaceIdentifierFromAccount(account: { slug: string | null; type?: st
 async function resolveAppsSpaceScope(
   c: { req: { header: (name: string) => string | undefined } },
   requireAccess: () => ReturnType<typeof requireSpaceAccess>,
-): Promise<{ identifier: string; spaceId: string } | Response | null> {
+): Promise<{ identifier: string; spaceId: string } | null> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c as Parameters<typeof getRequestedSpaceIdentifier>[0]);
   if (!spaceIdentifier) {
     return null;
   }
 
   const access = await requireAccess();
-  if (access instanceof Response) {
-    return access;
-  }
 
   return {
     identifier: spaceIdentifier,
@@ -103,16 +97,13 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
   api.get('/apps', async (c) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     const db = getDb(c.env.DB);
     const spaceScope = await resolveAppsSpaceScope(
       c,
       () => requireSpaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
-    if (spaceScope instanceof Response) {
-      return spaceScope;
-    }
     const principalId = resolvePrincipalId(user);
 
     const { asc: ascOrder, isNotNull } = await import('drizzle-orm');
@@ -192,7 +183,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
   api.get('/apps/:id', async (c) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     const appId = c.req.param('id');
     const db = getDb(c.env.DB);
@@ -200,9 +191,6 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
       c,
       () => requireSpaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
-    if (spaceScope instanceof Response) {
-      return spaceScope;
-    }
     const principalId = resolvePrincipalId(user);
 
     // Check if it's a builtin app
@@ -210,7 +198,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
       const builtinName = appId.slice(8);
       const builtin = BUILTIN_APPS.find(b => b.name === builtinName);
       if (!builtin) {
-        return notFound(c, 'App');
+        throw new NotFoundError('App');
       }
       return c.json({
         app: {
@@ -247,7 +235,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
       .get();
 
     if (!appRow) {
-      return notFound(c, 'App');
+      throw new NotFoundError('App');
     }
 
     return c.json({
@@ -273,13 +261,13 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
   api.patch('/apps/:id', async (c) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     const appId = c.req.param('id');
     const db = getDb(c.env.DB);
 
     if (appId.startsWith('builtin-')) {
-      return forbidden(c, 'Cannot modify builtin apps');
+      throw new AuthorizationError('Cannot modify builtin apps');
     }
 
     const body = await parseJsonBody<{
@@ -289,7 +277,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     }>(c, {});
 
     if (body === null) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
 
     const principalId = resolvePrincipalId(user);
@@ -299,7 +287,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     ).get();
 
     if (!app) {
-      return notFound(c, 'App');
+      throw new NotFoundError('App');
     }
 
     // Build update data
@@ -316,7 +304,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
 
     // Check if there are any actual updates besides updatedAt
     if (body.description === undefined && body.icon === undefined) {
-      return badRequest(c, 'No valid updates provided');
+      throw new BadRequestError('No valid updates provided');
     }
 
     await db.update(appsTable).set(updateData).where(eq(appsTable.id, appId));
@@ -328,13 +316,13 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
   api.post('/apps/:id/client-key', async (c) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     const appId = c.req.param('id');
     const db = getDb(c.env.DB);
 
     if (appId.startsWith('builtin-')) {
-      return forbidden(c, 'Cannot generate client key for builtin apps');
+      throw new AuthorizationError('Cannot generate client key for builtin apps');
     }
 
     const principalId = resolvePrincipalId(user);
@@ -344,7 +332,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     ).get();
 
     if (!app) {
-      return notFound(c, 'App');
+      throw new NotFoundError('App');
     }
 
     // Generate new client key
@@ -367,13 +355,13 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
   api.delete('/apps/:id', async (c) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     const appId = c.req.param('id');
     const db = getDb(c.env.DB);
 
     if (appId.startsWith('builtin-')) {
-      return forbidden(c, 'Cannot delete builtin apps');
+      throw new AuthorizationError('Cannot delete builtin apps');
     }
 
     const principalId = resolvePrincipalId(user);
@@ -383,7 +371,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     ).get();
 
     if (!app) {
-      return notFound(c, 'App');
+      throw new NotFoundError('App');
     }
 
     // Delete app files from R2 using batch delete

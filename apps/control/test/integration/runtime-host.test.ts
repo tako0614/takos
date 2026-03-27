@@ -1,8 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('@takos/control-hosts/container-runtime', () => ({
-  Container: class {},
-  HostContainerRuntime: class {},
-}));
 
 import runtimeHost, {
   buildRuntimeContainerEnv,

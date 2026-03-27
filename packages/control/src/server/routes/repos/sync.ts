@@ -205,8 +205,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
     ['owner', 'admin', 'editor'],
     'Permission denied',
     403
-  );
-  if (access instanceof Response) return access;
+  );
 
   if (!repo.forked_from_id) {
     throw new BadRequestError('Repository is not a fork');

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -76,7 +77,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const content = (body.body ?? body.content ?? '').trim();
     if (!content) {
-      return badRequest(c, 'Comment content is required');
+      throw new BadRequestError( 'Comment content is required');
     }
 
     const id = generateId();

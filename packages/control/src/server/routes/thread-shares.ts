@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { badRequest, notFound, type BaseVariables } from './shared/route-auth';
+import { type BaseVariables } from './shared/route-auth';
+import { BadRequestError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 import { checkThreadAccess } from '../../application/services/threads/thread-service';
 import {
@@ -27,7 +28,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const mode: ThreadShareMode = body.mode === 'password' ? 'password' : 'public';
@@ -38,7 +39,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   } else if (typeof body.expires_in_days === 'number') {
     const days = body.expires_in_days;
     if (!Number.isFinite(days) || days <= 0 || days > 365) {
-      return badRequest(c, 'expires_in_days must be between 1 and 365');
+      throw new BadRequestError('expires_in_days must be between 1 and 365');
     }
     expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   }
@@ -65,7 +66,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create share';
-    return badRequest(c, message);
+    throw new BadRequestError(message);
   }
 })
 
@@ -75,7 +76,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const shares = await listThreadShares(c.env.DB, threadId);
@@ -99,12 +100,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const ok = await revokeThreadShare({ db: c.env.DB, threadId, shareId });
   if (!ok) {
-    return notFound(c, 'Share');
+    throw new NotFoundError('Share');
   }
 
   return c.json({ success: true });

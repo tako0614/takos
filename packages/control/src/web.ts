@@ -29,6 +29,7 @@ import { staticAssetsMiddleware } from './server/middleware/static-assets';
 import { isInvalidArrayBufferError } from './shared/utils/db-guards';
 import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError, logInfo, logWarn } from './shared/utils/logger';
+import { AppError, RateLimitError, isAppError } from '@takos/common/errors';
 import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/types.ts';
 import { setPlatformContext } from './platform/context.ts';
@@ -320,6 +321,26 @@ app.onError((err, c) => {
       code: 'BAD_REQUEST',
       message: 'Malformed lookup parameter',
     }, 400);
+  }
+
+  // Handle AppError subclasses — return structured error responses
+  if (isAppError(err)) {
+    // Only log server errors (5xx) at error level; client errors are expected
+    if (err.statusCode >= 500) {
+      logError('AppError (server)', err, { module: 'web' });
+    }
+
+    const response = c.json(
+      err.toResponse(),
+      err.statusCode as import('hono/utils/http-status').ContentfulStatusCode,
+    );
+
+    // Set Retry-After header for rate limit errors
+    if (err instanceof RateLimitError && err.retryAfter) {
+      c.header('Retry-After', String(err.retryAfter));
+    }
+
+    return response;
   }
 
   // Log full error for debugging (server-side only)

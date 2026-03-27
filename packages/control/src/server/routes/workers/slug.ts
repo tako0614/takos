@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUserWithRole, slugifyServiceName } from '../../../application/services/platform/workers';
 import { getDb } from '../../../infra/db';
@@ -25,17 +25,17 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!body.slug) {
-    return badRequest(c, 'slug is required');
+    throw new BadRequestError( 'slug is required');
   }
 
   const newSlug = slugifyServiceName(body.slug);
   if (newSlug.length < 3 || newSlug.length > 32) {
-    return badRequest(c, 'Slug must be between 3 and 32 characters');
+    throw new BadRequestError( 'Slug must be between 3 and 32 characters');
   }
 
   const reserved = ['admin', 'api', 'www', 'mail', 'smtp', 'pop', 'imap', 'ftp', 'app', 'apps'];
   if (reserved.includes(newSlug)) {
-    return badRequest(c, 'This subdomain is reserved');
+    throw new BadRequestError( 'This subdomain is reserved');
   }
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);

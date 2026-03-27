@@ -10,9 +10,6 @@ const git = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 
 function resolveGitService(c: Context<{ Bindings: Env; Variables: BaseVariables }>) {
   const tenantSource = requireTenantSource(c);
-  if (tenantSource instanceof Response) {
-    return tenantSource;
-  }
 
   return createGitService(
     c.env.DB,
@@ -39,8 +36,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
     user.id,
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions'
-  );
-  if (access instanceof Response) return access;
+  );
 
   if (!body.message || body.message.trim().length === 0) {
     throw new BadRequestError('Commit message is required');
@@ -73,8 +69,7 @@ git.get('/spaces/:spaceId/git/log', async (c) => {
   const limit = parseLimit(c.req.query('limit'), 50, 100);
   const offset = parseOffset(c.req.query('offset'));
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
   if (gitService instanceof Response) return gitService;
@@ -99,8 +94,7 @@ git.get('/spaces/:spaceId/git/commits/:commitId', async (c) => {
   const spaceId = c.req.param('spaceId');
   const commitId = c.req.param('commitId');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
   if (gitService instanceof Response) return gitService;
@@ -130,8 +124,7 @@ git.get('/spaces/:spaceId/git/diff/:commitId', async (c) => {
   const spaceId = c.req.param('spaceId');
   const commitId = c.req.param('commitId');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
   if (gitService instanceof Response) return gitService;
@@ -174,8 +167,7 @@ git.post('/spaces/:spaceId/git/restore', async (c) => {
     user.id,
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions'
-  );
-  if (access instanceof Response) return access;
+  );
 
   if (!body.commit_id || !body.path) {
     throw new BadRequestError('commit_id and path are required');
@@ -205,8 +197,7 @@ git.get('/spaces/:spaceId/git/history/:path', async (c) => {
   const path = c.req.param('path');
   const limit = parseLimit(c.req.query('limit'), 20, 100);
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
   if (gitService instanceof Response) return gitService;

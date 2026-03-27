@@ -1,13 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
-  badRequest,
-  notFound,
   requireSpaceAccess,
   parseLimit,
   parseOffset,
   type AuthenticatedRouteEnv,
 } from '../shared/route-auth';
+import { BadRequestError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import {
   addRemoteStore,
@@ -98,7 +97,6 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/store-registry', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-    if (access instanceof Response) return access;
 
     try {
       const entries = await listRegisteredStores(c.env.DB, access.space.id);
@@ -114,7 +112,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
 
@@ -127,19 +124,18 @@ export default new Hono<AuthenticatedRouteEnv>()
         return c.json({ store: formatEntry(entry) }, 201);
       } catch (error) {
         logError('Failed to add remote store', error, { module: 'routes/store-registry' });
-        return badRequest(c, safeErrorMessage(error, 'Failed to add remote store'));
+        throw new BadRequestError( safeErrorMessage(error, 'Failed to add remote store'));
       }
     })
 
   .delete('/:spaceId/store-registry/:entryId', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
 
     try {
       const deleted = await removeRemoteStore(c.env.DB, access.space.id, c.req.param('entryId'));
       if (!deleted) {
-        return notFound(c, 'Store registry entry');
+        throw new NotFoundError( 'Store registry entry');
       }
       return c.json({ success: true });
     } catch (error) {
@@ -153,7 +149,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
       const entryId = c.req.param('entryId');
@@ -162,7 +157,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         // Verify entry exists before making any changes
         const existing = await getRegistryEntry(c.env.DB, access.space.id, entryId);
         if (!existing) {
-          return notFound(c, 'Store registry entry');
+          throw new NotFoundError( 'Store registry entry');
         }
 
         if (body.is_active !== undefined) {
@@ -187,17 +182,16 @@ export default new Hono<AuthenticatedRouteEnv>()
   .post('/:spaceId/store-registry/:entryId/refresh', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
 
     try {
       const entry = await refreshRemoteStore(c.env.DB, access.space.id, c.req.param('entryId'));
       if (!entry) {
-        return notFound(c, 'Store registry entry');
+        throw new NotFoundError( 'Store registry entry');
       }
       return c.json({ store: formatEntry(entry) });
     } catch (error) {
       logError('Failed to refresh store', error, { module: 'routes/store-registry' });
-      return badRequest(c, safeErrorMessage(error, 'Failed to refresh store'));
+      throw new BadRequestError( safeErrorMessage(error, 'Failed to refresh store'));
     }
   })
 
@@ -206,15 +200,14 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/store-registry/:entryId/repositories', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-    if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));
     if (!entry) {
-      return notFound(c, 'Store registry entry');
+      throw new NotFoundError( 'Store registry entry');
     }
 
     if (!entry.repositoriesUrl) {
-      return badRequest(c, 'Remote store does not expose a repositories endpoint');
+      throw new BadRequestError( 'Remote store does not expose a repositories endpoint');
     }
 
     try {
@@ -246,7 +239,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       });
     } catch (error) {
       logError('Failed to browse remote repos', error, { module: 'routes/store-registry' });
-      return badRequest(c, safeErrorMessage(error, 'Failed to browse remote repositories'));
+      throw new BadRequestError( safeErrorMessage(error, 'Failed to browse remote repositories'));
     }
   })
 
@@ -255,20 +248,19 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/store-registry/:entryId/repositories/search', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-    if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));
     if (!entry) {
-      return notFound(c, 'Store registry entry');
+      throw new NotFoundError( 'Store registry entry');
     }
 
     if (!entry.searchUrl) {
-      return badRequest(c, 'Remote store does not expose a search endpoint');
+      throw new BadRequestError( 'Remote store does not expose a search endpoint');
     }
 
     const query = c.req.query('q');
     if (!query?.trim()) {
-      return badRequest(c, 'q parameter required');
+      throw new BadRequestError( 'q parameter required');
     }
 
     try {
@@ -301,7 +293,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       });
     } catch (error) {
       logError('Failed to search remote repos', error, { module: 'routes/store-registry' });
-      return badRequest(c, safeErrorMessage(error, 'Failed to search remote repositories'));
+      throw new BadRequestError( safeErrorMessage(error, 'Failed to search remote repositories'));
     }
   })
 
@@ -312,7 +304,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
 
@@ -335,7 +326,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         }, 201);
       } catch (error) {
         logError('Failed to install from remote store', error, { module: 'routes/store-registry' });
-        return badRequest(c, safeErrorMessage(error, 'Failed to install from remote store'));
+        throw new BadRequestError( safeErrorMessage(error, 'Failed to install from remote store'));
       }
     })
 
@@ -344,7 +335,6 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/store-registry/updates', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-    if (access instanceof Response) return access;
 
     try {
       const unseenOnly = c.req.query('unseen') === 'true';
@@ -386,7 +376,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
 
@@ -408,11 +397,10 @@ export default new Hono<AuthenticatedRouteEnv>()
   .post('/:spaceId/store-registry/:entryId/poll', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));
     if (!entry) {
-      return notFound(c, 'Store registry entry');
+      throw new NotFoundError( 'Store registry entry');
     }
 
     try {
@@ -420,6 +408,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       return c.json({ new_updates: newUpdates });
     } catch (error) {
       logError('Failed to poll store', error, { module: 'routes/store-registry' });
-      return badRequest(c, safeErrorMessage(error, 'Failed to poll store'));
+      throw new BadRequestError( safeErrorMessage(error, 'Failed to poll store'));
     }
   });

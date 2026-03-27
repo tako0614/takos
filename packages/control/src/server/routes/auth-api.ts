@@ -16,7 +16,7 @@ import {
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
 import { now, extractBearerToken } from '../../shared/utils';
-import { badRequest, unauthorized, conflict } from './shared/route-auth';
+import { BadRequestError, AuthenticationError, ConflictError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 
 type Variables = {
@@ -42,7 +42,7 @@ const profileSchema = z.object({
 authApi.get('/me', async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   // Get linked auth identities
@@ -76,18 +76,18 @@ authApi.post('/setup-username',
   async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const body = c.req.valid('json');
 
   if (!body.username) {
-    return badRequest(c, 'Username is required');
+    throw new BadRequestError('Username is required');
   }
 
   // Validate username format (3-30 chars, lowercase alphanumeric, underscores or hyphens)
   if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(body.username)) {
-    return badRequest(c, 'Username must be 3-30 characters, lowercase alphanumeric, underscores or hyphens');
+    throw new BadRequestError('Username must be 3-30 characters, lowercase alphanumeric, underscores or hyphens');
   }
 
   // Check if username is taken
@@ -98,7 +98,7 @@ authApi.post('/setup-username',
     .get();
 
   if (existing) {
-    return conflict(c, 'Username already taken');
+    throw new ConflictError('Username already taken');
   }
 
   await db.update(accounts).set({
@@ -115,7 +115,7 @@ authApi.patch('/profile',
   async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const body = c.req.valid('json');
@@ -127,13 +127,13 @@ authApi.patch('/profile',
   }
   if (body.avatar_url !== undefined) {
     if (body.avatar_url && !isValidAvatarUrl(body.avatar_url)) {
-      return badRequest(c, 'Invalid avatar URL. Must be a valid HTTPS URL.');
+      throw new BadRequestError('Invalid avatar URL. Must be a valid HTTPS URL.');
     }
     updateData.picture = body.avatar_url;
   }
 
   if (Object.keys(updateData).length === 0) {
-    return badRequest(c, 'No updates provided');
+    throw new BadRequestError('No updates provided');
   }
 
   updateData.updatedAt = now();

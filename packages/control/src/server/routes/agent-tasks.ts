@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../shared/utils';
 import { createThread } from '../../application/services/threads/thread-service';
@@ -210,11 +211,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
     if (!access) {
-      return notFound(c, 'Workspace');
+      throw new NotFoundError('Workspace');
     }
 
     if (status && !VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
-      return badRequest(c, 'Invalid status');
+      throw new BadRequestError('Invalid status');
     }
 
     const db = getDb(c.env.DB);
@@ -254,11 +255,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return notFound(c, 'Workspace');
+      throw new NotFoundError('Workspace');
     }
 
     if (!body.title?.trim()) {
-      return badRequest(c, 'title is required');
+      throw new BadRequestError('title is required');
     }
 
     const status = body.status || DEFAULT_STATUS;
@@ -307,12 +308,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const task = await fetchTask(c.env.DB, taskId);
     if (!task) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
     if (!access) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     return c.json({ task: await enrichTask(c.env, task) });
@@ -340,19 +341,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const task = await fetchTask(c.env.DB, taskId);
     if (!task) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const updates: Record<string, unknown> = {};
 
     if (body.title !== undefined) {
       if (!body.title?.trim()) {
-        return badRequest(c, 'title is required');
+        throw new BadRequestError('title is required');
       }
       updates.title = body.title.trim();
     }
@@ -395,7 +396,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
           and(eq(threads.id, body.thread_id), eq(threads.accountId, task.space_id))
         ).get();
         if (!thread) {
-          return notFound(c, 'Thread');
+          throw new NotFoundError('Thread');
         }
       }
       updates.threadId = body.thread_id || null;
@@ -407,7 +408,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
           and(eq(runs.id, body.last_run_id), eq(runs.accountId, task.space_id))
         ).get();
         if (!run) {
-          return notFound(c, 'Run');
+          throw new NotFoundError('Run');
         }
       }
       updates.lastRunId = body.last_run_id || null;
@@ -430,13 +431,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     if (Object.keys(updates).length === 0) {
-      return badRequest(c, 'No valid updates provided');
+      throw new BadRequestError('No valid updates provided');
     }
 
     updates.updatedAt = now();
     const updated = await db.update(agentTasks).set(updates).where(eq(agentTasks.id, taskId)).returning().get();
     if (!updated) {
-      return internalError(c, 'Failed to update task');
+      throw new InternalError('Failed to update task');
     }
 
     return c.json({ task: await enrichTask(c.env, toApiTask(updated)) });
@@ -448,12 +449,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const task = await fetchTask(c.env.DB, taskId);
     if (!task) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin']);
     if (!access) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const db = getDb(c.env.DB);
@@ -468,12 +469,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const task = await fetchTask(c.env.DB, taskId);
     if (!task) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return notFound(c, 'Task');
+      throw new NotFoundError('Task');
     }
 
     const model = normalizeModelId(task.model)
@@ -491,7 +492,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     if (!apiKey) {
-      return badRequest(c, `API key for provider "${provider}" is not configured`);
+      throw new BadRequestError(`API key for provider "${provider}" is not configured`);
     }
 
     const taskText = task.description?.trim() || task.title;
@@ -514,12 +515,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         updatedAt: timestamp,
       }).where(eq(agentTasks.id, taskId)).returning().get();
       if (!updated) {
-        return internalError(c, 'Failed to update task plan');
+        throw new InternalError('Failed to update task plan');
       }
 
       return c.json({ task: await enrichTask(c.env, toApiTask(updated)), plan });
     } catch (err) {
       logError('Failed to generate task plan', err, { module: 'routes/agent-tasks' });
-      return internalError(c, 'Failed to generate task plan');
+      throw new InternalError('Failed to generate task plan');
     }
   });

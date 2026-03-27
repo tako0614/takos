@@ -125,6 +125,16 @@ export function createTimeoutError(timeoutMs: number): CloudflareAPIError {
   return error;
 }
 
+/**
+ * WfpClient uses Cloudflare-specific error handling (classifyAPIError /
+ * CloudflareAPIError) that carries rate-limit and retry metadata. This is
+ * intentionally separate from the generic ServiceCallError / parseServiceResponse
+ * in shared/utils/service-client.ts, which targets non-Cloudflare upstreams.
+ *
+ * The inline AbortController/setTimeout pattern mirrors the shared withTimeout
+ * utility but is kept inline here because the AbortError catch must produce a
+ * CloudflareAPIError (via createTimeoutError) rather than a plain Error.
+ */
 export class WfpClient {
   constructor(private config: WFPConfig) {}
 

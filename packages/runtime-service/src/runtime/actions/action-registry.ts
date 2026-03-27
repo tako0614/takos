@@ -6,6 +6,9 @@ import { createHash } from 'crypto';
 import { parse as parseYaml } from 'yaml';
 import type { ActionRuns, ActionOutputDefinition } from './composite-executor.js';
 import { cloneAndCheckout } from '../git.js';
+import { createLogger } from '@takos/common/logger';
+
+const logger = createLogger({ service: 'takos-runtime' });
 
 // ===========================================================================
 // --- Action metadata loading ---
@@ -225,14 +228,14 @@ async function removeEscapingSymlinks(dir: string, boundary: string): Promise<vo
           && (target === resolvedBoundary || target.startsWith(resolvedBoundary + path.sep));
         if (!isWithinBoundary) {
           await fs.unlink(entryPath).catch((e) => {
-            console.warn('Failed to unlink escaping symlink (non-critical):', entryPath, e);
+            logger.warn('Failed to unlink escaping symlink (non-critical)', { module: 'action-registry', path: entryPath, error: e });
           });
         }
       } else if (lstats.isDirectory()) {
         await removeEscapingSymlinks(entryPath, boundary);
       }
     } catch (e) {
-      console.warn('Failed to stat entry during symlink cleanup (non-critical):', entryPath, e);
+      logger.warn('Failed to stat entry during symlink cleanup (non-critical)', { module: 'action-registry', path: entryPath, error: e });
     }
   }
 }

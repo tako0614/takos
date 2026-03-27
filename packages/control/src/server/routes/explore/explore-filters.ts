@@ -1,7 +1,7 @@
 import { eq, ne, and, or, desc, asc, like, inArray, sql } from 'drizzle-orm';
 import { accounts, repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
 import type { Database } from '../../../infra/db';
-import { badRequest, type AnyAppContext } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 
 export interface ReleaseAsset {
   id: string;
@@ -85,22 +85,20 @@ export function parseExploreFilters(c: { req: { query: (key: string) => string |
 }
 
 export function validateExploreFilters(
-  c: AnyAppContext,
+  c: { req: { query: (key: string) => string | undefined } },
   filters: ExploreFilterParams,
-): Response | null {
+): void {
   if (filters.category && !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(filters.category)) {
-    return badRequest(c, 'Invalid category');
+    throw new BadRequestError('Invalid category');
   }
   if (c.req.query('since') && !filters.since) {
-    return badRequest(c, 'Invalid since (expected YYYY-MM-DD)');
+    throw new BadRequestError('Invalid since (expected YYYY-MM-DD)');
   }
-  return null;
 }
 
 export function parseTags(
-  c: AnyAppContext,
   tagsRaw: string | undefined,
-): { tags: string[] } | { error: Response } {
+): string[] {
   const tags = (tagsRaw || '')
     .split(',')
     .map((value) => value.trim().toLowerCase())
@@ -108,10 +106,10 @@ export function parseTags(
     .slice(0, 10);
   for (const tag of tags) {
     if (tag.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(tag)) {
-      return { error: badRequest(c, 'Invalid tags (expected comma-separated tag slugs)') };
+      throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
     }
   }
-  return { tags };
+  return tags;
 }
 
 export async function findRepoByUsernameAndName(

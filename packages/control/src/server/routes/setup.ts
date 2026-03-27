@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { now } from '../../shared/utils';
 import { validateUsername } from '../../shared/utils/reserved-usernames';
-import { badRequest, conflict, type BaseVariables } from './shared/route-auth';
+import { type BaseVariables } from './shared/route-auth';
+import { BadRequestError, ConflictError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 import { getDb } from '../../infra/db';
 import { accounts } from '../../infra/db/schema';
@@ -47,7 +48,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     // If already setup, return error
     if (user.setup_completed) {
-      return badRequest(c, 'Setup already completed');
+      throw new BadRequestError('Setup already completed');
     }
 
     const body = c.req.valid('json');
@@ -56,7 +57,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     // Validate username
     const usernameError = validateUsername(username);
     if (usernameError) {
-      return badRequest(c, usernameError);
+      throw new BadRequestError(usernameError);
     }
 
     // Check if username is already taken
@@ -66,7 +67,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     ).get();
 
     if (existingAccount) {
-      return conflict(c, 'This username is already taken');
+      throw new ConflictError('This username is already taken');
     }
 
     const timestamp = now();

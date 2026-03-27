@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ReviewStatus, ReviewerType } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -135,7 +136,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const validStatuses: ReviewStatus[] = ['approved', 'changes_requested', 'commented'];
     if (!body.status || !validStatuses.includes(body.status)) {
-      return badRequest(c, 'Invalid review status');
+      throw new BadRequestError( 'Invalid review status');
     }
 
     const id = generateId();

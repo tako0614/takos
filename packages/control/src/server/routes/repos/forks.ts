@@ -3,8 +3,9 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { Repository } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, conflict, internalError, notFound, requireSpaceAccess } from '../shared/route-auth';
+import { requireSpaceAccess } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError, ConflictError, InternalError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { sanitizeRepoName } from './base';
@@ -32,7 +33,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const sourceRepoData = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
 
   if (!sourceRepoData) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (sourceRepoData.visibility === 'private') {
@@ -42,8 +43,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       user.id,
       undefined,
       'Repository not found'
-    );
-    if (access instanceof Response) return access;
+    );
   }
   const targetSpaceId = body.target_space_id || null;
 
@@ -76,11 +76,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (existing) {
-    return conflict(c, 'Repository with this name already exists in target workspace');
+    throw new ConflictError('Repository with this name already exists in target workspace');
   }
 
   if (resolvedTargetSpaceId === sourceRepoData.accountId && sanitizedName === sourceRepoData.name) {
-    return badRequest(c, 'Cannot fork repository to itself');
+    throw new BadRequestError('Cannot fork repository to itself');
   }
 
   const forkId = generateId();
@@ -106,7 +106,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     await db.delete(repositories).where(eq(repositories.id, forkId));
     logError('Failed to fork repository', err, { action: 'forkRepository', repoId, forkId });
-    return internalError(c, 'Failed to fork repository');
+    throw new InternalError('Failed to fork repository');
   }
 
   await db.update(repositories)

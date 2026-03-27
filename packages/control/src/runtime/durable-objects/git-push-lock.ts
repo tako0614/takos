@@ -1,4 +1,5 @@
 import { jsonResponse } from './shared';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 // 5-minute lease is sized for the 90MB packfile upload limit: even worst-case
 // large pushes complete well within this window (Workers CPU time limit is 30s,
@@ -34,7 +35,7 @@ export class GitPushLockDO {
 
   private async acquire(request: Request): Promise<Response> {
     const body = await request.json().catch((err) => {
-      console.warn('[git-push-lock] Failed to parse acquire request body, using defaults', err);
+      logWarn('Failed to parse acquire request body, using defaults', { module: 'git-push-lock', error: err instanceof Error ? err.message : String(err) });
       return {};
     }) as { token?: string; leaseMs?: number };
     const token = typeof body.token === 'string' && body.token.length > 0
@@ -58,7 +59,7 @@ export class GitPushLockDO {
 
   private async release(request: Request): Promise<Response> {
     const body = await request.json().catch((err) => {
-      console.warn('[git-push-lock] Failed to parse release request body, using defaults', err);
+      logWarn('Failed to parse release request body, using defaults', { module: 'git-push-lock', error: err instanceof Error ? err.message : String(err) });
       return {};
     }) as { token?: string };
     if (typeof body.token !== 'string' || body.token.length === 0) {

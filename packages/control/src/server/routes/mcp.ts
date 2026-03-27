@@ -25,7 +25,7 @@ import { McpClient } from '../../application/tools/mcp-client';
 import { requireSpaceAccess } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { escapeHtml } from './auth/html';
-import { logError } from '../../shared/utils/logger';
+import { logError, logWarn } from '../../shared/utils/logger';
 import { AuthenticationError, BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from '@takos/common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
@@ -140,8 +140,7 @@ mcpRoutes.post('/servers',
   const spaceId = c.req.query('spaceId');
   if (!spaceId) throw new BadRequestError('spaceId query param required');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_CREATE_ROLES);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_CREATE_ROLES);
 
   const body = c.req.valid('json');
 
@@ -175,8 +174,7 @@ mcpRoutes.get('/servers', async (c) => {
   const spaceId = c.req.query('spaceId');
   if (!spaceId) throw new BadRequestError('spaceId query param required');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
 
   const servers = await listMcpServers(c.env.DB, spaceId);
 
@@ -194,8 +192,7 @@ mcpRoutes.delete('/servers/:id', async (c) => {
   const spaceId = c.req.query('spaceId');
   if (!spaceId) throw new BadRequestError('spaceId query param required');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_DELETE_ROLES);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_DELETE_ROLES);
 
   const deleted = await deleteMcpServer(c.env.DB, spaceId, serverId);
   if (!deleted) throw new NotFoundError('MCP server');
@@ -214,8 +211,7 @@ mcpRoutes.patch('/servers/:id',
   const spaceId = c.req.query('spaceId');
   if (!spaceId) throw new BadRequestError('spaceId query param required');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_UPDATE_ROLES);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_UPDATE_ROLES);
 
   const body = c.req.valid('json');
 
@@ -236,8 +232,7 @@ mcpRoutes.get('/servers/:id/tools', async (c) => {
   const spaceId = c.req.query('spaceId');
   if (!spaceId) throw new BadRequestError('spaceId query param required');
 
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
 
   const server = await getMcpServerWithTokens(c.env.DB, spaceId, serverId);
   if (!server) throw new NotFoundError('MCP server');
@@ -293,7 +288,7 @@ mcpRoutes.get('/servers/:id/tools', async (c) => {
   } finally {
     // Best-effort cleanup; errors closing the client are non-fatal
     await client.close().catch((e) => {
-      console.warn('MCP client close failed (non-critical):', e);
+      logWarn('MCP client close failed (non-critical)', { module: 'mcp', error: e instanceof Error ? e.message : String(e) });
     });
   }
 });

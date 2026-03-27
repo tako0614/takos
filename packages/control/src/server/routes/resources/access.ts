@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { ResourcePermission } from '../../../shared/types';
-import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import {
   deleteResourceAccess,
   getResourceById,
@@ -42,7 +43,7 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   }>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError( 'Invalid JSON body');
   }
 
   const resource = await getResourceById(c.env.DB, resourceId);
@@ -56,7 +57,7 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!['read', 'write', 'admin'].includes(body.permission)) {
-    return badRequest(c, 'Invalid permission level');
+    throw new BadRequestError( 'Invalid permission level');
   }
 
   const db = getDb(c.env.DB);

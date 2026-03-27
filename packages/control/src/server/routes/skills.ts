@@ -84,7 +84,6 @@ async function listSkillsHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_LIST_ROLES);
-  if (access instanceof Response) return access;
 
   const skillsList = await listSkills(c.env.DB, access.space.id);
   return c.json({ skills: skillsList });
@@ -113,7 +112,6 @@ async function createSkillHandler(c: SkillsContext) {
     SKILL_CREATE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const db = getDb(c.env.DB);
   const existing = await db.select({ id: skillsTable.id }).from(skillsTable).where(
@@ -145,7 +143,6 @@ async function getSkillByNameHandler(c: SkillsContext) {
   const skillName = getSkillNameParam(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
-  if (access instanceof Response) return access;
 
   const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
@@ -164,7 +161,6 @@ async function getSkillByIdHandler(c: SkillsContext) {
   const skillId = getSkillIdParam(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
-  if (access instanceof Response) return access;
 
   const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
@@ -190,7 +186,6 @@ async function updateSkillByNameHandler(c: SkillsContext) {
     SKILL_UPDATE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
@@ -241,7 +236,6 @@ async function updateSkillByIdHandler(c: SkillsContext) {
     SKILL_UPDATE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
@@ -292,7 +286,6 @@ async function patchSkillByNameHandler(c: SkillsContext) {
     SKILL_TOGGLE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
@@ -319,7 +312,6 @@ async function patchSkillByIdHandler(c: SkillsContext) {
     SKILL_TOGGLE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
@@ -345,7 +337,6 @@ async function deleteSkillByNameHandler(c: SkillsContext) {
     SKILL_DELETE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
@@ -370,7 +361,6 @@ async function deleteSkillByIdHandler(c: SkillsContext) {
     SKILL_DELETE_ROLES,
     'Workspace not found or insufficient permissions'
   );
-  if (access instanceof Response) return access;
 
   const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
@@ -388,7 +378,6 @@ async function skillContextHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_CONTEXT_ROLES);
-  if (access instanceof Response) return access;
 
   const catalog = await listSkillContext(c.env.DB, access.space.id, getSkillLocaleInput(c));
   return c.json({
@@ -404,7 +393,6 @@ async function listOfficialSkillsHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
-  if (access instanceof Response) return access;
 
   const catalog = await listOfficialSkillsCatalog(c.env.DB, access.space.id, getSkillLocaleInput(c));
   return c.json(catalog);
@@ -416,7 +404,6 @@ async function getOfficialSkillHandler(c: SkillsContext) {
   const skillId = getSkillIdParam(c);
 
   const access = await requireSpaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
-  if (access instanceof Response) return access;
 
   const skill = await getOfficialSkillCatalogEntry(c.env.DB, access.space.id, skillId, getSkillLocaleInput(c));
   if (!skill) {

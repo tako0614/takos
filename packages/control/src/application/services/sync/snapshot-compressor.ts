@@ -1,3 +1,5 @@
+import { logWarn } from '../../../shared/utils/logger';
+
 /** Concatenate an array of Uint8Array chunks into a single Uint8Array. */
 function concatChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
     const result = new Uint8Array(totalLength);
@@ -67,7 +69,7 @@ export class SnapshotCompressor {
                 chunks.push(value);
             }
         } catch (error) {
-            try { reader.releaseLock(); } catch (err) { console.warn('[snapshot-compressor] failed to release reader lock (non-critical)', err); }
+            try { reader.releaseLock(); } catch (err) { logWarn('Failed to release reader lock (non-critical)', { module: 'snapshot-compressor', error: err instanceof Error ? err.message : String(err) }); }
             throw error;
         }
 

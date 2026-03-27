@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { TAKOS_ACCESS_TOKEN_ENV_NAME, createCommonEnvService } from '../../../application/services/common-env';
@@ -181,7 +181,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!Array.isArray(body.variables)) {
-    return badRequest(c, 'variables array is required');
+    throw new BadRequestError( 'variables array is required');
   }
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
@@ -228,7 +228,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     logError('Failed to update environment variables', err, { module: 'routes/services/settings' });
     if (err instanceof Error) {
-      return badRequest(c, err.message);
+      throw new BadRequestError( err.message);
     }
     throw new InternalError('Failed to update environment variables');
   }
@@ -265,7 +265,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (body.keys && !Array.isArray(body.keys)) {
-    return badRequest(c, 'keys must be an array');
+    throw new BadRequestError( 'keys must be an array');
   }
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
@@ -293,14 +293,14 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     }
 
     if (body.builtins?.TAKOS_ACCESS_TOKEN && !nextEffectiveHasTakosAccessToken) {
-      return badRequest(c, 'builtins.TAKOS_ACCESS_TOKEN requires TAKOS_ACCESS_TOKEN to be linked');
+      throw new BadRequestError( 'builtins.TAKOS_ACCESS_TOKEN requires TAKOS_ACCESS_TOKEN to be linked');
     }
     if (
       nextEffectiveHasTakosAccessToken
       && !body.builtins?.TAKOS_ACCESS_TOKEN
       && !currentBuiltins[TAKOS_ACCESS_TOKEN_ENV_NAME]?.configured
     ) {
-      return badRequest(c, 'TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked');
+      throw new BadRequestError( 'TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked');
     }
 
     const actor = await buildCommonEnvActor(c, user.id);
@@ -328,7 +328,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     logError('Failed to update service common env links', err, { module: 'routes/services/settings' });
     if (err instanceof Error) {
-      return badRequest(c, err.message);
+      throw new BadRequestError( err.message);
     }
     throw new InternalError('Failed to update common env links');
   }
@@ -347,21 +347,21 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (body.add !== undefined && !Array.isArray(body.add)) {
-    return badRequest(c, 'add must be an array');
+    throw new BadRequestError( 'add must be an array');
   }
   if (body.remove !== undefined && !Array.isArray(body.remove)) {
-    return badRequest(c, 'remove must be an array');
+    throw new BadRequestError( 'remove must be an array');
   }
   if (body.set !== undefined && !Array.isArray(body.set)) {
-    return badRequest(c, 'set must be an array');
+    throw new BadRequestError( 'set must be an array');
   }
   const hasSet = body.set !== undefined;
   const hasAddOrRemove = body.add !== undefined || body.remove !== undefined;
   if (!hasSet && !hasAddOrRemove) {
-    return badRequest(c, 'one of add/remove/set must be provided');
+    throw new BadRequestError( 'one of add/remove/set must be provided');
   }
   if (hasSet && hasAddOrRemove) {
-    return badRequest(c, 'set cannot be combined with add/remove');
+    throw new BadRequestError( 'set cannot be combined with add/remove');
   }
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
@@ -403,14 +403,14 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     }
 
     if (body.builtins?.TAKOS_ACCESS_TOKEN && !nextEffectiveHasTakosAccessToken) {
-      return badRequest(c, 'builtins.TAKOS_ACCESS_TOKEN requires TAKOS_ACCESS_TOKEN to be linked');
+      throw new BadRequestError( 'builtins.TAKOS_ACCESS_TOKEN requires TAKOS_ACCESS_TOKEN to be linked');
     }
     if (
       nextEffectiveHasTakosAccessToken
       && !body.builtins?.TAKOS_ACCESS_TOKEN
       && !currentBuiltins[TAKOS_ACCESS_TOKEN_ENV_NAME]?.configured
     ) {
-      return badRequest(c, 'TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked');
+      throw new BadRequestError( 'TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked');
     }
 
     const actor = await buildCommonEnvActor(c, user.id);
@@ -440,7 +440,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     logError('Failed to patch service common env links', err, { module: 'routes/services/settings' });
     if (err instanceof Error) {
-      return badRequest(c, err.message);
+      throw new BadRequestError( err.message);
     }
     throw new InternalError('Failed to patch common env links');
   }
@@ -522,7 +522,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!body.bindings || !Array.isArray(body.bindings)) {
-    return badRequest(c, 'bindings array is required');
+    throw new BadRequestError( 'bindings array is required');
   }
 
   const db = getDb(c.env.DB);
@@ -571,7 +571,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
       }
 
       if (!resource) {
-        return badRequest(c, `Resource not found for binding: ${binding.name}`);
+        throw new BadRequestError( `Resource not found for binding: ${binding.name}`);
       }
 
       let bindingType: string;
@@ -585,7 +585,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
           bindingType = 'service';
           break;
         default:
-          return badRequest(c, `Unsupported binding resource type: ${resource.type}`);
+          throw new BadRequestError( `Unsupported binding resource type: ${resource.type}`);
       }
 
       nextBindings.push({
@@ -608,7 +608,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     logError('Failed to update bindings', err, { module: 'routes/services/settings' });
     if (err instanceof Error) {
-      return badRequest(c, err.message);
+      throw new BadRequestError( err.message);
     }
     throw new InternalError('Failed to update bindings');
   }

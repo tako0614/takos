@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Env, User } from '../../../shared/types';
 import { checkSpaceAccess } from '../../../shared/utils';
+import { AppError, ErrorCodes, NotFoundError, InternalError } from '@takos/common/errors';
 
 // Re-export Error classes and types from @takos/common/errors (canonical location)
 export {
@@ -23,29 +24,8 @@ export {
   type ErrorResponse,
 } from '@takos/common/errors';
 
-// Re-export legacy helper functions from error-response for backward compatibility.
-// These are deprecated -- callers should migrate to throwing AppError subclasses.
-export {
-  errorResponse,
-  badRequest,
-  unauthorized,
-  forbidden,
-  notFound,
-  conflict,
-  validationError,
-  internalError,
-  serviceUnavailable,
-  rateLimited,
-  handleDbError,
-} from '../../../shared/utils/error-response';
-
-// Re-export legacy AnyAppContext type for backward compatibility.
-// This is deprecated -- callers should use typed Context or AppContext instead.
-export type { AnyAppContext } from '../../../shared/utils/error-response';
-
-// Import for local use
-import { errorResponse } from '../../../shared/utils/error-response';
-import type { AnyAppContext } from '../../../shared/utils/error-response';
+// Re-export non-deprecated helpers from error-response
+export { oauth2Error, type OAuth2ErrorResponse } from '../../../shared/utils/error-response';
 
 /**
  * Base Variables type that all authenticated routes must have.
@@ -83,8 +63,11 @@ export type AppContext<TVariables extends BaseVariables = BaseVariables> = Conte
   Variables: TVariables;
 }>;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyCtx = Context<any>;
+
 export async function requireSpaceAccess(
-  c: AnyAppContext,
+  c: AnyCtx,
   spaceId: string,
   userId: string,
   roles?: Array<'owner' | 'admin' | 'editor' | 'viewer'>,
@@ -93,12 +76,12 @@ export async function requireSpaceAccess(
 ) {
   const access = await checkSpaceAccess(c.env.DB, spaceId, userId, roles);
   if (!access) {
-    return errorResponse(c, status, message);
+    throw new AppError(message, ErrorCodes.NOT_FOUND, status);
   }
   return access;
 }
 
-export function getRequestedSpaceIdentifier(c: AnyAppContext): string | null {
+export function getRequestedSpaceIdentifier(c: AnyCtx): string | null {
   const value = c.req.header('X-Takos-Space-Id');
   if (!value) return null;
   const trimmed = value.trim();
@@ -106,12 +89,11 @@ export function getRequestedSpaceIdentifier(c: AnyAppContext): string | null {
 }
 
 export function requireTenantSource(
-  c: AnyAppContext,
+  c: AnyCtx,
   message = 'Storage not configured',
-  status = 500
 ) {
   if (!c.env.TENANT_SOURCE) {
-    return errorResponse(c, status, message);
+    throw new InternalError(message);
   }
   return c.env.TENANT_SOURCE;
 }
@@ -128,10 +110,10 @@ export function parseOffset(value: string | undefined, fallback = 0): number {
   return parsed;
 }
 
-export async function parseJsonBody<T>(c: AnyAppContext, fallback: T): Promise<T>;
-export async function parseJsonBody<T>(c: AnyAppContext, fallback?: T | null): Promise<T | null>;
+export async function parseJsonBody<T>(c: AnyCtx, fallback: T): Promise<T>;
+export async function parseJsonBody<T>(c: AnyCtx, fallback?: T | null): Promise<T | null>;
 export async function parseJsonBody<T>(
-  c: AnyAppContext,
+  c: AnyCtx,
   fallback: T | null = null
 ): Promise<T | null> {
   try {

@@ -2,11 +2,10 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Env, User } from '../../shared/types';
 import {
-  badRequest,
   getRequestedSpaceIdentifier,
-  notFound,
   requireSpaceAccess,
 } from './shared/route-auth';
+import { BadRequestError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 import {
   ALLOWED_SHORTCUT_RESOURCE_TYPES,
@@ -81,12 +80,11 @@ const addGroupItemSchema = z.object({
 type ShortcutContext = Context<{ Bindings: Env; Variables: { user: User } }>;
 
 // Helper to resolve space context. Header-based space selection must pass membership checks.
-async function getSpaceId(c: ShortcutContext): Promise<string | Response> {
+async function getSpaceId(c: ShortcutContext): Promise<string> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c);
   if (spaceIdentifier) {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
     return access.space.id;
   }
   // Default to user's own account
@@ -101,7 +99,6 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
   .get('/', async (c) => {
     const user = c.get('user');
     const spaceId = await getSpaceId(c);
-    if (spaceId instanceof Response) return spaceId;
     const results = await listShortcuts(c.env.DB, user.id, spaceId);
     return c.json({ shortcuts: results });
   })
@@ -112,7 +109,6 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     async (c) => {
     const user = c.get('user');
     const spaceId = await getSpaceId(c);
-    if (spaceId instanceof Response) return spaceId;
 
     const body = c.req.valid('json') as {
       name: string;
@@ -122,22 +118,22 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     };
 
     if (!body.name || !body.resourceType || !body.resourceId) {
-      return badRequest(c, 'Name, resourceType, and resourceId are required');
+      throw new BadRequestError( 'Name, resourceType, and resourceId are required');
     }
 
     if (!isShortcutResourceType(body.resourceType)) {
-      return badRequest(c, `Invalid resourceType. Allowed values: ${ALLOWED_SHORTCUT_RESOURCE_TYPES.join(', ')}`);
+      throw new BadRequestError( `Invalid resourceType. Allowed values: ${ALLOWED_SHORTCUT_RESOURCE_TYPES.join(', ')}`);
     }
 
     if (body.resourceType === 'link') {
       try {
         const u = new URL(body.resourceId);
         if (!['http:', 'https:'].includes(u.protocol)) {
-          return badRequest(c, 'Invalid URL scheme. Only http and https are allowed.');
+          throw new BadRequestError( 'Invalid URL scheme. Only http and https are allowed.');
         }
       } catch {
         // URL constructor throws on malformed input
-        return badRequest(c, 'Invalid URL');
+        throw new BadRequestError( 'Invalid URL');
       }
     }
 
@@ -151,14 +147,13 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     async (c) => {
     const user = c.get('user');
     const spaceId = await getSpaceId(c);
-    if (spaceId instanceof Response) return spaceId;
     const id = c.req.param('id');
 
     const body = c.req.valid('json');
 
     const updated = await updateShortcut(c.env.DB, user.id, spaceId, id, body);
     if (!updated) {
-      return badRequest(c, 'No fields to update');
+      throw new BadRequestError( 'No fields to update');
     }
 
     return c.json({ success: true });
@@ -168,7 +163,6 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
   .delete('/:id', async (c) => {
     const user = c.get('user');
     const spaceId = await getSpaceId(c);
-    if (spaceId instanceof Response) return spaceId;
     const id = c.req.param('id');
 
     await deleteShortcut(c.env.DB, user.id, spaceId, id);
@@ -182,7 +176,6 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     async (c) => {
     const user = c.get('user');
     const spaceId = await getSpaceId(c);
-    if (spaceId instanceof Response) return spaceId;
 
     const body = c.req.valid('json');
 
@@ -214,8 +207,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id);
 
     const groups = await listShortcutGroups(c.env.DB, access.space.id);
 
@@ -229,13 +221,12 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
 
     const body = c.req.valid('json');
 
     if (!body.name) {
-      return badRequest(c, 'name is required');
+      throw new BadRequestError( 'name is required');
     }
 
     const group = await createShortcutGroup(c.env.DB, access.space.id, {
@@ -252,13 +243,12 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId, groupId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id);
 
     const group = await getShortcutGroup(c.env.DB, access.space.id, groupId);
 
     if (!group) {
-      return notFound(c, 'Shortcut group');
+      throw new NotFoundError( 'Shortcut group');
     }
 
     return c.json({ data: group });
@@ -271,8 +261,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId, groupId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
 
     const body = c.req.valid('json');
 
@@ -283,7 +272,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     });
 
     if (!group) {
-      return notFound(c, 'Shortcut group (or managed by app deployment)');
+      throw new NotFoundError( 'Shortcut group (or managed by app deployment)');
     }
 
     return c.json({ data: group });
@@ -294,13 +283,12 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId, groupId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
 
     const deleted = await deleteShortcutGroup(c.env.DB, access.space.id, groupId);
 
     if (!deleted) {
-      return notFound(c, 'Shortcut group (or managed by app deployment)');
+      throw new NotFoundError( 'Shortcut group (or managed by app deployment)');
     }
 
     return c.json({ success: true });
@@ -313,19 +301,18 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId, groupId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
 
     const body = c.req.valid('json');
 
     if (!body.type || !body.label) {
-      return badRequest(c, 'type and label are required');
+      throw new BadRequestError( 'type and label are required');
     }
 
     const item = await addItemToGroup(c.env.DB, access.space.id, groupId, body as Omit<ShortcutItem, 'id'>);
 
     if (!item) {
-      return notFound(c, 'Shortcut group (or managed by app deployment)');
+      throw new NotFoundError( 'Shortcut group (or managed by app deployment)');
     }
 
     return c.json({ data: item }, 201);
@@ -336,13 +323,12 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const { spaceId, groupId, itemId } = c.req.param();
     const user = c.get('user');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
 
     const removed = await removeItemFromGroup(c.env.DB, access.space.id, groupId, itemId);
 
     if (!removed) {
-      return notFound(c, 'Shortcut group or item (or managed by app deployment)');
+      throw new NotFoundError( 'Shortcut group or item (or managed by app deployment)');
     }
 
     return c.json({ success: true });

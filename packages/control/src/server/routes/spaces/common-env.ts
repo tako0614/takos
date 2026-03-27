@@ -10,8 +10,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id);
 
     try {
       const service = createCommonEnvService(c.env);
@@ -26,8 +25,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
 
     const body = await parseJsonBody<{
       name?: string;
@@ -72,8 +70,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const envName = c.req.param('name');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
 
     try {
       const service = createCommonEnvService(c.env);

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest, parseLimit } from '../shared/route-auth';
+import { parseLimit } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { createDeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
@@ -114,22 +115,22 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   if (isContainerDeploy) {
     if (!body.target?.artifact?.image_ref) {
-      return badRequest(c, 'artifact.image_ref is required for container-image deploys');
+      throw new BadRequestError( 'artifact.image_ref is required for container-image deploys');
     }
     if (body.provider?.name === 'workers-dispatch') {
-      return badRequest(c, 'workers-dispatch provider does not support container-image deploys');
+      throw new BadRequestError( 'workers-dispatch provider does not support container-image deploys');
     }
     if (body.strategy === 'canary') {
-      return badRequest(c, 'canary strategy is not supported for container-image deploys');
+      throw new BadRequestError( 'canary strategy is not supported for container-image deploys');
     }
   } else {
     if (!body.bundle || typeof body.bundle !== 'string' || body.bundle.trim().length === 0) {
-      return badRequest(c, 'bundle is required');
+      throw new BadRequestError( 'bundle is required');
     }
 
     const bundleSizeBytes = new TextEncoder().encode(body.bundle).byteLength;
     if (bundleSizeBytes > MAX_BUNDLE_SIZE_BYTES) {
-      return badRequest(c, `Bundle size (${Math.round(bundleSizeBytes / 1024 / 1024)}MB) exceeds maximum allowed size of 25MB`);
+      throw new BadRequestError( `Bundle size (${Math.round(bundleSizeBytes / 1024 / 1024)}MB) exceeds maximum allowed size of 25MB`);
     }
   }
 

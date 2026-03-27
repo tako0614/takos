@@ -20,7 +20,8 @@ import { accounts, repositories, repoStars, repoReleases, repoReleaseAssets } fr
 import { eq, and, or, desc, asc, like, inArray, sql, count } from 'drizzle-orm';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { badRequest, unauthorized, forbidden, notFound, errorResponse, parseLimit, parseOffset, type AnyAppContext } from '../shared/route-auth';
+import { parseLimit, parseOffset } from '../shared/route-auth';
+import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, AppError, GoneError } from '@takos/common/errors';
 import {
   buildCatalogSuggestions,
   EXPLORE_CATEGORIES,
@@ -44,8 +45,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const filters = parseExploreFilters(c);
-    const filterError = validateExploreFilters(c, filters);
-    if (filterError) return filterError;
+    validateExploreFilters(c, filters);
 
     const response = await listExploreRepos(c.env.DB, {
       sort: c.req.query('sort') || 'stars',
@@ -66,8 +66,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const filters = parseExploreFilters(c);
-    const filterError = validateExploreFilters(c, filters);
-    if (filterError) return filterError;
+    validateExploreFilters(c, filters);
 
     const response = await listTrendingRepos(c.env.DB, {
       limit: parseLimit(c.req.query('limit'), 20, 100),
@@ -85,8 +84,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const filters = parseExploreFilters(c);
-    const filterError = validateExploreFilters(c, filters);
-    if (filterError) return filterError;
+    validateExploreFilters(c, filters);
 
     const response = await listNewRepos(c.env.DB, {
       limit: parseLimit(c.req.query('limit'), 20, 100),
@@ -104,8 +102,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const filters = parseExploreFilters(c);
-    const filterError = validateExploreFilters(c, filters);
-    if (filterError) return filterError;
+    validateExploreFilters(c, filters);
 
     const response = await listRecentRepos(c.env.DB, {
       limit: parseLimit(c.req.query('limit'), 20, 100),
@@ -136,8 +133,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const filters = parseExploreFilters(c);
-    const filterError = validateExploreFilters(c, filters);
-    if (filterError) return filterError;
+    validateExploreFilters(c, filters);
 
     const sortRaw = (c.req.query('sort') || 'trending').trim().toLowerCase();
     const sort = (
@@ -148,7 +144,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       sortRaw === 'downloads'
     ) ? sortRaw : null;
     if (!sort) {
-      return badRequest(c, 'Invalid sort');
+      throw new BadRequestError('Invalid sort');
     }
 
     const typeRaw = (c.req.query('type') || 'all').trim().toLowerCase();
@@ -161,18 +157,18 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       ? normalizedCatalogType
       : null;
     if (!catalogType) {
-      return badRequest(c, 'Invalid type');
+      throw new BadRequestError('Invalid type');
     }
 
     const spaceIdRaw = c.req.query('space_id')?.trim();
     let resolvedSpaceId: string | undefined;
     if (spaceIdRaw) {
       if (!user) {
-        return unauthorized(c, 'Authentication required for space_id');
+        throw new AuthenticationError('Authentication required for space_id');
       }
       const access = await checkSpaceAccess(c.env.DB, spaceIdRaw, user.id);
       if (!access) {
-        return forbidden(c, 'Workspace access denied');
+        throw new AuthorizationError('Workspace access denied');
       }
       resolvedSpaceId = access.space.id;
     }
@@ -185,7 +181,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       .slice(0, 10);
     for (const tag of tags) {
       if (tag.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(tag)) {
-        return badRequest(c, 'Invalid tags (expected comma-separated tag slugs)');
+        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
       }
     }
 
@@ -245,17 +241,17 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
     if (!repo) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     if (repo.visibility !== 'public') {
       if (!user) {
-        return notFound(c, 'Repository');
+        throw new NotFoundError('Repository');
       }
 
       const repoAccess = await checkRepoAccess(c.env, repo.id, user.id);
       if (!repoAccess) {
-        return notFound(c, 'Repository');
+        throw new NotFoundError('Repository');
       }
     }
 
@@ -317,7 +313,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       .get();
 
     if (!result) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     let isStarred = false;
@@ -364,7 +360,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const tagsRaw = c.req.query('tags');
 
     if (category && !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)) {
-      return badRequest(c, 'Invalid category');
+      throw new BadRequestError('Invalid category');
     }
 
     const tags = (tagsRaw || '')
@@ -374,7 +370,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       .slice(0, 10);
     for (const t of tags) {
       if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
-        return badRequest(c, 'Invalid tags (expected comma-separated tag slugs)');
+        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
       }
     }
 
@@ -405,7 +401,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }
 
     if (category && !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)) {
-      return badRequest(c, 'Invalid category');
+      throw new BadRequestError('Invalid category');
     }
 
     const tags = (tagsRaw || '')
@@ -415,7 +411,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       .slice(0, 10);
     for (const t of tags) {
       if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
-        return badRequest(c, 'Invalid tags (expected comma-separated tag slugs)');
+        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
       }
     }
 
@@ -430,7 +426,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
     if (!repo || repo.visibility !== 'public') {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const releaseRows = await db.select().from(repoReleases).where(
@@ -468,7 +464,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }
 
     if (!latestPackage) {
-      return notFound(c, 'Takopack release');
+      throw new NotFoundError('Takopack release');
     }
 
     const rating = await getTakopackRatingSummary(db, repo.id);
@@ -517,7 +513,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
     if (!repo || repo.visibility !== 'public') {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const releaseRows = await db.select().from(repoReleases).where(
@@ -576,7 +572,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       and(eq(repositories.id, repoId), eq(repositories.visibility, 'public'))
     ).get();
     if (!repo) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const rating = await getTakopackRatingSummary(db, repoId);
@@ -590,7 +586,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     });
   })
   .post('/packages/by-repo/:repoId/reviews', async (c) => {
-    return errorResponse(c, 410, 'Bundle reviews are no longer supported');
+    throw new GoneError('Bundle reviews are no longer supported');
   })
   // User/Workspace Discovery API
   .get('/users', withCache({
@@ -659,7 +655,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }).from(accounts).where(eq(accounts.slug, username)).get();
 
     if (!user) {
-      return notFound(c, 'User');
+      throw new NotFoundError('User');
     }
 
     const repos = await db.select({

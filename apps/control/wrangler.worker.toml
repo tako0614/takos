@@ -171,10 +171,6 @@ binding = "BROWSER"
 binding = "RUNTIME_HOST"
 service = "takos-runtime-host"
 
-[[services]]
-binding = "EXECUTOR_HOST"
-service = "takos-executor"
-
 # Secrets (set via wrangler secret put):
 # - CF_API_TOKEN: Cloudflare API token for deployment processing
 # - ENCRYPTION_KEY: Encryption key for deployment processing
@@ -319,6 +315,3 @@ binding = "BROWSER"
 binding = "RUNTIME_HOST"
 service = "takos-runtime-host-staging"
 
-[[env.staging.services]]
-binding = "EXECUTOR_HOST"
-service = "takos-executor-staging"
