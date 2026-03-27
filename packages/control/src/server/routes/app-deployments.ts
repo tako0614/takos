@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { requireWorkspaceAccess, badRequest, notFound, internalError, type BaseVariables } from './shared/helpers';
+import { requireWorkspaceAccess, badRequest, notFound, internalError, type BaseVariables } from './shared/route-auth';
 import { createAppDeploymentService } from '../../application/services/platform/app-deployments';
 import { RolloutService } from '../../application/services/platform/rollout';
 import { zValidator } from './zod-validator';
 import { logError } from '../../shared/utils/logger';
-import { getWorkspaceOperationPolicy } from '../../application/tools/tool-policy';
+import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 const createAppDeploymentSchema = z.object({
   repo_id: z.string().min(1),
@@ -20,11 +20,11 @@ const rollbackSchema = z.object({
   approve_oauth_auto_env: z.boolean().optional(),
 });
 
-const APP_DEPLOYMENT_LIST_ROLES = getWorkspaceOperationPolicy('app_deployment.list').allowed_roles;
-const APP_DEPLOYMENT_GET_ROLES = getWorkspaceOperationPolicy('app_deployment.get').allowed_roles;
-const APP_DEPLOYMENT_DEPLOY_ROLES = getWorkspaceOperationPolicy('app_deployment.deploy_from_repo').allowed_roles;
-const APP_DEPLOYMENT_ROLLBACK_ROLES = getWorkspaceOperationPolicy('app_deployment.rollback').allowed_roles;
-const APP_DEPLOYMENT_REMOVE_ROLES = getWorkspaceOperationPolicy('app_deployment.remove').allowed_roles;
+const APP_DEPLOYMENT_LIST_ROLES = getSpaceOperationPolicy('app_deployment.list').allowed_roles;
+const APP_DEPLOYMENT_GET_ROLES = getSpaceOperationPolicy('app_deployment.get').allowed_roles;
+const APP_DEPLOYMENT_DEPLOY_ROLES = getSpaceOperationPolicy('app_deployment.deploy_from_repo').allowed_roles;
+const APP_DEPLOYMENT_ROLLBACK_ROLES = getSpaceOperationPolicy('app_deployment.rollback').allowed_roles;
+const APP_DEPLOYMENT_REMOVE_ROLES = getSpaceOperationPolicy('app_deployment.remove').allowed_roles;
 
 const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post('/spaces/:spaceId/app-deployments', zValidator('json', createAppDeploymentSchema), async (c) => {
@@ -36,7 +36,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     try {
       const body = c.req.valid('json');
       const service = createAppDeploymentService(c.env);
-      const result = await service.deployFromRepoRef(access.workspace.id, user.id, {
+      const result = await service.deployFromRepoRef(access.space.id, user.id, {
         repoId: body.repo_id,
         ref: body.ref,
         refType: body.ref_type || 'branch',
@@ -58,7 +58,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const service = createAppDeploymentService(c.env);
-      const deployments = await service.list(access.workspace.id);
+      const deployments = await service.list(access.space.id);
       return c.json({ data: deployments });
     } catch (error) {
       logError('App deployment list error', error, { module: 'routes/app-deployments' });
@@ -74,7 +74,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const service = createAppDeploymentService(c.env);
-      const deployment = await service.get(access.workspace.id, appDeploymentId);
+      const deployment = await service.get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
       return c.json({ data: deployment });
     } catch (error) {
@@ -92,7 +92,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     try {
       const body = c.req.valid('json');
       const service = createAppDeploymentService(c.env);
-      const result = await service.rollback(access.workspace.id, user.id, appDeploymentId, {
+      const result = await service.rollback(access.space.id, user.id, appDeploymentId, {
         approveOauthAutoEnv: body.approve_oauth_auto_env === true,
       });
       return c.json({ success: true, data: result });
@@ -127,7 +127,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const rollout = new RolloutService(c.env);
-      const deployment = await createAppDeploymentService(c.env).get(access.workspace.id, appDeploymentId);
+      const deployment = await createAppDeploymentService(c.env).get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
       const hostname = deployment.hostnames?.[0] || '';
       const state = await rollout.pauseRollout(appDeploymentId, hostname);
@@ -147,7 +147,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const rollout = new RolloutService(c.env);
-      const deployment = await createAppDeploymentService(c.env).get(access.workspace.id, appDeploymentId);
+      const deployment = await createAppDeploymentService(c.env).get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
       const hostname = deployment.hostnames?.[0] || '';
       const state = await rollout.resumeRollout(appDeploymentId, hostname);
@@ -167,7 +167,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const rollout = new RolloutService(c.env);
-      const deployment = await createAppDeploymentService(c.env).get(access.workspace.id, appDeploymentId);
+      const deployment = await createAppDeploymentService(c.env).get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
       const hostname = deployment.hostnames?.[0] || '';
       const state = await rollout.abortRollout(appDeploymentId, hostname);
@@ -187,7 +187,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const rollout = new RolloutService(c.env);
-      const deployment = await createAppDeploymentService(c.env).get(access.workspace.id, appDeploymentId);
+      const deployment = await createAppDeploymentService(c.env).get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
       const hostname = deployment.hostnames?.[0] || '';
       const state = await rollout.promoteRollout(appDeploymentId, hostname);
@@ -207,9 +207,9 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const service = createAppDeploymentService(c.env);
-      const deployment = await service.get(access.workspace.id, appDeploymentId);
+      const deployment = await service.get(access.space.id, appDeploymentId);
       if (!deployment) return notFound(c, 'App deployment');
-      await service.remove(access.workspace.id, appDeploymentId);
+      await service.remove(access.space.id, appDeploymentId);
       return c.json({ success: true });
     } catch (error) {
       logError('App deployment delete error', error, { module: 'routes/app-deployments' });

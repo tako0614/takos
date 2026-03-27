@@ -18,8 +18,8 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   };
 });
 
-vi.mock('@/services/source/workspace-storage', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/source/workspace-storage')>();
+vi.mock('@/services/source/space-storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/source/space-storage')>();
   return {
     ...actual,
     createFileRecord: mocks.createFileRecord,
@@ -28,7 +28,7 @@ vi.mock('@/services/source/workspace-storage', async (importOriginal) => {
   };
 });
 
-import storageRoutes from '@/routes/workspaces/storage';
+import storageRoutes from '@/routes/spaces/storage';
 
 function createUser(): User {
   return {

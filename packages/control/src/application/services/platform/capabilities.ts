@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, accounts, accountMemberships } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import type { WorkspaceRole } from '../../../shared/types';
+import type { SpaceRole } from '../../../shared/types';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { resolveActorPrincipalId } from '../identity/principals';
 
@@ -13,6 +13,10 @@ export type StandardCapabilityId =
   | 'egress.http'
   | 'oauth.exchange'
   | 'vectorize.write'
+  | 'queue.write'
+  | 'analytics.write'
+  | 'workflow.invoke'
+  | 'durable_object.use'
   | 'billing.meter';
 
 export interface CapabilityDefinition {
@@ -28,6 +32,10 @@ export const STANDARD_CAPABILITIES: ReadonlyArray<CapabilityDefinition> = [
   { id: 'egress.http', description: 'Outbound HTTP requests to external origins' },
   { id: 'oauth.exchange', description: 'OAuth token exchange / refresh' },
   { id: 'vectorize.write', description: 'Vector DB write (embeddings / indexing)' },
+  { id: 'queue.write', description: 'Queue resource binding and publishing access' },
+  { id: 'analytics.write', description: 'Workers Analytics Engine dataset access' },
+  { id: 'workflow.invoke', description: 'Takos-managed workflow invocation access' },
+  { id: 'durable_object.use', description: 'Durable Object namespace binding access' },
   { id: 'billing.meter', description: 'Usage metering / billing record' },
 ] as const;
 
@@ -82,25 +90,25 @@ export const capabilityRegistry = new CapabilityRegistry();
 
 export type TenantType = 'official' | 'approved' | 'third_party';
 export type SecurityPosture = 'standard' | 'restricted_egress';
-const WORKSPACE_ROLE_ORDER: WorkspaceRole[] = ['viewer', 'editor', 'admin', 'owner'];
+const WORKSPACE_ROLE_ORDER: SpaceRole[] = ['viewer', 'editor', 'admin', 'owner'];
 
 export interface CapabilityPolicyContext {
-  role: WorkspaceRole;
+  role: SpaceRole;
   securityPosture: SecurityPosture;
   tenantType: TenantType;
 }
 
-function normalizeWorkspaceRole(role: WorkspaceRole | null | undefined): WorkspaceRole {
+function normalizeSpaceRole(role: SpaceRole | null | undefined): SpaceRole {
   return role && WORKSPACE_ROLE_ORDER.includes(role) ? role : 'viewer';
 }
 
-function applyWorkspaceRoleFloor(role: WorkspaceRole, minimumRole?: WorkspaceRole): WorkspaceRole {
-  const normalizedRole = normalizeWorkspaceRole(role);
+function applySpaceRoleFloor(role: SpaceRole, minimumRole?: SpaceRole): SpaceRole {
+  const normalizedRole = normalizeSpaceRole(role);
   if (!minimumRole) {
     return normalizedRole;
   }
 
-  const normalizedFloor = normalizeWorkspaceRole(minimumRole);
+  const normalizedFloor = normalizeSpaceRole(minimumRole);
   const currentIndex = WORKSPACE_ROLE_ORDER.indexOf(normalizedRole);
   const floorIndex = WORKSPACE_ROLE_ORDER.indexOf(normalizedFloor);
   return currentIndex >= floorIndex ? normalizedRole : normalizedFloor;
@@ -118,6 +126,10 @@ export function selectAllowedCapabilities(ctx: CapabilityPolicyContext): Set<Sta
     allowed.add('egress.http');
     allowed.add('oauth.exchange');
     allowed.add('vectorize.write');
+    allowed.add('queue.write');
+    allowed.add('analytics.write');
+    allowed.add('workflow.invoke');
+    allowed.add('durable_object.use');
     allowed.add('billing.meter');
   }
 
@@ -128,11 +140,11 @@ export function selectAllowedCapabilities(ctx: CapabilityPolicyContext): Set<Sta
   return allowed;
 }
 
-export async function resolveWorkspaceRole(
+export async function resolveSpaceRole(
   db: D1Database,
   spaceId: string,
   userId: string
-): Promise<WorkspaceRole> {
+): Promise<SpaceRole> {
   const drizzle = getDb(db);
   const principalId = await resolveActorPrincipalId(db, userId);
   if (!principalId) {
@@ -161,14 +173,14 @@ export async function resolveAllowedCapabilities(params: {
   userId: string;
   securityPosture?: SecurityPosture;
   tenantType?: TenantType;
-  minimumRole?: WorkspaceRole;
+  minimumRole?: SpaceRole;
 }): Promise<{
   ctx: CapabilityPolicyContext;
   allowed: Set<StandardCapabilityId>;
 }> {
   const drizzle = getDb(params.db);
-  const resolvedRole = await resolveWorkspaceRole(params.db, params.spaceId, params.userId);
-  const role = applyWorkspaceRoleFloor(resolvedRole, params.minimumRole);
+  const resolvedRole = await resolveSpaceRole(params.db, params.spaceId, params.userId);
+  const role = applySpaceRoleFloor(resolvedRole, params.minimumRole);
   const workspace = await drizzle.select({ securityPosture: accounts.securityPosture })
     .from(accounts)
     .where(eq(accounts.id, params.spaceId))
@@ -206,8 +218,30 @@ export function filterBindingsByCapabilities(params: {
       continue;
     }
 
-    if (binding.type === 'd1' || binding.type === 'kv_namespace' || binding.type === 'r2_bucket') {
+    if (
+      binding.type === 'd1'
+      || binding.type === 'kv_namespace'
+      || binding.type === 'r2_bucket'
+    ) {
       if (params.allowed.has('storage.write')) {
+        allowedBindings.push(binding);
+      } else {
+        deniedBindings.push(binding);
+      }
+      continue;
+    }
+
+    if (binding.type === 'queue') {
+      if (params.allowed.has('queue.write') || params.allowed.has('storage.write')) {
+        allowedBindings.push(binding);
+      } else {
+        deniedBindings.push(binding);
+      }
+      continue;
+    }
+
+    if (binding.type === 'analytics_engine') {
+      if (params.allowed.has('analytics.write') || params.allowed.has('storage.write')) {
         allowedBindings.push(binding);
       } else {
         deniedBindings.push(binding);
@@ -217,6 +251,24 @@ export function filterBindingsByCapabilities(params: {
 
     if (binding.type === 'vectorize') {
       if (params.allowed.has('vectorize.write')) {
+        allowedBindings.push(binding);
+      } else {
+        deniedBindings.push(binding);
+      }
+      continue;
+    }
+
+    if (binding.type === 'workflow') {
+      if (params.allowed.has('workflow.invoke')) {
+        allowedBindings.push(binding);
+      } else {
+        deniedBindings.push(binding);
+      }
+      continue;
+    }
+
+    if (binding.type === 'durable_object_namespace') {
+      if (params.allowed.has('durable_object.use')) {
         allowedBindings.push(binding);
       } else {
         deniedBindings.push(binding);

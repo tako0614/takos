@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, parseLimit, parseOffset } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseLimit, parseOffset } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import type { ReleaseAsset } from '../../../application/services/takopack/types';
@@ -14,7 +14,7 @@ import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { parseManifestOnly } from '../../../application/services/takopack/manifest';
 import { toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { logWarn } from '../../../shared/utils/logger';
-import { forbidden, notFound, conflict, internalError } from '../../../shared/utils/error-response';
+import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takos/common/errors';
 
 const MAX_RELEASE_ASSET_FILENAME_LENGTH = 180;
 
@@ -83,7 +83,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const canSeeDrafts = hasWriteRole(repoAccess.role);
@@ -155,7 +155,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -163,13 +163,13 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   if (releaseData.isDraft) {
     const canSeeDrafts = hasWriteRole(repoAccess.role);
     if (!canSeeDrafts) {
-      return notFound(c, 'Release');
+      throw new NotFoundError('Release');
     }
   }
 
@@ -225,16 +225,16 @@ export default new Hono<AuthenticatedRouteEnv>()
   const db = getDb(c.env.DB);
 
   if (!body.tag) {
-    return badRequest(c, 'Tag is required');
+    throw new BadRequestError('Tag is required');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!hasWriteRole(repoAccess.role)) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const existing = await db.select({ id: repoReleases.id })
@@ -243,7 +243,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (existing) {
-    return conflict(c, 'Release with this tag already exists');
+    throw new ConflictError('Release with this tag already exists');
   }
 
   const releaseId = generateId();
@@ -304,11 +304,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!hasWriteRole(repoAccess.role)) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const existing = await db.select().from(repoReleases)
@@ -316,7 +316,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!existing) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   const updateData: {
@@ -347,7 +347,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   }
 
   if (Object.keys(updateData).length === 1) {
-    return badRequest(c, 'No updates provided');
+    throw new BadRequestError('No updates provided');
   }
 
   await db.update(repoReleases)
@@ -391,11 +391,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!hasWriteRole(repoAccess.role)) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const existing = await db.select({ id: repoReleases.id })
@@ -404,7 +404,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!existing) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   await db.delete(repoReleases)
@@ -419,7 +419,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -432,7 +432,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   const assets = await db.select().from(repoReleaseAssets)
@@ -481,11 +481,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!hasWriteRole(repoAccess.role)) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -493,7 +493,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   const contentType = c.req.header('content-type') || '';
@@ -505,26 +505,26 @@ export default new Hono<AuthenticatedRouteEnv>()
     const file = formData.get('file');
 
     if (!file || typeof file === 'string') {
-      return badRequest(c, 'No file uploaded');
+      throw new BadRequestError('No file uploaded');
     }
 
     // After null/string checks, `file` is a File (Blob with name)
     uploadedFileName = file.name || 'asset';
     fileData = await file.arrayBuffer();
   } else {
-    return badRequest(c, 'Invalid content type. Use multipart/form-data');
+    throw new BadRequestError('Invalid content type. Use multipart/form-data');
   }
 
   if (fileData.byteLength === 0) {
-    return badRequest(c, 'Empty file');
+    throw new BadRequestError('Empty file');
   }
 
   if (fileData.byteLength > 100 * 1024 * 1024) {
-    return badRequest(c, 'File too large. Maximum size is 100MB');
+    throw new BadRequestError('File too large. Maximum size is 100MB');
   }
 
   if (!c.env.GIT_OBJECTS) {
-    return internalError(c, 'Storage not configured');
+    throw new InternalError('Storage not configured');
   }
 
   const fileName = sanitizeReleaseAssetFilename(uploadedFileName);
@@ -633,7 +633,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -641,13 +641,13 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   if (releaseData.isDraft) {
     const canSeeDrafts = hasWriteRole(repoAccess.role);
     if (!canSeeDrafts) {
-      return notFound(c, 'Release');
+      throw new NotFoundError('Release');
     }
   }
 
@@ -660,11 +660,11 @@ export default new Hono<AuthenticatedRouteEnv>()
   const asset = assetRow ? toReleaseAsset(assetRow) : null;
 
   if (!asset) {
-    return notFound(c, 'Asset');
+    throw new NotFoundError('Asset');
   }
 
   if (!c.env.GIT_OBJECTS) {
-    return internalError(c, 'Storage not configured');
+    throw new InternalError('Storage not configured');
   }
 
   await db.update(repoReleaseAssets)
@@ -677,7 +677,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const object = await c.env.GIT_OBJECTS.get(asset.r2_key);
 
   if (!object) {
-    return notFound(c, 'Asset file');
+    throw new NotFoundError('Asset file');
   }
 
   const headers = new Headers();
@@ -698,11 +698,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!hasWriteRole(repoAccess.role)) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -710,7 +710,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   const assetRow = await db.select().from(repoReleaseAssets)
@@ -722,7 +722,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const asset = assetRow ? toReleaseAsset(assetRow) : null;
 
   if (!asset) {
-    return notFound(c, 'Asset');
+    throw new NotFoundError('Asset');
   }
 
   if (c.env.GIT_OBJECTS) {
@@ -744,7 +744,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const releaseData = await db.select().from(repoReleases)
@@ -752,13 +752,13 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!releaseData) {
-    return notFound(c, 'Release');
+    throw new NotFoundError('Release');
   }
 
   if (releaseData.isDraft) {
     const canSeeDrafts = hasWriteRole(repoAccess.role);
     if (!canSeeDrafts) {
-      return notFound(c, 'Release');
+      throw new NotFoundError('Release');
     }
   }
 

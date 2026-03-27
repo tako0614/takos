@@ -14,7 +14,7 @@ import { createInitialState } from './workflow-types';
 import {
   runtimeJson,
   getRunContext,
-  getWorkspaceIdFromRepoId,
+  getSpaceIdFromRepoId,
   markJobSkipped,
 } from './workflow-helpers';
 import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from './workflow-secrets';
@@ -152,9 +152,9 @@ export async function handleWorkflowJob(
       throw new Error('RUNTIME_HOST binding is required for workflow execution');
     }
 
-    state.runtimeWorkspaceId = await getWorkspaceIdFromRepoId(env.DB, repoId);
+    state.runtimeSpaceId = await getSpaceIdFromRepoId(env.DB, repoId);
 
-    await runtimeJson(env, `/actions/jobs/${jobId}/start`, state.runtimeWorkspaceId, {
+    await runtimeJson(env, `/actions/jobs/${jobId}/start`, state.runtimeSpaceId, {
       runId,
       repoId,
       ref,
@@ -179,8 +179,8 @@ export async function handleWorkflowJob(
   } finally {
     if (runtimeConfigured && state.runtimeStarted) {
       try {
-        if (!state.runtimeCancelled && state.runtimeWorkspaceId) {
-          await runtimeJson(env, `/actions/jobs/${jobId}/complete`, state.runtimeWorkspaceId, {
+        if (!state.runtimeCancelled && state.runtimeSpaceId) {
+          await runtimeJson(env, `/actions/jobs/${jobId}/complete`, state.runtimeSpaceId, {
             conclusion: state.completionConclusion ?? state.jobConclusion,
             uploadLogs: false,
           });

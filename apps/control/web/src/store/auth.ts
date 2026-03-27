@@ -1,9 +1,9 @@
 import { atom } from 'jotai';
-import type { User, UserSettings, Workspace } from '../types';
+import type { User, UserSettings, Space } from '../types';
 
 export type AuthState = 'loading' | 'login' | 'authenticated';
 
-export type FetchWorkspacesOptions = {
+export type FetchSpacesOptions = {
   notifyOnError?: boolean;
   throwOnError?: boolean;
 };
@@ -11,8 +11,8 @@ export type FetchWorkspacesOptions = {
 export const authStateAtom = atom<AuthState>('loading');
 export const userAtom = atom<User | null>(null);
 export const userSettingsAtom = atom<UserSettings | null>(null);
-export const workspacesAtom = atom<Workspace[]>([]);
-export const workspacesLoadedAtom = atom<boolean>(false);
+export const spacesAtom = atom<Space[]>([]);
+export const spacesLoadedAtom = atom<boolean>(false);
 
 export function redirectToLogin(returnTo?: string): void {
   const url = new URL('/auth/login', window.location.origin);

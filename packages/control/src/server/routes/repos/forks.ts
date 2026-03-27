@@ -3,8 +3,8 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { Repository } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, conflict, internalError, notFound, requireWorkspaceAccess } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, conflict, internalError, notFound, requireWorkspaceAccess } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { sanitizeRepoName } from './base';
@@ -45,23 +45,23 @@ export default new Hono<AuthenticatedRouteEnv>()
     );
     if (access instanceof Response) return access;
   }
-  const targetWorkspaceId = body.target_space_id || null;
+  const targetSpaceId = body.target_space_id || null;
 
-  let resolvedTargetWorkspaceId: string;
+  let resolvedTargetSpaceId: string;
 
-  if (targetWorkspaceId) {
+  if (targetSpaceId) {
     const targetAccess = await requireWorkspaceAccess(
       c,
-      targetWorkspaceId,
+      targetSpaceId,
       user.id,
       ['owner', 'admin', 'editor'],
       'Target workspace not found or insufficient permissions'
     );
     if (targetAccess instanceof Response) return targetAccess;
-    resolvedTargetWorkspaceId = targetAccess.workspace.id;
+    resolvedTargetSpaceId = targetAccess.space.id;
   } else {
     // Default to user's own account
-    resolvedTargetWorkspaceId = user.id;
+    resolvedTargetSpaceId = user.id;
   }
 
   const forkName = body.name || sourceRepoData.name;
@@ -70,7 +70,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const existing = await db.select({ id: repositories.id })
     .from(repositories)
     .where(and(
-      eq(repositories.accountId, resolvedTargetWorkspaceId),
+      eq(repositories.accountId, resolvedTargetSpaceId),
       eq(repositories.name, sanitizedName),
     ))
     .get();
@@ -79,7 +79,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     return conflict(c, 'Repository with this name already exists in target workspace');
   }
 
-  if (resolvedTargetWorkspaceId === sourceRepoData.accountId && sanitizedName === sourceRepoData.name) {
+  if (resolvedTargetSpaceId === sourceRepoData.accountId && sanitizedName === sourceRepoData.name) {
     return badRequest(c, 'Cannot fork repository to itself');
   }
 
@@ -88,7 +88,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   await db.insert(repositories).values({
     id: forkId,
-    accountId: resolvedTargetWorkspaceId,
+    accountId: resolvedTargetSpaceId,
     name: sanitizedName,
     description: sourceRepoData.description,
     visibility: 'private',

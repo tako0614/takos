@@ -3,12 +3,14 @@ import chalk from 'chalk';
 import { cliExit } from '../lib/command-exit.js';
 import { getConfig, isContainerMode, saveApiUrl } from '../lib/config.js';
 
+const DEFAULT_LOCAL_PORT = 8787;
+
 const ENDPOINT_PRESETS: Readonly<Record<string, string>> = {
   prod: 'https://takos.jp',
   production: 'https://takos.jp',
   staging: 'https://test.takos.jp',
   test: 'https://test.takos.jp',
-  local: 'http://localhost:8787',
+  local: `http://localhost:${DEFAULT_LOCAL_PORT}`,
 };
 
 export function resolveEndpointTarget(target: string): string {

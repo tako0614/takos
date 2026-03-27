@@ -1,9 +1,9 @@
 import type { EcsPlatformDeployProviderConfig } from '../../platform/types.ts';
 
-// Placeholder for ECS deployment provider implementation.
-// Full implementation would use @aws-sdk/client-ecs to:
-// 1. Register new task definition revision
-// 2. Update ECS service to use new task definition
-// 3. Wait for deployment to stabilize
+// ECS deployments are handled via the OCI orchestrator abstraction layer.
+// The createDeploymentProvider() factory in provider.ts routes 'ecs' to the
+// OCI provider which communicates with the oci-orchestrator HTTP API.
+// The orchestrator is responsible for translating deploy requests into
+// ECS-specific operations (task definition revision, service update, etc.).
 
 export type EcsDeploymentConfig = EcsPlatformDeployProviderConfig['config'];

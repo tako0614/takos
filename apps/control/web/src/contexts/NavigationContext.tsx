@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getWorkspaceIdentifier, getPersonalWorkspace, findWorkspaceByIdentifier } from '../lib/workspaces';
+import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useI18n } from '../providers/I18nProvider';
 import { useToast } from '../hooks/useToast';
 import { useConfirmDialog } from '../providers/ConfirmDialogProvider';
-import type { RouteState, Thread, Workspace } from '../types';
+import type { RouteState, Thread, Space } from '../types';
 
 interface NavigationContextValue {
   // Router (single source of truth)
@@ -13,11 +13,11 @@ interface NavigationContextValue {
   navigate: (state: Partial<RouteState>) => void;
   replace: (state: RouteState) => void;
 
-  // Sidebar workspace mode
-  sidebarWorkspace: Workspace | null;
-  setSidebarWorkspace: (ws: Workspace | null) => void;
-  handleEnterWorkspace: (ws: Workspace) => void;
-  handleExitWorkspace: () => void;
+  // Sidebar space mode
+  sidebarSpace: Space | null;
+  setSidebarSpace: (ws: Space | null) => void;
+  handleEnterSpace: (ws: Space) => void;
+  handleExitSpace: () => void;
 
   // Mobile drawer
   showMobileNavDrawer: boolean;
@@ -25,10 +25,10 @@ interface NavigationContextValue {
   mobileNavDrawerId: string;
 
   // Thread state
-  threadsByWorkspace: Record<string, Thread[]>;
-  setThreadsByWorkspace: React.Dispatch<React.SetStateAction<Record<string, Thread[]>>>;
+  threadsBySpace: Record<string, Thread[]>;
+  setThreadsBySpace: React.Dispatch<React.SetStateAction<Record<string, Thread[]>>>;
   allThreads: Thread[];
-  fetchAllThreads: (wsList?: Workspace[]) => Promise<void>;
+  fetchAllThreads: (wsList?: Space[]) => Promise<void>;
   handleNewThread: () => void;
   handleDeleteThread: (threadId: string) => Promise<void>;
   toggleArchiveThread: (thread: Thread) => Promise<void>;
@@ -40,12 +40,12 @@ interface NavigationContextValue {
   replaceToChat: (spaceId?: string) => void;
   navigateToPreferredChat: () => void;
 
-  // Workspace resolution
-  preferredWorkspace: Workspace | undefined;
-  preferredWorkspaceId: string | undefined;
-  routeWorkspaceId: string | undefined;
-  selectedWorkspaceId: string | null;
-  waitingForWorkspaceResolution: boolean;
+  // Space resolution
+  preferredSpace: Space | undefined;
+  preferredSpaceId: string | undefined;
+  routeSpaceId: string | undefined;
+  selectedSpaceId: string | null;
+  waitingForSpaceResolution: boolean;
 
   // Sidebar action wrapper (closes mobile drawer before executing)
   runSidebarAction: (action: () => void | Promise<void>) => void;
@@ -63,51 +63,51 @@ export function useNavigation(): NavigationContextValue {
 
 interface NavigationProviderProps {
   children: ReactNode;
-  workspaces: Workspace[];
-  workspacesLoaded: boolean;
+  spaces: Space[];
+  spacesLoaded: boolean;
   route: RouteState;
   navigate: (state: Partial<RouteState>) => void;
   replace: (state: RouteState) => void;
 }
 
-export function NavigationProvider({ children, workspaces, workspacesLoaded, route, navigate, replace }: NavigationProviderProps) {
+export function NavigationProvider({ children, spaces, spacesLoaded, route, navigate, replace }: NavigationProviderProps) {
   const { t } = useI18n();
   const { isMobile } = useBreakpoint();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [sidebarWorkspace, setSidebarWorkspace] = useState<Workspace | null>(null);
+  const [sidebarSpace, setSidebarSpace] = useState<Space | null>(null);
   const [showMobileNavDrawer, setShowMobileNavDrawer] = useState(false);
   const mobileNavDrawerId = 'mobile-navigation-drawer';
 
-  // Thread state keyed by workspace identifier
-  const [threadsByWorkspace, setThreadsByWorkspace] = useState<Record<string, Thread[]>>({});
+  // Thread state keyed by space identifier
+  const [threadsBySpace, setThreadsBySpace] = useState<Record<string, Thread[]>>({});
   const allThreads = useMemo(
-    () => Object.values(threadsByWorkspace).flat(),
-    [threadsByWorkspace],
+    () => Object.values(threadsBySpace).flat(),
+    [threadsBySpace],
   );
 
-  // Workspace resolution
-  const preferredWorkspace = useMemo(
-    () => getPersonalWorkspace(workspaces, t('personal')) || workspaces[0],
-    [workspaces, t],
+  // Space resolution
+  const preferredSpace = useMemo(
+    () => getPersonalSpace(spaces, t('personal')) || spaces[0],
+    [spaces, t],
   );
 
-  const preferredWorkspaceId = useMemo(
-    () => (preferredWorkspace ? getWorkspaceIdentifier(preferredWorkspace) : undefined),
-    [preferredWorkspace],
+  const preferredSpaceId = useMemo(
+    () => (preferredSpace ? getSpaceIdentifier(preferredSpace) : undefined),
+    [preferredSpace],
   );
 
-  const routeWorkspaceId = useMemo(() => {
+  const routeSpaceId = useMemo(() => {
     if (!route.spaceId) return undefined;
-    const workspace = findWorkspaceByIdentifier(workspaces, route.spaceId, t('personal'));
-    return workspace ? getWorkspaceIdentifier(workspace) : undefined;
-  }, [route.spaceId, workspaces, t]);
+    const space = findSpaceByIdentifier(spaces, route.spaceId, t('personal'));
+    return space ? getSpaceIdentifier(space) : undefined;
+  }, [route.spaceId, spaces, t]);
 
-  const selectedWorkspaceId = route.spaceId
-    ? routeWorkspaceId ?? null
-    : preferredWorkspaceId ?? null;
-  const waitingForWorkspaceResolution = Boolean(route.spaceId) && !routeWorkspaceId && !workspacesLoaded;
+  const selectedSpaceId = route.spaceId
+    ? routeSpaceId ?? null
+    : preferredSpaceId ?? null;
+  const waitingForSpaceResolution = Boolean(route.spaceId) && !routeSpaceId && !spacesLoaded;
 
   // Navigation helpers
   const navigateToChat = useCallback((spaceId?: string, threadId?: string) => {
@@ -131,27 +131,27 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
   }, [replace]);
 
   const navigateToPreferredChat = useCallback(() => {
-    navigateToChat(preferredWorkspaceId);
-  }, [navigateToChat, preferredWorkspaceId]);
+    navigateToChat(preferredSpaceId);
+  }, [navigateToChat, preferredSpaceId]);
 
-  // Sidebar workspace handlers
-  const handleEnterWorkspace = useCallback((ws: Workspace) => {
-    setSidebarWorkspace(ws);
-    navigate({ view: 'chat', spaceId: getWorkspaceIdentifier(ws), threadId: undefined, runId: undefined, messageId: undefined });
+  // Sidebar space handlers
+  const handleEnterSpace = useCallback((ws: Space) => {
+    setSidebarSpace(ws);
+    navigate({ view: 'chat', spaceId: getSpaceIdentifier(ws), threadId: undefined, runId: undefined, messageId: undefined });
   }, [navigate]);
 
-  const handleExitWorkspace = useCallback(() => {
-    setSidebarWorkspace(null);
-    replace({ view: 'apps', spaceId: preferredWorkspaceId });
-  }, [replace, preferredWorkspaceId]);
+  const handleExitSpace = useCallback(() => {
+    setSidebarSpace(null);
+    replace({ view: 'apps', spaceId: preferredSpaceId });
+  }, [replace, preferredSpaceId]);
 
   // Thread fetching
-  const fetchAllThreads = useCallback(async (wsList?: Workspace[]) => {
-    const list = wsList ?? workspaces;
+  const fetchAllThreads = useCallback(async (wsList?: Space[]) => {
+    const list = wsList ?? spaces;
     if (list.length === 0) return;
     const entries = await Promise.all(
       list.map(async (ws) => {
-        const identifier = getWorkspaceIdentifier(ws);
+        const identifier = getSpaceIdentifier(ws);
         try {
           const res = await rpc.spaces[':spaceId'].threads.$get({
             param: { spaceId: identifier },
@@ -164,14 +164,14 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
         }
       }),
     );
-    setThreadsByWorkspace(Object.fromEntries(entries));
-  }, [workspaces]);
+    setThreadsBySpace(Object.fromEntries(entries));
+  }, [spaces]);
 
   // Thread CRUD
   const handleNewThread = useCallback(() => {
-    if (!preferredWorkspaceId) return;
-    navigateToChat(preferredWorkspaceId);
-  }, [preferredWorkspaceId, navigateToChat]);
+    if (!preferredSpaceId) return;
+    navigateToChat(preferredSpaceId);
+  }, [preferredSpaceId, navigateToChat]);
 
   const handleDeleteThread = useCallback(async (threadId: string) => {
     const confirmed = await confirm({
@@ -185,7 +185,7 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
     try {
       const res = await rpc.threads[':id'].$delete({ param: { id: threadId } });
       await rpcJson(res);
-      setThreadsByWorkspace((prev) => {
+      setThreadsBySpace((prev) => {
         const next: Record<string, Thread[]> = {};
         for (const key of Object.keys(prev)) {
           next[key] = prev[key].filter((th) => th.id !== threadId);
@@ -193,13 +193,13 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
         return next;
       });
       if (route.threadId === threadId) {
-        navigateToChat(selectedWorkspaceId ?? undefined);
+        navigateToChat(selectedSpaceId ?? undefined);
       }
       showToast('success', t('deleted'));
     } catch {
       showToast('error', t('failedToDelete'));
     }
-  }, [confirm, t, showToast, route.threadId, selectedWorkspaceId, navigateToChat]);
+  }, [confirm, t, showToast, route.threadId, selectedSpaceId, navigateToChat]);
 
   const toggleArchiveThread = useCallback(async (thread: Thread) => {
     try {
@@ -217,21 +217,21 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
   }, [fetchAllThreads, showToast, t]);
 
   const handleNewThreadCreated = useCallback((spaceId: string, thread: Thread) => {
-    setThreadsByWorkspace((prev) => ({
+    setThreadsBySpace((prev) => ({
       ...prev,
       [spaceId]: [thread, ...(prev[spaceId] ?? [])],
     }));
   }, []);
 
   const handleSelectThread = useCallback((thread: Thread) => {
-    for (const [wsId, wsThreads] of Object.entries(threadsByWorkspace)) {
-      if (wsThreads.some((t) => t.id === thread.id)) {
-        navigateToChat(wsId, thread.id);
+    for (const [spId, spThreads] of Object.entries(threadsBySpace)) {
+      if (spThreads.some((t) => t.id === thread.id)) {
+        navigateToChat(spId, thread.id);
         return;
       }
     }
-    navigateToChat(selectedWorkspaceId ?? undefined, thread.id);
-  }, [threadsByWorkspace, selectedWorkspaceId, navigateToChat]);
+    navigateToChat(selectedSpaceId ?? undefined, thread.id);
+  }, [threadsBySpace, selectedSpaceId, navigateToChat]);
 
   // Sidebar action wrapper
   const runSidebarAction = useCallback((action: () => void | Promise<void>) => {
@@ -241,14 +241,14 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
     void action();
   }, [isMobile]);
 
-  // Sync threads when workspaces change
+  // Sync threads when spaces change
   useEffect(() => {
-    if (workspaces.length === 0) {
-      setThreadsByWorkspace((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    if (spaces.length === 0) {
+      setThreadsBySpace((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
-    void fetchAllThreads(workspaces);
-  }, [workspaces, fetchAllThreads]);
+    void fetchAllThreads(spaces);
+  }, [spaces, fetchAllThreads]);
 
   // Close mobile drawer when switching to desktop
   useEffect(() => {
@@ -267,15 +267,15 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
     route,
     navigate,
     replace,
-    sidebarWorkspace,
-    setSidebarWorkspace,
-    handleEnterWorkspace,
-    handleExitWorkspace,
+    sidebarSpace,
+    setSidebarSpace,
+    handleEnterSpace,
+    handleExitSpace,
     showMobileNavDrawer,
     setShowMobileNavDrawer,
     mobileNavDrawerId,
-    threadsByWorkspace,
-    setThreadsByWorkspace,
+    threadsBySpace,
+    setThreadsBySpace,
     allThreads,
     fetchAllThreads,
     handleNewThread,
@@ -286,22 +286,22 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
     navigateToChat,
     replaceToChat,
     navigateToPreferredChat,
-    preferredWorkspace,
-    preferredWorkspaceId,
-    routeWorkspaceId,
-    selectedWorkspaceId,
-    waitingForWorkspaceResolution,
+    preferredSpace,
+    preferredSpaceId,
+    routeSpaceId,
+    selectedSpaceId,
+    waitingForSpaceResolution,
     runSidebarAction,
   }), [
     route,
     navigate,
     replace,
-    sidebarWorkspace,
-    handleEnterWorkspace,
-    handleExitWorkspace,
+    sidebarSpace,
+    handleEnterSpace,
+    handleExitSpace,
     showMobileNavDrawer,
     mobileNavDrawerId,
-    threadsByWorkspace,
+    threadsBySpace,
     allThreads,
     fetchAllThreads,
     handleNewThread,
@@ -312,11 +312,11 @@ export function NavigationProvider({ children, workspaces, workspacesLoaded, rou
     navigateToChat,
     replaceToChat,
     navigateToPreferredChat,
-    preferredWorkspace,
-    preferredWorkspaceId,
-    routeWorkspaceId,
-    selectedWorkspaceId,
-    waitingForWorkspaceResolution,
+    preferredSpace,
+    preferredSpaceId,
+    routeSpaceId,
+    selectedSpaceId,
+    waitingForSpaceResolution,
     runSidebarAction,
   ]);
 

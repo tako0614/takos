@@ -2,7 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
 const MAX_RUN_NESTING_DEPTH = 5;
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { getRunHierarchyNode, getWorkspaceModel } from './create-thread-run-store';
+import { getRunHierarchyNode, getSpaceModel } from './create-thread-run-store';
 import { logWarn } from '../../../shared/utils/logger';
 
 export async function validateParentRunId(
@@ -82,7 +82,7 @@ export async function resolveRunModel(
   spaceId: string,
   requestedModel: string | undefined,
 ): Promise<string> {
-  const workspaceModel = await getWorkspaceModel(db, spaceId);
-  const resolvedModel = requestedModel || workspaceModel?.aiModel || DEFAULT_MODEL_ID;
+  const spaceModel = await getSpaceModel(db, spaceId);
+  const resolvedModel = requestedModel || spaceModel?.aiModel || DEFAULT_MODEL_ID;
   return validateModel(resolvedModel);
 }

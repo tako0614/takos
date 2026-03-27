@@ -62,7 +62,7 @@ describe('toApiDeployment', () => {
       routingWeight: 100,
       deployedBy: 'user-1',
       deployMessage: 'Fix bug',
-      providerName: 'cloudflare',
+      providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
       idempotencyKey: 'idem-1',
@@ -92,7 +92,7 @@ describe('toApiDeployment', () => {
     expect(result.routing_weight).toBe(100);
     expect(result.deployed_by).toBe('user-1');
     expect(result.deploy_message).toBe('Fix bug');
-    expect(result.provider_name).toBe('cloudflare');
+    expect(result.provider_name).toBe('workers-dispatch');
     expect(result.idempotency_key).toBe('idem-1');
     expect(result.is_rollback).toBe(false);
   });
@@ -121,7 +121,7 @@ describe('toApiDeployment', () => {
       routingWeight: 100,
       deployedBy: null,
       deployMessage: null,
-      providerName: 'cloudflare',
+      providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
       idempotencyKey: null,
@@ -192,7 +192,7 @@ describe('getDeploymentHistory', () => {
         routingWeight: 100,
         deployedBy: null,
         deployMessage: null,
-        providerName: 'cloudflare',
+        providerName: 'workers-dispatch',
         targetJson: '{}',
         providerStateJson: '{}',
         idempotencyKey: null,

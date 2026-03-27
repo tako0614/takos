@@ -4,10 +4,10 @@ import { eq, and } from 'drizzle-orm';
 import { createSession } from '../../../application/services/identity/session';
 import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../shared/helpers';
+import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { validateCliCallbackUrl } from './utils';
 import { escapeHtml, errorPage, warningPage } from './html';
-import { badRequest, forbidden } from '../../../shared/utils/error-response';
+import { BadRequestError } from '@takos/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
 
 const CLI_STATE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -87,20 +87,20 @@ authCliRouter.get('/cli', async (c) => {
   const cliState = typeof cliStateRaw === 'string' ? cliStateRaw.trim() : '';
 
   if (!callbackUrl) {
-    return badRequest(c, 'Missing callback URL');
+    throw new BadRequestError('Missing callback URL');
   }
 
   if (cliState && !CLI_STATE_PATTERN.test(cliState)) {
-    return badRequest(c, 'Invalid CLI state');
+    throw new BadRequestError('Invalid CLI state');
   }
 
   const validation = validateCliCallbackUrl(callbackUrl);
   if (!validation.valid) {
-    return badRequest(c, validation.error!);
+    throw new BadRequestError(validation.error!);
   }
 
   if (!dbBinding || !config.googleClientId) {
-    return badRequest(c, 'CLI auth is not configured');
+    throw new BadRequestError('CLI auth is not configured');
   }
 
   const redirectUri = `https://${config.adminDomain}/auth/cli/callback`;

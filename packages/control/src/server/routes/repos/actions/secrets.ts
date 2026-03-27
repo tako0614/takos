@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import { badRequest, parseJsonBody } from '../../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../../shared/helpers';
+import { badRequest, parseJsonBody } from '../../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import { getDb } from '../../../../infra/db';
 import { workflowSecrets } from '../../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { encrypt, generateId, now } from '../../../../shared/utils';
-import { notFound, internalError } from '../../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/secrets', async (c) => {
@@ -16,7 +16,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, ['owner', 'admin']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const secrets = await db.select({
@@ -50,7 +50,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
@@ -64,7 +64,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const encryptionKey = c.env.ENCRYPTION_KEY;
     if (!encryptionKey) {
-      return internalError(c, 'Encryption not configured');
+      throw new InternalError('Encryption not configured');
     }
 
     const encryptedValue = JSON.stringify(await encrypt(body.value, encryptionKey, `secret:${repoId}:${name}`));
@@ -100,6 +100,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           updatedAt: timestamp,
         });
       } catch {
+        // Insert failed (unique constraint) -- update existing secret instead
         await db.update(workflowSecrets)
           .set({
             encryptedValue,
@@ -126,7 +127,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const result = await db.delete(workflowSecrets)
@@ -137,7 +138,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .returning();
 
     if (result.length === 0) {
-      return notFound(c, 'Secret');
+      throw new NotFoundError('Secret');
     }
 
     return c.json({ deleted: true });

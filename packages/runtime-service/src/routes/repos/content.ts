@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { runGitCommand } from '../../runtime/git.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import {
   getVerifiedRepoPath,
   validateRef,

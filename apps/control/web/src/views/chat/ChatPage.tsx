@@ -8,31 +8,31 @@ import { useToast } from '../../hooks/useToast';
 import { useMobileHeader } from '../../contexts/MobileHeaderContext';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { DEFAULT_MODEL_ID, getTierFromModel } from '../../lib/modelCatalog';
-import { getPersonalWorkspace, getWorkspaceIdentifier, findWorkspaceByIdentifier } from '../../lib/workspaces';
-import type { Thread, UserSettings, Workspace } from '../../types';
-import { WelcomeView } from '../app/workspace/WelcomeView';
+import { getPersonalSpace, getSpaceIdentifier, findSpaceByIdentifier } from '../../lib/spaces';
+import type { Thread, UserSettings, Space } from '../../types';
+import { WelcomeView } from '../app/space/WelcomeView';
 
 interface ChatPageProps {
-  workspaces: Workspace[];
+  spaces: Space[];
   userSettings: UserSettings | null;
-  initialWorkspaceId?: string;
+  initialSpaceId?: string;
   initialThreadId?: string;
   initialRunId?: string;
   initialMessageId?: string;
-  onWorkspaceChange?: (spaceId: string) => void;
+  onSpaceChange?: (spaceId: string) => void;
   onThreadChange?: (threadId: string | undefined) => void;
   onUpdateThread?: (threadId: string, updates: Partial<Thread>) => void;
   onNewThreadCreated?: (spaceId: string, thread: Thread) => void;
 }
 
 export function ChatPage({
-  workspaces,
+  spaces,
   userSettings,
-  initialWorkspaceId,
+  initialSpaceId,
   initialThreadId,
   initialRunId,
   initialMessageId,
-  onWorkspaceChange,
+  onSpaceChange,
   onThreadChange,
   onUpdateThread,
   onNewThreadCreated,
@@ -41,19 +41,19 @@ export function ChatPage({
   const { showToast } = useToast();
   const { setHeaderContent } = useMobileHeader();
 
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
-    initialWorkspaceId || null
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
+    initialSpaceId || null
   );
 
   // Model state for WelcomeView header
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
 
-  const selectedWorkspace = useMemo(() => {
-    if (selectedWorkspaceId) {
-      return findWorkspaceByIdentifier(workspaces, selectedWorkspaceId, t('personal'));
+  const selectedSpace = useMemo(() => {
+    if (selectedSpaceId) {
+      return findSpaceByIdentifier(spaces, selectedSpaceId, t('personal'));
     }
     return null;
-  }, [workspaces, selectedWorkspaceId, t]);
+  }, [spaces, selectedSpaceId, t]);
 
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -64,21 +64,21 @@ export function ChatPage({
   const [focusRunId, setFocusRunId] = useState<string | null>(initialRunId ?? null);
 
   useEffect(() => {
-    if (workspaces.length > 0 && !selectedWorkspaceId) {
-      const ws = getPersonalWorkspace(workspaces, t('personal')) || workspaces[0];
-      const identifier = getWorkspaceIdentifier(ws);
-      setSelectedWorkspaceId(identifier);
-      onWorkspaceChange?.(identifier);
+    if (spaces.length > 0 && !selectedSpaceId) {
+      const ws = getPersonalSpace(spaces, t('personal')) || spaces[0];
+      const identifier = getSpaceIdentifier(ws);
+      setSelectedSpaceId(identifier);
+      onSpaceChange?.(identifier);
     }
-  }, [workspaces, selectedWorkspaceId, t, onWorkspaceChange]);
+  }, [spaces, selectedSpaceId, t, onSpaceChange]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId) return;
+    if (!selectedSpaceId) return;
     let cancelled = false;
     const fetchModel = async () => {
       try {
         const res = await rpc.spaces[':spaceId'].model.$get({
-          param: { spaceId: selectedWorkspaceId },
+          param: { spaceId: selectedSpaceId },
         });
         const data = await rpcJson<{ ai_model?: string; model?: string }>(res);
         if (cancelled) return;
@@ -90,7 +90,7 @@ export function ChatPage({
     };
     fetchModel();
     return () => { cancelled = true; };
-  }, [selectedWorkspaceId]);
+  }, [selectedSpaceId]);
 
   // WelcomeView表示時のみモバイルヘッダーにモデル切り替えを注入（スレッドがあるときはChatViewが担当）
   useEffect(() => {
@@ -101,10 +101,10 @@ export function ChatPage({
         isLoading={false}
         onTierChange={async (model) => {
           setSelectedModel(model);
-          if (selectedWorkspaceId) {
+          if (selectedSpaceId) {
             try {
               const res = await rpc.spaces[':spaceId'].model.$patch({
-                param: { spaceId: selectedWorkspaceId },
+                param: { spaceId: selectedSpaceId },
                 json: { tier: getTierFromModel(model) } as Record<string, string>,
               });
               await rpcJson(res);
@@ -116,7 +116,7 @@ export function ChatPage({
       />
     );
     return () => setHeaderContent(null);
-  }, [selectedThread, selectedModel, selectedWorkspaceId, setHeaderContent]);
+  }, [selectedThread, selectedModel, selectedSpaceId, setHeaderContent]);
 
   useEffect(() => {
     if (initialThreadId) {
@@ -160,15 +160,15 @@ export function ChatPage({
 
   // Called by WelcomeView when user sends a message
   const handleCreateThread = useCallback(async (message: string, files?: File[]) => {
-    if (!selectedWorkspaceId) return;
+    if (!selectedSpaceId) return;
     try {
       const res = await rpc.spaces[':spaceId'].threads.$post({
-        param: { spaceId: selectedWorkspaceId },
+        param: { spaceId: selectedSpaceId },
         json: { title: message.slice(0, 60), locale: lang },
       });
       const data = await rpcJson<{ thread: Thread }>(res);
       const thread = data.thread;
-      onNewThreadCreated?.(selectedWorkspaceId, thread);
+      onNewThreadCreated?.(selectedSpaceId, thread);
       setSelectedThread(thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
@@ -176,15 +176,15 @@ export function ChatPage({
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('failedToCreate'));
     }
-  }, [lang, selectedWorkspaceId, onNewThreadCreated, onThreadChange, showToast, t]);
+  }, [lang, selectedSpaceId, onNewThreadCreated, onThreadChange, showToast, t]);
 
   return (
     <div className="flex flex-1 h-full bg-white dark:bg-zinc-900">
       <main className="flex-1 flex flex-col min-w-0 h-full">
-        {selectedThread && selectedWorkspace ? (
+        {selectedThread && selectedSpace ? (
           <ChatView
             thread={selectedThread}
-            spaceId={getWorkspaceIdentifier(selectedWorkspace)}
+            spaceId={getSpaceIdentifier(selectedSpace)}
             userSettings={userSettings}
             jumpToMessageId={jumpToMessageId}
             jumpToMessageSequence={jumpToMessageSequence}
@@ -196,7 +196,7 @@ export function ChatPage({
             onRunFocusHandled={() => {
               setFocusRunId(null);
             }}
-            onOpenSearch={selectedWorkspaceId ? () => setShowSearchModal(true) : undefined}
+            onOpenSearch={selectedSpaceId ? () => setShowSearchModal(true) : undefined}
             initialMessage={pendingMessage ?? undefined}
             initialFiles={pendingFiles ?? undefined}
             onInitialMessageSent={() => { setPendingMessage(null); setPendingFiles(null); }}
@@ -207,17 +207,17 @@ export function ChatPage({
               }
             }}
           />
-        ) : selectedWorkspace ? (
+        ) : selectedSpace ? (
           <>
             <ChatHeader
               selectedModel={selectedModel}
               isLoading={false}
               onTierChange={async (model) => {
                 setSelectedModel(model);
-                if (selectedWorkspaceId) {
+                if (selectedSpaceId) {
                   try {
                     const res = await rpc.spaces[':spaceId'].model.$patch({
-                      param: { spaceId: selectedWorkspaceId },
+                      param: { spaceId: selectedSpaceId },
                       json: { tier: getTierFromModel(model) } as Record<string, string>,
                     });
                     await rpcJson(res);
@@ -228,23 +228,23 @@ export function ChatPage({
               }}
             />
             <WelcomeView
-              workspace={selectedWorkspace}
+              space={selectedSpace}
               onNewChat={() => {
-                onWorkspaceChange?.(getWorkspaceIdentifier(selectedWorkspace));
+                onSpaceChange?.(getSpaceIdentifier(selectedSpace));
               }}
               onCreateThread={handleCreateThread}
             />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
-            <p>{t('selectWorkspaceToChat')}</p>
+            <p>{t('selectSpaceToChat')}</p>
           </div>
         )}
       </main>
 
-      {showSearchModal && selectedWorkspaceId && (
+      {showSearchModal && selectedSpaceId && (
         <ChatSearchModal
-          spaceId={selectedWorkspaceId}
+          spaceId={selectedSpaceId}
           onSelectResult={openSearchResult}
           onClose={() => setShowSearchModal(false)}
         />

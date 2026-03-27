@@ -7,7 +7,7 @@ import { type ActionContext } from '../executor.js';
 import { pushLog } from '../../logging.js';
 import { s3Client, isR2Configured } from '../../../storage/r2.js';
 import { R2_BUCKET } from '../../../shared/config.js';
-import { getErrorMessage } from '../../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { parseTarEntriesFromGzipArchive } from './tar-parser.js';
 
 function toStringArray(value: string | string[]): string[] {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createCloudflareDeploymentProvider,
+  createWorkersDispatchDeploymentProvider,
   createDeploymentProvider,
   createOciDeploymentProvider,
   parseDeploymentTargetConfig,
@@ -43,12 +43,12 @@ describe('deployment provider helpers', () => {
 
   it('returns a cloudflare default provider when config is absent', () => {
     expect(serializeDeploymentTarget(undefined)).toEqual({
-      providerName: 'cloudflare',
+      providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
     });
     expect(parseDeploymentTargetConfig({
-      provider_name: 'cloudflare',
+      provider_name: 'workers-dispatch',
       target_json: '{}',
     })).toEqual({});
   });
@@ -59,7 +59,7 @@ describe('deployment provider helpers', () => {
       createWorkerWithWasm: vi.fn().mockResolvedValue(undefined),
       workerExists: vi.fn().mockResolvedValue(true),
     };
-    const provider = createCloudflareDeploymentProvider(wfp as never);
+    const provider = createWorkersDispatchDeploymentProvider(wfp as never);
 
     await provider.deploy({
       deployment: {} as never,
@@ -95,7 +95,7 @@ describe('deployment provider helpers', () => {
           return {
             name: 'oci',
             config: {
-              orchestratorUrl: 'https://orchestrator.example.test/deploy',
+              orchestratorUrl: 'https://orchestrator.example.test',
               orchestratorToken: 'registry-token',
             },
           };
@@ -158,7 +158,7 @@ describe('deployment provider helpers', () => {
         },
       }),
     }, {
-      orchestratorUrl: 'https://orchestrator.example.test/deploy',
+      orchestratorUrl: 'https://orchestrator.example.test',
       orchestratorToken: 'secret-token',
       fetchImpl,
     });
@@ -198,6 +198,7 @@ describe('deployment provider helpers', () => {
         artifact: {
           image_ref: 'ghcr.io/takos/worker:latest',
           exposed_port: 8080,
+          health_path: '/health',
         },
       },
       runtime: {
@@ -219,7 +220,7 @@ describe('deployment provider helpers', () => {
         },
       }),
     }, {
-      orchestratorUrl: 'https://orchestrator.example.test/deploy',
+      orchestratorUrl: 'https://orchestrator.example.test',
       fetchImpl,
     });
 

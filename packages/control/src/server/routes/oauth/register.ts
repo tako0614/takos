@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { ClientRegistrationRequest } from '../../../shared/types/oauth';
 import { safeJsonParseOrDefault, extractBearerToken } from '../../../shared/utils';
-import { parseJsonBody } from '../shared/helpers';
+import { parseJsonBody } from '../shared/route-auth';
 import {
   createClient,
   deleteClient,
@@ -11,7 +11,7 @@ import {
 } from '../../../application/services/oauth/client';
 import { isAccessTokenValid, verifyAccessToken } from '../../../application/services/oauth/token';
 import { tryLogOAuthEvent } from './helpers';
-import type { PublicRouteEnv } from '../shared/helpers';
+import type { PublicRouteEnv } from '../shared/route-auth';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 
 const oauthRegister = new Hono<PublicRouteEnv>();

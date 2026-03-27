@@ -22,12 +22,12 @@ import {
   refreshMcpToken,
 } from '../../application/services/platform/mcp';
 import { McpClient } from '../../application/tools/mcp-client';
-import { notFound, unauthorized, requireWorkspaceAccess } from './shared/helpers';
+import { requireWorkspaceAccess } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { escapeHtml } from './auth/html';
 import { logError } from '../../shared/utils/logger';
-import { badRequest, internalError, badGateway, gatewayTimeout } from '../../shared/utils/error-response';
-import { getWorkspaceOperationPolicy } from '../../application/tools/tool-policy';
+import { AuthenticationError, BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from '@takos/common/errors';
+import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -48,10 +48,10 @@ type McpRouteEnv = { Bindings: Env; Variables: { user?: { id: string } } };
 
 const mcpRoutes = new Hono<McpRouteEnv>();
 
-const MCP_LIST_ROLES = getWorkspaceOperationPolicy('mcp_server.list').allowed_roles;
-const MCP_CREATE_ROLES = getWorkspaceOperationPolicy('mcp_server.create').allowed_roles;
-const MCP_UPDATE_ROLES = getWorkspaceOperationPolicy('mcp_server.update').allowed_roles;
-const MCP_DELETE_ROLES = getWorkspaceOperationPolicy('mcp_server.delete').allowed_roles;
+const MCP_LIST_ROLES = getSpaceOperationPolicy('mcp_server.list').allowed_roles;
+const MCP_CREATE_ROLES = getSpaceOperationPolicy('mcp_server.create').allowed_roles;
+const MCP_UPDATE_ROLES = getSpaceOperationPolicy('mcp_server.update').allowed_roles;
+const MCP_DELETE_ROLES = getSpaceOperationPolicy('mcp_server.delete').allowed_roles;
 
 function serializeMcpServer(server: Awaited<ReturnType<typeof listMcpServers>>[number]) {
   const sourceType = server.sourceType === 'worker' ? 'service' : server.sourceType;
@@ -135,10 +135,10 @@ mcpRoutes.post('/servers',
   zValidator('json', createServerSchema),
   async (c) => {
   const user = c.get('user');
-  if (!user) return unauthorized(c);
+  if (!user) throw new AuthenticationError();
 
   const spaceId = c.req.query('spaceId');
-  if (!spaceId) return badRequest(c, 'spaceId query param required');
+  if (!spaceId) throw new BadRequestError('spaceId query param required');
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id, MCP_CREATE_ROLES);
   if (access instanceof Response) return access;
@@ -146,7 +146,7 @@ mcpRoutes.post('/servers',
   const body = c.req.valid('json');
 
   if (!body.name || !body.url) {
-    return badRequest(c, 'name and url are required');
+    throw new BadRequestError('name and url are required');
   }
 
   const result = await registerExternalMcpServer(c.env.DB, c.env, {
@@ -170,10 +170,10 @@ mcpRoutes.post('/servers',
 /** GET /api/mcp/servers?spaceId=... */
 mcpRoutes.get('/servers', async (c) => {
   const user = c.get('user');
-  if (!user) return unauthorized(c);
+  if (!user) throw new AuthenticationError();
 
   const spaceId = c.req.query('spaceId');
-  if (!spaceId) return badRequest(c, 'spaceId query param required');
+  if (!spaceId) throw new BadRequestError('spaceId query param required');
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
   if (access instanceof Response) return access;
@@ -188,17 +188,17 @@ mcpRoutes.get('/servers', async (c) => {
 /** DELETE /api/mcp/servers/:id?spaceId=... */
 mcpRoutes.delete('/servers/:id', async (c) => {
   const user = c.get('user');
-  if (!user) return unauthorized(c);
+  if (!user) throw new AuthenticationError();
 
   const serverId = c.req.param('id');
   const spaceId = c.req.query('spaceId');
-  if (!spaceId) return badRequest(c, 'spaceId query param required');
+  if (!spaceId) throw new BadRequestError('spaceId query param required');
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id, MCP_DELETE_ROLES);
   if (access instanceof Response) return access;
 
   const deleted = await deleteMcpServer(c.env.DB, spaceId, serverId);
-  if (!deleted) return notFound(c, 'MCP server');
+  if (!deleted) throw new NotFoundError('MCP server');
 
   return c.json({ success: true });
 });
@@ -208,11 +208,11 @@ mcpRoutes.patch('/servers/:id',
   zValidator('json', updateServerSchema),
   async (c) => {
   const user = c.get('user');
-  if (!user) return unauthorized(c);
+  if (!user) throw new AuthenticationError();
 
   const serverId = c.req.param('id');
   const spaceId = c.req.query('spaceId');
-  if (!spaceId) return badRequest(c, 'spaceId query param required');
+  if (!spaceId) throw new BadRequestError('spaceId query param required');
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id, MCP_UPDATE_ROLES);
   if (access instanceof Response) return access;
@@ -220,7 +220,7 @@ mcpRoutes.patch('/servers/:id',
   const body = c.req.valid('json');
 
   const updated = await updateMcpServer(c.env.DB, spaceId, serverId, body);
-  if (!updated) return notFound(c, 'MCP server');
+  if (!updated) throw new NotFoundError('MCP server');
 
   return c.json({
     data: serializeMcpServer(updated),
@@ -230,17 +230,17 @@ mcpRoutes.patch('/servers/:id',
 /** GET /api/mcp/servers/:id/tools?spaceId=... */
 mcpRoutes.get('/servers/:id/tools', async (c) => {
   const user = c.get('user');
-  if (!user) return unauthorized(c);
+  if (!user) throw new AuthenticationError();
 
   const serverId = c.req.param('id');
   const spaceId = c.req.query('spaceId');
-  if (!spaceId) return badRequest(c, 'spaceId query param required');
+  if (!spaceId) throw new BadRequestError('spaceId query param required');
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
   if (access instanceof Response) return access;
 
   const server = await getMcpServerWithTokens(c.env.DB, spaceId, serverId);
-  if (!server) return notFound(c, 'MCP server');
+  if (!server) throw new NotFoundError('MCP server');
 
   let accessToken: string | null = null;
 
@@ -287,10 +287,11 @@ mcpRoutes.get('/servers/:id/tools', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to connect to MCP server';
     if (message.includes('timeout') || message.includes('Timeout')) {
-      return gatewayTimeout(c, message);
+      throw new GatewayTimeoutError(message);
     }
-    return badGateway(c, message);
+    throw new BadGatewayError(message);
   } finally {
+    // Best-effort cleanup; errors closing the client are non-fatal
     await client.close().catch(() => {});
   }
 });

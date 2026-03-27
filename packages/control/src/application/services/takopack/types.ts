@@ -5,10 +5,32 @@ export interface ManifestResources {
   d1?: Array<{ binding: string; migrations?: string }>;
   r2?: Array<{ binding: string }>;
   kv?: Array<{ binding: string }>;
+  queue?: Array<{
+    binding: string;
+    maxRetries?: number;
+    deadLetterQueue?: string;
+    deliveryDelaySeconds?: number;
+  }>;
+  analyticsEngine?: Array<{
+    binding: string;
+    dataset?: string;
+  }>;
+  workflow?: Array<{
+    binding: string;
+    service: string;
+    export: string;
+    timeoutMs?: number;
+    maxRetries?: number;
+  }>;
   vectorize?: Array<{
     binding: string;
     dimensions?: number;
     metric?: 'cosine' | 'euclidean' | 'dot-product';
+  }>;
+  durableObject?: Array<{
+    binding: string;
+    className: string;
+    scriptName?: string;
   }>;
 }
 
@@ -70,13 +92,33 @@ export interface TakopackPackageObject extends TakopackObjectBase {
 export interface TakopackResourceObject extends TakopackObjectBase {
   kind: 'Resource';
   spec: {
-    type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize';
+    type: 'd1' | 'r2' | 'kv' | 'queue' | 'analyticsEngine' | 'workflow' | 'secretRef' | 'vectorize' | 'durableObject';
     binding?: string;
     migrations?: string;
+    queue?: {
+      maxRetries?: number;
+      deadLetterQueue?: string;
+      deliveryDelaySeconds?: number;
+    };
+    analyticsEngine?: {
+      dataset?: string;
+    };
+    workflow?: {
+      service: string;
+      export: string;
+      timeoutMs?: number;
+      maxRetries?: number;
+    };
     vectorize?: {
       dimensions: number;
       metric: 'cosine' | 'euclidean' | 'dot-product';
     };
+    durableObject?: {
+      className: string;
+      scriptName?: string;
+    };
+    /** For type: 'secretRef' — auto-generate a random token at deploy time. */
+    generate?: boolean;
   };
 }
 
@@ -97,7 +139,7 @@ export interface TakopackBindingObject extends TakopackObjectBase {
     to: string;
     mount?: {
       as?: string;
-      type?: 'd1' | 'r2' | 'kv' | 'vectorize';
+      type?: 'd1' | 'r2' | 'kv' | 'queue' | 'analyticsEngine' | 'workflow' | 'secretRef' | 'vectorize' | 'durableObject';
     };
   };
 }
@@ -110,6 +152,8 @@ export interface TakopackEndpointObject extends TakopackObjectBase {
     ingressRef?: string;
     path?: string;
     timeoutMs?: number;
+    /** Authentication requirement: 'none' (default), 'bearer', 'takos'. */
+    auth?: 'none' | 'bearer' | 'takos';
   };
 }
 
@@ -119,9 +163,12 @@ export interface TakopackMcpServerObject extends TakopackObjectBase {
     endpointRef: string;
     name?: string;
     transport?: 'streamable-http';
+    /** Reference to a Resource(type=secretRef) for Bearer token auth. */
+    authSecretRef?: string;
   };
 }
 
+/** Reserved — parsed but not processed in v1alpha1. */
 export interface TakopackPolicyObject extends TakopackObjectBase {
   kind: 'Policy';
 }
@@ -203,7 +250,16 @@ export interface TakopackManifest {
   group?: {
     workers: string[];
     ui: string[];
-    resources: { d1: string[]; r2: string[]; kv: string[] };
+    resources: {
+      d1: string[];
+      r2: string[];
+      kv: string[];
+      queue: string[];
+      analyticsEngine: string[];
+      workflow: string[];
+      vectorize: string[];
+      durableObject: string[];
+    };
     links: Array<{ label: string; url: string; icon?: string }>;
   };
   oauth?: {
@@ -224,7 +280,21 @@ export interface TakopackManifest {
     bundle: string;
     bundleHash: string;
     bundleSize: number;
-    bindings: { d1: string[]; r2: string[]; kv: string[]; vectorize?: string[]; services?: string[] };
+    bindings: {
+      d1: string[];
+      r2: string[];
+      kv: string[];
+      queue?: string[];
+      analytics?: string[];
+      workflows?: string[];
+      vectorize?: string[];
+      durableObjects?: string[];
+      services?: string[];
+    };
+    triggers?: {
+      schedules?: Array<{ cron: string; export: string }>;
+      queues?: Array<{ queue: string; export: string }>;
+    };
     env: Record<string, string>;
   }>;
   endpoints?: ManifestEndpoint[];
@@ -244,6 +314,7 @@ export interface ManifestEndpoint {
   routes: HttpRoute[];
   path?: string;
   timeoutMs?: number;
+  auth?: 'none' | 'bearer' | 'takos';
 }
 
 export type { HttpRoute };
@@ -254,6 +325,8 @@ export interface ManifestMcpServer {
   worker: string;
   endpoint: string;
   path: string;
+  /** Resource name of a secretRef to use as Bearer token auth. */
+  authSecretRef?: string;
 }
 
 export interface ParsedTakopackPackage {
@@ -274,7 +347,11 @@ export interface ResourceProvisionResult {
   d1: ResourceProvisionResultEntry[];
   r2: Array<{ binding: string; name: string; resourceId: string; wasAdopted: boolean }>;
   kv: ResourceProvisionResultEntry[];
+  queue: ResourceProvisionResultEntry[];
+  analyticsEngine: Array<{ binding: string; name: string; resourceId: string; wasAdopted: boolean }>;
+  workflow: Array<{ binding: string; name: string; resourceId: string; wasAdopted: boolean }>;
   vectorize: ResourceProvisionResultEntry[];
+  durableObject: Array<{ binding: string; name: string; resourceId: string; className: string; scriptName?: string; wasAdopted: boolean }>;
 }
 
 export interface WorkerDeploymentResult {
@@ -289,7 +366,7 @@ export interface WorkerDeploymentResult {
 export type ManifestWorkerConfig = NonNullable<TakopackManifest['workers']>[number];
 
 export interface ResolvedWorkerResourceBinding {
-  bindingType: 'd1' | 'r2' | 'kv' | 'vectorize';
+  bindingType: 'd1' | 'r2' | 'kv' | 'queue' | 'analytics_engine' | 'workflow' | 'vectorize' | 'durable_object';
   bindingName: string;
   resourceId: string;
   wfpBinding: WorkerBinding;
@@ -299,7 +376,11 @@ export interface ProvisionedResourceReferenceMaps {
   d1: Map<string, string>;
   r2: Map<string, string>;
   kv: Map<string, string>;
+  queue: Map<string, string>;
+  analyticsEngine: Map<string, string>;
+  workflow: Map<string, string>;
   vectorize: Map<string, string>;
+  durableObject: Map<string, string>;
 }
 
 export interface InstallResult {
@@ -313,7 +394,11 @@ export interface InstallResult {
     d1: number;
     r2: number;
     kv: number;
+    queue: number;
+    analyticsEngine: number;
+    workflow: number;
     vectorize: number;
+    durableObject: number;
   };
   rolloutInitiated?: boolean;
   applyReport: TakopackApplyReportEntry[];

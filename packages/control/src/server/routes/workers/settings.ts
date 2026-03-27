@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { TAKOS_ACCESS_TOKEN_ENV_NAME, createCommonEnvService } from '../../../application/services/common-env';
-import { buildCommonEnvActor } from '../common-env/helpers';
+import { buildCommonEnvActor } from '../common-env/common-env-handlers';
 import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
 import { getDb } from '../../../infra/db';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import { serviceCommonEnvLinks, resources, resourceAccess } from '../../../infra/db/schema';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
-import { notFound, internalError } from '../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 const workerBuiltinsSchema = z.object({
   TAKOS_ACCESS_TOKEN: z.object({
@@ -73,7 +73,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -90,7 +90,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     });
   } catch (err) {
     logError('Failed to get service settings', err, { module: 'routes/services/settings' });
-    return internalError(c, 'Failed to get service settings');
+    throw new InternalError('Failed to get service settings');
   }
 })
 
@@ -112,7 +112,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -139,7 +139,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     });
   } catch (err) {
     logError('Failed to update service settings', err, { module: 'routes/services/settings' });
-    return internalError(c, 'Failed to update service settings');
+    throw new InternalError('Failed to update service settings');
   }
 })
 
@@ -150,7 +150,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -163,7 +163,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     });
   } catch (err) {
     logError('Failed to get environment variables', err, { module: 'routes/services/settings' });
-    return internalError(c, 'Failed to get environment variables');
+    throw new InternalError('Failed to get environment variables');
   }
 })
 
@@ -187,7 +187,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -230,7 +230,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     if (err instanceof Error) {
       return badRequest(c, err.message);
     }
-    return internalError(c, 'Failed to update environment variables');
+    throw new InternalError('Failed to update environment variables');
   }
 })
 
@@ -240,7 +240,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -250,7 +250,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     return c.json({ links, builtins });
   } catch (err) {
     logError('Failed to get service common env links', err, { module: 'routes/services/settings' });
-    return internalError(c, 'Failed to get common env links');
+    throw new InternalError('Failed to get common env links');
   }
 })
 
@@ -270,7 +270,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -288,7 +288,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     })) {
       const privilegedWorker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin']);
       if (!privilegedWorker) {
-        return notFound(c, 'Service');
+        throw new NotFoundError('Service');
       }
     }
 
@@ -330,7 +330,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     if (err instanceof Error) {
       return badRequest(c, err.message);
     }
-    return internalError(c, 'Failed to update common env links');
+    throw new InternalError('Failed to update common env links');
   }
 })
 
@@ -366,7 +366,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -398,7 +398,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     })) {
       const privilegedWorker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin']);
       if (!privilegedWorker) {
-        return notFound(c, 'Service');
+        throw new NotFoundError('Service');
       }
     }
 
@@ -442,7 +442,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     if (err instanceof Error) {
       return badRequest(c, err.message);
     }
-    return internalError(c, 'Failed to patch common env links');
+    throw new InternalError('Failed to patch common env links');
   }
 })
 
@@ -454,7 +454,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   try {
@@ -496,7 +496,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     });
   } catch (err) {
     logError('Failed to get bindings', err, { module: 'routes/services/settings' });
-    return internalError(c, 'Failed to get bindings');
+    throw new InternalError('Failed to get bindings');
   }
 })
 
@@ -516,7 +516,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const body = c.req.valid('json');
@@ -610,7 +610,7 @@ const workersSettings = new Hono<AuthenticatedRouteEnv>()
     if (err instanceof Error) {
       return badRequest(c, err.message);
     }
-    return internalError(c, 'Failed to update bindings');
+    throw new InternalError('Failed to update bindings');
   }
 });
 

@@ -3,7 +3,7 @@ import { useI18n } from '../../../providers/I18nProvider';
 import { Modal, ModalFooter } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
-import type { Repository, Workspace } from '../../../types';
+import type { Repository, Space } from '../../../types';
 import { rpc, rpcJson } from '../../../lib/rpc';
 import { useToast } from '../../../hooks/useToast';
 import { Icons } from '../../../lib/Icons';
@@ -35,8 +35,8 @@ export function ForkModal({
 }: ForkModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { workspaces, workspacesLoaded } = useAuth();
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>('');
+  const { spaces, spacesLoaded } = useAuth();
+  const [targetSpaceId, setTargetSpaceId] = useState<string>('');
   const [customName, setCustomName] = useState('');
   const [copyWorkflows, setCopyWorkflows] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -59,23 +59,23 @@ export function ForkModal({
     };
   }, [dropdownOpen]);
 
-  // Set default target workspace when workspaces are loaded
+  // Set default target space when spaces are loaded
   useEffect(() => {
-    if (!workspacesLoaded || workspaces.length === 0 || targetWorkspaceId) return;
-    const personal = workspaces.find((w) => w.kind === 'user');
+    if (!spacesLoaded || spaces.length === 0 || targetSpaceId) return;
+    const personal = spaces.find((w) => w.kind === 'user');
     if (personal) {
-      setTargetWorkspaceId(personal.kind === 'user' ? 'me' : personal.slug);
+      setTargetSpaceId(personal.kind === 'user' ? 'me' : personal.slug);
     } else {
-      setTargetWorkspaceId(workspaces[0].slug);
+      setTargetSpaceId(spaces[0].slug);
     }
-  }, [workspaces, workspacesLoaded, targetWorkspaceId]);
+  }, [spaces, spacesLoaded, targetSpaceId]);
 
-  const selectedWorkspace = workspaces.find(w =>
-    targetWorkspaceId === 'me' ? w.kind === 'user' : w.slug === targetWorkspaceId
+  const selectedSpace = spaces.find(w =>
+    targetSpaceId === 'me' ? w.kind === 'user' : w.slug === targetSpaceId
   );
 
   const effectiveName = customName.trim() || repo.name;
-  const isSelfFork = targetWorkspaceId === repo.space_id && effectiveName === repo.name;
+  const isSelfFork = targetSpaceId === repo.space_id && effectiveName === repo.name;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -86,7 +86,7 @@ export function ForkModal({
       const res = await rpc.repos[':repoId'].fork.$post({
         param: { repoId: repo.id },
         json: {
-          target_space_id: targetWorkspaceId,
+          target_space_id: targetSpaceId,
           name: customName.trim() || undefined,
           copy_workflows: copyWorkflows,
         },
@@ -140,41 +140,41 @@ export function ForkModal({
       size="sm"
       title={t('forkRepository')}
     >
-      {!workspacesLoaded ? (
+      {!spacesLoaded ? (
         <div className="flex items-center justify-center py-8">
           <div className="w-6 h-6 border-2 border-[var(--color-border-primary)] border-t-[var(--color-primary)] rounded-full animate-spin" />
         </div>
-      ) : workspaces.length === 0 ? (
+      ) : spaces.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 gap-2">
           <Icons.Folder className="w-8 h-8 text-[var(--color-text-tertiary)]" />
-          <p className="text-sm text-[var(--color-text-secondary)]">{t('noWorkspacesAvailable')}</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">{t('noSpacesAvailable')}</p>
         </div>
       ) : (
       <form onSubmit={handleSubmit}>
         <div style={fieldGroupStyle}>
-          <label style={labelStyle}>{t('targetWorkspace')}</label>
+          <label style={labelStyle}>{t('targetSpace')}</label>
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               className="w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] text-base bg-[var(--color-surface-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-primary)] rounded-[var(--radius-md)] cursor-pointer transition-colors hover:border-[var(--color-border-focus)]"
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              disabled={!workspacesLoaded}
+              disabled={!spacesLoaded}
             >
               <span className="flex items-center gap-2">
-                {selectedWorkspace ? (
+                {selectedSpace ? (
                   <>
-                    {selectedWorkspace.is_personal ? (
+                    {selectedSpace.is_personal ? (
                       <Icons.User className="w-4 h-4" />
                     ) : (
                       <Icons.Users className="w-4 h-4" />
                     )}
-                    <span>{selectedWorkspace.name}</span>
-                    {selectedWorkspace.is_personal && (
+                    <span>{selectedSpace.name}</span>
+                    {selectedSpace.is_personal && (
                       <span className="text-xs text-[var(--color-text-tertiary)]">({t('personal')})</span>
                     )}
                   </>
                 ) : (
-                  <span>{t('selectWorkspace')}</span>
+                  <span>{t('selectSpace')}</span>
                 )}
               </span>
               <Icons.ChevronDown className="w-4 h-4 text-[var(--color-text-tertiary)]" />
@@ -182,12 +182,12 @@ export function ForkModal({
 
             {dropdownOpen && (
               <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--color-surface-primary)] border border-[var(--color-border-primary)] rounded-[var(--radius-md)] shadow-lg z-20 max-h-60 overflow-y-auto">
-                {workspaces.map(workspace => {
-                  const wsIdentifier = workspace.is_personal ? 'me' : workspace.slug;
-                  const isSelected = targetWorkspaceId === wsIdentifier;
+                {spaces.map(space => {
+                  const wsIdentifier = space.is_personal ? 'me' : space.slug;
+                  const isSelected = targetSpaceId === wsIdentifier;
                   return (
                     <button
-                      key={workspace.slug}
+                      key={space.slug}
                       type="button"
                       className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
                         isSelected
@@ -195,18 +195,18 @@ export function ForkModal({
                           : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]'
                       }`}
                       onClick={() => {
-                        setTargetWorkspaceId(wsIdentifier);
+                        setTargetSpaceId(wsIdentifier);
                         setDropdownOpen(false);
                         setError(null);
                       }}
                     >
-                      {workspace.is_personal ? (
+                      {space.is_personal ? (
                         <Icons.User className="w-4 h-4" />
                       ) : (
                         <Icons.Users className="w-4 h-4" />
                       )}
-                      <span>{workspace.name}</span>
-                      {workspace.is_personal && (
+                      <span>{space.name}</span>
+                      {space.is_personal && (
                         <span className="text-xs text-[var(--color-text-tertiary)]">({t('personal')})</span>
                       )}
                       {isSelected && (
@@ -280,7 +280,7 @@ export function ForkModal({
             type="submit"
             variant="primary"
             isLoading={loading}
-            disabled={loading || !targetWorkspaceId || isSelfFork}
+            disabled={loading || !targetSpaceId || isSelfFork}
           >
             {loading ? t('forking') : t('fork')}
           </Button>

@@ -159,7 +159,7 @@ async function hasEscapingSymlinkComponent(baseDir: string, targetPath: string):
   return false;
 }
 
-async function downloadWorkspaceFiles(
+async function downloadSpaceFiles(
   spaceId: string,
   localDir: string,
   logs: string[]
@@ -171,7 +171,7 @@ async function downloadWorkspaceFiles(
   let downloadFailureCount = 0;
   const resolvedBaseDir = await resolveBaseDirectory(localDir, true);
 
-  pushLog(logs, 'Downloading workspace files...');
+  pushLog(logs, 'Downloading space files...');
 
   do {
     const listResult = await s3Client.send(
@@ -279,12 +279,12 @@ async function downloadWorkspaceFiles(
 
   pushLog(logs, `Downloaded ${fileCount} files (${totalDownloadedBytes} bytes total)`);
   if (downloadFailureCount > 0) {
-    throw new Error(`Failed to download ${downloadFailureCount} workspace files from R2`);
+    throw new Error(`Failed to download ${downloadFailureCount} space files from R2`);
   }
   return fileCount;
 }
 
-async function uploadWorkspaceFiles(
+async function uploadSpaceFiles(
   spaceId: string,
   localDir: string,
   outputPaths: string[],
@@ -347,10 +347,10 @@ async function uploadWorkspaceFiles(
   }
 
   if (uploadFailureCount > 0) {
-    throw new Error(`Failed to upload ${uploadFailureCount} workspace files to R2`);
+    throw new Error(`Failed to upload ${uploadFailureCount} space files to R2`);
   }
   return uploadCount;
 }
 
 /** @internal Exposed for unit tests only. */
-export const _testInternals = { downloadWorkspaceFiles, uploadWorkspaceFiles };
+export const _testInternals = { downloadSpaceFiles, uploadSpaceFiles, downloadWorkspaceFiles: downloadSpaceFiles, uploadWorkspaceFiles: uploadSpaceFiles };

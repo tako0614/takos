@@ -14,13 +14,13 @@ import {
   getTakopackRatingSummary,
 } from '../../application/services/source/explore-packages';
 import { withCache, CacheTTL, CacheTags } from '../middleware/cache';
-import { checkWorkspaceAccess } from '../../shared/utils';
+import { checkSpaceAccess } from '../../shared/utils';
 import { getDb } from '../../infra/db';
 import { accounts, repositories, repoStars, repoReleases, repoReleaseAssets } from '../../infra/db/schema';
 import { eq, and, or, desc, asc, like, inArray, sql, count } from 'drizzle-orm';
 import { checkRepoAccess } from '../../application/services/source/repos';
 import { toReleaseAssets } from '../../application/services/source/repo-release-assets';
-import { badRequest, unauthorized, forbidden, notFound, errorResponse, parseLimit, parseOffset, type AnyAppContext } from './shared/helpers';
+import { badRequest, unauthorized, forbidden, notFound, errorResponse, parseLimit, parseOffset, type AnyAppContext } from './shared/route-auth';
 import {
   buildCatalogSuggestions,
   EXPLORE_CATEGORIES,
@@ -29,7 +29,7 @@ import {
   parseExploreFilters,
   validateExploreFilters,
   type ReleaseAsset,
-} from './explore/helpers';
+} from './explore/explore-filters';
 import { ERR } from '../../shared/constants';
 
 type Variables = {
@@ -165,16 +165,16 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }
 
     const spaceIdRaw = c.req.query('space_id')?.trim();
-    let resolvedWorkspaceId: string | undefined;
+    let resolvedSpaceId: string | undefined;
     if (spaceIdRaw) {
       if (!user) {
         return unauthorized(c, 'Authentication required for space_id');
       }
-      const access = await checkWorkspaceAccess(c.env.DB, spaceIdRaw, user.id);
+      const access = await checkSpaceAccess(c.env.DB, spaceIdRaw, user.id);
       if (!access) {
         return forbidden(c, 'Workspace access denied');
       }
-      resolvedWorkspaceId = access.workspace.id;
+      resolvedSpaceId = access.space.id;
     }
 
     const tagsRaw = c.req.query('tags');
@@ -198,7 +198,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       ...filters,
       tagsRaw,
       certifiedOnly: c.req.query('certified_only') === 'true',
-      spaceId: resolvedWorkspaceId,
+      spaceId: resolvedSpaceId,
       userId: user?.id,
     });
 

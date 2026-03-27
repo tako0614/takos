@@ -14,13 +14,13 @@ import type { ApiVariables } from './api';
 
 // Re-export individual route types for RPC client type inference
 import me from './me';
-import workspacesBase from './workspaces/base';
-import workspacesMembers from './workspaces/members';
-import workspacesRepos from './workspaces/repositories';
-import workspacesStorage from './workspaces/storage';
-import workspacesCommonEnv from './workspaces/common-env';
-import workspacesStores from './workspaces/stores';
-import workspacesStoreRegistry from './workspaces/store-registry';
+import spacesBase from './spaces/base';
+import spacesMembers from './spaces/members';
+import spacesRepos from './spaces/repositories';
+import spacesStorage from './spaces/storage';
+import spacesCommonEnv from './spaces/common-env';
+import spacesStores from './spaces/stores';
+import spacesStoreRegistry from './spaces/store-registry';
 import services from './workers';
 import resources from './resources';
 import threads from './threads';
@@ -56,13 +56,13 @@ export type ApiEnv = { Bindings: Env; Variables: ApiVariables };
 const apiRoutes = new Hono<ApiEnv>()
   // Prefixed routes
   .route('/me', me)
-  .route('/spaces', workspacesBase)
-  .route('/spaces', workspacesMembers)
-  .route('/spaces', workspacesRepos)
-  .route('/spaces', workspacesStorage)
-  .route('/spaces', workspacesCommonEnv)
-  .route('/spaces', workspacesStores)
-  .route('/spaces', workspacesStoreRegistry)
+  .route('/spaces', spacesBase)
+  .route('/spaces', spacesMembers)
+  .route('/spaces', spacesRepos)
+  .route('/spaces', spacesStorage)
+  .route('/spaces', spacesCommonEnv)
+  .route('/spaces', spacesStores)
+  .route('/spaces', spacesStoreRegistry)
   .route('/services', services)
   .route('/resources', resources)
   .route('/shortcuts', shortcuts)

@@ -4,7 +4,7 @@ import {
   buildRunFailedPayload,
   type RunTerminalPayload,
 } from './run-events-contract';
-import { buildRunNotifierEmitRequest, getRunNotifierStub } from './run-notifier-client';
+import { buildRunNotifierEmitRequest, getRunNotifierStub } from './client';
 import { buildRunNotifierEmitPayload } from './run-notifier-payload';
 
 export interface PersistedRunFailedEvent {

@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { badRequest } from '../shared/helpers';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../shared/helpers';
-import { errorResponse } from '../../../shared/utils/error-response';
+import type { BaseVariables } from '../shared/route-auth';
+import { BadRequestError, AppError } from '@takos/common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 import { zValidator } from '../zod-validator';
@@ -32,9 +31,9 @@ export function registerRunCreateRoutes(app: RunRouteApp) {
 
       if (!result.ok) {
         if (result.status === 400) {
-          return badRequest(c, result.error);
+          throw new BadRequestError(result.error);
         }
-        return errorResponse(c, result.status, result.error);
+        throw new AppError(result.error, undefined, result.status);
       }
 
       return c.json({ run: result.run }, result.status);

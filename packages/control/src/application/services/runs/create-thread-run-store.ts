@@ -9,7 +9,7 @@ import {
   prismaRunToApi,
   type D1CountRow,
   type RunHierarchyNode,
-  type WorkspaceModelLookup,
+  type SpaceModelLookup,
 } from './shared';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
@@ -217,17 +217,17 @@ export async function getRunHierarchyNode(
   );
 }
 
-async function getWorkspaceModelFallback(
+async function getSpaceModelFallback(
   db: D1Database,
   spaceId: string,
-): Promise<WorkspaceModelLookup | null> {
+): Promise<SpaceModelLookup | null> {
   const row = await db.prepare(`
     SELECT
       ai_model AS aiModel
     FROM accounts
     WHERE id = ?
     LIMIT 1
-  `).bind(spaceId).first<WorkspaceModelLookup>();
+  `).bind(spaceId).first<SpaceModelLookup>();
 
   if (!row) {
     return null;
@@ -238,13 +238,13 @@ async function getWorkspaceModelFallback(
   };
 }
 
-export async function getWorkspaceModel(
+export async function getSpaceModel(
   dbBinding: D1Database,
   spaceId: string,
-): Promise<WorkspaceModelLookup | null> {
+): Promise<SpaceModelLookup | null> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'workspace model lookup',
+    'space model lookup',
     async () => {
       const row = await db.select({ aiModel: accounts.aiModel })
         .from(accounts)
@@ -257,7 +257,7 @@ export async function getWorkspaceModel(
         aiModel: row.aiModel ?? null,
       };
     },
-    () => getWorkspaceModelFallback(dbBinding, spaceId),
+    () => getSpaceModelFallback(dbBinding, spaceId),
   );
 }
 
@@ -442,30 +442,30 @@ export async function checkRunRateLimits(
   const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   try {
-    let userWorkspaces = await db.select({ accountId: accountMemberships.accountId })
+    let userSpaces = await db.select({ accountId: accountMemberships.accountId })
       .from(accountMemberships)
       .where(eq(accountMemberships.memberId, actorId))
       .all();
 
-    if (userWorkspaces.length === 0) {
+    if (userSpaces.length === 0) {
       const principalId = await resolveActorPrincipalId(dbBinding, actorId);
       if (principalId && principalId !== actorId) {
-        userWorkspaces = await db.select({ accountId: accountMemberships.accountId })
+        userSpaces = await db.select({ accountId: accountMemberships.accountId })
           .from(accountMemberships)
           .where(eq(accountMemberships.memberId, principalId))
           .all();
       }
     }
 
-    const userWorkspaceIds = userWorkspaces.map((workspace) => workspace.accountId);
+    const userSpaceIds = userSpaces.map((workspace) => workspace.accountId);
 
-    if (userWorkspaceIds.length === 0) {
+    if (userSpaceIds.length === 0) {
       return { allowed: true };
     }
 
     const minuteResult = await db.select({ count: count() }).from(runs)
       .where(and(
-        inArray(runs.accountId, userWorkspaceIds),
+        inArray(runs.accountId, userSpaceIds),
         parentCondition,
         gt(runs.createdAt, oneMinuteAgo),
       ))
@@ -483,7 +483,7 @@ export async function checkRunRateLimits(
 
     const hourResult = await db.select({ count: count() }).from(runs)
       .where(and(
-        inArray(runs.accountId, userWorkspaceIds),
+        inArray(runs.accountId, userSpaceIds),
         parentCondition,
         gt(runs.createdAt, oneHourAgo),
       ))

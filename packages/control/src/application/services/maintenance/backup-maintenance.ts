@@ -97,6 +97,11 @@ function parseInventoryCreatedAtMs(key: string): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function isUnsupportedDbDumpError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('DB.dump() is not implemented');
+}
+
 async function sha256Hex(input: ArrayBuffer): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', input);
   const bytes = new Uint8Array(buf);
@@ -255,8 +260,18 @@ export async function runD1DailyBackup(
     backupKind = 'd1_export_sql';
     exportFilename = exportResult.filename;
   } else {
-    // Fallback for tests/local envs (DB.dump is deprecated).
-    body = await env.DB.dump();
+    // Fallback for tests/local envs. Some local adapters do not implement DB.dump().
+    try {
+      body = await env.DB.dump();
+    } catch (err) {
+      if (isUnsupportedDbDumpError(err)) {
+        return {
+          skipped: true,
+          reason: 'DB.dump() is not supported by this local database adapter; configure Cloudflare D1 export credentials instead.',
+        };
+      }
+      throw err;
+    }
     bytes = body.byteLength;
     sha256 = await sha256Hex(body);
     ext = '.sqlite';

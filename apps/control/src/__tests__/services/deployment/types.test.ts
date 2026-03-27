@@ -46,7 +46,7 @@ describe('deployment types', () => {
   });
 
   it('DeploymentProviderName has all expected values', () => {
-    const providers: DeploymentProviderName[] = ['cloudflare', 'oci'];
+    const providers: DeploymentProviderName[] = ['workers-dispatch', 'oci'];
     expect(providers).toHaveLength(2);
   });
 
@@ -58,6 +58,7 @@ describe('deployment types', () => {
       space_id: 'space-1',
       version: 1,
       artifact_ref: 'worker-w-1-v1',
+      artifact_kind: 'worker-bundle',
       bundle_r2_key: 'deployments/w-1/1/bundle.js',
       bundle_hash: 'abc123',
       bundle_size: 1000,
@@ -75,7 +76,7 @@ describe('deployment types', () => {
       routing_weight: 100,
       deployed_by: 'user-1',
       deploy_message: 'Initial deployment',
-      provider_name: 'cloudflare',
+      provider_name: 'workers-dispatch',
       target_json: '{}',
       provider_state_json: '{}',
       idempotency_key: null,

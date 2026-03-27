@@ -70,7 +70,7 @@ export interface JobExecutionState {
   jobConclusion: Conclusion;
   runtimeStarted: boolean;
   runtimeCancelled: boolean;
-  runtimeWorkspaceId: string | null;
+  runtimeSpaceId: string | null;
   completionConclusion: Conclusion | null;
   logs: string[];
   stepResults: StepResult[];
@@ -93,7 +93,7 @@ export function createInitialState(): JobExecutionState {
     jobConclusion: 'success',
     runtimeStarted: false,
     runtimeCancelled: false,
-    runtimeWorkspaceId: null,
+    runtimeSpaceId: null,
     completionConclusion: null,
     logs: [],
     stepResults: [],

@@ -159,3 +159,26 @@ WHERE id = ? AND updated_at = ?
 -- UNIQUE(app_pk, version_code) on releases table
 -- 同一 versionCode の INSERT は constraint violation → 409
 ```
+
+## Durable Objects
+
+Control Plane は以下の Durable Object を使用します。
+
+| DO | 用途 | 状態 |
+| --- | --- | --- |
+| `SessionDO` | リアルタイムセッション管理 | ✅ 稼働中 |
+| `RunNotifierDO` | Agent run のイベントストリーミング (SSE/WS) | ✅ 稼働中 |
+| `NotificationNotifierDO` | 汎用通知ストリーミング | ⚠️ サーバー側のみ、フロントクライアント未実装 |
+| `RateLimiterDO` | レートリミット (auth 系) | ✅ 稼働中 |
+| `RoutingDO` | ホスト名ルーティングキャッシュ | ✅ 稼働中 |
+| `GitPushLockDO` | Git push の排他制御 | ✅ 稼働中 |
+| `BrowserSessionContainer` | ブラウザコンテナ管理 (takos-computer) | ✅ 稼働中 |
+| `TakosAgentExecutorContainer` | エグゼキュータコンテナ管理 (takos-computer) | ✅ 稼働中 |
+
+### RunNotifierDO
+
+Agent run の実行イベント (thinking, tool_call, tool_result, message, completed 等) をリアルタイムにクライアントに配信します。リングバッファで最新イベントを保持し、SSE または WebSocket でストリーミングします。
+
+### NotificationNotifierDO
+
+汎用的な通知配信基盤。リングバッファ実装は完了していますが、フロントエンドの WebSocket クライアントは未実装です。

@@ -95,6 +95,7 @@ vi.mock('@/services/wfp', () => ({
 }));
 
 import { BundleDeploymentOrchestrator } from '@/services/platform/bundle-deployment-orchestrator';
+import { resolveAndInstallDependencies } from '@/services/platform/bundle-deployment-dependencies';
 
 function createService(envOverrides: Partial<Record<string, unknown>> = {}): BundleDeploymentOrchestrator {
   const env = createMockEnv(envOverrides) as unknown as Env;
@@ -256,26 +257,29 @@ describe('BundleDeploymentOrchestrator safety guards', () => {
     };
     mocks.getDb.mockReturnValue(dbLocal);
 
-    const service = createService();
-    const installFromGitSpy = vi.spyOn(service, 'installFromGit').mockResolvedValue({
+    const env = createMockEnv() as unknown as Env;
+    const installFromGitSpy = vi.fn().mockResolvedValue({
       bundleDeploymentId: 'unused',
       name: 'unused',
       appId: 'unused.app',
       version: '1.0.0',
       groupsCreated: 0,
       toolsCreated: 0,
-      resourcesCreated: { d1: 0, r2: 0, kv: 0 },
+      resourcesCreated: {
+        d1: 0,
+        r2: 0,
+        kv: 0,
+        queue: 0,
+        analyticsEngine: 0,
+        workflow: 0,
+        vectorize: 0,
+        durableObject: 0,
+      },
       applyReport: [],
     });
 
     await expect(
-      (service as unknown as {
-        resolveAndInstallDependencies: (
-          spaceId: string,
-          userId: string,
-          manifest: unknown
-        ) => Promise<void>;
-      }).resolveAndInstallDependencies('ws-1', 'user-1', {
+      resolveAndInstallDependencies(env, installFromGitSpy, 'ws-1', 'user-1', {
         manifestVersion: '1',
         meta: {
           name: 'root-app',
@@ -286,7 +290,7 @@ describe('BundleDeploymentOrchestrator safety guards', () => {
           { repo: '@alice/alpha', version: '^1.0.0' },
           { repo: '@alice/beta', version: '^1.0.0' },
         ],
-      })
+      } as import('@/services/takopack/types').TakopackManifest)
     ).rejects.toThrow(/Dependency appId conflict/);
 
     expect(installFromGitSpy).not.toHaveBeenCalled();

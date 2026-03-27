@@ -7,7 +7,7 @@ import { getDb } from '../../infra/db';
 import { threads, messages } from '../../infra/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { InMemoryRateLimiter } from '../../shared/utils/rate-limiter';
-import { unauthorized, forbidden, notFound, rateLimited } from '../../shared/utils/error-response';
+import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from '@takos/common/errors';
 
 type Variables = Record<string, never>;
 
@@ -76,14 +76,14 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const access = await verifyThreadShareAccess({ db: c.env.DB, token, password: null });
     if ('error' in access) {
       if (access.error === 'password_required') {
-        return unauthorized(c, 'Password required');
+        throw new AuthenticationError('Password required');
       }
-      return notFound(c);
+      throw new NotFoundError();
     }
 
     const payload = await buildSharedThreadPayload(c.env, access.threadId, token);
     if (!payload) {
-      return notFound(c);
+      throw new NotFoundError();
     }
 
     return c.json({
@@ -112,24 +112,24 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     if (rateLimitInfo.remaining <= 0) {
       const retryAfter = Math.ceil((rateLimitInfo.reset - Date.now()) / 1000);
       c.header('Retry-After', String(retryAfter));
-      return rateLimited(c, retryAfter);
+      throw new RateLimitError('Rate limit exceeded', retryAfter);
     }
     sharePasswordRateLimiter.hit(rateLimitKey);
 
     const access = await verifyThreadShareAccess({ db: c.env.DB, token, password: body.password || null });
     if ('error' in access) {
       if (access.error === 'password_required') {
-        return unauthorized(c, 'Password required');
+        throw new AuthenticationError('Password required');
       }
       if (access.error === 'forbidden') {
-        return forbidden(c, 'Invalid password');
+        throw new AuthorizationError('Invalid password');
       }
-      return notFound(c);
+      throw new NotFoundError();
     }
 
     const payload = await buildSharedThreadPayload(c.env, access.threadId, token);
     if (!payload) {
-      return notFound(c);
+      throw new NotFoundError();
     }
 
     return c.json({

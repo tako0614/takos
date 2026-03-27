@@ -50,6 +50,7 @@ function extractPatFromBasicAuth(authHeader: string | undefined): string | null 
     const password = decoded.slice(colonIdx + 1);
     return password.startsWith('tak_pat_') ? password : null;
   } catch {
+    // Malformed base64 in Authorization header -- treat as unauthenticated
     return null;
   }
 }

@@ -13,7 +13,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { now } from '../../../shared/utils';
 import { deleteManagedMcpServersByBundleDeployment } from '../platform/mcp';
-import { upsertHostnameRouting } from '../routing';
+import { upsertHostnameRouting } from '../routing/service';
 import { bestEffort, CompensationTracker, cleanupDeployedWorkers, cleanupProvisionedResources } from './compensation';
 import { buildProvisionedResourceReferenceMaps, type BundleShortcutGroupService } from './groups';
 import type { BundleManagedMcpService } from './tools';
@@ -197,7 +197,16 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
 
   let groupsCreated = 0;
   let toolsCreated = 0;
-  let resourcesCreated = { d1: 0, r2: 0, kv: 0, vectorize: 0 };
+  let resourcesCreated = {
+    d1: 0,
+    r2: 0,
+    kv: 0,
+    queue: 0,
+    analyticsEngine: 0,
+    workflow: 0,
+    vectorize: 0,
+    durableObject: 0,
+  };
   const appliedEntries: TakopackApplyReportEntry[] = normalizedApplyReport
     .filter((entry) => entry.phase === 'planned')
     .map((entry) => ({
@@ -220,15 +229,34 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
       manifest.resources,
       files,
     );
+    const createdResourceResult: ResourceProvisionResult = provisionedResources;
     resourcesCreated = {
-      d1: provisionedResources.d1.length,
-      r2: provisionedResources.r2.length,
-      kv: provisionedResources.kv.length,
-      vectorize: provisionedResources.vectorize.length,
+      d1: createdResourceResult.d1.length,
+      r2: createdResourceResult.r2.length,
+      kv: createdResourceResult.kv.length,
+      queue: createdResourceResult.queue.length,
+      analyticsEngine: createdResourceResult.analyticsEngine.length,
+      workflow: createdResourceResult.workflow.length,
+      vectorize: createdResourceResult.vectorize.length,
+      durableObject: createdResourceResult.durableObject.length,
     };
     tracker.add('cleanup provisioned resources', async () => {
-      await cleanupProvisionedResources(env, provisionedResources!);
+      await cleanupProvisionedResources(env, createdResourceResult);
     });
+  }
+
+  // Provision secretRef resources — generate random tokens for shared secrets
+  const provisionedSecrets = new Map<string, string>();
+  if (manifest.objects) {
+    for (const obj of manifest.objects) {
+      if (obj.kind === 'Resource' && obj.spec.type === 'secretRef' && obj.spec.generate) {
+        const bytes = new Uint8Array(32);
+        crypto.getRandomValues(bytes);
+        const token = btoa(String.fromCharCode(...bytes))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        provisionedSecrets.set(obj.metadata.name, token);
+      }
+    }
   }
 
   const oauthResult = await provisionOAuthClient({
@@ -246,6 +274,18 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
   let deployedWorkers: WorkerDeploymentResult[] = [];
   if (manifest.workers?.length) {
     const sharedEnv = { ...(options?.envOverrides || {}) };
+
+    // Inject secretRef tokens into worker env via Binding declarations
+    if (provisionedSecrets.size > 0 && manifest.objects) {
+      for (const obj of manifest.objects) {
+        if (obj.kind !== 'Binding') continue;
+        const fromName = String(obj.spec.from || '');
+        const secretValue = provisionedSecrets.get(fromName);
+        if (!secretValue) continue;
+        const envName = obj.spec.mount?.as || obj.spec.from;
+        sharedEnv[envName] = secretValue;
+      }
+    }
 
     deployedWorkers = await workerService.deployManifestWorkers({
       spaceId,
@@ -363,12 +403,16 @@ export async function executeBundleInstallPipeline(params: BundleInstallPipeline
 
   if (manifest.mcpServers) {
     for (const server of manifest.mcpServers) {
+      const authSecret = server.authSecretRef
+        ? provisionedSecrets.get(server.authSecretRef)
+        : undefined;
       await toolService.registerManagedMcpServer(
         spaceId,
         bundleDeploymentId,
         installKey,
         server,
         deployedWorkerIdByRef,
+        authSecret,
       );
       toolsCreated++;
     }

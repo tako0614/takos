@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, Repository, User, Workspace, WorkspaceMember, WorkspaceRole, SecurityPosture } from '../../../shared/types';
+import type { Env, Repository, User, Space, SpaceMembership, SpaceRole, SecurityPosture } from '../../../shared/types';
 import { generateId, now, slugifyName } from '../../../shared/utils';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { resolveActorPrincipalId, resolveUserPrincipalId } from './principals';
@@ -22,7 +22,7 @@ interface MemberListItem {
   created_at: string;
 }
 
-export interface WorkspaceListItem {
+export interface SpaceListItem {
   id: string;
   kind: 'user' | 'team' | 'system';
   name: string;
@@ -33,7 +33,7 @@ export interface WorkspaceListItem {
   security_posture: SecurityPosture;
   created_at: string;
   updated_at: string;
-  member_role: WorkspaceRole;
+  member_role: SpaceRole;
   repository: RepoSummary | null;
 }
 
@@ -50,7 +50,7 @@ function accountToWorkspace(row: {
   securityPosture: string | null;
   createdAt: string;
   updatedAt: string;
-}): Workspace {
+}): Space {
   const kind = row.type === 'user' ? 'user' : 'team';
   return {
     id: row.id,
@@ -266,7 +266,7 @@ export async function getRepositoryById(db: D1Database, repoId: string): Promise
 export async function listWorkspacesForUser(
   env: Env,
   userId: string
-): Promise<WorkspaceListItem[]> {
+): Promise<SpaceListItem[]> {
   if (!isValidOpaqueId(userId)) {
     return [];
   }
@@ -322,7 +322,7 @@ export async function listWorkspacesForUser(
     security_posture: membership.spaceSecurityPosture === 'restricted_egress' ? 'restricted_egress' : 'standard',
     created_at: membership.spaceCreatedAt,
     updated_at: membership.spaceUpdatedAt,
-    member_role: membership.memberRole as WorkspaceRole,
+    member_role: membership.memberRole as SpaceRole,
     repository: latestRepoBySpace.get(membership.spaceId) ?? null,
   }));
 }
@@ -332,7 +332,7 @@ export async function createWorkspaceWithDefaultRepo(
   userId: string,
   name: string,
   options?: { id?: string; skipIdCheck?: boolean; kind?: 'team'; description?: string }
-): Promise<{ workspace: Workspace; repository: Repository | null }> {
+): Promise<{ workspace: Space; repository: Repository | null }> {
   const spaceId = options?.id || generateId();
   const repoId = generateId();
   const timestamp = now();
@@ -378,8 +378,8 @@ export async function createWorkspaceWithDefaultRepo(
 
 export async function getWorkspaceWithRepository(
   env: Env,
-  workspace: Workspace
-): Promise<{ workspace: Workspace; repository: Repository | null }> {
+  workspace: Space
+): Promise<{ workspace: Space; repository: Repository | null }> {
   return {
     workspace,
     repository: await findLatestRepositoryBySpaceId(env.DB, workspace.id).then((repo) => {
@@ -406,7 +406,7 @@ export async function updateWorkspace(
   db: D1Database,
   spaceId: string,
   updates: { name?: string; ai_model?: string; ai_provider?: string; security_posture?: SecurityPosture }
-): Promise<Workspace | null> {
+): Promise<Space | null> {
   const current = await loadSpaceById(db, spaceId);
   if (!current) return null;
 
@@ -435,7 +435,7 @@ export async function updateWorkspace(
 export async function getWorkspaceByIdOrSlug(
   db: D1Database,
   idOrSlug: string
-): Promise<Workspace | null> {
+): Promise<Space | null> {
   const row = await loadCanonicalSpaceByIdOrSlug(db, idOrSlug);
   return row ? accountToWorkspace(row) : null;
 }
@@ -485,7 +485,7 @@ export async function deleteWorkspace(db: D1Database, spaceId: string): Promise<
   await drizzle.delete(accounts).where(eq(accounts.id, spaceId));
 }
 
-export async function listWorkspaceMembers(
+export async function listSpaceMembers(
   db: D1Database,
   spaceId: string
 ): Promise<MemberListItem[]> {
@@ -551,11 +551,11 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
   return user;
 }
 
-export async function getWorkspaceMember(
+export async function getSpaceMember(
   db: D1Database,
   spaceId: string,
   actorId: string
-): Promise<WorkspaceMember | null> {
+): Promise<SpaceMembership | null> {
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
   const row = await drizzle
@@ -576,17 +576,17 @@ export async function getWorkspaceMember(
     id: row.id,
     space_id: row.accountId,
     principal_id: row.memberId,
-    role: row.role as WorkspaceRole,
+    role: row.role as SpaceRole,
     created_at: row.createdAt,
   };
 }
 
-export async function createWorkspaceMember(
+export async function createSpaceMember(
   db: D1Database,
   spaceId: string,
   actorId: string,
-  role: WorkspaceRole
-): Promise<{ role: WorkspaceRole; created_at: string }> {
+  role: SpaceRole
+): Promise<{ role: SpaceRole; created_at: string }> {
   const timestamp = now();
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
@@ -603,11 +603,11 @@ export async function createWorkspaceMember(
   return { role, created_at: timestamp };
 }
 
-export async function updateWorkspaceMemberRole(
+export async function updateSpaceMemberRole(
   db: D1Database,
   spaceId: string,
   actorId: string,
-  role: WorkspaceRole
+  role: SpaceRole
 ): Promise<void> {
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
@@ -622,7 +622,7 @@ export async function updateWorkspaceMemberRole(
     );
 }
 
-export async function deleteWorkspaceMember(
+export async function deleteSpaceMember(
   db: D1Database,
   spaceId: string,
   actorId: string
@@ -666,7 +666,7 @@ async function ensureSelfMembership(db: D1Database, userId: string): Promise<voi
 export async function getPersonalWorkspace(
   env: Env,
   userId: string
-): Promise<WorkspaceListItem | null> {
+): Promise<SpaceListItem | null> {
   const drizzle = getDb(env.DB);
   const userAccount = await drizzle.select().from(accounts)
     .where(and(eq(accounts.id, userId), eq(accounts.type, 'user')))
@@ -697,7 +697,7 @@ export async function getPersonalWorkspace(
 export async function getOrCreatePersonalWorkspace(
   env: Env,
   userId: string
-): Promise<WorkspaceListItem | null> {
+): Promise<SpaceListItem | null> {
   return getPersonalWorkspace(env, userId);
 }
 

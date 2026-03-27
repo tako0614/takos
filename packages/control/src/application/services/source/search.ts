@@ -1,5 +1,5 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, WorkspaceFile, FileKind, FileOrigin } from '../../../shared/types';
+import type { Env, SpaceFile, FileKind, FileOrigin } from '../../../shared/types';
 import { createEmbeddingsService, isEmbeddingsAvailable } from '../execution/embeddings';
 import { getDb, files } from '../../../infra/db';
 import { eq, and, ne, like, desc, sql } from 'drizzle-orm';
@@ -23,7 +23,7 @@ export interface ContentMatch {
 
 export interface SearchResult {
   type: 'file' | 'content' | 'semantic';
-  file: WorkspaceFile;
+  file: SpaceFile;
   matches?: ContentMatch[];
   score?: number;
   semanticContent?: string;
@@ -39,7 +39,7 @@ function getR2Key(spaceId: string, fileId: string): string {
   return `spaces/${spaceId}/files/${fileId}`;
 }
 
-function toWorkspaceFile(f: {
+function toSpaceFile(f: {
   id: string;
   accountId: string;
   path: string;
@@ -50,7 +50,7 @@ function toWorkspaceFile(f: {
   origin: string;
   createdAt: string | Date;
   updatedAt: string | Date;
-}): WorkspaceFile {
+}): SpaceFile {
   return {
     id: f.id,
     space_id: f.accountId,
@@ -105,7 +105,7 @@ export async function searchWorkspace(params: {
             if (file) {
               results.push({
                 type: 'semantic',
-                file: toWorkspaceFile(file),
+                file: toSpaceFile(file),
                 score: sr.score * 100,
                 semanticContent: sr.content,
               });
@@ -166,7 +166,7 @@ export async function searchFilenames(d1: D1Database, spaceId: string, query: st
 
   return fileRows.map(file => ({
     type: 'file' as const,
-    file: toWorkspaceFile(file),
+    file: toSpaceFile(file),
     score: calculateFilenameScore(file.path, query),
   }));
 }
@@ -197,7 +197,7 @@ export async function searchContent(d1: D1Database, storage: R2Bucket | undefine
       const content = await object.text();
       const matches = findContentMatches(content, queryLower);
       if (matches.length > 0) {
-        results.push({ type: 'content', file: toWorkspaceFile(file), matches: matches.slice(0, 5), score: matches.length * 10 + calculateFilenameScore(file.path, query) });
+        results.push({ type: 'content', file: toSpaceFile(file), matches: matches.slice(0, 5), score: matches.length * 10 + calculateFilenameScore(file.path, query) });
       }
     } catch (err) {
       if (err instanceof Error && !err.message.includes('not found')) {

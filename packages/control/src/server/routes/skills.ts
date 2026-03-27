@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { notFound, conflict, requireWorkspaceAccess, type BaseVariables } from './shared/helpers';
+import { requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import {
   createSkill,
@@ -22,8 +22,8 @@ import {
 import { getDb } from '../../infra/db';
 import { skills as skillsTable } from '../../infra/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
-import { badRequest, validationError } from '../../shared/utils/error-response';
-import { getWorkspaceOperationPolicy } from '../../application/tools/tool-policy';
+import { BadRequestError, NotFoundError, ConflictError, ValidationError } from '@takos/common/errors';
+import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 const skills = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 
@@ -47,14 +47,14 @@ const updateSkillSchema = z.object({
 const patchSkillSchema = z.object({ enabled: z.boolean().optional() });
 type SkillsContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 
-const SKILL_LIST_ROLES = getWorkspaceOperationPolicy('skill.list').allowed_roles;
-const SKILL_GET_ROLES = getWorkspaceOperationPolicy('skill.get').allowed_roles;
-const SKILL_CREATE_ROLES = getWorkspaceOperationPolicy('skill.create').allowed_roles;
-const SKILL_UPDATE_ROLES = getWorkspaceOperationPolicy('skill.update').allowed_roles;
-const SKILL_TOGGLE_ROLES = getWorkspaceOperationPolicy('skill.toggle').allowed_roles;
-const SKILL_DELETE_ROLES = getWorkspaceOperationPolicy('skill.delete').allowed_roles;
-const SKILL_CONTEXT_ROLES = getWorkspaceOperationPolicy('skill.context').allowed_roles;
-const SKILL_DESCRIBE_ROLES = getWorkspaceOperationPolicy('skill.describe').allowed_roles;
+const SKILL_LIST_ROLES = getSpaceOperationPolicy('skill.list').allowed_roles;
+const SKILL_GET_ROLES = getSpaceOperationPolicy('skill.get').allowed_roles;
+const SKILL_CREATE_ROLES = getSpaceOperationPolicy('skill.create').allowed_roles;
+const SKILL_UPDATE_ROLES = getSpaceOperationPolicy('skill.update').allowed_roles;
+const SKILL_TOGGLE_ROLES = getSpaceOperationPolicy('skill.toggle').allowed_roles;
+const SKILL_DELETE_ROLES = getSpaceOperationPolicy('skill.delete').allowed_roles;
+const SKILL_CONTEXT_ROLES = getSpaceOperationPolicy('skill.context').allowed_roles;
+const SKILL_DESCRIBE_ROLES = getSpaceOperationPolicy('skill.describe').allowed_roles;
 
 function getScopeId(c: { req: { param(name: string): string } }): string {
   return c.req.param('spaceId') || c.req.param('workspaceId');
@@ -86,17 +86,17 @@ async function listSkillsHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_LIST_ROLES);
   if (access instanceof Response) return access;
 
-  const skillsList = await listSkills(c.env.DB, access.workspace.id);
+  const skillsList = await listSkills(c.env.DB, access.space.id);
   return c.json({ skills: skillsList });
 }
 
 async function validateJson<T extends z.ZodTypeAny>(
   c: SkillsContext,
   schema: T,
-): Promise<z.infer<T> | Response> {
+): Promise<z.infer<T>> {
   const result = schema.safeParse(await c.req.json());
   if (!result.success) {
-    return validationError(c, 'Validation error', result.error.flatten());
+    throw new ValidationError('Validation error');
   }
   return result.data;
 }
@@ -105,7 +105,6 @@ async function createSkillHandler(c: SkillsContext) {
   const user = c.get('user');
   const scopeId = getScopeId(c);
   const body = await validateJson(c, createSkillSchema);
-  if (body instanceof Response) return body;
 
   const access = await requireWorkspaceAccess(
     c,
@@ -118,19 +117,19 @@ async function createSkillHandler(c: SkillsContext) {
 
   const db = getDb(c.env.DB);
   const existing = await db.select({ id: skillsTable.id }).from(skillsTable).where(
-    and(eq(skillsTable.accountId, access.workspace.id), eq(skillsTable.name, body.name.trim()))
+    and(eq(skillsTable.accountId, access.space.id), eq(skillsTable.name, body.name.trim()))
   ).get();
 
   if (existing) {
-    return conflict(c, 'Skill with this name already exists');
+    throw new ConflictError('Skill with this name already exists');
   }
 
   let skill;
   try {
-    skill = await createSkill(c.env.DB, access.workspace.id, body);
+    skill = await createSkill(c.env.DB, access.space.id, body);
   } catch (error) {
     if (error instanceof SkillMetadataValidationError) {
-      return badRequest(c, error.message, error.details);
+      throw new BadRequestError(error.message, error.details);
     }
     throw error;
   }
@@ -148,10 +147,10 @@ async function getSkillByNameHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
   if (access instanceof Response) return access;
 
-  const skill = await getSkillByName(c.env.DB, access.workspace.id, skillName);
+  const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   return c.json({
@@ -167,10 +166,10 @@ async function getSkillByIdHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_GET_ROLES);
   if (access instanceof Response) return access;
 
-  const skill = await getSkill(c.env.DB, access.workspace.id, skillId);
+  const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   return c.json({
@@ -183,7 +182,6 @@ async function updateSkillByNameHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillName = getSkillNameParam(c);
   const body = await validateJson(c, updateSkillSchema);
-  if (body instanceof Response) return body;
 
   const access = await requireWorkspaceAccess(
     c,
@@ -194,33 +192,33 @@ async function updateSkillByNameHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkillByName(c.env.DB, access.workspace.id, skillName);
+  const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   if (body.name && body.name.trim() !== skill.name) {
     const db = getDb(c.env.DB);
     const existing = await db.select({ id: skillsTable.id }).from(skillsTable).where(
       and(
-        eq(skillsTable.accountId, access.workspace.id),
+        eq(skillsTable.accountId, access.space.id),
         eq(skillsTable.name, body.name.trim()),
         ne(skillsTable.id, skill.id),
       )
     ).get();
 
     if (existing) {
-      return conflict(c, 'Skill with this name already exists');
+      throw new ConflictError('Skill with this name already exists');
     }
   }
 
   let updatedSkill;
   try {
-    updatedSkill = await updateSkillByName(c.env.DB, access.workspace.id, skillName, body);
+    updatedSkill = await updateSkillByName(c.env.DB, access.space.id, skillName, body);
   } catch (error) {
     if (error instanceof SkillMetadataValidationError) {
-      return badRequest(c, error.message, error.details);
+      throw new BadRequestError(error.message, error.details);
     }
     throw error;
   }
@@ -235,7 +233,6 @@ async function updateSkillByIdHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillId = getSkillIdParam(c);
   const body = await validateJson(c, updateSkillSchema);
-  if (body instanceof Response) return body;
 
   const access = await requireWorkspaceAccess(
     c,
@@ -246,33 +243,33 @@ async function updateSkillByIdHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkill(c.env.DB, access.workspace.id, skillId);
+  const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   if (body.name && body.name.trim() !== skill.name) {
     const db = getDb(c.env.DB);
     const existing = await db.select({ id: skillsTable.id }).from(skillsTable).where(
       and(
-        eq(skillsTable.accountId, access.workspace.id),
+        eq(skillsTable.accountId, access.space.id),
         eq(skillsTable.name, body.name.trim()),
         ne(skillsTable.id, skill.id),
       )
     ).get();
 
     if (existing) {
-      return conflict(c, 'Skill with this name already exists');
+      throw new ConflictError('Skill with this name already exists');
     }
   }
 
   let updatedSkill;
   try {
-    updatedSkill = await updateSkill(c.env.DB, access.workspace.id, skillId, body);
+    updatedSkill = await updateSkill(c.env.DB, access.space.id, skillId, body);
   } catch (error) {
     if (error instanceof SkillMetadataValidationError) {
-      return badRequest(c, error.message, error.details);
+      throw new BadRequestError(error.message, error.details);
     }
     throw error;
   }
@@ -287,7 +284,6 @@ async function patchSkillByNameHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillName = getSkillNameParam(c);
   const body = await validateJson(c, patchSkillSchema);
-  if (body instanceof Response) return body;
 
   const access = await requireWorkspaceAccess(
     c,
@@ -298,14 +294,14 @@ async function patchSkillByNameHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkillByName(c.env.DB, access.workspace.id, skillName);
+  const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   const enabled = body.enabled !== undefined ? body.enabled : skill.enabled;
-  await updateSkillEnabledByName(c.env.DB, access.workspace.id, skillName, enabled);
+  await updateSkillEnabledByName(c.env.DB, access.space.id, skillName, enabled);
 
   return c.json({ success: true, enabled });
 }
@@ -315,7 +311,6 @@ async function patchSkillByIdHandler(c: SkillsContext) {
   const scopeId = getScopeId(c);
   const skillId = getSkillIdParam(c);
   const body = await validateJson(c, patchSkillSchema);
-  if (body instanceof Response) return body;
 
   const access = await requireWorkspaceAccess(
     c,
@@ -326,10 +321,10 @@ async function patchSkillByIdHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkill(c.env.DB, access.workspace.id, skillId);
+  const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
   const enabled = body.enabled !== undefined ? body.enabled : skill.enabled;
@@ -352,13 +347,13 @@ async function deleteSkillByNameHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkillByName(c.env.DB, access.workspace.id, skillName);
+  const skill = await getSkillByName(c.env.DB, access.space.id, skillName);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
-  await deleteSkillByName(c.env.DB, access.workspace.id, skillName);
+  await deleteSkillByName(c.env.DB, access.space.id, skillName);
 
   return c.json({ success: true });
 }
@@ -377,13 +372,13 @@ async function deleteSkillByIdHandler(c: SkillsContext) {
   );
   if (access instanceof Response) return access;
 
-  const skill = await getSkill(c.env.DB, access.workspace.id, skillId);
+  const skill = await getSkill(c.env.DB, access.space.id, skillId);
 
   if (!skill) {
-    return notFound(c, 'Skill');
+    throw new NotFoundError('Skill');
   }
 
-  await deleteSkillByName(c.env.DB, access.workspace.id, skill.name);
+  await deleteSkillByName(c.env.DB, access.space.id, skill.name);
 
   return c.json({ success: true });
 }
@@ -395,7 +390,7 @@ async function skillContextHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_CONTEXT_ROLES);
   if (access instanceof Response) return access;
 
-  const catalog = await listSkillContext(c.env.DB, access.workspace.id, getSkillLocaleInput(c));
+  const catalog = await listSkillContext(c.env.DB, access.space.id, getSkillLocaleInput(c));
   return c.json({
     locale: catalog.locale,
     available_skills: catalog.available_skills,
@@ -411,7 +406,7 @@ async function listOfficialSkillsHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
   if (access instanceof Response) return access;
 
-  const catalog = await listOfficialSkillsCatalog(c.env.DB, access.workspace.id, getSkillLocaleInput(c));
+  const catalog = await listOfficialSkillsCatalog(c.env.DB, access.space.id, getSkillLocaleInput(c));
   return c.json(catalog);
 }
 
@@ -423,9 +418,9 @@ async function getOfficialSkillHandler(c: SkillsContext) {
   const access = await requireWorkspaceAccess(c, scopeId, user.id, SKILL_DESCRIBE_ROLES);
   if (access instanceof Response) return access;
 
-  const skill = await getOfficialSkillCatalogEntry(c.env.DB, access.workspace.id, skillId, getSkillLocaleInput(c));
+  const skill = await getOfficialSkillCatalogEntry(c.env.DB, access.space.id, skillId, getSkillLocaleInput(c));
   if (!skill) {
-    return notFound(c, 'Official skill');
+    throw new NotFoundError('Official skill');
   }
 
   return c.json({ skill });

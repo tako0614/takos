@@ -17,6 +17,18 @@ type ProvisionCloudflareResourceInput = {
     dimensions: number;
     metric: 'cosine' | 'euclidean' | 'dot-product';
   };
+  queue?: {
+    deliveryDelaySeconds?: number;
+  };
+  analyticsEngine?: {
+    dataset?: string;
+  };
+  workflow?: {
+    service: string;
+    export: string;
+    timeoutMs?: number;
+    maxRetries?: number;
+  };
 };
 
 export async function provisionCloudflareResource(
@@ -34,6 +46,9 @@ export async function provisionCloudflareResource(
   try {
     const created = await provider.createResource(input.type, input.cfName, {
       ...(input.vectorize ? { vectorize: input.vectorize } : {}),
+      ...(input.queue ? { queue: input.queue } : {}),
+      ...(input.analyticsEngine ? { analyticsEngine: input.analyticsEngine } : {}),
+      ...(input.workflow ? { workflow: input.workflow } : {}),
     });
 
     await insertResource(env.DB, {

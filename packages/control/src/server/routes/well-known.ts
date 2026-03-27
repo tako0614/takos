@@ -12,7 +12,7 @@ import type { Env } from '../../shared/types';
 import type { OAuthServerMetadata } from '../../shared/types/oauth';
 import { ALL_SCOPES, DEVICE_CODE_GRANT_TYPE } from '../../shared/types/oauth';
 import { logError } from '../../shared/utils/logger';
-import { internalError } from '../../shared/utils/error-response';
+import { InternalError } from '@takos/common/errors';
 
 const wellKnown = new Hono<{ Bindings: Env }>();
 
@@ -77,7 +77,7 @@ wellKnown.get('/jwks.json', async (c) => {
     });
   } catch (error) {
     logError('JWKS generation error', error, { module: 'routes/well-known' });
-    return internalError(c, 'Failed to generate JWKS');
+    throw new InternalError('Failed to generate JWKS');
   }
 });
 

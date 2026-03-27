@@ -17,7 +17,7 @@ import {
   serviceAuthError,
   toJwtHeartbeatPayload,
 } from './auth';
-import type { BaseVariables } from '../shared/helpers';
+import type { BaseVariables } from '../shared/route-auth';
 
 const sessions = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 const startSessionSchema = z.object({ repo_id: z.string(), branch: z.string().optional() });

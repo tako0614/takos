@@ -7,13 +7,13 @@ const mocks = vi.hoisted(() => ({
   listWorkspacesForUser: vi.fn(),
   getOrCreatePersonalWorkspace: vi.fn(),
   createWorkspaceWithDefaultRepo: vi.fn(),
-  createWorkspaceMember: vi.fn(),
+  createSpaceMember: vi.fn(),
   deleteWorkspace: vi.fn(),
   getUserByEmail: vi.fn(),
-  getWorkspaceMember: vi.fn(),
+  getSpaceMember: vi.fn(),
   getWorkspaceModelSettings: vi.fn(),
   getWorkspaceWithRepository: vi.fn(),
-  listWorkspaceMembers: vi.fn(),
+  listSpaceMembers: vi.fn(),
   updateWorkspace: vi.fn(),
   updateWorkspaceModel: vi.fn(),
 }));
@@ -22,18 +22,18 @@ vi.mock('@/services/identity/spaces', () => ({
   listWorkspacesForUser: mocks.listWorkspacesForUser,
   getOrCreatePersonalWorkspace: mocks.getOrCreatePersonalWorkspace,
   createWorkspaceWithDefaultRepo: mocks.createWorkspaceWithDefaultRepo,
-  createWorkspaceMember: mocks.createWorkspaceMember,
+  createSpaceMember: mocks.createSpaceMember,
   deleteWorkspace: mocks.deleteWorkspace,
   getUserByEmail: mocks.getUserByEmail,
-  getWorkspaceMember: mocks.getWorkspaceMember,
+  getSpaceMember: mocks.getSpaceMember,
   getWorkspaceModelSettings: mocks.getWorkspaceModelSettings,
   getWorkspaceWithRepository: mocks.getWorkspaceWithRepository,
-  listWorkspaceMembers: mocks.listWorkspaceMembers,
+  listSpaceMembers: mocks.listSpaceMembers,
   updateWorkspace: mocks.updateWorkspace,
   updateWorkspaceModel: mocks.updateWorkspaceModel,
 }));
 
-import spacesRoutes from '@/routes/workspaces/base';
+import spacesRoutes from '@/routes/spaces/base';
 
 function createUser(): User {
   return {

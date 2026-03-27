@@ -6,7 +6,7 @@ import { getSession, getSessionIdFromCookie } from '../../application/services/i
 import { getCachedUser } from '../../shared/utils/user-cache';
 import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
-import { unauthorized } from '../../shared/utils/error-response';
+import { AuthenticationError } from '@takos/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
 export interface OAuthContext {
@@ -199,6 +199,6 @@ export function requireAnyAuth(
       return requireOAuthAuth(requiredScopes)(c, next);
     }
 
-    return c.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, 401);
+    throw new AuthenticationError('Unauthorized');
   };
 }

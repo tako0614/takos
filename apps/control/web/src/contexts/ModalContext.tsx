@@ -1,8 +1,8 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 interface ModalContextValue {
-  showCreateWorkspace: boolean;
-  setShowCreateWorkspace: (show: boolean) => void;
+  showCreateSpace: boolean;
+  setShowCreateSpace: (show: boolean) => void;
   showAgentModal: boolean;
   setShowAgentModal: (show: boolean) => void;
   showSearch: boolean;
@@ -20,21 +20,21 @@ export function useModals(): ModalContextValue {
 }
 
 export function ModalProvider({ children }: { children: ReactNode }) {
-  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
 
   const value = useMemo(
     (): ModalContextValue => ({
-      showCreateWorkspace,
-      setShowCreateWorkspace,
+      showCreateSpace,
+      setShowCreateSpace,
       showAgentModal,
       setShowAgentModal,
       showSearch,
       setShowSearch,
     }),
     [
-      showCreateWorkspace,
+      showCreateSpace,
       showAgentModal,
       showSearch,
     ],

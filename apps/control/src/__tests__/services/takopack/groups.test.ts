@@ -56,7 +56,16 @@ function createBaseManifest(groupOverrides?: Partial<NonNullable<TakopackManifes
     group: {
       workers: [],
       ui: [],
-      resources: { d1: [], r2: [], kv: [] },
+      resources: {
+        d1: [],
+        r2: [],
+        kv: [],
+        queue: [],
+        analyticsEngine: [],
+        workflow: [],
+        vectorize: [],
+        durableObject: [],
+      },
       links: [],
       ...groupOverrides,
     },
@@ -109,13 +118,27 @@ describe('BundleShortcutGroupService', () => {
   it('creates shortcut group items for resources', async () => {
     const service = new BundleShortcutGroupService({ DB: {} } as any);
     const manifest = createBaseManifest({
-      resources: { d1: ['my-db'], r2: ['my-bucket'], kv: [] },
+      resources: {
+        d1: ['my-db'],
+        r2: ['my-bucket'],
+        kv: [],
+        queue: [],
+        analyticsEngine: [],
+        workflow: [],
+        vectorize: [],
+        durableObject: [],
+      },
     });
 
     const resourceMaps = {
       d1: new Map([['my-db', 'res-d1-1']]),
       r2: new Map([['my-bucket', 'res-r2-1']]),
       kv: new Map(),
+      queue: new Map(),
+      analyticsEngine: new Map(),
+      workflow: new Map(),
+      vectorize: new Map(),
+      durableObject: new Map(),
     };
 
     await service.createShortcutGroup('ws-1', 'tp-1', manifest, {
@@ -158,6 +181,10 @@ describe('buildProvisionedResourceReferenceMaps', () => {
     expect(maps.d1.size).toBe(0);
     expect(maps.r2.size).toBe(0);
     expect(maps.kv.size).toBe(0);
+    expect(maps.queue.size).toBe(0);
+    expect(maps.analyticsEngine.size).toBe(0);
+    expect(maps.workflow.size).toBe(0);
+    expect(maps.vectorize.size).toBe(0);
   });
 
   it('builds reference maps for D1 resources', () => {
@@ -165,6 +192,11 @@ describe('buildProvisionedResourceReferenceMaps', () => {
       d1: [{ binding: 'DB', id: 'cf-d1-1', name: 'db-name', resourceId: 'res-d1-1', wasAdopted: false }],
       r2: [],
       kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
     };
 
     const maps = buildProvisionedResourceReferenceMaps(provisioned);
@@ -180,6 +212,11 @@ describe('buildProvisionedResourceReferenceMaps', () => {
       d1: [],
       r2: [{ binding: 'STORAGE', name: 'r2-bucket', resourceId: 'res-r2-1', wasAdopted: false }],
       kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
     };
 
     const maps = buildProvisionedResourceReferenceMaps(provisioned);
@@ -194,6 +231,11 @@ describe('buildProvisionedResourceReferenceMaps', () => {
       d1: [],
       r2: [],
       kv: [{ binding: 'CACHE', id: 'cf-kv-1', name: 'kv-name', resourceId: 'res-kv-1', wasAdopted: false }],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
     };
 
     const maps = buildProvisionedResourceReferenceMaps(provisioned);
@@ -209,6 +251,11 @@ describe('buildProvisionedResourceReferenceMaps', () => {
       d1: [{ binding: '', id: '', name: '', resourceId: 'res-d1-1', wasAdopted: false }],
       r2: [],
       kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
     };
 
     const maps = buildProvisionedResourceReferenceMaps(provisioned);

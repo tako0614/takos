@@ -34,9 +34,12 @@ export type RunHierarchyNode = {
   rootRunId: string | null;
 };
 
-export type WorkspaceModelLookup = {
+export type SpaceModelLookup = {
   aiModel: string | null;
 };
+
+/** @deprecated Use {@link SpaceModelLookup} instead. */
+export type WorkspaceModelLookup = SpaceModelLookup;
 
 export type D1CountRow = {
   count: number | string;

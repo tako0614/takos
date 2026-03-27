@@ -36,7 +36,7 @@ export function ReposPanel({
     setShowCreateModal,
     handleCreateRepo,
     handleStar,
-  } = useReposData({ selectedWorkspaceId: spaceId, initialTab: 'repos' });
+  } = useReposData({ selectedSpaceId: spaceId, initialTab: 'repos' });
 
   const handleSelectRepo = (repo: { owner?: { username?: string | null } | null; name: string }) => {
     if (repo?.owner?.username && repo.name) {
@@ -89,7 +89,7 @@ export function ReposPanel({
                 />
               ) : (
                 <RepoCollection
-                  selectedWorkspaceId={spaceId}
+                  selectedSpaceId={spaceId}
                   myRepos={myRepos}
                   myReposLoading={myReposLoading}
                   myReposError={myReposError}

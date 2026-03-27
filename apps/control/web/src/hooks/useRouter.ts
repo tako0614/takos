@@ -100,28 +100,28 @@ function parseAppRoute(parts: string[]): RouteState | undefined {
   }
 }
 
-function parseWorkspaceAliasRoute(parts: string[]): RouteState | undefined {
+function parseSpaceAliasRoute(parts: string[]): RouteState | undefined {
   if (parts[0] !== 'w' || !parts[1]) return undefined;
 
   const spaceId = parts[1];
 
   if (parts[2] === 'repos') {
     if (parts[3]) {
-      return { view: 'repo', spaceId, workspaceSlug: spaceId, repoId: parts[3] };
+      return { view: 'repo', spaceId, spaceSlug: spaceId, repoId: parts[3] };
     }
-    return { view: 'repos', spaceId, workspaceSlug: spaceId };
+    return { view: 'repos', spaceId, spaceSlug: spaceId };
   }
 
   if (parts[2] === 'files') {
     const storagePath = parts.length > 3 ? `/${parts.slice(3).join('/')}` : '/';
-    return { view: 'storage', spaceId, workspaceSlug: spaceId, storagePath };
+    return { view: 'storage', spaceId, spaceSlug: spaceId, storagePath };
   }
 
   if (parts[2] === 't' && parts[3]) {
-    return { view: 'chat', spaceId, workspaceSlug: spaceId, threadId: parts[3] };
+    return { view: 'chat', spaceId, spaceSlug: spaceId, threadId: parts[3] };
   }
 
-  return { view: 'chat', spaceId, workspaceSlug: spaceId };
+  return { view: 'chat', spaceId, spaceSlug: spaceId };
 }
 
 type TopLevelRouteParser = (parts: string[]) => RouteState | undefined;
@@ -142,7 +142,7 @@ const TOP_LEVEL_ROUTE_PARSERS: Partial<Record<string, TopLevelRouteParser>> = {
   deployments: () => ({ view: 'deploy', deploySection: 'workers' }),
   services: () => ({ view: 'deploy', deploySection: 'workers' }),
   app: parseAppRoute,
-  w: parseWorkspaceAliasRoute,
+  w: parseSpaceAliasRoute,
 };
 
 function parseTopLevelRoute(parts: string[]): RouteState | undefined {

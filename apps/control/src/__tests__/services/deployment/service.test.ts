@@ -181,6 +181,7 @@ function createBaseDeployment(overrides: Partial<Deployment & { service_id?: str
     space_id: 'space-1',
     version: 1,
     artifact_ref: 'worker-w-1-v1',
+    artifact_kind: 'worker-bundle',
     bundle_r2_key: 'deployments/w-1/1/bundle.js',
     bundle_hash: 'sha256-abc',
     bundle_size: 100,
@@ -198,7 +199,7 @@ function createBaseDeployment(overrides: Partial<Deployment & { service_id?: str
     routing_weight: 100,
     deployed_by: 'user-1',
     deploy_message: null,
-    provider_name: 'cloudflare',
+    provider_name: 'workers-dispatch',
     target_json: '{}',
     provider_state_json: '{}',
     idempotency_key: null,
@@ -408,7 +409,7 @@ describe('DeploymentService.createDeployment', () => {
     mocks.generateId.mockReturnValue('new-dep-id');
     mocks.computeSHA256.mockResolvedValue('sha256-hash');
     mocks.serializeDeploymentTarget.mockReturnValue({
-      providerName: 'cloudflare',
+      providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
     });
@@ -456,7 +457,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('creates a deployment successfully', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'test.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 3,
@@ -484,7 +485,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('uploads bundle to R2 when WORKER_BUNDLES is present', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 1,
@@ -507,7 +508,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('encrypts env vars snapshot when present', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 1,
@@ -541,7 +542,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('encrypts bindings snapshot when present', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 1,
@@ -613,7 +614,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('uses snapshotOverride when provided instead of resolving state', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 1,
@@ -644,7 +645,7 @@ describe('DeploymentService.createDeployment', () => {
   });
 
   it('cleans up R2 artifacts on creation failure', async () => {
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createBaseDeployment({ id: 'new-dep-id', version: 1 }),
       version: 1,
@@ -668,7 +669,7 @@ describe('DeploymentService.createDeployment', () => {
 
   it('falls back to workerId when serviceId is not provided', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com' });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
     mocks.createDeploymentWithVersion.mockResolvedValue({
       deployment: createdDeployment,
       version: 1,
@@ -748,7 +749,7 @@ describe('DeploymentService.executeDeployment', () => {
     });
     mocks.constantTimeEqual.mockReturnValue(true);
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn(),
     });
@@ -806,7 +807,7 @@ describe('DeploymentService.executeDeployment', () => {
     mocks.getServiceDeploymentBasics
       .mockResolvedValue({ exists: false, id: 'w-1', hostname: null, activeDeploymentId: null });
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn(),
     });
@@ -855,7 +856,7 @@ describe('DeploymentService.executeDeployment', () => {
     });
     mocks.constantTimeEqual.mockReturnValue(true);
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn(),
     });
@@ -995,7 +996,7 @@ describe('DeploymentService.rollback', () => {
       .mockResolvedValueOnce(targetDep) // find fallback target
       .mockResolvedValueOnce(targetDep); // final fetch
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
     });
@@ -1061,7 +1062,7 @@ describe('DeploymentService.rollback', () => {
     mocks.findDeploymentByServiceVersion.mockResolvedValue(targetDep);
     mocks.getDeploymentById.mockResolvedValue(targetDep);
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
     });
@@ -1355,7 +1356,7 @@ describe('resolveDeploymentArtifactRef logic', () => {
       hostname: 'test.example.com',
     });
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: vi.fn(),
       assertRollbackTarget: vi.fn(),
     });
@@ -1404,7 +1405,7 @@ describe('resolveDeploymentArtifactRef logic', () => {
     // with the correct artifactRef.
     const deployFn = vi.fn();
     mocks.createDeploymentProvider.mockReturnValue({
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       deploy: deployFn,
       assertRollbackTarget: vi.fn(),
     });

@@ -109,6 +109,7 @@ describe('dispatchAgentExecutorStart', () => {
     expect(request.headers.get('Content-Type')).toBe('application/json');
     await expect(request.json()).resolves.toEqual({
       ...payload,
+      serviceId: 'worker-1',
       ...controlConfig,
     });
 

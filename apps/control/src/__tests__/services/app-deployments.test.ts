@@ -15,9 +15,10 @@ const mocks = vi.hoisted(() => {
     parseAndValidateWorkflowYaml: vi.fn(),
     validateDeployProducerJob: vi.fn(),
     appManifestToBundleDocs: vi.fn(),
-    buildBundlePackageData: vi.fn(),
+    buildParsedPackageFromDocs: vi.fn(),
+    buildParsedPackageFromParts: vi.fn(),
     extractBuildSourcesFromManifestJson: vi.fn(),
-    install: vi.fn(),
+    installResolvedPackage: vi.fn(),
     bucketGet,
     workerBundlesPut: vi.fn(),
   };
@@ -45,14 +46,18 @@ vi.mock('@/services/source/app-manifest', () => ({
   parseAndValidateWorkflowYaml: mocks.parseAndValidateWorkflowYaml,
   validateDeployProducerJob: mocks.validateDeployProducerJob,
   appManifestToBundleDocs: mocks.appManifestToBundleDocs,
-  buildBundlePackageData: mocks.buildBundlePackageData,
+  buildParsedPackageFromDocs: mocks.buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson: mocks.extractBuildSourcesFromManifestJson,
   selectAppManifestPathFromRepo: (entries: ReadonlyArray<string>) => entries[0] || null,
 }));
 
+vi.mock('@/services/takopack/manifest', () => ({
+  buildParsedPackageFromParts: mocks.buildParsedPackageFromParts,
+}));
+
 vi.mock('@/services/platform/bundle-deployment-orchestrator', () => ({
   createBundleDeploymentOrchestrator: () => ({
-    install: mocks.install,
+    installResolvedPackage: mocks.installResolvedPackage,
   }),
 }));
 
@@ -97,7 +102,16 @@ describe('AppDeploymentService', () => {
       jobs: { 'build-web': { runsOn: 'ubuntu-latest', steps: [] } },
     });
     mocks.appManifestToBundleDocs.mockReturnValue([{ kind: 'Package' }]);
-    mocks.buildBundlePackageData.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
+    mocks.buildParsedPackageFromDocs.mockResolvedValue({
+      manifestYaml: 'apiVersion: takos.dev/v1alpha1\nkind: Package\n',
+      normalizedFiles: new Map(),
+      checksums: new Map(),
+    });
+    mocks.buildParsedPackageFromParts.mockReturnValue({
+      manifest: { meta: { name: 'test', appId: 'test', version: '1.0.0', createdAt: '' }, manifestVersion: 'vnext-infra-v1alpha1', objects: [] },
+      files: new Map(),
+      applyReport: [],
+    });
     // Create Drizzle-compatible mock for workflow queries
     {
       const getMock = vi.fn();
@@ -129,7 +143,7 @@ describe('AppDeploymentService', () => {
         delete: vi.fn(() => chain),
       });
     }
-    mocks.install.mockResolvedValue({
+    mocks.installResolvedPackage.mockResolvedValue({
       bundleDeploymentId: 'bundle-1',
       appId: 'app-1',
       name: 'Sample App',
@@ -137,7 +151,7 @@ describe('AppDeploymentService', () => {
       applyReport: [],
       resourcesCreated: [],
       sourceRepoId: 'repo-1',
-      sourceTag: 'branch:main',
+      sourceTag: 'branch:main@commit-sha-1',
     });
   });
 
@@ -164,7 +178,7 @@ describe('AppDeploymentService', () => {
     });
 
     expect(mocks.bucketGet).toHaveBeenCalledWith('actions/artifacts/job-1/web-dist/dist/worker.mjs');
-    expect(mocks.workerBundlesPut).toHaveBeenCalled();
+    expect(mocks.installResolvedPackage).toHaveBeenCalled();
     expect(result.build_sources).toEqual([{
       service_name: 'web',
       workflow_path: '.takos/workflows/build.yml',

@@ -9,11 +9,11 @@
     "@hono/node-server": "^1.13.0",
     "@takos/agent-core": "workspace:*",
     "@takos/common": "workspace:*",
-    "@takos/control-agent": "workspace:*",
+    "@takos/control-core": "workspace:*",
     "hono": "^4.7.0"
   },
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/app.ts",
     "./package.json": "./package.json"
   },
   "devDependencies": {

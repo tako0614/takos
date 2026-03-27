@@ -3,7 +3,7 @@ import { services } from '../../../infra/db/schema-services';
 import { eq, and } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { upsertManagedMcpServer } from '../platform/mcp';
-import { resolveServiceRouteSummaryForWorkspace } from '../platform/workers';
+import { resolveServiceRouteSummaryForSpace } from '../platform/workers';
 import type { ManifestMcpServer } from './types';
 
 export class BundleManagedMcpService {
@@ -22,7 +22,8 @@ export class BundleManagedMcpService {
     bundleDeploymentId: string,
     installKey: string,
     server: ManifestMcpServer,
-    deployedWorkerIdByRef?: Map<string, string>
+    deployedWorkerIdByRef?: Map<string, string>,
+    authSecret?: string,
   ): Promise<void> {
     const db = getDb(this.env.DB);
     const workerRef = server.worker?.trim();
@@ -39,7 +40,7 @@ export class BundleManagedMcpService {
             eq(services.id, resolvedWorkerId),
           )
         ).get()
-      : await resolveServiceRouteSummaryForWorkspace(this.env.DB, spaceId, workerRef);
+      : await resolveServiceRouteSummaryForSpace(this.env.DB, spaceId, workerRef);
 
     if (!workerSummary) {
       throw new Error(`Worker not found for MCP server "${server.name}": ${workerRef}`);
@@ -58,6 +59,7 @@ export class BundleManagedMcpService {
       name: this.buildManagedServerName(server.name, installKey),
       url,
       serviceId: resolvedWorkerId,
+      authToken: authSecret,
     });
   }
 }

@@ -1,7 +1,7 @@
 import { parentPort } from 'worker_threads';
 import vm from 'vm';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { createLogger } from '@takos/common/logger';
 import {
   normalizeAllowedDomains,
@@ -244,6 +244,7 @@ parentPort.on('message', async (message: ToolRequest) => {
 
     const sandboxContext = {
       fetch: restrictedFetch,
+      // eslint-disable-next-line no-console -- intentional console proxy for sandboxed tool output
       console: Object.freeze({
         log: (...args: unknown[]) => console.log('[Tool]', ...args),
         error: (...args: unknown[]) => console.error('[Tool]', ...args),

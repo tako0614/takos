@@ -17,7 +17,7 @@ import type {
   AgentWorkerConfig,
   RetryPolicy,
 } from '../multi-agent/types';
-import type { DeploymentEnv } from './service';
+import type { DeploymentEnv } from './types';
 import {
   executeDeploymentStep,
   updateDeploymentState,

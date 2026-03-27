@@ -16,14 +16,14 @@ import type {
   VectorIndexBinding,
 } from '../shared/types/bindings.ts';
 
-export type PlatformSource = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'kubernetes';
+export type PlatformSource = 'workers' | 'node';
 
 export type PlatformServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
-export type CloudflarePlatformDeployProviderConfig = {
-  name: 'cloudflare';
+export type WorkersDispatchDeployProviderConfig = {
+  name: 'workers-dispatch';
   config: {
     accountId: string;
     apiToken: string;
@@ -32,7 +32,7 @@ export type CloudflarePlatformDeployProviderConfig = {
   };
 };
 
-export type OciPlatformDeployProviderConfig = {
+export type OciDeployProviderConfig = {
   name: 'oci';
   config: {
     orchestratorUrl: string;
@@ -40,7 +40,7 @@ export type OciPlatformDeployProviderConfig = {
   };
 };
 
-export type EcsPlatformDeployProviderConfig = {
+export type EcsDeployProviderConfig = {
   name: 'ecs';
   config: {
     region: string;
@@ -51,7 +51,7 @@ export type EcsPlatformDeployProviderConfig = {
   };
 };
 
-export type CloudRunPlatformDeployProviderConfig = {
+export type CloudRunDeployProviderConfig = {
   name: 'cloud-run';
   config: {
     projectId: string;
@@ -61,8 +61,8 @@ export type CloudRunPlatformDeployProviderConfig = {
   };
 };
 
-export type KubernetesPlatformDeployProviderConfig = {
-  name: 'kubernetes';
+export type K8sDeployProviderConfig = {
+  name: 'k8s';
   config: {
     namespace: string;
     deploymentName?: string;
@@ -71,11 +71,11 @@ export type KubernetesPlatformDeployProviderConfig = {
 };
 
 export type PlatformDeployProviderConfig =
-  | CloudflarePlatformDeployProviderConfig
-  | OciPlatformDeployProviderConfig
-  | EcsPlatformDeployProviderConfig
-  | CloudRunPlatformDeployProviderConfig
-  | KubernetesPlatformDeployProviderConfig;
+  | WorkersDispatchDeployProviderConfig
+  | OciDeployProviderConfig
+  | EcsDeployProviderConfig
+  | CloudRunDeployProviderConfig
+  | K8sDeployProviderConfig;
 
 export type PlatformDeployProviderRegistry = {
   defaultName?: DeploymentProviderName;

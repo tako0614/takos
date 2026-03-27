@@ -16,6 +16,7 @@ export function isValidLogoUrl(url: string | undefined | null): boolean {
     const parsed = new URL(url);
     return ['http:', 'https:'].includes(parsed.protocol);
   } catch {
+    // Malformed URL -- treat as invalid
     return false;
   }
 }

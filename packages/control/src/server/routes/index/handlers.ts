@@ -4,20 +4,20 @@ import { eq, and, ne, inArray, desc, count } from 'drizzle-orm';
 import { createEmbeddingsService, isEmbeddingsAvailable } from '../../../application/services/execution/embeddings';
 import type { IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { checkWorkspaceAccess, generateId, now } from '../../../shared/utils';
+import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import { logError, logInfo } from '../../../shared/utils/logger';
 import { indexFile, runIndexJob } from './jobs';
 import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './shared';
 import { scheduleBackground } from './shared';
-import { badRequest, notFound, internalError } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
-  const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id);
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
 
   const db = getDb(c.env.DB);
@@ -55,14 +55,14 @@ export async function handleVectorizeIndex(
 ): Promise<Response> {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
-  const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin']);
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin']);
   if (!access) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
 
   if (!isEmbeddingsAvailable(c.env)) {
-    return badRequest(c, 'Vectorize not available');
+    throw new BadRequestError('Vectorize not available');
   }
 
   const jobId = generateId();
@@ -79,12 +79,12 @@ export async function handleVectorizeIndex(
       logInfo(`Vectorize job ${jobId} enqueued for workspace ${spaceId}`, { module: 'index_queue' });
     } catch (err) {
       logError('Failed to enqueue vectorize job', err, { module: 'routes/index/handlers' });
-      return internalError(c, 'Failed to queue indexing job');
+      throw new InternalError('Failed to queue indexing job');
     }
   } else {
     const embeddingsService = createEmbeddingsService(c.env);
     if (!embeddingsService) {
-      return internalError(c, 'Failed to create embeddings service');
+      throw new InternalError('Failed to create embeddings service');
     }
 
     scheduleBackground(
@@ -110,10 +110,10 @@ export async function handleVectorizeIndex(
 export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
-  const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin']);
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin']);
   if (!access) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
 
   const db = getDb(c.env.DB);
@@ -121,7 +121,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
     and(eq(indexJobs.accountId, spaceId), inArray(indexJobs.status, ['queued', 'running']))
   ).get();
   if (runningJob) {
-    return badRequest(c, 'Index job already in progress');
+    throw new BadRequestError('Index job already in progress');
   }
 
   const fileCountResult = await db.select({ count: count() }).from(files).where(
@@ -159,18 +159,18 @@ export async function handleIndexFile(
   body: IndexFileBody | null
 ): Promise<Response> {
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
-  const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin', 'editor']);
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
   if (!body.path) {
-    return badRequest(c, 'Path is required');
+    throw new BadRequestError('Path is required');
   }
 
   const db = getDb(c.env.DB);
@@ -178,7 +178,7 @@ export async function handleIndexFile(
     and(eq(files.accountId, spaceId), eq(files.path, body.path))
   ).get();
   if (!file) {
-    return notFound(c, 'File');
+    throw new NotFoundError('File');
   }
 
   const jobId = generateId();

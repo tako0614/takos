@@ -17,24 +17,49 @@ export function toRequiredIsoString(value: string | Date): string {
 
 // --- Common utilities ---
 
-export {
-  buildDurableObjectUrl,
-  extractBearerToken,
-} from './common';
+// Durable Object URL builder (formerly services/durable-object-url.ts)
+const DURABLE_OBJECT_INTERNAL_ORIGIN = 'https://internal.do';
 
-// --- Workspace access ---
+export function buildDurableObjectUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${DURABLE_OBJECT_INTERNAL_ORIGIN}${normalizedPath}`;
+}
+
+/** Length of the 'Bearer ' prefix used when extracting tokens. */
+const BEARER_PREFIX_LENGTH = 7;
+
+export function extractBearerToken(header: string | undefined | null): string | null {
+  if (!header?.startsWith('Bearer ')) return null;
+  const token = header.slice(BEARER_PREFIX_LENGTH).trim();
+  return token || null;
+}
+
+// --- Space access ---
 
 export {
   loadSpace,
   loadSpaceMembership,
-  checkWorkspaceAccess,
+  checkSpaceAccess,
   hasPermission,
-  type WorkspaceAccess,
-} from './workspace';
+  type SpaceAccess,
+} from './space-access';
 
 // --- Naming ---
 
-export { slugifyName } from './slug';
+/** Maximum length of a generated slug. */
+const MAX_SLUG_LENGTH = 32;
+
+export function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_SLUG_LENGTH) || 'space';
+}
+
+export function sanitizeRepoName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+}
 
 // --- ID generation ---
 
@@ -120,36 +145,6 @@ export {
 } from './crypto';
 
 // --- Error handling ---
-
-export {
-  ErrorCodes,
-  type ErrorCode,
-  AppError,
-  BadRequestError,
-  AuthenticationError,
-  AuthorizationError,
-  NotFoundError,
-  ConflictError,
-  ValidationError,
-  RateLimitError,
-  InternalError,
-  ServiceUnavailableError,
-  isAppError,
-  normalizeError,
-  logError as logAppError,
-  type ValidationErrorDetail,
-  errorResponse,
-  badRequest,
-  unauthorized,
-  forbidden,
-  notFound,
-  conflict,
-  validationError,
-  rateLimited,
-  internalError,
-  serviceUnavailable,
-  handleDbError,
-  type ErrorResponse,
-  oauth2Error,
-  type OAuth2ErrorResponse,
-} from './error-response';
+// NOTE: Error classes and response helpers (BadRequestError, notFound, etc.)
+// are intentionally NOT re-exported here. Import them directly from
+// './error-response' to keep this barrel lean and aid tree-shaking.

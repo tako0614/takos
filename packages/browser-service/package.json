@@ -12,7 +12,7 @@
     "playwright-core": "^1.52.0"
   },
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/app.ts",
     "./package.json": "./package.json"
   },
   "devDependencies": {

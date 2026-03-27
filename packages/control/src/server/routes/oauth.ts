@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import type { Env } from '../../shared/types';
-import type { PublicRouteEnv } from './shared/helpers';
+import type { PublicRouteEnv } from './shared/route-auth';
 import { oauthBodyLimit } from '../middleware/body-size';
 import oauthAuthorize from './oauth/authorize';
 import oauthDevice from './oauth/device';
@@ -21,7 +21,7 @@ import {
 import { getDb, accounts, authIdentities } from '../../infra/db';
 import { externalTokenPostRedirectPage } from './auth/html';
 import { logError } from '../../shared/utils/logger';
-import { badRequest, forbidden } from '../../shared/utils/error-response';
+import { BadRequestError, AuthorizationError } from '@takos/common/errors';
 
 const oauth = new Hono<PublicRouteEnv>();
 
@@ -74,7 +74,7 @@ oauth.get('/google', async (c) => {
           externalRedirectUri = redirectUri;
         } else if (redirectUri) {
           await auditLog('oauth_invalid_redirect', { attempted_uri: redirectUri });
-          return badRequest(c, 'Invalid redirect_uri');
+          throw new BadRequestError('Invalid redirect_uri');
         }
       }
     } catch {
@@ -119,13 +119,13 @@ oauth.get('/google/callback', async (c) => {
   }
 
   if (!code || !state) {
-    return badRequest(c, 'Missing code or state');
+    throw new BadRequestError('Missing code or state');
   }
 
   const stateResult = await validateOAuthState(env.DB, state);
   if (!stateResult.valid || !stateResult.redirectUri) {
     await auditLog('oauth_invalid_state', { state });
-    return badRequest(c, 'Invalid or expired OAuth state');
+    throw new BadRequestError('Invalid or expired OAuth state');
   }
 
   const externalRedirectUri = stateResult.redirectUri;
@@ -146,7 +146,7 @@ oauth.get('/google/callback', async (c) => {
 
   if (!tokenResponse.ok) {
     logError('Token exchange failed', await tokenResponse.text(), { module: 'routes/oauth' });
-    return badRequest(c, 'Token exchange failed');
+    throw new BadRequestError('Token exchange failed');
   }
 
   const tokens = (await tokenResponse.json()) as {
@@ -161,7 +161,7 @@ oauth.get('/google/callback', async (c) => {
   });
 
   if (!userInfoResponse.ok) {
-    return badRequest(c, 'Failed to get user info');
+    throw new BadRequestError('Failed to get user info');
   }
 
   const googleUser = (await userInfoResponse.json()) as {
@@ -183,7 +183,7 @@ oauth.get('/google/callback', async (c) => {
 
   if (!identity) {
     // Registration disabled for external OAuth
-    return forbidden(c, 'User not registered');
+    throw new AuthorizationError('User not registered');
   }
 
   const user = await db.select({ id: accounts.id })
@@ -192,7 +192,7 @@ oauth.get('/google/callback', async (c) => {
     .get();
 
   if (!user) {
-    return forbidden(c, 'User not registered');
+    throw new AuthorizationError('User not registered');
   }
 
   // Create D1-based auth session (for service API validation)
@@ -210,7 +210,7 @@ oauth.get('/google/callback', async (c) => {
     redirectFallbackDomains(env.ADMIN_DOMAIN)
   )) {
     await auditLog('oauth_invalid_redirect_after_state', { redirect_uri: externalRedirectUri });
-    return badRequest(c, 'Invalid redirect_uri');
+    throw new BadRequestError('Invalid redirect_uri');
   }
 
   const nonce = generateNonce();

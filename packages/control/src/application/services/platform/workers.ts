@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { WorkspaceRole } from '../../../shared/types';
+import type { SpaceRole } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { accountMemberships, accounts, getDb, services } from '../../../infra/db';
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
@@ -28,9 +28,12 @@ export interface ServiceRow {
   updated_at: string;
 }
 
-export interface ServiceWithWorkspaceName extends ServiceRow {
+export interface ServiceWithSpaceName extends ServiceRow {
   workspace_name: string;
 }
+
+/** @deprecated Use {@link ServiceWithSpaceName} instead. */
+export type ServiceWithWorkspaceName = ServiceWithSpaceName;
 
 export type ServiceRouteRecord = {
   id: string;
@@ -96,7 +99,7 @@ function normalizeServiceRouteRecord(row: ServiceRouteRecord): ServiceRouteRecor
   };
 }
 
-export async function countServicesInWorkspace(d1: D1Database, spaceId: string): Promise<number> {
+export async function countServicesInSpace(d1: D1Database, spaceId: string): Promise<number> {
   const db = getDb(d1);
   const result = await db.select({ count: sql<number>`count(*)` }).from(services).where(eq(services.accountId, spaceId)).get();
   return result?.count ?? 0;
@@ -128,7 +131,7 @@ export async function listServicesForUser(d1: D1Database, userId: string) {
   return serviceRows.map((service) => ({ ...toApiService(service), workspace_name: accountNameMap.get(service.accountId) ?? '' }));
 }
 
-export async function listServicesForWorkspace(d1: D1Database, spaceId: string) {
+export async function listServicesForSpace(d1: D1Database, spaceId: string) {
   const db = getDb(d1);
   const serviceRows = await db.select({
     id: services.id,
@@ -179,7 +182,7 @@ export async function getServiceRouteRecord(d1: D1Database, serviceId: string): 
   return service ? normalizeServiceRouteRecord(service) : null;
 }
 
-export async function getServiceRouteRecordForWorkspace(
+export async function getServiceRouteRecordForSpace(
   d1: D1Database,
   spaceId: string,
   serviceId: string,
@@ -272,7 +275,7 @@ export async function getServiceRouteSummary(
   return service ?? null;
 }
 
-export async function resolveServiceRouteSummaryForWorkspace(
+export async function resolveServiceRouteSummaryForSpace(
   d1: D1Database,
   spaceId: string,
   reference: string,
@@ -288,15 +291,15 @@ export async function resolveServiceRouteSummaryForWorkspace(
   };
 }
 
-export async function findServiceRouteSummaryInWorkspace(
+export async function findServiceRouteSummaryInSpace(
   d1: D1Database,
   spaceId: string,
   reference: string,
 ): Promise<ServiceRouteSummary | null> {
-  return resolveServiceRouteSummaryForWorkspace(d1, spaceId, reference);
+  return resolveServiceRouteSummaryForSpace(d1, spaceId, reference);
 }
 
-export async function listWorkspaceServiceRouteCleanupRecords(
+export async function listSpaceServiceRouteCleanupRecords(
   d1: D1Database,
   spaceId: string,
 ): Promise<ServiceRouteCleanupRecord[]> {
@@ -313,11 +316,11 @@ export async function listWorkspaceServiceRouteCleanupRecords(
     .all();
 }
 
-export async function listServiceRouteCleanupRecordsForWorkspace(
+export async function listServiceRouteCleanupRecordsForSpace(
   d1: D1Database,
   spaceId: string,
 ): Promise<ServiceRouteCleanupRecord[]> {
-  return listWorkspaceServiceRouteCleanupRecords(d1, spaceId);
+  return listSpaceServiceRouteCleanupRecords(d1, spaceId);
 }
 
 export async function getServiceForUser(d1: D1Database, serviceId: string, userId: string) {
@@ -346,7 +349,7 @@ export async function getServiceForUser(d1: D1Database, serviceId: string, userI
   return { ...toApiService(service), workspace_name: account?.name ?? '' };
 }
 
-export async function getServiceForUserWithRole(d1: D1Database, serviceId: string, userId: string, roles?: WorkspaceRole[]) {
+export async function getServiceForUserWithRole(d1: D1Database, serviceId: string, userId: string, roles?: SpaceRole[]) {
   const principalId = await resolveActorPrincipalId(d1, userId);
   if (!principalId) return null;
 
@@ -367,9 +370,9 @@ export async function getServiceForUserWithRole(d1: D1Database, serviceId: strin
 
   const membership = await db.select({ role: accountMemberships.role }).from(accountMemberships).where(and(eq(accountMemberships.accountId, service.accountId), eq(accountMemberships.memberId, principalId))).get();
   if (!membership) return null;
-  if (roles && roles.length > 0 && !roles.includes(membership.role as WorkspaceRole)) return null;
+  if (roles && roles.length > 0 && !roles.includes(membership.role as SpaceRole)) return null;
 
-  return { ...toApiService(service), member_role: membership.role as WorkspaceRole };
+  return { ...toApiService(service), member_role: membership.role as SpaceRole };
 }
 
 export async function createService(d1: D1Database, input: { spaceId: string; workerType: 'app' | 'service'; slug?: string; config?: string | null; platformDomain: string; }) {
@@ -423,20 +426,30 @@ export async function deleteService(d1: D1Database, serviceId: string) {
   await db.delete(services).where(eq(services.id, serviceId));
 }
 
-export const countWorkersInWorkspace = countServicesInWorkspace;
+// --- Deprecated aliases (Workspace -> Space rename) ---
+export const countServicesInWorkspace = countServicesInSpace;
+export const listServicesForWorkspace = listServicesForSpace;
+export const getServiceRouteRecordForWorkspace = getServiceRouteRecordForSpace;
+export const resolveServiceRouteSummaryForWorkspace = resolveServiceRouteSummaryForSpace;
+export const findServiceRouteSummaryInWorkspace = findServiceRouteSummaryInSpace;
+export const listWorkspaceServiceRouteCleanupRecords = listSpaceServiceRouteCleanupRecords;
+export const listServiceRouteCleanupRecordsForWorkspace = listServiceRouteCleanupRecordsForSpace;
+
+// --- Worker-prefixed aliases ---
+export const countWorkersInWorkspace = countServicesInSpace;
 export const listWorkersForUser = listServicesForUser;
-export const listWorkersForWorkspace = listServicesForWorkspace;
+export const listWorkersForWorkspace = listServicesForSpace;
 export const getWorkerById = getServiceById;
 export const getWorkerRouteRecord = getServiceRouteRecord;
-export const getWorkerRouteRecordForWorkspace = getServiceRouteRecordForWorkspace;
+export const getWorkerRouteRecordForWorkspace = getServiceRouteRecordForSpace;
 export const resolveWorkerReferenceRecord = resolveServiceReferenceRecord;
 export const resolveWorkerRouteReference = resolveServiceRouteReference;
 export const listWorkerRouteRecordsByIds = listServiceRouteRecordsByIds;
 export const getWorkerRouteSummary = getServiceRouteSummary;
-export const resolveWorkerRouteSummaryForWorkspace = resolveServiceRouteSummaryForWorkspace;
-export const findWorkerRouteSummaryInWorkspace = findServiceRouteSummaryInWorkspace;
-export const listWorkspaceWorkerRouteCleanupRecords = listWorkspaceServiceRouteCleanupRecords;
-export const listWorkerRouteCleanupRecordsForWorkspace = listServiceRouteCleanupRecordsForWorkspace;
+export const resolveWorkerRouteSummaryForWorkspace = resolveServiceRouteSummaryForSpace;
+export const findWorkerRouteSummaryInWorkspace = findServiceRouteSummaryInSpace;
+export const listWorkspaceWorkerRouteCleanupRecords = listSpaceServiceRouteCleanupRecords;
+export const listWorkerRouteCleanupRecordsForWorkspace = listServiceRouteCleanupRecordsForSpace;
 export const getWorkerForUser = getServiceForUser;
 export const getWorkerForUserWithRole = getServiceForUserWithRole;
 export const createWorker = createService;

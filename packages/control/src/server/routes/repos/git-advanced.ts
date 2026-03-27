@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { parseLimit } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseLimit } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -16,7 +16,7 @@ import { generateId } from '../../../shared/utils';
 import type { IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { logError } from '../../../shared/utils/logger';
-import { badRequest, notFound, internalError, notImplemented, payloadTooLarge } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from '@takos/common/errors';
 
 function getPathFromRouteOrQuery(c: Context<AuthenticatedRouteEnv>): string {
   const routePath = c.req.param('path') || '';
@@ -68,20 +68,20 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
   const pathPrefixRaw = (path_prefix || '').trim();
 
   if (!q) {
-    return badRequest(c, 'q is required');
+    throw new BadRequestError('q is required');
   }
   if (q.length < 2) {
-    return badRequest(c, 'q must be at least 2 characters');
+    throw new BadRequestError('q must be at least 2 characters');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const ref = (refRaw || repoAccess.repo.default_branch || 'main').trim();
@@ -95,7 +95,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
     try {
       pathPrefix = validatePath(pathPrefixRaw);
     } catch (err) {
-      return badRequest(c, err instanceof Error ? err.message : 'Invalid path_prefix');
+      throw new BadRequestError(err instanceof Error ? err.message : 'Invalid path_prefix');
     }
   }
 
@@ -146,6 +146,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       try {
         text = new TextDecoder().decode(blobData);
       } catch {
+        // Binary blob that cannot be decoded as text -- skip
         continue;
       }
 
@@ -183,14 +184,14 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
   } catch (err) {
     const limitError = getTreeFlattenLimitError(err);
     if (limitError) {
-      return c.json({
-        error: 'Repository tree is too large to search',
+      throw new PayloadTooLargeError('Repository tree is too large to search', {
         code: limitError.code,
         detail: limitError.detail,
-      }, 413);
+      });
     }
+    if (isAppError(err)) throw err;
     logError('Failed repository search', err, { module: 'routes/repos/git-advanced' });
-    return internalError(c, 'Failed to search repository');
+    throw new InternalError('Failed to search repository');
   }
   })
   .get('/repos/:repoId/semantic-search', async (c) => {
@@ -201,17 +202,17 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
   const pathPrefix = (c.req.query('path_prefix') || '').trim();
 
   if (!q) {
-    return badRequest(c, 'q is required');
+    throw new BadRequestError('q is required');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const embeddingsService = createEmbeddingsService(c.env);
   if (!embeddingsService) {
-    return notImplemented(c, 'Semantic search not available (AI/Vectorize not configured)');
+    throw new NotImplementedError('Semantic search not available (AI/Vectorize not configured)');
   }
 
   const results = await embeddingsService.searchRepo(repoId, q, {
@@ -227,17 +228,17 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const embeddingsService = createEmbeddingsService(c.env);
   if (!embeddingsService) {
-    return notImplemented(c, 'Semantic search not available (AI/Vectorize not configured)');
+    throw new NotImplementedError('Semantic search not available (AI/Vectorize not configured)');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const ref = (c.req.query('ref') || repoAccess.repo.default_branch || 'main').trim();
@@ -275,31 +276,31 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
 async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const repoId = c.req.param('repoId');
-  if (!repoId) return badRequest(c, 'Missing repoId');
+  if (!repoId) throw new BadRequestError('Missing repoId');
   const ref = c.req.param('ref');
-  if (!ref) return badRequest(c, 'Missing ref');
+  if (!ref) throw new BadRequestError('Missing ref');
   const rawPath = getPathFromRouteOrQuery(c);
   const limit = parseLimit(c.req.query('limit'), 50, 200);
 
   if (!rawPath) {
-    return badRequest(c, 'path is required');
+    throw new BadRequestError('path is required');
   }
 
   let path = '';
   try {
     path = validatePath(rawPath);
   } catch (err) {
-    return badRequest(c, err instanceof Error ? err.message : 'Invalid path');
+    throw new BadRequestError(err instanceof Error ? err.message : 'Invalid path');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const resolvedCommit = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, ref);
@@ -310,7 +311,7 @@ async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
   let cursor: gitStore.GitCommit | null = resolvedCommit.commit;
   let cursorOid = await getBlobOidAtPath(bucket, cursor.tree, path);
   if (!cursorOid) {
-    return notFound(c, 'File');
+    throw new NotFoundError('File');
   }
 
   const commits: Array<{
@@ -364,30 +365,30 @@ repoGitAdvanced
 async function handleBlameRequest(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const repoId = c.req.param('repoId');
-  if (!repoId) return badRequest(c, 'Missing repoId');
+  if (!repoId) throw new BadRequestError('Missing repoId');
   const ref = c.req.param('ref');
-  if (!ref) return badRequest(c, 'Missing ref');
+  if (!ref) throw new BadRequestError('Missing ref');
   const rawPath = getPathFromRouteOrQuery(c);
 
   if (!rawPath) {
-    return badRequest(c, 'path is required');
+    throw new BadRequestError('path is required');
   }
 
   let path = '';
   try {
     path = validatePath(rawPath);
   } catch (err) {
-    return badRequest(c, err instanceof Error ? err.message : 'Invalid path');
+    throw new BadRequestError(err instanceof Error ? err.message : 'Invalid path');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const resolvedCommit = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, ref);
@@ -398,7 +399,7 @@ async function handleBlameRequest(c: Context<AuthenticatedRouteEnv>) {
   const headCommit = resolvedCommit.commit;
   const headOid = await getBlobOidAtPath(bucket, headCommit.tree, path);
   if (!headOid) {
-    return notFound(c, 'File');
+    throw new NotFoundError('File');
   }
 
   const MAX_FILE_BYTES = 256 * 1024;
@@ -424,15 +425,15 @@ async function handleBlameRequest(c: Context<AuthenticatedRouteEnv>) {
       try {
         loaded = await loadTextBlob(bucket, cursorOid, MAX_FILE_BYTES);
       } catch (err) {
-        return badRequest(c, err instanceof Error ? err.message : 'Failed to load file');
+        throw new BadRequestError(err instanceof Error ? err.message : 'Failed to load file');
       }
 
       if (!loaded) {
-        return notFound(c, 'File');
+        throw new NotFoundError('File');
       }
 
       if (loaded.lines.length > MAX_LINES) {
-        return payloadTooLarge(c, 'File too large');
+        throw new PayloadTooLargeError('File too large');
       }
 
       changeCommits.push({ commit: cursorCommit, lines: loaded.lines });

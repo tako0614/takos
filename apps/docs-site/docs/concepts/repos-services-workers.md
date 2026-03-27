@@ -9,10 +9,20 @@ Takos は repo-local な `.takos/app.yml` と workflow artifact を使って app
 
 Service は internal model での実行単位です。service には少なくとも次の形があります。
 
-- worker service
+- worker service (`workload_kind: worker-bundle`)
+- container service (`workload_kind: container-image`)
 - http-url target
 
 App は複数 service を持てます。現在の `.takos/app.yml` v1alpha1 では worker service を正本にしつつ、internal routing model では外部 HTTP backend への target も扱います。
+
+### workload_kind
+
+service は `workload_kind` を持ちます。初回 deploy 時に確定し、以後は同じ kind のみ deploy できます。
+
+- `worker-bundle`: Cloudflare Workers / local adapter で実行される JavaScript/WASM bundle
+- `container-image`: Docker / OCI runtime で実行される long-running HTTP container
+
+deploy API (`POST /services/:id/deployments`) では `target.artifact.kind` で artifact kind を指定します。`.takos/app.yml` は現時点では `worker-bundle` のみを扱います。
 
 ## Worker
 

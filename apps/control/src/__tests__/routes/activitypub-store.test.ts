@@ -109,6 +109,38 @@ describe('activitypub store routes', () => {
     });
   });
 
+  it('returns an explicit not_implemented contract for store inbox', async () => {
+    mocks.findStoreBySlug.mockResolvedValue({
+      accountId: 'acct-1',
+      accountSlug: 'alice',
+      slug: 'alice',
+      name: 'Alice',
+      description: null,
+      picture: null,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      updatedAt: '2026-03-01T00:00:00.000Z',
+      publicRepoCount: 2,
+      isDefault: true,
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request('https://test.takos.jp/ap/stores/alice/inbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/activity+json' },
+        body: JSON.stringify({ type: 'Follow' }),
+      }),
+      createMockEnv() as unknown as Env,
+      {} as ExecutionContext,
+    );
+
+    expect(response.status).toBe(501);
+    await expect(response.json()).resolves.toEqual({
+      error: 'not_implemented',
+      message: 'Store inbox is not implemented. Use outbox polling for updates.',
+    });
+  });
+
   it('exposes a proprietary search service and repository search endpoint', async () => {
     mocks.findStoreBySlug.mockResolvedValue({
       accountId: 'acct-1',

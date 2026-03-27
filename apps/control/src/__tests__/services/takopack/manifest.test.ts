@@ -251,4 +251,162 @@ describe('takopack manifest parser (endpoint model)', () => {
       required: ['TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN'],
     });
   });
+
+  it('normalizes queue, analyticsEngine, workflow resources and worker triggers', async () => {
+    const data = await createTakopack(
+      [
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Package',
+          metadata: { name: 'runtime-pack' },
+          spec: { appId: 'dev.takos.runtime-pack', version: '1.0.0' },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Resource',
+          metadata: { name: 'jobs' },
+          spec: {
+            type: 'queue',
+            binding: 'JOBS',
+            queue: {
+              maxRetries: 5,
+              deliveryDelaySeconds: 10,
+              deadLetterQueue: 'jobs-dlq',
+            },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Resource',
+          metadata: { name: 'events' },
+          spec: {
+            type: 'analyticsEngine',
+            binding: 'ANALYTICS',
+            analyticsEngine: {
+              dataset: 'tenant-events',
+            },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Resource',
+          metadata: { name: 'onboarding' },
+          spec: {
+            type: 'workflow',
+            binding: 'ONBOARDING_FLOW',
+            workflow: {
+              service: 'api',
+              export: 'runOnboarding',
+              timeoutMs: 60000,
+              maxRetries: 3,
+            },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Workload',
+          metadata: { name: 'api' },
+          spec: {
+            type: 'cloudflare.worker',
+            artifactRef: 'artifacts/api.mjs',
+            pluginConfig: {
+              workerName: 'api-worker',
+              bindings: {
+                services: ['core-service'],
+              },
+              triggers: {
+                schedules: [
+                  { cron: '*/5 * * * *', export: 'handleCron' },
+                ],
+                queues: [
+                  { queue: 'jobs', export: 'handleJob' },
+                ],
+              },
+              env: {
+                FEATURE_FLAG: 'enabled',
+              },
+            },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Binding',
+          metadata: { name: 'bind-jobs' },
+          spec: {
+            from: 'jobs',
+            to: 'api',
+            mount: { as: 'JOBS' },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Binding',
+          metadata: { name: 'bind-events' },
+          spec: {
+            from: 'events',
+            to: 'api',
+            mount: { as: 'ANALYTICS' },
+          },
+        },
+        {
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Binding',
+          metadata: { name: 'bind-onboarding' },
+          spec: {
+            from: 'onboarding',
+            to: 'api',
+            mount: { as: 'ONBOARDING_FLOW' },
+          },
+        },
+      ],
+      {
+        'artifacts/api.mjs': 'export default { fetch: () => new Response("ok") };',
+      },
+    );
+
+    const parsed = await parsePackage(data);
+
+    expect(parsed.manifest.resources).toMatchObject({
+      queue: [
+        {
+          binding: 'JOBS',
+          maxRetries: 5,
+          deliveryDelaySeconds: 10,
+          deadLetterQueue: 'jobs-dlq',
+        },
+      ],
+      analyticsEngine: [
+        {
+          binding: 'ANALYTICS',
+          dataset: 'tenant-events',
+        },
+      ],
+      workflow: [
+        {
+          binding: 'ONBOARDING_FLOW',
+          service: 'api',
+          export: 'runOnboarding',
+          timeoutMs: 60000,
+          maxRetries: 3,
+        },
+      ],
+    });
+    expect(parsed.manifest.workers).toHaveLength(1);
+    expect(parsed.manifest.workers?.[0]).toMatchObject({
+      name: 'api-worker',
+      bindings: {
+        queue: ['JOBS'],
+        analytics: ['ANALYTICS'],
+        workflows: ['ONBOARDING_FLOW'],
+        services: ['core-service'],
+      },
+      triggers: {
+        schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
+        queues: [{ queue: 'jobs', export: 'handleJob' }],
+      },
+      env: {
+        FEATURE_FLAG: 'enabled',
+      },
+    });
+  });
 });

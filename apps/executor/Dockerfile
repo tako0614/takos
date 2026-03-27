@@ -40,7 +40,7 @@ RUN pnpm install --frozen-lockfile
 WORKDIR /workspace/packages/common
 RUN pnpm run build
 
-# Bundle agent-executor (esbuild resolves the control-agent boundary into a single file)
+# Bundle agent-executor (esbuild resolves control-core imports into a single file)
 WORKDIR /workspace/apps/executor
 RUN node build.mjs
 

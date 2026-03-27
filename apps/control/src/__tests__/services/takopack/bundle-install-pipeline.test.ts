@@ -8,7 +8,15 @@ const mocks = vi.hoisted(() => ({
   buildNamespacedInfraName: vi.fn((name: string, key: string) => `${name}__${key.slice(0, 8)}`),
   provisionOAuthClient: vi.fn().mockResolvedValue({}),
   markProvisionedResourcesAsTakopackManaged: vi.fn().mockResolvedValue(undefined),
-  buildProvisionedResourceReferenceMaps: vi.fn().mockReturnValue({ d1: new Map(), r2: new Map(), kv: new Map() }),
+  buildProvisionedResourceReferenceMaps: vi.fn().mockReturnValue({
+    d1: new Map(),
+    r2: new Map(),
+    kv: new Map(),
+    queue: new Map(),
+    analyticsEngine: new Map(),
+    workflow: new Map(),
+    vectorize: new Map(),
+  }),
   upsertHostnameRouting: vi.fn().mockResolvedValue(undefined),
   deleteManagedMcpServersByBundleDeployment: vi.fn().mockResolvedValue(undefined),
   bestEffort: vi.fn(async (fn: () => Promise<unknown>) => { try { await fn(); } catch {} }),
@@ -100,7 +108,16 @@ function createPipelineParams(overrides?: Partial<BundleInstallPipelineParams>):
     env: { DB: {} } as any,
     db: db as any,
     resourceService: {
-      provisionOrAdoptResources: vi.fn().mockResolvedValue({ d1: [], r2: [], kv: [] }),
+      provisionOrAdoptResources: vi.fn().mockResolvedValue({
+        d1: [],
+        r2: [],
+        kv: [],
+        queue: [],
+        analyticsEngine: [],
+        workflow: [],
+        vectorize: [],
+        durableObject: [],
+      }),
     } as any,
     workerService: {
       deployManifestWorkers: vi.fn().mockResolvedValue([]),
@@ -157,7 +174,16 @@ describe('executeBundleInstallPipeline', () => {
     expect(result.version).toBe('1.0.0');
     expect(result.groupsCreated).toBe(0);
     expect(result.toolsCreated).toBe(0);
-    expect(result.resourcesCreated).toEqual({ d1: 0, r2: 0, kv: 0 });
+    expect(result.resourcesCreated).toEqual({
+      d1: 0,
+      r2: 0,
+      kv: 0,
+      queue: 0,
+      analyticsEngine: 0,
+      workflow: 0,
+      vectorize: 0,
+      durableObject: 0,
+    });
   });
 
   it('inserts bundle deployment record for new install', async () => {
@@ -205,6 +231,11 @@ describe('executeBundleInstallPipeline', () => {
         d1: [{ binding: 'DB', id: 'cf-1', name: 'db-1', resourceId: 'res-1', wasAdopted: false }],
         r2: [],
         kv: [],
+        queue: [],
+        analyticsEngine: [],
+        workflow: [],
+        vectorize: [],
+        durableObject: [],
       }),
     };
 
@@ -231,7 +262,7 @@ describe('executeBundleInstallPipeline', () => {
     manifest.group = {
       workers: ['api'],
       ui: [],
-      resources: { d1: [], r2: [], kv: [] },
+      resources: { d1: [], r2: [], kv: [], queue: [], analyticsEngine: [], workflow: [], vectorize: [], durableObject: [] },
       links: [],
     };
 

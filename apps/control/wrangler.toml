@@ -26,6 +26,7 @@ crons = ["3,18,33,48 * * * *", "5 * * * *"]
 
 # IMPORTANT: The following sensitive values must be set via `wrangler secret put`:
 # - GOOGLE_CLIENT_SECRET: OAuth client secret for Google authentication (required)
+# - EXECUTOR_PROXY_SECRET: Shared secret for executor-host → web worker RPC forwarding
 # Static assets (routed through Worker for hostname-based routing)
 [assets]
 directory = "./dist"

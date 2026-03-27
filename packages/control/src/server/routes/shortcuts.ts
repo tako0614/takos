@@ -6,7 +6,7 @@ import {
   getRequestedSpaceIdentifier,
   notFound,
   requireWorkspaceAccess,
-} from './shared/helpers';
+} from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import {
   ALLOWED_SHORTCUT_RESOURCE_TYPES,
@@ -80,14 +80,14 @@ const addGroupItemSchema = z.object({
 
 type ShortcutContext = Context<{ Bindings: Env; Variables: { user: User } }>;
 
-// Helper to resolve workspace context. Header-based workspace selection must pass membership checks.
-async function getWorkspaceId(c: ShortcutContext): Promise<string | Response> {
+// Helper to resolve space context. Header-based space selection must pass membership checks.
+async function getSpaceId(c: ShortcutContext): Promise<string | Response> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c);
   if (spaceIdentifier) {
     const user = c.get('user');
     const access = await requireWorkspaceAccess(c, spaceIdentifier, user.id);
     if (access instanceof Response) return access;
-    return access.workspace.id;
+    return access.space.id;
   }
   // Default to user's own account
   const user = c.get('user');
@@ -97,12 +97,12 @@ async function getWorkspaceId(c: ShortcutContext): Promise<string | Response> {
  
 export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
 
-  // List shortcuts for current workspace/user
+  // List shortcuts for current space/user
   .get('/', async (c) => {
     const user = c.get('user');
-    const workspaceId = await getWorkspaceId(c);
-    if (workspaceId instanceof Response) return workspaceId;
-    const results = await listShortcuts(c.env.DB, user.id, workspaceId);
+    const spaceId = await getSpaceId(c);
+    if (spaceId instanceof Response) return spaceId;
+    const results = await listShortcuts(c.env.DB, user.id, spaceId);
     return c.json({ shortcuts: results });
   })
 
@@ -111,8 +111,8 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     zValidator('json', createShortcutSchema),
     async (c) => {
     const user = c.get('user');
-    const workspaceId = await getWorkspaceId(c);
-    if (workspaceId instanceof Response) return workspaceId;
+    const spaceId = await getSpaceId(c);
+    if (spaceId instanceof Response) return spaceId;
 
     const body = c.req.valid('json') as {
       name: string;
@@ -136,11 +136,12 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
           return badRequest(c, 'Invalid URL scheme. Only http and https are allowed.');
         }
       } catch {
+        // URL constructor throws on malformed input
         return badRequest(c, 'Invalid URL');
       }
     }
 
-    const created = await createShortcut(c.env.DB, user.id, workspaceId, body);
+    const created = await createShortcut(c.env.DB, user.id, spaceId, body);
     return c.json(created, 201);
   })
 
@@ -149,13 +150,13 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     zValidator('json', updateShortcutSchema),
     async (c) => {
     const user = c.get('user');
-    const workspaceId = await getWorkspaceId(c);
-    if (workspaceId instanceof Response) return workspaceId;
+    const spaceId = await getSpaceId(c);
+    if (spaceId instanceof Response) return spaceId;
     const id = c.req.param('id');
 
     const body = c.req.valid('json');
 
-    const updated = await updateShortcut(c.env.DB, user.id, workspaceId, id, body);
+    const updated = await updateShortcut(c.env.DB, user.id, spaceId, id, body);
     if (!updated) {
       return badRequest(c, 'No fields to update');
     }
@@ -166,11 +167,11 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
   // Delete shortcut
   .delete('/:id', async (c) => {
     const user = c.get('user');
-    const workspaceId = await getWorkspaceId(c);
-    if (workspaceId instanceof Response) return workspaceId;
+    const spaceId = await getSpaceId(c);
+    if (spaceId instanceof Response) return spaceId;
     const id = c.req.param('id');
 
-    await deleteShortcut(c.env.DB, user.id, workspaceId, id);
+    await deleteShortcut(c.env.DB, user.id, spaceId, id);
 
     return c.json({ success: true });
   })
@@ -180,14 +181,14 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     zValidator('json', reorderSchema),
     async (c) => {
     const user = c.get('user');
-    const workspaceId = await getWorkspaceId(c);
-    if (workspaceId instanceof Response) return workspaceId;
+    const spaceId = await getSpaceId(c);
+    if (spaceId instanceof Response) return spaceId;
 
     const body = c.req.valid('json');
 
     // Update each shortcut's position
     for (let i = 0; i < body.order.length; i++) {
-      await updateShortcut(c.env.DB, user.id, workspaceId, body.order[i], { position: i });
+      await updateShortcut(c.env.DB, user.id, spaceId, body.order[i], { position: i });
     }
 
     return c.json({ success: true });
@@ -216,7 +217,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const access = await requireWorkspaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
-    const groups = await listShortcutGroups(c.env.DB, access.workspace.id);
+    const groups = await listShortcutGroups(c.env.DB, access.space.id);
 
     return c.json({ data: groups });
   })
@@ -237,7 +238,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
       return badRequest(c, 'name is required');
     }
 
-    const group = await createShortcutGroup(c.env.DB, access.workspace.id, {
+    const group = await createShortcutGroup(c.env.DB, access.space.id, {
       name: body.name,
       icon: body.icon,
       items: body.items as ShortcutItem[] | undefined,
@@ -254,7 +255,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const access = await requireWorkspaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
-    const group = await getShortcutGroup(c.env.DB, access.workspace.id, groupId);
+    const group = await getShortcutGroup(c.env.DB, access.space.id, groupId);
 
     if (!group) {
       return notFound(c, 'Shortcut group');
@@ -275,7 +276,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
 
     const body = c.req.valid('json');
 
-    const group = await updateShortcutGroup(c.env.DB, access.workspace.id, groupId, {
+    const group = await updateShortcutGroup(c.env.DB, access.space.id, groupId, {
       name: body.name,
       icon: body.icon,
       items: body.items as ShortcutItem[] | undefined,
@@ -296,7 +297,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
-    const deleted = await deleteShortcutGroup(c.env.DB, access.workspace.id, groupId);
+    const deleted = await deleteShortcutGroup(c.env.DB, access.space.id, groupId);
 
     if (!deleted) {
       return notFound(c, 'Shortcut group (or managed by takopack)');
@@ -321,7 +322,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
       return badRequest(c, 'type and label are required');
     }
 
-    const item = await addItemToGroup(c.env.DB, access.workspace.id, groupId, body as Omit<ShortcutItem, 'id'>);
+    const item = await addItemToGroup(c.env.DB, access.space.id, groupId, body as Omit<ShortcutItem, 'id'>);
 
     if (!item) {
       return notFound(c, 'Shortcut group (or managed by takopack)');
@@ -338,7 +339,7 @@ export const shortcutGroupRoutes = new Hono<{ Bindings: Env; Variables: { user: 
     const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin', 'editor']);
     if (access instanceof Response) return access;
 
-    const removed = await removeItemFromGroup(c.env.DB, access.workspace.id, groupId, itemId);
+    const removed = await removeItemFromGroup(c.env.DB, access.space.id, groupId, itemId);
 
     if (!removed) {
       return notFound(c, 'Shortcut group or item (or managed by takopack)');

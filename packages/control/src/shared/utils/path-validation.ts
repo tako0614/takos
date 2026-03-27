@@ -1,3 +1,12 @@
+/** Maximum normalization iterations to prevent infinite loops from nested patterns. */
+const MAX_NORMALIZATION_ITERATIONS = 10;
+
+/** Unicode full-width character offset to convert to ASCII equivalents. */
+const FULLWIDTH_TO_ASCII_OFFSET = 0xfee0;
+
+/** Maximum allowed length for a single path segment name. */
+const MAX_PATH_SEGMENT_LENGTH = 255;
+
 // SECURITY: Normalization MUST happen AFTER URL decoding to prevent bypass attacks
 // where encoded Unicode characters normalize to path traversal sequences.
 export function validatePath(path: string): string {
@@ -42,7 +51,7 @@ export function validatePath(path: string): string {
   // \u3000 (ideographic space) handled separately as it's outside \uff01-\uff5e.
   normalized = normalized.replace(/[\uff01-\uff5e\u3000]/g, (ch) => {
     if (ch === '\u3000') return ' ';
-    return String.fromCharCode(ch.charCodeAt(0) - 0xfee0);
+    return String.fromCharCode(ch.charCodeAt(0) - FULLWIDTH_TO_ASCII_OFFSET);
   });
 
   // Re-check after full-width conversion (full-width dots may have created '..')
@@ -65,8 +74,7 @@ export function validatePath(path: string): string {
   // Repeat until stable (handles nested patterns like ./../)
   let prev = '';
   let iterations = 0;
-  const maxIterations = 10;
-  while (prev !== normalized && iterations < maxIterations) {
+  while (prev !== normalized && iterations < MAX_NORMALIZATION_ITERATIONS) {
     prev = normalized;
     normalized = normalized
       .replace(/^\.\//, '')
@@ -111,6 +119,6 @@ export function validatePathSegment(name: string): boolean {
   if (!name || name === '.' || name === '..') return false;
   if (name.includes('/')) return false;
   if (name.includes('%') || name.includes('\\')) return false;
-  if (name.length > 255) return false;
+  if (name.length > MAX_PATH_SEGMENT_LENGTH) return false;
   return true;
 }

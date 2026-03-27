@@ -3,9 +3,8 @@ export {
   type CloudflareBindingRecord,
   createWfpService,
   WFPService,
-  getTakosWorkerScript,
-  getTakosMigrationSQL,
 } from './service';
+export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator';
 export type { AssetManifestEntry, AssetUploadFile, AssetsUploadSession, AssetsUploadCompletion } from './assets';
 export {
   CF_API_BASE,

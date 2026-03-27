@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises';
+import http from 'node:http';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { z } from 'zod';
-import { logInfo } from '../shared/utils/logger.ts';
+import { logInfo, logError } from '../shared/utils/logger.ts';
 import { serveNodeFetch } from './fetch-server.ts';
 
 type OciServiceStatus = 'deployed' | 'removed' | 'routing-only';
@@ -26,6 +27,9 @@ type OciServiceRecord = {
   endpoint: OciServiceEndpoint;
   image_ref: string | null;
   exposed_port: number | null;
+  health_path: string | null;
+  container_id: string | null;
+  resolved_endpoint: { kind: 'http-url'; base_url: string } | null;
   compatibility_date: string | null;
   compatibility_flags: string[];
   limits: {
@@ -43,6 +47,198 @@ type OciServiceRecord = {
 type OciOrchestratorState = {
   services: Record<string, OciServiceRecord>;
 };
+
+const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
+const DOCKER_NETWORK = process.env.TAKOS_DOCKER_NETWORK || 'takos-containers';
+const HEALTH_TIMEOUT_MS = 30_000;
+const HEALTH_POLL_INTERVAL_MS = 1_000;
+
+// ─── Docker Engine API client via Unix socket ───
+
+function dockerRequest(
+  method: string,
+  apiPath: string,
+  body?: unknown,
+): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    const options: http.RequestOptions = {
+      socketPath: DOCKER_SOCKET,
+      path: apiPath,
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    const req = http.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        let parsed: unknown = raw;
+        try { parsed = JSON.parse(raw); } catch { /* raw text */ }
+        resolve({ status: res.statusCode ?? 0, body: parsed });
+      });
+    });
+    req.on('error', reject);
+    if (body !== undefined) {
+      req.write(JSON.stringify(body));
+    }
+    req.end();
+  });
+}
+
+// Stream-based request for docker pull (returns chunked progress)
+function dockerRequestStream(
+  method: string,
+  apiPath: string,
+  body?: unknown,
+): Promise<{ status: number }> {
+  return new Promise((resolve, reject) => {
+    const options: http.RequestOptions = {
+      socketPath: DOCKER_SOCKET,
+      path: apiPath,
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    const req = http.request(options, (res) => {
+      // Consume the stream to completion
+      res.on('data', () => {});
+      res.on('end', () => {
+        resolve({ status: res.statusCode ?? 0 });
+      });
+    });
+    req.on('error', reject);
+    if (body !== undefined) {
+      req.write(JSON.stringify(body));
+    }
+    req.end();
+  });
+}
+
+async function dockerPull(imageRef: string): Promise<void> {
+  // Parse image ref into fromImage and tag
+  const parts = imageRef.split(':');
+  const tag = parts.length > 1 ? parts[parts.length - 1] : 'latest';
+  const fromImage = parts.length > 1 ? parts.slice(0, -1).join(':') : imageRef;
+  const result = await dockerRequestStream(
+    'POST',
+    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
+  );
+  if (result.status !== 200) {
+    throw new Error(`Docker pull failed with status ${result.status}`);
+  }
+}
+
+async function dockerCreate(
+  name: string,
+  imageRef: string,
+  exposedPort: number,
+  envVars: string[],
+  network: string,
+): Promise<string> {
+  const result = await dockerRequest('POST', `/containers/create?name=${encodeURIComponent(name)}`, {
+    Image: imageRef,
+    Env: envVars,
+    ExposedPorts: { [`${exposedPort}/tcp`]: {} },
+    HostConfig: {
+      NetworkMode: network,
+    },
+  });
+  if (result.status !== 201) {
+    throw new Error(`Docker create failed with status ${result.status}: ${JSON.stringify(result.body)}`);
+  }
+  return (result.body as { Id: string }).Id;
+}
+
+async function dockerStart(containerId: string): Promise<void> {
+  const result = await dockerRequest('POST', `/containers/${containerId}/start`);
+  if (result.status !== 204 && result.status !== 304) {
+    throw new Error(`Docker start failed with status ${result.status}`);
+  }
+}
+
+async function dockerStop(containerId: string, timeoutSeconds = 10): Promise<void> {
+  const result = await dockerRequest('POST', `/containers/${containerId}/stop?t=${timeoutSeconds}`);
+  if (result.status !== 204 && result.status !== 304) {
+    // Container may already be stopped
+    if (result.status === 404) return;
+    throw new Error(`Docker stop failed with status ${result.status}`);
+  }
+}
+
+async function dockerRemove(containerId: string): Promise<void> {
+  const result = await dockerRequest('DELETE', `/containers/${containerId}?force=true`);
+  if (result.status !== 204 && result.status !== 404) {
+    throw new Error(`Docker remove failed with status ${result.status}`);
+  }
+}
+
+async function dockerLogs(containerId: string, tail = 100): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const options: http.RequestOptions = {
+      socketPath: DOCKER_SOCKET,
+      path: `/containers/${containerId}/logs?stdout=1&stderr=1&tail=${tail}&timestamps=1`,
+      method: 'GET',
+    };
+    const req = http.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks);
+        // Docker multiplexed stream: 8-byte header per frame
+        // Strip headers for clean log output
+        const lines: string[] = [];
+        let offset = 0;
+        while (offset < raw.length) {
+          if (offset + 8 > raw.length) break;
+          const size = raw.readUInt32BE(offset + 4);
+          offset += 8;
+          if (offset + size > raw.length) break;
+          lines.push(raw.subarray(offset, offset + size).toString('utf8'));
+          offset += size;
+        }
+        resolve(lines.join(''));
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function pollHealthCheck(
+  containerName: string,
+  port: number,
+  healthPath: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  const normalizedPath = healthPath.startsWith('/') ? healthPath : `/${healthPath}`;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const result = await new Promise<number>((resolve, reject) => {
+        const req = http.request(
+          { hostname: containerName, port, path: normalizedPath, method: 'GET', timeout: 5000 },
+          (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve(res.statusCode ?? 0));
+          },
+        );
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        req.end();
+      });
+      if (result >= 200 && result < 400) return true;
+    } catch {
+      // Not ready yet
+    }
+    await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS));
+  }
+  return false;
+}
+
+function containerName(spaceId: string, routeRef: string): string {
+  // Sanitize for Docker container naming
+  return `takos-${spaceId}-${routeRef}`.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 128);
+}
 
 const deploySchema = z.object({
   deployment_id: z.string().min(1),
@@ -63,6 +259,7 @@ const deploySchema = z.object({
     artifact: z.object({
       image_ref: z.string().min(1).optional(),
       exposed_port: z.number().int().positive().optional(),
+      health_path: z.string().min(1).optional(),
     }).strict().optional(),
   }).strict(),
   runtime: z.object({
@@ -154,6 +351,17 @@ function createAuthMiddleware() {
   };
 }
 
+async function stopAndRemoveContainer(record: OciServiceRecord, spaceId: string, routeRef: string): Promise<void> {
+  if (!record.container_id) return;
+  try {
+    await dockerStop(record.container_id);
+    await dockerRemove(record.container_id);
+    await appendServiceLog(spaceId, routeRef, `CONTAINER_REMOVED ${record.container_id}`);
+  } catch (err) {
+    logError(`Failed to stop/remove container ${record.container_id}`, err, { module: 'oci-orchestrator' });
+  }
+}
+
 export function createLocalOciOrchestratorApp(): Hono {
   const app = new Hono();
 
@@ -179,7 +387,8 @@ export function createLocalOciOrchestratorApp(): Hono {
     const state = await loadState();
     const previous = state.services[key];
     const imageRef = payload.target.artifact?.image_ref ?? null;
-    const exposedPort = payload.target.artifact?.exposed_port ?? null;
+    const exposedPort = payload.target.artifact?.exposed_port ?? 8080;
+    const healthPath = payload.target.artifact?.health_path ?? '/health';
     const runtime: {
       compatibility_date?: string | null;
       compatibility_flags?: string[];
@@ -188,6 +397,71 @@ export function createLocalOciOrchestratorApp(): Hono {
         subrequests?: number;
       } | null;
     } = payload.runtime ?? {};
+
+    let newContainerId: string | null = null;
+    let resolvedEndpoint: { kind: 'http-url'; base_url: string } | null = null;
+
+    if (imageRef) {
+      const cName = containerName(payload.space_id, routeRef);
+
+      try {
+        // Stop and remove previous container if exists
+        if (previous?.container_id) {
+          await stopAndRemoveContainer(previous, payload.space_id, routeRef);
+        }
+
+        // Also try removing by name in case state was out of sync
+        try {
+          const inspectResult = await dockerRequest('GET', `/containers/${encodeURIComponent(cName)}/json`);
+          if (inspectResult.status === 200) {
+            const existingId = (inspectResult.body as { Id: string }).Id;
+            await dockerStop(existingId);
+            await dockerRemove(existingId);
+          }
+        } catch { /* container doesn't exist, fine */ }
+
+        await appendServiceLog(payload.space_id, routeRef, `PULLING ${imageRef}`);
+        await dockerPull(imageRef);
+
+        await appendServiceLog(payload.space_id, routeRef, `CREATING container ${cName}`);
+        newContainerId = await dockerCreate(cName, imageRef, exposedPort, [], DOCKER_NETWORK);
+
+        await appendServiceLog(payload.space_id, routeRef, `STARTING container ${newContainerId.slice(0, 12)}`);
+        await dockerStart(newContainerId);
+
+        // Poll health check
+        await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${cName}:${exposedPort}${healthPath}`);
+        const healthy = await pollHealthCheck(cName, exposedPort, healthPath, HEALTH_TIMEOUT_MS);
+
+        if (!healthy) {
+          await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK failed, removing container`);
+          await dockerStop(newContainerId);
+          await dockerRemove(newContainerId);
+          return c.json({
+            error: 'Container health check failed',
+            details: `Health check at ${healthPath} did not pass within ${HEALTH_TIMEOUT_MS / 1000}s`,
+          }, 503);
+        }
+
+        resolvedEndpoint = { kind: 'http-url', base_url: `http://${cName}:${exposedPort}` };
+        await appendServiceLog(payload.space_id, routeRef, `DEPLOYED container ${newContainerId.slice(0, 12)} → ${resolvedEndpoint.base_url}`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await appendServiceLog(payload.space_id, routeRef, `DEPLOY_ERROR ${errMsg}`);
+        // Clean up partially created container
+        if (newContainerId) {
+          try {
+            await dockerStop(newContainerId);
+            await dockerRemove(newContainerId);
+          } catch { /* best effort */ }
+        }
+        return c.json({
+          error: 'Container deployment failed',
+          details: errMsg.slice(0, 500),
+        }, 500);
+      }
+    }
+
     const record: OciServiceRecord = {
       space_id: payload.space_id,
       route_ref: routeRef,
@@ -196,12 +470,15 @@ export function createLocalOciOrchestratorApp(): Hono {
       endpoint: payload.target.endpoint,
       image_ref: imageRef,
       exposed_port: exposedPort,
+      health_path: healthPath,
+      container_id: newContainerId,
+      resolved_endpoint: resolvedEndpoint,
       compatibility_date: runtime.compatibility_date ?? null,
       compatibility_flags: runtime.compatibility_flags ?? [],
       limits: runtime.limits ?? null,
       status: imageRef ? 'deployed' : 'routing-only',
-      health_status: 'unknown',
-      last_health_at: null,
+      health_status: resolvedEndpoint ? 'healthy' : 'unknown',
+      last_health_at: resolvedEndpoint ? now : null,
       last_error: null,
       created_at: previous?.created_at ?? now,
       updated_at: now,
@@ -219,7 +496,8 @@ export function createLocalOciOrchestratorApp(): Hono {
     return c.json({
       ok: true,
       service: record,
-      log_path: logPathFor(payload.space_id, routeRef),
+      resolved_endpoint: resolvedEndpoint,
+      logs_ref: logPathFor(payload.space_id, routeRef),
     });
   });
 
@@ -254,9 +532,17 @@ export function createLocalOciOrchestratorApp(): Hono {
     if (!record) {
       return c.json({ error: 'Service not found' }, 404);
     }
+
+    // Stop and remove the Docker container if present
+    if (record.container_id) {
+      await stopAndRemoveContainer(record, query.data.space_id, routeRef);
+    }
+
     const updated: OciServiceRecord = {
       ...record,
       status: 'removed',
+      container_id: null,
+      resolved_endpoint: null,
       updated_at: new Date().toISOString(),
     };
     state.services[key] = updated;
@@ -273,23 +559,81 @@ export function createLocalOciOrchestratorApp(): Hono {
       return c.json({ error: 'space_id is required' }, 400);
     }
     const tail = Number.parseInt(c.req.query('tail') ?? '100', 10);
+    const tailCount = Number.isFinite(tail) && tail > 0 ? tail : 100;
     const routeRef = c.req.param('routeRef');
     const key = serviceKey(query.data.space_id, routeRef);
     const state = await loadState();
-    if (!state.services[key]) {
+    const record = state.services[key];
+    if (!record) {
       return c.json({ error: 'Service not found' }, 404);
     }
+
+    // Fetch Docker container logs if container is running
+    let containerLogText = '';
+    if (record.container_id && record.status === 'deployed') {
+      try {
+        containerLogText = await dockerLogs(record.container_id, tailCount);
+      } catch {
+        // Container may not be running
+      }
+    }
+
+    // Also fetch file-based orchestrator logs
+    let fileLogText = '';
     try {
       const body = await readFile(logPathFor(query.data.space_id, routeRef), 'utf8');
-      return new Response(tailLines(body, Number.isFinite(tail) && tail > 0 ? tail : 100), {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      });
+      fileLogText = tailLines(body, tailCount);
     } catch {
-      return new Response('', {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      // No file logs
+    }
+
+    // Combine: orchestrator events + container stdout/stderr
+    const combined = fileLogText + (containerLogText ? `--- container logs ---\n${containerLogText}` : '');
+
+    return new Response(combined || '', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  });
+
+  // Reverse proxy to active container
+  app.all('/proxy/:spaceId/:routeRef/*', async (c) => {
+    const spaceId = c.req.param('spaceId');
+    const routeRef = c.req.param('routeRef');
+    const key = serviceKey(spaceId, routeRef);
+    const state = await loadState();
+    const record = state.services[key];
+
+    if (!record || record.status !== 'deployed' || !record.resolved_endpoint) {
+      return c.json({ error: 'No active container for this service' }, 503);
+    }
+
+    const baseUrl = record.resolved_endpoint.base_url;
+    const proxyPrefix = `/proxy/${spaceId}/${routeRef}`;
+    const remainingPath = c.req.path.slice(proxyPrefix.length) || '/';
+    const targetUrl = new URL(remainingPath, baseUrl);
+    targetUrl.search = new URL(c.req.url).search;
+
+    const headers = new Headers(c.req.raw.headers);
+    headers.delete('host');
+
+    try {
+      const upstream = await fetch(targetUrl.toString(), {
+        method: c.req.method,
+        headers,
+        body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
+        redirect: 'manual',
       });
+
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers: upstream.headers,
+      });
+    } catch (err) {
+      return c.json({
+        error: 'Proxy request failed',
+        details: err instanceof Error ? err.message : String(err),
+      }, 502);
     }
   });
 

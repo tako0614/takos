@@ -24,9 +24,6 @@ vi.mock('@/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/utils')>()),
   generateId: mocks.generateId,
   now: mocks.now,
-}));
-
-vi.mock('@/shared/utils/slug', () => ({
   sanitizeRepoName: mocks.sanitizeRepoName,
   slugifyName: vi.fn((name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'space'),
 }));

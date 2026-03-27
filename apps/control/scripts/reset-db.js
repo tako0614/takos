@@ -161,17 +161,8 @@ const TABLES = [
   'deployment_events',
   'custom_domains',
   'deployments',
-  'workers',
+  'services',
   'bundle_deployments',
-  // Legacy compatibility mirrors kept for cleanup during cutover
-  'worker_mcp_endpoints',
-  'worker_runtime_limits',
-  'worker_runtime_flags',
-  'worker_env_vars',
-  'infra_workers',
-  'worker_runtime_settings',
-  'worker_common_env_links',
-  'worker_bindings',
 
   // Files / repositories / account hierarchy
   'files',

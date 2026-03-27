@@ -5,7 +5,7 @@ import {
   WEEKLY_RUNTIME_LIMIT_SECONDS,
   WEEKLY_RUNTIME_WINDOW_DAYS,
 } from '../../application/services/billing/billing';
-import { paymentRequired } from '../../shared/utils/error-response';
+import { PaymentRequiredError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
 
 type PlanGateVariables = {
@@ -58,7 +58,7 @@ export function requireWeeklyRuntimeLimitForAgent(options?: {
       if (check.retryAfterSeconds > 0) {
         c.header('Retry-After', String(check.retryAfterSeconds));
       }
-      return paymentRequired(c, 'Weekly runtime limit exceeded', {
+      throw new PaymentRequiredError('Weekly runtime limit exceeded', {
         reason: `Weekly runtime limit reached (${check.usedSeconds}/${check.limitSeconds} seconds in rolling ${check.windowDays}-day window)`,
         used_seconds_7d: check.usedSeconds,
         limit_seconds_7d: check.limitSeconds,

@@ -1,2 +1,2 @@
-export * from '@takos/control-core/worker';
-export { default } from '@takos/control-core/worker';
+export * from '../../../packages/control/src/runtime/worker/index.ts';
+export { default } from '../../../packages/control/src/runtime/worker/index.ts';

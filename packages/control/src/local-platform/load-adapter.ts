@@ -4,8 +4,8 @@ import type { Env } from '../shared/types/index.ts';
 import type { DispatchEnv } from '../dispatch.ts';
 
 export interface LocalControlAdapterModule {
-  createTakosWebEnv?: () => Promise<Env> | Env;
-  createTakosDispatchEnv?: () => Promise<DispatchEnv> | DispatchEnv;
+  createNodeWebEnv?: () => Promise<Env> | Env;
+  createNodeDispatchEnv?: () => Promise<DispatchEnv> | DispatchEnv;
 }
 
 function resolveAdapterSpecifier(rawSpecifier: string): string {
@@ -18,7 +18,7 @@ function resolveAdapterSpecifier(rawSpecifier: string): string {
 async function loadLocalAdapterModule(): Promise<LocalControlAdapterModule> {
   const rawSpecifier = process.env.TAKOS_LOCAL_ADAPTER;
   if (!rawSpecifier) {
-    return import(new URL('./adapters/local.ts', import.meta.url).href) as Promise<LocalControlAdapterModule>;
+    return import(new URL('../node-platform/env-builder.ts', import.meta.url).href) as Promise<LocalControlAdapterModule>;
   }
 
   const module = await import(resolveAdapterSpecifier(rawSpecifier));
@@ -27,16 +27,16 @@ async function loadLocalAdapterModule(): Promise<LocalControlAdapterModule> {
 
 export async function loadLocalWebEnv(): Promise<Env> {
   const module = await loadLocalAdapterModule();
-  if (typeof module.createTakosWebEnv !== 'function') {
-    throw new Error('Local adapter must export createTakosWebEnv()');
+  if (typeof module.createNodeWebEnv !== 'function') {
+    throw new Error('Local adapter must export createNodeWebEnv()');
   }
-  return await module.createTakosWebEnv();
+  return await module.createNodeWebEnv();
 }
 
 export async function loadLocalDispatchEnv(): Promise<DispatchEnv> {
   const module = await loadLocalAdapterModule();
-  if (typeof module.createTakosDispatchEnv !== 'function') {
-    throw new Error('Local adapter must export createTakosDispatchEnv()');
+  if (typeof module.createNodeDispatchEnv !== 'function') {
+    throw new Error('Local adapter must export createNodeDispatchEnv()');
   }
-  return await module.createTakosDispatchEnv();
+  return await module.createNodeDispatchEnv();
 }

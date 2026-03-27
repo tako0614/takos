@@ -93,12 +93,17 @@ export async function buildBindingFromResource(
   resourceId: string,
   bindingName: string
 ): Promise<{
-  type: 'd1' | 'r2' | 'kv' | 'vectorize';
+  type: 'd1' | 'r2' | 'kv' | 'queue' | 'analytics_engine' | 'workflow' | 'vectorize' | 'durable_object_namespace';
   name: string;
   id?: string;
   bucket_name?: string;
   namespace_id?: string;
+  queue_name?: string;
+  dataset?: string;
+  workflow_name?: string;
   index_name?: string;
+  class_name?: string;
+  script_name?: string;
 } | null> {
   const resource = await getResourceById(db, resourceId);
 
@@ -134,6 +139,45 @@ export async function buildBindingFromResource(
         name: bindingName,
         index_name: resource.cf_name || undefined,
       };
+    case 'queue':
+      return {
+        type: 'queue',
+        name: bindingName,
+        queue_name: resource.cf_name || resource.cf_id || undefined,
+      };
+    case 'analytics_engine':
+    case 'analyticsEngine':
+      return {
+        type: 'analytics_engine',
+        name: bindingName,
+        dataset: resource.cf_name || resource.cf_id || undefined,
+      };
+    case 'workflow':
+      return {
+        type: 'workflow',
+        name: bindingName,
+        workflow_name: resource.cf_name || resource.cf_id || undefined,
+      };
+
+    case 'durable_object': {
+      let config: Record<string, unknown> = {};
+      if (resource.config) {
+        try {
+          config = (typeof resource.config === 'string' ? JSON.parse(resource.config) : resource.config) as Record<string, unknown>;
+        } catch {
+          config = {};
+        }
+      }
+      const className = (config.className as string) || resource.cf_name || undefined;
+      if (!className) return null;
+      const scriptName = config.scriptName as string | undefined;
+      return {
+        type: 'durable_object_namespace',
+        name: bindingName,
+        class_name: className,
+        ...(scriptName ? { script_name: scriptName } : {}),
+      };
+    }
 
     default:
       return null;

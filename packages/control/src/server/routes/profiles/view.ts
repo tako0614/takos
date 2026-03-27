@@ -5,8 +5,8 @@ import { getDb } from '../../../infra/db';
 import { repositories, repoStars, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/helpers';
-import { notFound } from '../../../shared/utils/error-response';
+import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
+import { NotFoundError } from '@takos/common/errors';
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
 
@@ -17,7 +17,7 @@ profilesView.get(':username', async (c) => {
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const stats = await getUserStats(c.env.DB, profileUser.id);
@@ -82,7 +82,7 @@ profilesView.get('/:username/repos', async (c) => {
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const ALLOWED_SORT_COLUMNS = {
@@ -138,7 +138,7 @@ profilesView.get('/:username/stars', async (c) => {
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   // Count stars with public repos using a join

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { slugifyName, sanitizeRepoName } from '@/utils/slug';
+import { slugifyName, sanitizeRepoName } from '@/utils';
 
 describe('slugifyName', () => {
   it('lowercases and replaces spaces with hyphens', () => {

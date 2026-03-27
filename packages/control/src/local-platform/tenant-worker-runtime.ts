@@ -2,6 +2,43 @@ import path from 'node:path';
 import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts';
 import type { ServiceTargetMap } from './url-registry.ts';
 
+export type TenantWorkerScheduledOptions = {
+  scheduledTime?: Date;
+  cron?: string;
+};
+
+export type TenantWorkerScheduledResult = {
+  outcome: string;
+  noRetry: boolean;
+};
+
+export type TenantWorkerQueueMessage<Body = unknown> = {
+  id: string;
+  timestamp: Date;
+  attempts: number;
+} & (
+  | { body: Body }
+  | { serializedBody: ArrayBuffer | ArrayBufferView }
+);
+
+export type TenantWorkerQueueResult = {
+  outcome: string;
+  ackAll: boolean;
+  retryBatch: unknown;
+  explicitAcks: string[];
+  retryMessages: unknown[];
+};
+
+export type TenantWorkflowInvocation = {
+  exportName: string;
+  payload?: unknown;
+};
+
+export type TenantWorkerFetcher = Fetcher & {
+  scheduled(options?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult>;
+  queue(queueName: string, messages: TenantWorkerQueueMessage[]): Promise<TenantWorkerQueueResult>;
+};
+
 export type TenantWorkerRuntimeFactoryOptions = {
   db: D1Database;
   workerBundles?: R2Bucket;
@@ -12,7 +49,23 @@ export type TenantWorkerRuntimeFactoryOptions = {
 };
 
 export type TenantWorkerRuntimeRegistry = {
-  get(name: string, options?: { deploymentId?: string }): Fetcher;
+  get(name: string, options?: { deploymentId?: string }): TenantWorkerFetcher;
+  dispatchScheduled(
+    name: string,
+    scheduledOptions?: TenantWorkerScheduledOptions,
+    options?: { deploymentId?: string },
+  ): Promise<TenantWorkerScheduledResult>;
+  dispatchQueue(
+    name: string,
+    queueName: string,
+    messages: TenantWorkerQueueMessage[],
+    options?: { deploymentId?: string },
+  ): Promise<TenantWorkerQueueResult>;
+  invokeWorkflow(
+    name: string,
+    invocation: TenantWorkflowInvocation,
+    options?: { deploymentId?: string },
+  ): Promise<never>;
   dispose(): Promise<void>;
 };
 
@@ -47,7 +100,7 @@ export async function createLocalTenantWorkerRuntimeRegistry(
   };
 
   let registryPromise: Promise<TenantWorkerRuntimeRegistry> | null = null;
-  const fetchers = new Map<string, Fetcher>();
+  const fetchers = new Map<string, TenantWorkerFetcher>();
 
   const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> => {
     if (!registryPromise) {
@@ -58,23 +111,56 @@ export async function createLocalTenantWorkerRuntimeRegistry(
   };
 
   return {
-    get(name: string, options?: { deploymentId?: string }): Fetcher {
+    get(name: string, options?: { deploymentId?: string }): TenantWorkerFetcher {
       const cacheKey = `${name}:${options?.deploymentId ?? ''}`;
       const cached = fetchers.get(cacheKey);
-      if (cached) return cached;
+      if (cached) return cached as TenantWorkerFetcher;
 
       const lazyFetcher = {
         async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
           const registry = await loadRegistry();
           return registry.get(name, options).fetch(input as never, init as never) as unknown as Promise<Response>;
         },
+        async scheduled(scheduledOptions?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult> {
+          const registry = await loadRegistry();
+          return registry.dispatchScheduled(name, scheduledOptions, options);
+        },
+        async queue(queueName: string, messages: TenantWorkerQueueMessage[]): Promise<TenantWorkerQueueResult> {
+          const registry = await loadRegistry();
+          return registry.dispatchQueue(name, queueName, messages, options);
+        },
         connect(): never {
           throw new Error('connect() is not supported by the local tenant runtime registry');
         },
-      } as unknown as Fetcher;
+      } as unknown as TenantWorkerFetcher;
 
       fetchers.set(cacheKey, lazyFetcher);
       return lazyFetcher;
+    },
+    async dispatchScheduled(
+      name: string,
+      scheduledOptions?: TenantWorkerScheduledOptions,
+      registryOptions?: { deploymentId?: string },
+    ): Promise<TenantWorkerScheduledResult> {
+      const registry = await loadRegistry();
+      return registry.dispatchScheduled(name, scheduledOptions, registryOptions);
+    },
+    async dispatchQueue(
+      name: string,
+      queueName: string,
+      messages: TenantWorkerQueueMessage[],
+      registryOptions?: { deploymentId?: string },
+    ): Promise<TenantWorkerQueueResult> {
+      const registry = await loadRegistry();
+      return registry.dispatchQueue(name, queueName, messages, registryOptions);
+    },
+    async invokeWorkflow(
+      name: string,
+      invocation: TenantWorkflowInvocation,
+      registryOptions?: { deploymentId?: string },
+    ): Promise<never> {
+      const registry = await loadRegistry();
+      return registry.invokeWorkflow(name, invocation, registryOptions);
     },
     async dispose(): Promise<void> {
       if (!registryPromise) return;

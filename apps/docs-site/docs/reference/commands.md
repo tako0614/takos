@@ -44,6 +44,48 @@ takos deploy status --space SPACE_ID
 takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 ```
 
+## build / publish / promote
+
+```bash
+# ローカルビルド (CI workflow 経由)
+takos build --space SPACE_ID --repo REPO_ID
+
+# バンドルをアップロード
+takos publish --space SPACE_ID --file bundle.tar.gz
+
+# staged rollout を次のステージに進める
+takos promote APP_DEPLOYMENT_ID --space SPACE_ID
+
+# ロールバック
+takos rollback APP_DEPLOYMENT_ID --space SPACE_ID
+```
+
+## mcp
+
+```bash
+# MCP サーバー一覧
+takos mcp list --space SPACE_ID
+
+# MCP サーバー登録
+takos mcp add --name my-tools --url https://my-mcp-server.example/mcp
+
+# MCP サーバー削除
+takos mcp remove SERVER_ID
+```
+
+## personal-access-token
+
+```bash
+# PAT 一覧
+takos pat list
+
+# PAT 作成
+takos pat create --name "my-token" --scopes "*"
+
+# PAT 無効化
+takos pat revoke TOKEN_ID
+```
+
 ## 使わない surface
 
 Takos CLI では、次は canonical ではありません。

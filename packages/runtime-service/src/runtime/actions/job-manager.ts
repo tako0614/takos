@@ -76,7 +76,7 @@ export class JobManager {
     this.activeJobs.delete(jobId);
   }
 
-  countRunningJobsForWorkspace(spaceId: string): number {
+  countRunningJobsForSpace(spaceId: string): number {
     return Array.from(this.activeJobs.values())
       .filter(job => job.status === 'running' && job.spaceId === spaceId)
       .length;
@@ -90,29 +90,29 @@ export class JobManager {
 
   /**
    * Check whether a new job can be started.
-   * Enforces both per-workspace and global concurrency limits.
+   * Enforces both per-space and global concurrency limits.
    */
   canStartJob(spaceId: string): { allowed: boolean; reason?: string } {
     const globalRunning = this.countRunningJobsGlobal();
     if (globalRunning >= SANDBOX_LIMITS.maxConcurrentJobs) {
       return { allowed: false, reason: `Global concurrent job limit reached (${globalRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})` };
     }
-    const wsRunning = this.countRunningJobsForWorkspace(spaceId);
+    const wsRunning = this.countRunningJobsForSpace(spaceId);
     if (wsRunning >= SANDBOX_LIMITS.maxConcurrentJobs) {
-      return { allowed: false, reason: `Workspace concurrent job limit reached (${wsRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})` };
+      return { allowed: false, reason: `Space concurrent job limit reached (${wsRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})` };
     }
     return { allowed: true };
   }
 
-  /** Delete a job from the active map after clearing its sanitizer and cleaning up workspace. */
+  /** Delete a job from the active map after clearing its sanitizer and cleaning up job directory. */
   async purgeJob(jobId: string): Promise<void> {
     const job = this.activeJobs.get(jobId);
     if (!job) return;
     // Delete from map first to prevent concurrent access during cleanup
     this.activeJobs.delete(jobId);
     job.secretsSanitizer.clear();
-    // Ensure workspace is cleaned up (best-effort, may already be removed)
-    await removeWorkspaceSafe(job.workspacePath, jobId, 'purged job');
+    // Ensure job directory is cleaned up (best-effort, may already be removed)
+    await removeJobDirSafe(job.workspacePath, jobId, 'purged job');
   }
 
   /** Schedule removal of a completed job after the retention window. */
@@ -130,7 +130,7 @@ export class JobManager {
     setTimeout(tryPurge, COMPLETED_JOB_RETENTION_MS);
   }
 
-  /** Mark a job failed, cleanup workspace, and schedule retention cleanup. */
+  /** Mark a job failed, cleanup job directory, and schedule retention cleanup. */
   async failCloseJob(
     jobId: string,
     job: ActiveJob,
@@ -140,7 +140,7 @@ export class JobManager {
     job.conclusion = 'failure';
     job.completedAt = Date.now();
     pushLog(job.logs, reason, job.secretsSanitizer);
-    await removeWorkspaceSafe(job.workspacePath, jobId, 'failed job');
+    await removeJobDirSafe(job.workspacePath, jobId, 'failed job');
     this.scheduleJobCleanup(jobId);
   }
 
@@ -180,7 +180,7 @@ export class JobManager {
       if (age > MAX_JOB_AGE_MS) {
         logger.info('Cleaning up stale job (max age exceeded)', { jobId, status: job.status });
         job.secretsSanitizer.clear();
-        await removeWorkspaceSafe(job.workspacePath, jobId, 'stale job');
+        await removeJobDirSafe(job.workspacePath, jobId, 'stale job');
         this.activeJobs.delete(jobId);
         continue;
       }
@@ -198,8 +198,8 @@ export class JobManager {
 // Standalone helpers (not dependent on instance state)
 // ---------------------------------------------------------------------------
 
-/** Remove a job's workspace directory, logging failures instead of throwing. */
-export async function removeWorkspaceSafe(
+/** Remove a job's working directory, logging failures instead of throwing. */
+export async function removeJobDirSafe(
   workspacePath: string,
   jobId: string,
   context: string,
@@ -207,9 +207,12 @@ export async function removeWorkspaceSafe(
   try {
     await fs.rm(workspacePath, { recursive: true, force: true });
   } catch (rmErr) {
-    logger.error(`Failed to remove ${context} workspace`, { jobId, error: rmErr });
+    logger.error(`Failed to remove ${context} job directory`, { jobId, error: rmErr });
   }
 }
+
+/** @deprecated Use {@link removeJobDirSafe} instead. */
+export const removeWorkspaceSafe = removeJobDirSafe;
 
 /** Sanitize a key-value map through the job's secrets sanitizer. */
 export function sanitizeOutputs(

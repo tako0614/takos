@@ -6,8 +6,8 @@ import type {
   ReminderTriggerType,
   ReminderPriority,
 } from '../../shared/types';
-import { checkWorkspaceAccess } from '../../shared/utils';
-import { forbidden, notFound, internalError, parseLimit, requireWorkspaceAccess, type BaseVariables } from './shared/helpers';
+import { checkSpaceAccess } from '../../shared/utils';
+import { forbidden, notFound, internalError, parseLimit, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import {
   listReminders,
@@ -39,7 +39,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const status = validatedQuery.status as ReminderStatus | undefined;
     const limit = parseLimit(validatedQuery.limit, 50, 100);
 
-    const reminders = await listReminders(c.env.DB, access.workspace.id, {
+    const reminders = await listReminders(c.env.DB, access.space.id, {
       status,
       limit,
     });
@@ -57,7 +57,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Reminder');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, reminder.space_id, user.id);
+    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id);
     if (!access) {
       return forbidden(c);
     }
@@ -86,7 +86,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const body = c.req.valid('json');
 
     const reminder = await createReminder(c.env.DB, {
-      spaceId: access.workspace.id,
+      spaceId: access.space.id,
       userId: user.id,
       content: body.content,
       context: body.context || null,
@@ -119,7 +119,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Reminder');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return forbidden(c);
     }
@@ -147,7 +147,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Reminder');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return forbidden(c);
     }
@@ -167,7 +167,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Reminder');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return forbidden(c);
     }

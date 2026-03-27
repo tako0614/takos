@@ -40,8 +40,6 @@ export interface OIDCState {
 }
 
 export type SpaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
-/** @deprecated Use SpaceRole instead */
-export type WorkspaceRole = SpaceRole;
 export type SpaceKind = 'user' | 'team' | 'system';
 export type SecurityPosture = 'standard' | 'restricted_egress';
 
@@ -63,9 +61,6 @@ export interface Space {
   updated_at: string;
 }
 
-/** @deprecated Use Space instead */
-export type Workspace = Space;
-
 export interface SpaceMembership {
   id: string;
   space_id: string;
@@ -74,14 +69,11 @@ export interface SpaceMembership {
   created_at: string;
 }
 
-/** @deprecated Use SpaceMembership instead */
-export type WorkspaceMember = SpaceMembership;
-
 export type FileOrigin = 'user' | 'ai' | 'system';
 export type FileKind = 'source' | 'config' | 'doc' | 'asset' | 'artifact' | 'temp';
 export type FileVisibility = 'private' | 'workspace' | 'public';
 
-export interface WorkspaceFile {
+export interface SpaceFile {
   id: string;
   space_id: string;
   path: string;
@@ -349,7 +341,18 @@ export interface ServiceBinding {
   created_at: string;
 }
 
-export type ResourceType = 'd1' | 'r2' | 'worker' | 'kv' | 'vectorize' | 'assets';
+export type ResourceType =
+  | 'd1'
+  | 'r2'
+  | 'worker'
+  | 'kv'
+  | 'vectorize'
+  | 'queue'
+  | 'analyticsEngine'
+  | 'analytics_engine'
+  | 'workflow'
+  | 'durable_object'
+  | 'assets';
 export type ResourceStatus = 'provisioning' | 'active' | 'failed' | 'deleting' | 'deleted';
 export type ResourcePermission = 'read' | 'write' | 'admin';
 
@@ -380,7 +383,16 @@ export interface ResourceAccess {
   created_at: string;
 }
 
-export type BindingType = 'd1' | 'r2' | 'kv' | 'vectorize' | 'service';
+export type BindingType =
+  | 'd1'
+  | 'r2'
+  | 'kv'
+  | 'vectorize'
+  | 'queue'
+  | 'analyticsEngine'
+  | 'analytics_engine'
+  | 'workflow'
+  | 'service';
 
 export type AppType = 'platform' | 'builtin' | 'custom';
 
@@ -460,15 +472,15 @@ export interface PullRequestComment {
   created_at: string;
 }
 
-export type WorkspaceStorageFileType = 'file' | 'folder';
+export type SpaceStorageFileType = 'file' | 'folder';
 
-export interface WorkspaceStorageFile {
+export interface SpaceStorageFile {
   id: string;
   space_id: string;
   parent_id: string | null;
   name: string;
   path: string;
-  type: WorkspaceStorageFileType;
+  type: SpaceStorageFileType;
   size: number;
   mime_type: string | null;
   r2_key: string | null;

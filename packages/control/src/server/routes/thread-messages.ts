@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, MessageRole } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/helpers';
+import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {

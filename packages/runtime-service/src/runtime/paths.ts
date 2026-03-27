@@ -174,9 +174,9 @@ function validateRepoNameComponent(value: string, label: string): string {
 }
 
 export function getRepoPath(spaceId: string, repoName: string): string {
-  const validatedWorkspaceId = validateRepoNameComponent(spaceId, 'spaceId');
+  const validatedSpaceId = validateRepoNameComponent(spaceId, 'spaceId');
   const validatedRepoName = validateRepoNameComponent(repoName, 'repoName');
-  return path.join(REPOS_BASE_DIR, validatedWorkspaceId, `${validatedRepoName}.git`);
+  return path.join(REPOS_BASE_DIR, validatedSpaceId, `${validatedRepoName}.git`);
 }
 
 export function resolveWorkDirPath(targetPath: string, label: string): string {

@@ -32,20 +32,12 @@ vi.mock('@/services/git-smart', () => ({
   getBlobAtPath: mocks.getBlobAtPath,
 }));
 
-import { WorkflowEngine } from '@/services/execution/workflow-engine';
+import { evaluateDependencies, scheduleDependentJobs } from '@/services/execution/workflow-job-scheduler';
 
 function createQueueMock(): Queue<unknown> {
   return {
     send: vi.fn(),
   } as unknown as Queue<unknown>;
-}
-
-function createEngine(queue = createQueueMock()): WorkflowEngine {
-  return new WorkflowEngine({
-    db: {} as D1Database,
-    bucket: {} as R2Bucket,
-    queue: queue as unknown as Queue<{ type: 'job' }>,
-  });
 }
 
 /**
@@ -103,7 +95,7 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
     vi.clearAllMocks();
   });
 
-  it('checkDependenciesSatisfied returns false when dependency conclusion is failure', async () => {
+  it('evaluateDependencies returns allSuccessful=false when dependency conclusion is failure', async () => {
     // evaluateDependencies does one select per dep:
     // select({ status, conclusion }).from(workflowJobs).where(...).get()
     const { drizzle } = buildDrizzleMock([
@@ -111,19 +103,14 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
     ]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const engine = createEngine();
-    const checkDependenciesSatisfied = (engine as unknown as {
-      checkDependenciesSatisfied: (runId: string, needs: string[]) => Promise<boolean>;
-    }).checkDependenciesSatisfied.bind(engine);
+    const result = await evaluateDependencies({} as D1Database, 'run-1', ['job-a']);
 
-    const result = await checkDependenciesSatisfied('run-1', ['job-a']);
-
-    expect(result).toBe(false);
+    expect(result.allCompleted).toBe(true);
+    expect(result.allSuccessful).toBe(false);
   });
 
   it('scheduleDependentJobs skips dependent job when one of multiple needs failed', async () => {
     const queue = createQueueMock();
-    const engine = createEngine(queue);
 
     // scheduleDependentJobs flow:
     // 1. select().from(workflowRuns).where(...).get() -> run record
@@ -213,11 +200,13 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
       diagnostics: [],
     });
 
-    const scheduleDependentJobs = (engine as unknown as {
-      scheduleDependentJobs: (runId: string, completedJobKey: string) => Promise<void>;
-    }).scheduleDependentJobs.bind(engine);
-
-    await scheduleDependentJobs('run-1', 'jobC');
+    await scheduleDependentJobs(
+      {} as D1Database,
+      {} as R2Bucket,
+      queue as unknown as Queue<{ type: 'job' }>,
+      'run-1',
+      'jobC',
+    );
 
     // Should have called update to skip jobB (set status=completed, conclusion=skipped)
     expect(drizzle.update).toHaveBeenCalled();

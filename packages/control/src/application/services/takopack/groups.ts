@@ -4,7 +4,7 @@ import { eq, and, or } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { nanoid } from 'nanoid';
 import { now } from '../../../shared/utils';
-import { resolveServiceRouteSummaryForWorkspace } from '../platform/workers';
+import { resolveServiceRouteSummaryForSpace } from '../platform/workers';
 import type {
   TakopackManifest,
   ResourceProvisionResult,
@@ -59,7 +59,7 @@ export class BundleShortcutGroupService {
       });
     }
 
-    for (const resourceType of ['d1', 'r2', 'kv'] as const) {
+    for (const resourceType of ['d1', 'r2', 'kv', 'queue', 'analyticsEngine', 'workflow', 'vectorize', 'durableObject'] as const) {
       for (const name of manifest.group?.resources?.[resourceType] || []) {
         const resolvedResourceId = await this.resolveGroupResourceId(
           spaceId,
@@ -132,14 +132,14 @@ export class BundleShortcutGroupService {
     const ref = reference.trim();
     if (!ref) return reference;
 
-    const worker = await resolveServiceRouteSummaryForWorkspace(this.env.DB, spaceId, ref);
+    const worker = await resolveServiceRouteSummaryForSpace(this.env.DB, spaceId, ref);
 
     return worker?.id || mapped || reference;
   }
 
   private async resolveGroupResourceId(
     spaceId: string,
-    type: 'd1' | 'r2' | 'kv',
+    type: 'd1' | 'r2' | 'kv' | 'queue' | 'analyticsEngine' | 'workflow' | 'vectorize' | 'durableObject',
     reference: string,
     map?: Map<string, string>
   ): Promise<string> {
@@ -153,10 +153,11 @@ export class BundleShortcutGroupService {
     if (!ref) return reference;
 
     const db = getDb(this.env.DB);
+    const storageType = type === 'analyticsEngine' ? 'analytics_engine' : type;
     const resource = await db.select({ id: resources.id }).from(resources).where(
       and(
         eq(resources.accountId, spaceId),
-        eq(resources.type, type),
+        eq(resources.type, storageType),
         eq(resources.status, 'active'),
         or(
           eq(resources.id, ref),
@@ -178,7 +179,11 @@ export function buildProvisionedResourceReferenceMaps(
     d1: new Map<string, string>(),
     r2: new Map<string, string>(),
     kv: new Map<string, string>(),
+    queue: new Map<string, string>(),
+    analyticsEngine: new Map<string, string>(),
+    workflow: new Map<string, string>(),
     vectorize: new Map<string, string>(),
+    durableObject: new Map<string, string>(),
   };
 
   if (!provisionedResources) {
@@ -205,11 +210,36 @@ export function buildProvisionedResourceReferenceMaps(
     addProvisionedReference(maps.kv, resource.resourceId, resource.resourceId);
   }
 
+  for (const resource of provisionedResources.queue) {
+    addProvisionedReference(maps.queue, resource.binding, resource.resourceId);
+    addProvisionedReference(maps.queue, resource.id, resource.resourceId);
+    addProvisionedReference(maps.queue, resource.name, resource.resourceId);
+    addProvisionedReference(maps.queue, resource.resourceId, resource.resourceId);
+  }
+
+  for (const resource of provisionedResources.analyticsEngine) {
+    addProvisionedReference(maps.analyticsEngine, resource.binding, resource.resourceId);
+    addProvisionedReference(maps.analyticsEngine, resource.name, resource.resourceId);
+    addProvisionedReference(maps.analyticsEngine, resource.resourceId, resource.resourceId);
+  }
+
+  for (const resource of provisionedResources.workflow) {
+    addProvisionedReference(maps.workflow, resource.binding, resource.resourceId);
+    addProvisionedReference(maps.workflow, resource.name, resource.resourceId);
+    addProvisionedReference(maps.workflow, resource.resourceId, resource.resourceId);
+  }
+
   for (const resource of provisionedResources.vectorize) {
     addProvisionedReference(maps.vectorize, resource.binding, resource.resourceId);
     addProvisionedReference(maps.vectorize, resource.id, resource.resourceId);
     addProvisionedReference(maps.vectorize, resource.name, resource.resourceId);
     addProvisionedReference(maps.vectorize, resource.resourceId, resource.resourceId);
+  }
+
+  for (const resource of provisionedResources.durableObject) {
+    addProvisionedReference(maps.durableObject, resource.binding, resource.resourceId);
+    addProvisionedReference(maps.durableObject, resource.name, resource.resourceId);
+    addProvisionedReference(maps.durableObject, resource.resourceId, resource.resourceId);
   }
 
   return maps;

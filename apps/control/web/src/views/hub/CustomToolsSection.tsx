@@ -5,21 +5,21 @@ import { useCustomTools } from '../../hooks/useCustomTools';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
-import type { CustomTool, Workspace } from '../../types';
+import type { CustomTool, Space } from '../../types';
 
 interface CustomToolsSectionProps {
-  workspaces: Workspace[];
-  selectedWorkspaceId: string | null;
-  setSelectedWorkspaceId: (id: string) => void;
+  spaces: Space[];
+  selectedSpaceId: string | null;
+  setSelectedSpaceId: (id: string) => void;
 }
 
 export function CustomToolsSection({
-  workspaces,
-  selectedWorkspaceId,
-  setSelectedWorkspaceId,
+  spaces,
+  selectedSpaceId,
+  setSelectedSpaceId,
 }: CustomToolsSectionProps) {
   const { t } = useI18n();
-  const spaceId = selectedWorkspaceId || '';
+  const spaceId = selectedSpaceId || '';
 
   const {
     tools,
@@ -78,13 +78,13 @@ export function CustomToolsSection({
     setShowEditModal(true);
   };
 
-  if (!selectedWorkspaceId) {
+  if (!selectedSpaceId) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
           <Icons.Wrench className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
         </div>
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectWorkspace')}</p>
+        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectSpace')}</p>
       </div>
     );
   }

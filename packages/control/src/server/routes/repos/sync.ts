@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, requireWorkspaceAccess } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseJsonBody, requireWorkspaceAccess } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess, toApiRepositoryFromDb } from '../../../application/services/source/repos';
@@ -11,7 +11,7 @@ import { repositories } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
 import { now } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
-import { badRequest, notFound, conflict, internalError, payloadTooLarge } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 
 function normalizeBranchName(input: string): string {
   if (input.startsWith('refs/heads/')) {
@@ -31,23 +31,23 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   const db = getDb(c.env.DB);
 
   if (body === null) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const remote = body.remote ?? 'upstream';
   if (remote !== 'upstream') {
-    return badRequest(c, `Unsupported remote: ${remote}`);
+    throw new BadRequestError(`Unsupported remote: ${remote}`);
   }
 
   if (body.branches !== undefined) {
     if (!Array.isArray(body.branches) || body.branches.some(branch => typeof branch !== 'string')) {
-      return badRequest(c, 'branches must be an array of strings');
+      throw new BadRequestError('branches must be an array of strings');
     }
   }
 
   const repoData = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
   if (!repoData) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const repo = toApiRepositoryFromDb(repoData);
@@ -64,12 +64,12 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (!repo.forked_from_id) {
-    return badRequest(c, 'Repository is not a fork');
+    throw new BadRequestError('Repository is not a fork');
   }
 
   const upstreamData = await db.select().from(repositories).where(eq(repositories.id, repo.forked_from_id)).get();
   if (!upstreamData) {
-    return notFound(c, 'Upstream repository');
+    throw new NotFoundError('Upstream repository');
   }
 
   const upstream = toApiRepositoryFromDb(upstreamData);
@@ -172,7 +172,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       }, 413);
     }
     logError('Failed to fetch remote branches', err, { module: 'routes/repos/sync' });
-    return internalError(c, 'Failed to fetch from upstream');
+    throw new InternalError('Failed to fetch from upstream');
   }
   })
   .post('/repos/:repoId/sync', zValidator('json', z.object({
@@ -187,13 +187,13 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
 
   const remote = body.remote ?? 'upstream';
   if (remote !== 'upstream') {
-    return badRequest(c, `Unsupported remote: ${remote}`);
+    throw new BadRequestError(`Unsupported remote: ${remote}`);
   }
 
   const repoData = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
 
   if (!repoData) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const repo = toApiRepositoryFromDb(repoData);
@@ -209,13 +209,13 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   if (access instanceof Response) return access;
 
   if (!repo.forked_from_id) {
-    return badRequest(c, 'Repository is not a fork');
+    throw new BadRequestError('Repository is not a fork');
   }
 
   const upstreamData = await db.select().from(repositories).where(eq(repositories.id, repo.forked_from_id)).get();
 
   if (!upstreamData) {
-    return notFound(c, 'Upstream repository');
+    throw new NotFoundError('Upstream repository');
   }
 
   const upstream = toApiRepositoryFromDb(upstreamData);
@@ -223,23 +223,23 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   try {
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      return internalError(c, 'Git storage not configured');
+      throw new InternalError('Git storage not configured');
     }
 
     const requestedBranch = typeof body.branch === 'string' ? body.branch.trim() : '';
     const branchName = normalizeBranchName(requestedBranch || repo.default_branch || 'main');
     if (!branchName) {
-      return badRequest(c, 'Invalid branch name');
+      throw new BadRequestError('Invalid branch name');
     }
 
     const forkBranch = await gitStore.getBranch(c.env.DB, repoId, branchName);
     if (!forkBranch) {
-      return notFound(c, 'Fork branch');
+      throw new NotFoundError('Fork branch');
     }
 
     const upstreamBranch = await gitStore.getBranch(c.env.DB, upstream.id, branchName);
     if (!upstreamBranch) {
-      return notFound(c, 'Upstream branch');
+      throw new NotFoundError('Upstream branch');
     }
 
     const { ahead, behind, has_merge_base } = await gitStore.countCommitsBetween(
@@ -300,7 +300,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       );
 
       if (!updateResult.success) {
-        return internalError(c, 'Failed to update branch');
+        throw new InternalError('Failed to update branch');
       }
 
       return c.json({
@@ -339,7 +339,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
     ]);
 
     if (!baseCommit || !localCommit || !incomingCommit) {
-      return internalError(c, 'Failed to load commits for merge');
+      throw new InternalError('Failed to load commits for merge');
     }
 
     const mergeResult = await gitStore.mergeTrees3Way(
@@ -407,7 +407,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       }, 413);
     }
     logError('Failed to sync fork', err, { module: 'routes/repos/sync' });
-    return internalError(c, 'Failed to sync with upstream');
+    throw new InternalError('Failed to sync with upstream');
   }
   })
   .get('/repos/:repoId/sync/status', async (c) => {
@@ -418,24 +418,24 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
   const repoData = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
 
   if (!repoData) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const repo = toApiRepositoryFromDb(repoData);
 
   const access = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!access) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!repo.forked_from_id) {
-    return badRequest(c, 'Repository is not a fork');
+    throw new BadRequestError('Repository is not a fork');
   }
 
   const upstreamData = await db.select().from(repositories).where(eq(repositories.id, repo.forked_from_id)).get();
 
   if (!upstreamData) {
-    return notFound(c, 'Upstream repository');
+    throw new NotFoundError('Upstream repository');
   }
 
   const upstream = toApiRepositoryFromDb(upstreamData);

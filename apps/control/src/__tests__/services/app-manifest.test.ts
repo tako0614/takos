@@ -79,6 +79,97 @@ spec:
     expect(manifest.spec.services.api.bindings?.vectorize).toEqual(['semantic-index']);
   });
 
+  it('parses queue, analyticsEngine, workflow resources and worker triggers', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: runtime-app
+spec:
+  version: 1.0.0
+  resources:
+    jobs:
+      type: queue
+      binding: JOBS
+      queue:
+        maxRetries: 5
+        deliveryDelaySeconds: 10
+        deadLetterQueue: jobs-dlq
+    jobs-dlq:
+      type: queue
+      binding: JOBS_DLQ
+    events:
+      type: analyticsEngine
+      binding: ANALYTICS
+      analyticsEngine:
+        dataset: tenant-events
+    onboarding:
+      type: workflow
+      binding: ONBOARDING_FLOW
+      workflow:
+        service: api
+        export: runOnboarding
+        timeoutMs: 60000
+        maxRetries: 3
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        queues: [jobs]
+        analytics: [events]
+        workflows: [onboarding]
+      triggers:
+        schedules:
+          - cron: '*/5 * * * *'
+            export: handleCron
+        queues:
+          - queue: jobs
+            export: handleJob
+`);
+
+    expect(manifest.spec.resources?.jobs).toEqual({
+      type: 'queue',
+      binding: 'JOBS',
+      queue: {
+        maxRetries: 5,
+        deliveryDelaySeconds: 10,
+        deadLetterQueue: 'jobs-dlq',
+      },
+    });
+    expect(manifest.spec.resources?.events).toEqual({
+      type: 'analyticsEngine',
+      binding: 'ANALYTICS',
+      analyticsEngine: {
+        dataset: 'tenant-events',
+      },
+    });
+    expect(manifest.spec.resources?.onboarding).toEqual({
+      type: 'workflow',
+      binding: 'ONBOARDING_FLOW',
+      workflow: {
+        service: 'api',
+        export: 'runOnboarding',
+        timeoutMs: 60000,
+        maxRetries: 3,
+      },
+    });
+    expect(manifest.spec.services.api.bindings).toMatchObject({
+      queues: ['jobs'],
+      analytics: ['events'],
+      workflows: ['onboarding'],
+    });
+    expect(manifest.spec.services.api.triggers).toEqual({
+      schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
+      queues: [{ queue: 'jobs', export: 'handleJob' }],
+    });
+  });
+
   it('round-trips build source labels through bundle manifest json', async () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
@@ -184,10 +275,12 @@ spec:
     }));
     expect(docs).toContainEqual(expect.objectContaining({
       kind: 'Workload',
-      metadata: { name: 'api' },
+      metadata: expect.objectContaining({ name: 'api' }),
       spec: expect.objectContaining({
         pluginConfig: expect.objectContaining({
-          bindings: expect.objectContaining({}),
+          bindings: {
+            services: [],
+          },
         }),
       }),
     }));
@@ -200,6 +293,114 @@ spec:
         mount: expect.objectContaining({
           as: 'SEARCH_INDEX',
           type: 'vectorize',
+        }),
+      }),
+    }));
+  });
+
+  it('emits queue, analyticsEngine, workflow resources and trigger metadata into bundle docs', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: tenant-runtime
+spec:
+  version: 1.0.0
+  resources:
+    jobs:
+      type: queue
+      binding: JOBS
+      queue:
+        maxRetries: 2
+    events:
+      type: analyticsEngine
+      binding: ANALYTICS
+      analyticsEngine:
+        dataset: tenant-events
+    onboarding:
+      type: workflow
+      binding: ONBOARDING_FLOW
+      workflow:
+        service: api
+        export: runOnboarding
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        queues: [jobs]
+        analytics: [events]
+        workflows: [onboarding]
+      triggers:
+        schedules:
+          - cron: '0 * * * *'
+            export: handleHourly
+        queues:
+          - queue: jobs
+            export: handleJob
+`);
+
+    const docs = appManifestToBundleDocs(manifest, new Map([
+      ['api', {
+        service_name: 'api',
+        workflow_path: '.takos/workflows/build.yml',
+        workflow_job: 'build-api',
+        workflow_artifact: 'api-dist',
+        artifact_path: 'dist/api.mjs',
+      }],
+    ]));
+
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Resource',
+      metadata: { name: 'jobs' },
+      spec: expect.objectContaining({
+        type: 'queue',
+        binding: 'JOBS',
+        queue: {
+          maxRetries: 2,
+        },
+      }),
+    }));
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Resource',
+      metadata: { name: 'events' },
+      spec: expect.objectContaining({
+        type: 'analyticsEngine',
+        binding: 'ANALYTICS',
+        analyticsEngine: {
+          dataset: 'tenant-events',
+        },
+      }),
+    }));
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Resource',
+      metadata: { name: 'onboarding' },
+      spec: expect.objectContaining({
+        type: 'workflow',
+        binding: 'ONBOARDING_FLOW',
+        workflow: {
+          service: 'api',
+          export: 'runOnboarding',
+        },
+      }),
+    }));
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Workload',
+      metadata: { name: 'api', labels: expect.any(Object) },
+      spec: expect.objectContaining({
+        pluginConfig: expect.objectContaining({
+          bindings: {
+            services: [],
+          },
+          triggers: {
+            schedules: [{ cron: '0 * * * *', export: 'handleHourly' }],
+            queues: [{ queue: 'jobs', export: 'handleJob' }],
+          },
         }),
       }),
     }));

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireWorkspaceAccess, type BaseVariables } from './shared/helpers';
+import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
 import { createGitService } from '../../application/services/source/git';
-import { badRequest, internalError, notFound } from '../../shared/utils/error-response';
+import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
 
 const git = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
@@ -30,7 +30,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
   }>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const access = await requireWorkspaceAccess(
@@ -43,7 +43,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
   if (access instanceof Response) return access;
 
   if (!body.message || body.message.trim().length === 0) {
-    return badRequest(c, 'Commit message is required');
+    throw new BadRequestError('Commit message is required');
   }
 
   const gitService = resolveGitService(c);
@@ -51,7 +51,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
 
   try {
     const commit = await gitService.commit(
-      access.workspace.id,
+      access.space.id,
       body.message.trim(),
       user.id,
       user.name,
@@ -61,7 +61,7 @@ git.post('/spaces/:spaceId/git/commit', async (c) => {
     return c.json({ commit }, 201);
   } catch (err) {
     logError('Git commit error', err, { module: 'routes/git' });
-    return internalError(c, 'Commit failed');
+    throw new InternalError('Commit failed');
   }
 });
 
@@ -80,7 +80,7 @@ git.get('/spaces/:spaceId/git/log', async (c) => {
   if (gitService instanceof Response) return gitService;
 
   try {
-    const commits = await gitService.log(access.workspace.id, {
+    const commits = await gitService.log(access.space.id, {
       limit,
       offset,
       path,
@@ -89,7 +89,7 @@ git.get('/spaces/:spaceId/git/log', async (c) => {
     return c.json({ commits });
   } catch (err) {
     logError('Git log error', err, { module: 'routes/git' });
-    return internalError(c, 'Failed to get commit history');
+    throw new InternalError('Failed to get commit history');
   }
 });
 
@@ -108,11 +108,11 @@ git.get('/spaces/:spaceId/git/commits/:commitId', async (c) => {
   try {
     const commit = await gitService.getCommit(commitId);
     if (!commit) {
-      return notFound(c, 'Commit');
+      throw new NotFoundError('Commit');
     }
 
-    if (commit.space_id !== access.workspace.id) {
-      return notFound(c, 'Commit');
+    if (commit.space_id !== access.space.id) {
+      throw new NotFoundError('Commit');
     }
 
     const changes = await gitService.getCommitChanges(commitId);
@@ -120,7 +120,7 @@ git.get('/spaces/:spaceId/git/commits/:commitId', async (c) => {
     return c.json({ commit, changes });
   } catch (err) {
     logError('Git show error', err, { module: 'routes/git' });
-    return internalError(c, 'Failed to get commit');
+    throw new InternalError('Failed to get commit');
   }
 });
 
@@ -139,19 +139,19 @@ git.get('/spaces/:spaceId/git/diff/:commitId', async (c) => {
   try {
     const commit = await gitService.getCommit(commitId);
     if (!commit) {
-      return notFound(c, 'Commit');
+      throw new NotFoundError('Commit');
     }
 
-    if (commit.space_id !== access.workspace.id) {
-      return notFound(c, 'Commit');
+    if (commit.space_id !== access.space.id) {
+      throw new NotFoundError('Commit');
     }
 
-    const diffs = await gitService.diff(access.workspace.id, commit.parent_id, commitId);
+    const diffs = await gitService.diff(access.space.id, commit.parent_id, commitId);
 
     return c.json({ commit, diffs });
   } catch (err) {
     logError('Git diff error', err, { module: 'routes/git' });
-    return internalError(c, 'Failed to get diff');
+    throw new InternalError('Failed to get diff');
   }
 });
 
@@ -165,7 +165,7 @@ git.post('/spaces/:spaceId/git/restore', async (c) => {
   }>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const access = await requireWorkspaceAccess(
@@ -178,23 +178,23 @@ git.post('/spaces/:spaceId/git/restore', async (c) => {
   if (access instanceof Response) return access;
 
   if (!body.commit_id || !body.path) {
-    return badRequest(c, 'commit_id and path are required');
+    throw new BadRequestError('commit_id and path are required');
   }
 
   const gitService = resolveGitService(c);
   if (gitService instanceof Response) return gitService;
 
   try {
-    const result = await gitService.restore(access.workspace.id, body.commit_id, body.path);
+    const result = await gitService.restore(access.space.id, body.commit_id, body.path);
 
     if (!result.success) {
-      return badRequest(c, result.message);
+      throw new BadRequestError(result.message);
     }
 
     return c.json(result);
   } catch (err) {
     logError('Git restore error', err, { module: 'routes/git' });
-    return internalError(c, 'Restore failed');
+    throw new InternalError('Restore failed');
   }
 });
 
@@ -212,7 +212,7 @@ git.get('/spaces/:spaceId/git/history/:path', async (c) => {
   if (gitService instanceof Response) return gitService;
 
   try {
-    const commits = await gitService.log(access.workspace.id, {
+    const commits = await gitService.log(access.space.id, {
       limit,
       path: decodeURIComponent(path),
     });
@@ -220,7 +220,7 @@ git.get('/spaces/:spaceId/git/history/:path', async (c) => {
     return c.json({ path, commits });
   } catch (err) {
     logError('Git history error', err, { module: 'routes/git' });
-    return internalError(c, 'Failed to get file history');
+    throw new InternalError('Failed to get file history');
   }
 });
 

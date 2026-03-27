@@ -30,7 +30,7 @@ import {
   WORKSPACE_SOURCE_HANDLERS,
   storeSearchHandler,
   repoForkHandler,
-} from '@/tools/builtin/workspace-source';
+} from '@/tools/builtin/space-source';
 
 // ---------------------------------------------------------------------------
 // Helpers

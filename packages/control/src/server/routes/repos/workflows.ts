@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import { parseWorkflow } from '@takos/actions-engine';
 import { generateId, now, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
-import { parseJsonBody } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseJsonBody } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import type { RepoAccess } from '../../../application/services/source/repos';
 import * as gitStore from '../../../application/services/git-smart';
@@ -11,7 +11,7 @@ import { getDb } from '../../../infra/db';
 import type { Database } from '../../../infra/db';
 import { workflows } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
-import { notFound, internalError } from '../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 interface WorkflowParseResult {
   name: string | null;
@@ -160,7 +160,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const workflowsData = await db.select().from(workflows)
@@ -208,7 +208,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const cached = await db.select().from(workflows)
@@ -223,7 +223,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
       if (cached) {
         return c.json({ workflow: buildCachedWorkflowResponse(cached) });
       }
-      return notFound(c, 'Workflow');
+      throw new NotFoundError('Workflow');
     }
 
     const refName = resolveRefName(branch, repoAccess);
@@ -233,7 +233,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
       if (cached) {
         return c.json({ workflow: buildCachedWorkflowResponse(cached) });
       }
-      return notFound(c, 'Workflow file');
+      throw new NotFoundError('Workflow file');
     }
 
     const content = new TextDecoder().decode(blob);
@@ -267,18 +267,18 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const refName = resolveRefName(body.branch, repoAccess);
   const blob = await resolveWorkflowBlob(c.env.DB, bucket, repoId, refName, path);
   if (!blob) {
-    return notFound(c, 'Workflow file');
+    throw new NotFoundError('Workflow file');
   }
 
   const content = new TextDecoder().decode(blob);
@@ -313,12 +313,12 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
 
   const refName = resolveRefName(body.branch, repoAccess);
@@ -367,7 +367,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const existing = await db.select({ id: workflows.id })
@@ -376,7 +376,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!existing) {
-    return notFound(c, 'Workflow');
+    throw new NotFoundError('Workflow');
   }
 
   await db.delete(workflows)

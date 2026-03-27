@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { getResourceById, getResourceByName } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
@@ -8,7 +8,7 @@ import { resourceAccessTokens } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateId, now, base64UrlEncode } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
-import { forbidden, notFound } from '../../../shared/utils/error-response';
+import { AuthorizationError, NotFoundError } from '@takos/common/errors';
 
 function generateRandomBytes(length: number): Uint8Array {
   const bytes = new Uint8Array(length);
@@ -25,12 +25,12 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   // Only owner can see tokens
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can view access tokens');
+    throw new AuthorizationError('Only the owner can view access tokens');
   }
 
   const db = getDb(c.env.DB);
@@ -58,7 +58,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resourceId = (resource as { _internal_id?: string } | null)?._internal_id;
 
   if (!resource || !resourceId) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const db = getDb(c.env.DB);
@@ -96,11 +96,11 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can create access tokens');
+    throw new AuthorizationError('Only the owner can create access tokens');
   }
 
   const tokenBytes = generateRandomBytes(32);
@@ -163,7 +163,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resourceId = (resource as { _internal_id?: string } | null)?._internal_id;
 
   if (!resource || !resourceId) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const tokenBytes = generateRandomBytes(32);
@@ -215,11 +215,11 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can delete access tokens');
+    throw new AuthorizationError('Only the owner can delete access tokens');
   }
 
   const db = getDb(c.env.DB);
@@ -229,7 +229,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!token) {
-    return notFound(c, 'Token');
+    throw new NotFoundError('Token');
   }
 
   await db.delete(resourceAccessTokens).where(eq(resourceAccessTokens.id, tokenId));
@@ -246,7 +246,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resourceId = (resource as { _internal_id?: string } | null)?._internal_id;
 
   if (!resource || !resourceId) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const db = getDb(c.env.DB);
@@ -256,7 +256,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!token) {
-    return notFound(c, 'Token');
+    throw new NotFoundError('Token');
   }
 
   await db.delete(resourceAccessTokens).where(eq(resourceAccessTokens.id, tokenId));
@@ -271,11 +271,11 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can view connection info');
+    throw new AuthorizationError('Only the owner can view connection info');
   }
 
   const connectionInfo: Record<string, string> = {};
@@ -321,7 +321,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceByName(c.env.DB, user.id, resourceName);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const connectionInfo: Record<string, string> = {};

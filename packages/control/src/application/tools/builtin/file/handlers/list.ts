@@ -1,6 +1,6 @@
 import type { ToolHandler } from '../../../types';
 import { callSessionApi } from '../session';
-import { setupFileOperation, handleSessionApiResponse } from '../helpers';
+import { setupFileOperation, handleSessionApiResponse } from '../file-operations';
 
 export const fileListHandler: ToolHandler = async (args, context) => {
   const { path, mountPath } = await setupFileOperation(args, context);

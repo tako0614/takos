@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ResourcePermission } from '../../../shared/types';
-import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import {
   deleteResourceAccess,
   getResourceById,
@@ -10,7 +10,7 @@ import {
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { forbidden, notFound } from '../../../shared/utils/error-response';
+import { NotFoundError, AuthorizationError } from '@takos/common/errors';
 
 const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
 
@@ -21,11 +21,11 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can view access grants');
+    throw new AuthorizationError('Only the owner can view access grants');
   }
 
   const accessList = await listResourceAccess(c.env.DB, resourceId);
@@ -48,11 +48,11 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can share this resource');
+    throw new AuthorizationError('Only the owner can share this resource');
   }
 
   if (!['read', 'write', 'admin'].includes(body.permission)) {
@@ -65,7 +65,7 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!workspace) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
 
   const result = await upsertResourceAccess(c.env.DB, {
@@ -93,11 +93,11 @@ const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can revoke access');
+    throw new AuthorizationError('Only the owner can revoke access');
   }
 
   await deleteResourceAccess(c.env.DB, resourceId, spaceId);

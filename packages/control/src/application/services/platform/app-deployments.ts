@@ -3,13 +3,12 @@ import { workflowRuns, workflowJobs } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { createBundleDeploymentOrchestrator } from './bundle-deployment-orchestrator';
-import { generateId } from '../../../shared/utils';
 import { checkRepoAccess } from '../source/repos';
 import * as gitStore from '../git-smart';
 import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts';
 import {
   appManifestToBundleDocs,
-  buildBundlePackageData,
+  buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson,
   parseAndValidateWorkflowYaml,
   parseAppManifestYaml,
@@ -18,6 +17,7 @@ import {
   type AppDeploymentBuildSource,
   type AppManifest,
 } from '../source/app-manifest';
+import { buildParsedPackageFromParts } from '../takopack/manifest';
 
 type RepoRefType = 'branch' | 'tag' | 'commit';
 
@@ -45,25 +45,31 @@ type ResolvedBuildArtifacts = {
 type BundleListItem = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['list']>>[number];
 type BundleDetail = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['get']>>;
 
-function encodeSourceRef(refType: RepoRefType | undefined, ref: string | undefined): string | undefined {
+export function encodeSourceRef(refType: RepoRefType | undefined, ref: string | undefined, commitSha?: string): string | undefined {
   const normalizedRef = String(ref || '').trim();
   if (!normalizedRef) return undefined;
-  return `${refType || 'branch'}:${normalizedRef}`;
+  const base = `${refType || 'branch'}:${normalizedRef}`;
+  return commitSha ? `${base}@${commitSha}` : base;
 }
 
-function decodeSourceRef(encoded: string | null | undefined): {
+export function decodeSourceRef(encoded: string | null | undefined): {
   ref: string | null;
   ref_type: RepoRefType | null;
+  commit_sha: string | null;
 } {
   const raw = String(encoded || '').trim();
-  if (!raw) return { ref: null, ref_type: null };
+  if (!raw) return { ref: null, ref_type: null, commit_sha: null };
   const separator = raw.indexOf(':');
-  if (separator <= 0) return { ref: raw, ref_type: null };
+  if (separator <= 0) return { ref: raw, ref_type: null, commit_sha: null };
   const rawType = raw.slice(0, separator).trim();
-  const ref = raw.slice(separator + 1).trim();
+  const rest = raw.slice(separator + 1).trim();
+  const atIndex = rest.indexOf('@');
+  const ref = atIndex > 0 ? rest.slice(0, atIndex) : rest;
+  const commitSha = atIndex > 0 ? rest.slice(atIndex + 1) : null;
   return {
     ref: ref || null,
     ref_type: rawType === 'branch' || rawType === 'tag' || rawType === 'commit' ? rawType : null,
+    commit_sha: commitSha || null,
   };
 }
 
@@ -76,17 +82,10 @@ function normalizeRepoPath(value: string): string {
     .trim();
 }
 
-function getPackageStorage(env: Env) {
-  return env.WORKER_BUNDLES || env.GIT_OBJECTS || null;
-}
-
 function getGitBucket(env: Env) {
   return env.GIT_OBJECTS || null;
 }
 
-function buildStoredPackageAssetId(spaceId: string) {
-  return `internal:app-packages/${spaceId}/${generateId()}/app-deploy.takopack`;
-}
 
 function buildWorkflowRunRef(refType: RepoRefType, ref: string): string | null {
   if (refType === 'branch') return `refs/heads/${ref}`;
@@ -439,37 +438,26 @@ export class AppDeploymentService {
       manifest,
       new Map(buildSources.map((source) => [source.service_name, source])),
     );
-    const bundleData = await buildBundlePackageData(docs, packageFiles);
-
-    const packageStorage = getPackageStorage(this.env);
-    if (!packageStorage) {
-      throw new Error('Package storage is not configured');
-    }
-
-    const storedAssetId = buildStoredPackageAssetId(spaceId);
-    await packageStorage.put(storedAssetId.replace(/^internal:/, ''), bundleData, {
-      httpMetadata: { contentType: 'application/x-takopack' },
-      customMetadata: {
-        source: 'app-repo-ref',
-        repo_id: target.repoId,
-        ref: target.ref,
-        ref_type: target.refType,
-        commit_sha: target.commitSha,
-      },
-    });
+    const { manifestYaml, normalizedFiles, checksums } = await buildParsedPackageFromDocs(docs, packageFiles);
+    const parsed = buildParsedPackageFromParts({ manifestYaml, files: normalizedFiles, checksums });
 
     const service = createBundleDeploymentOrchestrator(this.env);
-    const result = await service.install(spaceId, userId, bundleData, {
-      source: {
-        type: 'git',
-        repoId: target.repoId,
-        ...(encodeSourceRef(target.refType, target.ref) ? { tag: encodeSourceRef(target.refType, target.ref) } : {}),
-        assetId: storedAssetId,
+    const sourceTag = encodeSourceRef(target.refType, target.ref, target.commitSha);
+    const result = await service.installResolvedPackage(spaceId, userId, {
+      manifest: parsed.manifest,
+      files: parsed.files,
+      normalizedApplyReport: parsed.applyReport,
+      options: {
+        source: {
+          type: 'git',
+          repoId: target.repoId,
+          ...(sourceTag ? { tag: sourceTag } : {}),
+        },
+        skipDependencyResolution: true,
+        requireAutoEnvApproval: true,
+        oauthAutoEnvApproved: input.approveOauthAutoEnv === true,
+        approveSourceChange: input.approveSourceChange === true,
       },
-      skipDependencyResolution: true,
-      requireAutoEnvApproval: true,
-      oauthAutoEnvApproved: input.approveOauthAutoEnv === true,
-      approveSourceChange: input.approveSourceChange === true,
     });
 
     const sourceRef = decodeSourceRef(result.sourceTag);

@@ -7,12 +7,12 @@ import {
   createRuntimeSessionManager,
   type SessionInitResult,
 } from '../../../application/services/sync';
-import { requireWorkspaceAccess } from '../shared/helpers';
-import { checkWorkspaceAccess, generateId, now } from '../../../shared/utils';
+import { requireWorkspaceAccess } from '../shared/route-auth';
+import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import { toSessionSnakeCase } from './shared';
 import type { SessionContext } from './shared';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { badRequest, forbidden, notFound, internalError } from '../../../shared/utils/error-response';
+import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from '@takos/common/errors';
 import {
   getPlatformConfig,
   getPlatformGitObjects,
@@ -53,7 +53,7 @@ export async function startSession(
 ): Promise<Response> {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId') || c.req.param('workspaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
   const access = await requireWorkspaceAccess(
     c,
     spaceId,
@@ -69,10 +69,10 @@ export async function startSession(
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
 
   if (!repoId) {
-    return badRequest(c, 'repo_id is required');
+    throw new BadRequestError('repo_id is required');
   }
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const db = getDb(dbBinding);
@@ -81,18 +81,18 @@ export async function startSession(
     name: repositories.name,
     defaultBranch: repositories.defaultBranch,
   }).from(repositories).where(
-    and(eq(repositories.id, repoId), eq(repositories.accountId, access.workspace.id))
+    and(eq(repositories.id, repoId), eq(repositories.accountId, access.space.id))
   ).get();
 
   if (!repoInfo) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const sessionId = generateId();
   const timestamp = now();
   await db.insert(sessions).values({
     id: sessionId,
-    accountId: access.workspace.id,
+    accountId: access.space.id,
     userAccountId: user.id,
     baseSnapshotId: 'git-mode',
     status: 'initializing',
@@ -103,7 +103,7 @@ export async function startSession(
   });
 
   if (!runtimeSessionEnv) {
-    return internalError(c, 'RUNTIME_HOST binding is required');
+    throw new InternalError('RUNTIME_HOST binding is required');
   }
 
   let runtimeInit: SessionInitResult | null = null;
@@ -112,14 +112,14 @@ export async function startSession(
       runtimeSessionEnv,
       dbBinding,
       runtimeSessionEnv.GIT_OBJECTS || runtimeSessionEnv.TENANT_SOURCE,
-      access.workspace.id,
+      access.space.id,
       sessionId,
     );
     runtimeManager.setRepositoryInfo(repoId, branch || repoInfo.defaultBranch);
     runtimeInit = await runtimeManager.initSession();
   } catch (err) {
     logError('Failed to init runtime session', err, { module: 'routes/sessions-lifecycle' });
-    return internalError(c, 'Failed to initialize runtime session');
+    throw new InternalError('Failed to initialize runtime session');
   }
 
   return c.json({
@@ -139,7 +139,7 @@ export async function stopSession(
 ): Promise<Response> {
   const user = c.get('user');
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return badRequest(c, 'Missing sessionId');
+  if (!sessionId) throw new BadRequestError('Missing sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
   const gitObjects = getPlatformGitObjects(c);
@@ -147,13 +147,13 @@ export async function stopSession(
   const workflowQueue = getPlatformWorkflowQueue(c);
   const config = getPlatformConfig(c);
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
   const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (!sessionRow) {
-    return notFound(c, 'Session');
+    throw new NotFoundError('Session');
   }
 
   const session = toSessionSnakeCase(sessionRow);
@@ -168,14 +168,14 @@ export async function stopSession(
   if (access instanceof Response) return access;
 
   if (session.status !== 'running') {
-    return badRequest(c, 'Session is not running');
+    throw new BadRequestError('Session is not running');
   }
 
   type GitSyncResult = Awaited<ReturnType<ReturnType<typeof createRuntimeSessionManager>['syncToGit']>>;
   let gitResult: GitSyncResult | null = null;
 
   if (!session.repo_id) {
-    return badRequest(c, 'Session is not Git-based');
+    throw new BadRequestError('Session is not Git-based');
   }
   const repoId = session.repo_id;
 
@@ -191,7 +191,7 @@ export async function stopSession(
   }
 
   if (!runtimeSessionEnv) {
-    return internalError(c, 'RUNTIME_HOST binding is required for session sync');
+    throw new InternalError('RUNTIME_HOST binding is required for session sync');
   }
 
   try {
@@ -215,7 +215,7 @@ export async function stopSession(
     }
   } catch (err) {
     logError('Failed to commit to Git', err, { module: 'routes/sessions-lifecycle' });
-    return internalError(c, 'Failed to commit changes to Git');
+    throw new InternalError('Failed to commit changes to Git');
   }
 
   await db.update(sessions).set({ status: 'stopped', updatedAt: now() }).where(eq(sessions.id, sessionId));
@@ -257,16 +257,16 @@ export async function stopSession(
 export async function resumeSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return badRequest(c, 'Missing sessionId');
+  if (!sessionId) throw new BadRequestError('Missing sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
   const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (!sessionRow) {
-    return notFound(c, 'Session');
+    throw new NotFoundError('Session');
   }
 
   const access = await requireWorkspaceAccess(
@@ -280,7 +280,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
   if (access instanceof Response) return access;
 
   if (sessionRow.status !== 'stopped') {
-    return badRequest(c, 'Session is not stopped');
+    throw new BadRequestError('Session is not stopped');
   }
 
   await db.update(sessions).set({ status: 'running', updatedAt: now() }).where(eq(sessions.id, sessionId));
@@ -297,26 +297,26 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
 export async function discardSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return badRequest(c, 'Missing sessionId');
+  if (!sessionId) throw new BadRequestError('Missing sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
   const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (!sessionRow) {
-    return notFound(c, 'Session');
+    throw new NotFoundError('Session');
   }
 
-  const access = await checkWorkspaceAccess(dbBinding, sessionRow.accountId, user.id, ['owner', 'admin']);
+  const access = await checkSpaceAccess(dbBinding, sessionRow.accountId, user.id, ['owner', 'admin']);
   if (!access) {
-    return forbidden(c, 'Permission denied - only workspace owners and admins can discard sessions');
+    throw new AuthorizationError('Permission denied - only workspace owners and admins can discard sessions');
   }
 
   if (sessionRow.status === 'merged') {
-    return badRequest(c, 'Cannot discard a merged session');
+    throw new BadRequestError('Cannot discard a merged session');
   }
 
   await db.update(sessions).set({ status: 'discarded', updatedAt: now() }).where(eq(sessions.id, sessionId));

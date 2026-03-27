@@ -1,12 +1,12 @@
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
-import { eq, and, like, isNotNull } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
+import { generateId, now } from '../../../shared/utils';
 import type { ManifestResources, ResourceProvisionResult } from './types';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger';
 import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
-import { provisionCloudflareResource } from '../resources';
+import { provisionCloudflareResource, insertResource } from '../resources';
 import {
   getPackageFile,
   normalizePackagePath,
@@ -30,7 +30,6 @@ export class TakopackResourceService {
 
   /**
    * Provision new resources or adopt existing ones matched by manifest_key.
-   * On update, existing D1/R2/KV resources are reused instead of recreated.
    */
   async provisionOrAdoptResources(
     spaceId: string,
@@ -57,7 +56,11 @@ export class TakopackResourceService {
       d1: [],
       r2: [],
       kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
       vectorize: [],
+      durableObject: [],
     };
 
     const createdResources: Array<{ id: string; type: string; cfId?: string; cfName?: string }> = [];
@@ -71,7 +74,6 @@ export class TakopackResourceService {
           ).get();
 
           if (existing && existing.cfId) {
-            // Adopt existing resource
             await db.update(resources).set({
               orphanedAt: null,
               updatedAt: new Date().toISOString(),
@@ -89,7 +91,6 @@ export class TakopackResourceService {
               await this.applyIncrementalMigrations(provider, existing.cfId, d1Config.migrations, files, d1Config.binding);
             }
           } else {
-            // Provision new resource
             const d1Name = `${safeName}-${d1Config.binding.toLowerCase()}-${suffix}`;
             const created = await provisionCloudflareResource(this.env, {
               ownerId: userId,
@@ -98,27 +99,24 @@ export class TakopackResourceService {
               type: 'd1',
               cfName: d1Name,
             });
-            const d1Id = created.cfId;
-            const resourceId = created.id;
 
-            // Set manifest_key on newly created resource
-            await db.update(resources).set({ manifestKey }).where(eq(resources.id, resourceId));
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
 
-            createdResources.push({ id: resourceId, type: 'd1', cfId: d1Id || undefined, cfName: d1Name });
+            createdResources.push({ id: created.id, type: 'd1', cfId: created.cfId || undefined, cfName: d1Name });
 
             result.d1.push({
               binding: d1Config.binding,
-              id: d1Id || '',
+              id: created.cfId || '',
               name: d1Name,
-              resourceId,
+              resourceId: created.id,
               wasAdopted: false,
             });
 
             if (d1Config.migrations) {
-              if (!d1Id) {
+              if (!created.cfId) {
                 throw new Error(`Provisioned D1 resource is missing Cloudflare database ID: ${d1Name}`);
               }
-              await this.applyIncrementalMigrations(provider, d1Id, d1Config.migrations, files, d1Config.binding);
+              await this.applyIncrementalMigrations(provider, created.cfId, d1Config.migrations, files, d1Config.binding);
             }
           }
         }
@@ -152,13 +150,17 @@ export class TakopackResourceService {
               type: 'r2',
               cfName: r2Name,
             });
-            const resourceId = created.id;
 
-            await db.update(resources).set({ manifestKey }).where(eq(resources.id, resourceId));
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
 
-            createdResources.push({ id: resourceId, type: 'r2', cfName: r2Name });
+            createdResources.push({ id: created.id, type: 'r2', cfName: r2Name });
 
-            result.r2.push({ binding: r2Config.binding, name: r2Name, resourceId, wasAdopted: false });
+            result.r2.push({
+              binding: r2Config.binding,
+              name: r2Name,
+              resourceId: created.id,
+              wasAdopted: false,
+            });
           }
         }
       }
@@ -192,18 +194,177 @@ export class TakopackResourceService {
               type: 'kv',
               cfName: kvName,
             });
-            const kvId = created.cfId;
-            const resourceId = created.id;
 
-            await db.update(resources).set({ manifestKey }).where(eq(resources.id, resourceId));
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
 
-            createdResources.push({ id: resourceId, type: 'kv', cfId: kvId || undefined, cfName: kvName });
+            createdResources.push({ id: created.id, type: 'kv', cfId: created.cfId || undefined, cfName: kvName });
 
             result.kv.push({
               binding: kvConfig.binding,
-              id: kvId || '',
+              id: created.cfId || '',
               name: kvName,
-              resourceId,
+              resourceId: created.id,
+              wasAdopted: false,
+            });
+          }
+        }
+      }
+
+      if (manifestResources.queue) {
+        for (const queueConfig of manifestResources.queue) {
+          const manifestKey = buildManifestKey(bundleKey, queueConfig.binding);
+          const existing = await db.select().from(resources).where(
+            and(eq(resources.manifestKey, manifestKey), eq(resources.type, 'queue'))
+          ).get();
+
+          if (existing && (existing.cfId || existing.cfName)) {
+            await db.update(resources).set({
+              orphanedAt: null,
+              updatedAt: new Date().toISOString(),
+            }).where(eq(resources.id, existing.id));
+
+            result.queue.push({
+              binding: queueConfig.binding,
+              id: existing.cfId || existing.cfName || '',
+              name: existing.name,
+              resourceId: existing.id,
+              wasAdopted: true,
+            });
+          } else {
+            const queueName = `${safeName}-${queueConfig.binding.toLowerCase()}-${suffix}`;
+            const created = await provisionCloudflareResource(this.env, {
+              ownerId: userId,
+              spaceId,
+              name: queueName,
+              type: 'queue',
+              cfName: queueName,
+              config: {
+                ...(queueConfig.maxRetries != null ? { maxRetries: queueConfig.maxRetries } : {}),
+                ...(queueConfig.deadLetterQueue ? { deadLetterQueue: queueConfig.deadLetterQueue } : {}),
+                ...(queueConfig.deliveryDelaySeconds != null
+                  ? { deliveryDelaySeconds: queueConfig.deliveryDelaySeconds }
+                  : {}),
+              },
+              queue: queueConfig.deliveryDelaySeconds != null
+                ? { deliveryDelaySeconds: queueConfig.deliveryDelaySeconds }
+                : undefined,
+            });
+
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
+
+            createdResources.push({ id: created.id, type: 'queue', cfId: created.cfId || undefined, cfName: queueName });
+
+            result.queue.push({
+              binding: queueConfig.binding,
+              id: created.cfId || '',
+              name: queueName,
+              resourceId: created.id,
+              wasAdopted: false,
+            });
+          }
+        }
+      }
+
+      if (manifestResources.analyticsEngine) {
+        for (const analyticsConfig of manifestResources.analyticsEngine) {
+          const manifestKey = buildManifestKey(bundleKey, analyticsConfig.binding);
+          const existing = await db.select().from(resources).where(
+            and(
+              eq(resources.manifestKey, manifestKey),
+              or(eq(resources.type, 'analyticsEngine'), eq(resources.type, 'analytics_engine')),
+            )
+          ).get();
+
+          if (existing) {
+            await db.update(resources).set({
+              orphanedAt: null,
+              updatedAt: new Date().toISOString(),
+            }).where(eq(resources.id, existing.id));
+
+            result.analyticsEngine.push({
+              binding: analyticsConfig.binding,
+              name: existing.name,
+              resourceId: existing.id,
+              wasAdopted: true,
+            });
+          } else {
+            const datasetName = (analyticsConfig.dataset || '').trim()
+              || `${safeName}-${analyticsConfig.binding.toLowerCase()}-${suffix}`;
+            const created = await provisionCloudflareResource(this.env, {
+              ownerId: userId,
+              spaceId,
+              name: datasetName,
+              type: 'analytics_engine',
+              cfName: datasetName,
+              config: {
+                dataset: datasetName,
+              },
+              analyticsEngine: {
+                dataset: datasetName,
+              },
+            });
+
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
+
+            createdResources.push({ id: created.id, type: 'analytics_engine', cfId: created.cfId || undefined, cfName: datasetName });
+
+            result.analyticsEngine.push({
+              binding: analyticsConfig.binding,
+              name: datasetName,
+              resourceId: created.id,
+              wasAdopted: false,
+            });
+          }
+        }
+      }
+
+      if (manifestResources.workflow) {
+        for (const workflowConfig of manifestResources.workflow) {
+          const manifestKey = buildManifestKey(bundleKey, workflowConfig.binding);
+          const existing = await db.select().from(resources).where(
+            and(eq(resources.manifestKey, manifestKey), eq(resources.type, 'workflow'))
+          ).get();
+
+          const workflowName = `${safeName}-${workflowConfig.binding.toLowerCase()}-${suffix}`;
+          const workflowConfigRecord = {
+            service: workflowConfig.service,
+            export: workflowConfig.export,
+            ...(workflowConfig.timeoutMs != null ? { timeoutMs: workflowConfig.timeoutMs } : {}),
+            ...(workflowConfig.maxRetries != null ? { maxRetries: workflowConfig.maxRetries } : {}),
+          };
+
+          if (existing) {
+            await db.update(resources).set({
+              orphanedAt: null,
+              config: JSON.stringify(workflowConfigRecord),
+              updatedAt: new Date().toISOString(),
+            }).where(eq(resources.id, existing.id));
+
+            result.workflow.push({
+              binding: workflowConfig.binding,
+              name: existing.name,
+              resourceId: existing.id,
+              wasAdopted: true,
+            });
+          } else {
+            const created = await provisionCloudflareResource(this.env, {
+              ownerId: userId,
+              spaceId,
+              name: workflowName,
+              type: 'workflow',
+              cfName: workflowName,
+              config: workflowConfigRecord,
+              workflow: workflowConfigRecord,
+            });
+
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
+
+            createdResources.push({ id: created.id, type: 'workflow', cfId: created.cfId || undefined, cfName: workflowName });
+
+            result.workflow.push({
+              binding: workflowConfig.binding,
+              name: workflowName,
+              resourceId: created.id,
               wasAdopted: false,
             });
           }
@@ -247,17 +408,73 @@ export class TakopackResourceService {
                   }
                 : {}),
             });
-            const resourceId = created.id;
 
-            await db.update(resources).set({ manifestKey }).where(eq(resources.id, resourceId));
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, created.id));
 
-            createdResources.push({ id: resourceId, type: 'vectorize', cfId: created.cfId || undefined, cfName: vectorizeName });
+            createdResources.push({ id: created.id, type: 'vectorize', cfId: created.cfId || undefined, cfName: vectorizeName });
 
             result.vectorize.push({
               binding: vectorizeConfig.binding,
               id: created.cfName,
               name: vectorizeName,
-              resourceId,
+              resourceId: created.id,
+              wasAdopted: false,
+            });
+          }
+        }
+      }
+
+      if (manifestResources.durableObject) {
+        for (const doConfig of manifestResources.durableObject) {
+          const manifestKey = buildManifestKey(bundleKey, doConfig.binding);
+          const existing = await db.select().from(resources).where(
+            and(eq(resources.manifestKey, manifestKey), eq(resources.type, 'durable_object'))
+          ).get();
+
+          if (existing) {
+            await db.update(resources).set({
+              orphanedAt: null,
+              config: JSON.stringify({ className: doConfig.className, ...(doConfig.scriptName ? { scriptName: doConfig.scriptName } : {}) }),
+              updatedAt: new Date().toISOString(),
+            }).where(eq(resources.id, existing.id));
+
+            result.durableObject.push({
+              binding: doConfig.binding,
+              name: existing.name,
+              resourceId: existing.id,
+              className: doConfig.className,
+              scriptName: doConfig.scriptName,
+              wasAdopted: true,
+            });
+          } else {
+            const doName = `${safeName}-${doConfig.binding.toLowerCase()}-${suffix}`;
+            const id = generateId();
+            const timestamp = now();
+
+            await insertResource(this.env.DB, {
+              id,
+              owner_id: userId,
+              name: doName,
+              type: 'durable_object',
+              status: 'active',
+              cf_id: null,
+              cf_name: doConfig.className,
+              config: { className: doConfig.className, ...(doConfig.scriptName ? { scriptName: doConfig.scriptName } : {}) },
+              space_id: spaceId,
+              created_at: timestamp,
+              updated_at: timestamp,
+            });
+
+            await db.update(resources).set({ manifestKey }).where(eq(resources.id, id));
+
+            createdResources.push({ id, type: 'durable_object', cfName: doConfig.className });
+
+            result.durableObject.push({
+              binding: doConfig.binding,
+              name: doName,
+              resourceId: id,
+              className: doConfig.className,
+              scriptName: doConfig.scriptName,
               wasAdopted: false,
             });
           }
@@ -268,7 +485,6 @@ export class TakopackResourceService {
     } catch (error) {
       logError('Resource provisioning failed, rolling back', error, { module: 'services/takopack/resources' });
 
-      // Only rollback newly created resources, not adopted ones
       for (const resource of createdResources) {
         try {
           await provider.deleteResource({
@@ -286,10 +502,6 @@ export class TakopackResourceService {
     }
   }
 
-  /**
-   * Apply D1 migrations incrementally using a _takos_migrations tracking table.
-   * Already-applied migrations are skipped; modified migrations cause an error.
-   */
   private async applyIncrementalMigrations(
     provider: CloudflareResourceService,
     databaseId: string,
@@ -297,7 +509,6 @@ export class TakopackResourceService {
     files: Map<string, ArrayBuffer>,
     bindingName: string
   ): Promise<{ applied: number; skipped: number }> {
-    // Ensure tracking table exists
     await provider.executeD1Query(databaseId, `
       CREATE TABLE IF NOT EXISTS _takos_migrations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -307,14 +518,12 @@ export class TakopackResourceService {
       )
     `);
 
-    // Fetch already-applied migrations
     const appliedRows = await provider.queryD1<{ filename: string; checksum: string }>(
       databaseId,
       'SELECT filename, checksum FROM _takos_migrations ORDER BY id'
     );
     const appliedMap = new Map(appliedRows.map(r => [r.filename, r.checksum]));
 
-    // Resolve migration SQL sources
     const sqlSources = this.resolveMigrationSqlSources(migrations, files);
 
     let applied = 0;
@@ -328,19 +537,16 @@ export class TakopackResourceService {
       const existingChecksum = appliedMap.get(source.source);
 
       if (existingChecksum) {
-        // Already applied — verify integrity
         if (existingChecksum !== checksum) {
           throw new Error(
             `Migration checksum mismatch for "${source.source}" (binding: ${bindingName}). ` +
-            `Expected ${existingChecksum}, got ${checksum}. ` +
-            `Previously applied migrations must not be modified.`
+            `Expected ${existingChecksum}, got ${checksum}. Previously applied migrations must not be modified.`
           );
         }
         skipped++;
         continue;
       }
 
-      // Apply the migration
       try {
         await provider.executeD1Query(databaseId, sql);
       } catch (error) {
@@ -348,7 +554,6 @@ export class TakopackResourceService {
         throw new Error(`Failed to apply D1 migration (${bindingName}, ${source.source}): ${message}`);
       }
 
-      // Record it
       const escapedFilename = source.source.replace(/'/g, "''");
       const escapedChecksum = checksum.replace(/'/g, "''");
       await provider.executeD1Query(databaseId,
@@ -365,9 +570,7 @@ export class TakopackResourceService {
     files: Map<string, ArrayBuffer>
   ): Array<{ source: string; sql: string }> {
     const ref = migrations.trim();
-    if (!ref) {
-      return [];
-    }
+    if (!ref) return [];
 
     const directFile = getPackageFile(files, ref);
     if (directFile) {
@@ -397,10 +600,7 @@ export class TakopackResourceService {
     }
 
     if (looksLikeSQL(ref)) {
-      return [{
-        source: 'inline-sql',
-        sql: ref,
-      }];
+      return [{ source: 'inline-sql', sql: ref }];
     }
 
     throw new Error(`Migration source not found in package: ${migrations}`);

@@ -17,7 +17,7 @@ import { triggerPushWorkflows } from '../../application/services/actions/actions
 import { getDb } from '../../infra/db';
 import { accounts, repositories } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { checkWorkspaceAccess, toIsoString } from '../../shared/utils';
+import { checkSpaceAccess, toIsoString } from '../../shared/utils';
 import { logError } from '../../shared/utils/logger';
 import type {
   D1Database,
@@ -222,7 +222,7 @@ smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) =>
         headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
       });
     }
-    const access = await checkWorkspaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return c.text('Permission denied\n', 403);
     }
@@ -235,7 +235,7 @@ smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) =>
           headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
         });
       }
-      const access = await checkWorkspaceAccess(c.env.DB, result.spaceId, user.id);
+      const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id);
       if (!access) {
         return c.text('Permission denied\n', 403);
       }
@@ -267,7 +267,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuth, async
         headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
       });
     }
-    const access = await checkWorkspaceAccess(c.env.DB, result.spaceId, user.id);
+    const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id);
     if (!access) {
       return c.text('Permission denied\n', 403);
     }
@@ -301,7 +301,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
   }
 
   // Write access check
-  const access = await checkWorkspaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
+  const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
     return c.text('Permission denied\n', 403);
   }

@@ -8,7 +8,7 @@
 import { validator } from 'hono/validator';
 import type { ValidationTargets } from 'hono';
 import type { z } from 'zod';
-import { validationError } from '../../shared/utils/error-response';
+import { ValidationError } from '@takos/common/errors';
 
 export function zValidator<T extends z.ZodTypeAny, Target extends keyof ValidationTargets>(
   target: Target,
@@ -17,7 +17,7 @@ export function zValidator<T extends z.ZodTypeAny, Target extends keyof Validati
   return validator(target, (value, c) => {
     const result = schema.safeParse(value);
     if (!result.success) {
-      return validationError(c, 'Validation error', result.error.flatten());
+      throw new ValidationError('Validation error');
     }
     return result.data as z.infer<T>;
   });

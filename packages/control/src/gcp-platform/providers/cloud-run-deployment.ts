@@ -1,9 +1,9 @@
 import type { CloudRunPlatformDeployProviderConfig } from '../../platform/types.ts';
 
-// Placeholder for Cloud Run deployment provider implementation.
-// Full implementation would use @google-cloud/run to:
-// 1. Create new Cloud Run revision with updated container image
-// 2. Update traffic routing to new revision
-// 3. Wait for revision to become healthy
+// Cloud Run deployments are handled via the OCI orchestrator abstraction layer.
+// The createDeploymentProvider() factory in provider.ts routes 'cloud-run' to the
+// OCI provider which communicates with the oci-orchestrator HTTP API.
+// The orchestrator is responsible for translating deploy requests into
+// Cloud Run-specific operations (revision creation, traffic routing, etc.).
 
 export type CloudRunDeploymentConfig = CloudRunPlatformDeployProviderConfig['config'];

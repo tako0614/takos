@@ -30,7 +30,7 @@ vi.mock('@/services/activitypub/stores', async (importOriginal) => {
   };
 });
 
-import workspaceStoresRoutes from '@/routes/workspaces/stores';
+import workspaceStoresRoutes from '@/routes/spaces/stores';
 
 function createUser(): User {
   return {

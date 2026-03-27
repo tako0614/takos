@@ -8,7 +8,7 @@ import {
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
 } from '../../runtime/paths.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import {
   validateRef,
   validateTargetDir,

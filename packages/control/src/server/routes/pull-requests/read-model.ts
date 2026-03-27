@@ -13,7 +13,7 @@ import {
   type PullRequestRecord,
 } from './dto';
 import { toGitBucket } from './git-store';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { logError } from '../../../shared/utils/logger';
 
 export type PullRequestDetail = {
@@ -56,6 +56,7 @@ async function buildCommitMetrics(
       const { ahead } = await gitStore.countCommitsBetween(env.DB, bucket, repoId, baseSha, headSha);
       commitsCountByPrId.set(pullRequest.id, ahead);
     } catch {
+      // Commit count lookup can fail for orphaned refs; default to 0
       commitsCountByPrId.set(pullRequest.id, 0);
     }
   }));

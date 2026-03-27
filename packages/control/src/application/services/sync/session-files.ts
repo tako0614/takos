@@ -28,7 +28,7 @@ export interface FileContent {
   size: number;
 }
 
-function getWorkspaceR2Key(spaceId: string, fileId: string): string {
+function getSpaceR2Key(spaceId: string, fileId: string): string {
   return `spaces/${spaceId}/files/${fileId}`;
 }
 
@@ -78,7 +78,7 @@ export class SessionFilesManager {
       }
     }
 
-    const workspaceFile = await drizzle.select({
+    const spaceFile = await drizzle.select({
       id: files.id,
       path: files.path,
       sha256: files.sha256,
@@ -93,20 +93,20 @@ export class SessionFilesManager {
       )
       .get();
 
-    if (!workspaceFile) {
+    if (!spaceFile) {
       return null;
     }
 
     if (this.storage) {
-      const r2Key = getWorkspaceR2Key(this.spaceId, workspaceFile.id);
+      const r2Key = getSpaceR2Key(this.spaceId, spaceFile.id);
       const obj = await this.storage.get(r2Key);
       if (obj) {
         const content = await obj.text();
         return {
           path,
           content,
-          hash: workspaceFile.sha256 || '',
-          size: workspaceFile.size,
+          hash: spaceFile.sha256 || '',
+          size: spaceFile.size,
         };
       }
     }
@@ -295,7 +295,7 @@ export class SessionFilesManager {
       ne(files.origin, 'system'),
     ];
 
-    const workspaceFiles = await drizzle.select({
+    const spaceFiles = await drizzle.select({
       path: files.path,
       size: files.size,
     })
@@ -304,7 +304,7 @@ export class SessionFilesManager {
       .all();
 
     const filesMap = new Map<string, number>();
-    for (const f of workspaceFiles) {
+    for (const f of spaceFiles) {
       if (directory && !f.path.startsWith(directory + '/')) continue;
       filesMap.set(f.path, f.size);
     }

@@ -1,220 +1,22 @@
 import { Hono } from 'hono';
-import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { createNotification } from '../../../application/services/notifications';
+import { createNotification } from '../../../application/services/notifications/service';
 import { fetchProfileActivity } from '../../../application/services/identity/profile-activity';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/helpers';
+import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
-import { ERR } from '../../../shared/constants';
-import { notFound, unauthorized, forbidden, badRequest } from '../../../shared/utils/error-response';
+import { NotFoundError, AuthenticationError, AuthorizationError, BadRequestError } from '@takos/common/errors';
 import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing, isMutedBy } from './shared';
-
-export interface UserProfileResponse {
-  username: string;
-  name: string;
-  bio: string | null;
-  picture: string | null;
-  public_repo_count: number;
-  followers_count: number;
-  following_count: number;
-  is_self: boolean;
-  private_account: boolean;
-  is_following: boolean;
-  follow_requested: boolean;
-  is_blocking: boolean;
-  is_muted: boolean;
-  created_at: string;
-}
-
-export interface ProfileRepoResponse {
-  owner_username: string;
-  name: string;
-  description: string | null;
-  visibility: 'public' | 'private';
-  default_branch: string;
-  stars: number;
-  forks: number;
-  is_starred: boolean;
-  updated_at: string;
-}
-
-export interface FollowUserResponse {
-  username: string;
-  name: string;
-  picture: string | null;
-  bio: string | null;
-  is_following: boolean;
-}
-
-export interface FollowRequestResponse {
-  id: string;
-  requester: FollowUserResponse;
-  created_at: string;
-}
 import { getDb } from '../../../infra/db';
-import type { Database } from '../../../infra/db';
 import {
   accountBlocks, accountFollows, accountFollowRequests, accountMutes,
   accounts, repositories, repoStars,
 } from '../../../infra/db/schema';
 import { eq, and, or, desc, asc, count, inArray } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
+import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted, isMutedByViewer, hasPendingFollowRequest } from './helpers';
+import type { UserProfileResponse, ProfileRepoResponse, FollowUserResponse, FollowRequestResponse } from './types';
 
-async function getBlockFlags(
-  db: Database,
-  currentUserId: string | undefined,
-  targetUserId: string
-): Promise<{ blocked_by_target: boolean; is_blocking: boolean }> {
-  if (!currentUserId) return { blocked_by_target: false, is_blocking: false };
-
-  const blockedByTarget = await db.select({ blockerAccountId: accountBlocks.blockerAccountId })
-    .from(accountBlocks)
-    .where(and(
-      eq(accountBlocks.blockerAccountId, targetUserId),
-      eq(accountBlocks.blockedAccountId, currentUserId),
-    ))
-    .get();
-  const isBlocking = await db.select({ blockerAccountId: accountBlocks.blockerAccountId })
-    .from(accountBlocks)
-    .where(and(
-      eq(accountBlocks.blockerAccountId, currentUserId),
-      eq(accountBlocks.blockedAccountId, targetUserId),
-    ))
-    .get();
-  return { blocked_by_target: !!blockedByTarget, is_blocking: !!isBlocking };
-}
-
-async function fetchFollowList(
-  _db: D1Database,
-  db: Database,
-  profileUserId: string,
-  currentUserId: string | undefined,
-  mode: 'followers' | 'following',
-  options: { limit: number; offset: number; sort: string; order: string },
-): Promise<{ users: FollowUserResponse[]; total: number; has_more: boolean }> {
-  const { limit, offset, sort, order } = options;
-  const orderDirection: 'asc' | 'desc' = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
-
-  const isFollowers = mode === 'followers';
-  const whereField = isFollowers ? accountFollows.followingAccountId : accountFollows.followerAccountId;
-  const joinField = isFollowers ? accountFollows.followerAccountId : accountFollows.followingAccountId;
-
-  const where = eq(whereField, profileUserId);
-
-  const totalResult = await db.select({ count: count() }).from(accountFollows).where(where).get();
-  const total = totalResult?.count ?? 0;
-
-  // Build a query joining accountFollows with accounts
-  const orderByClause = sort === 'username'
-    ? (orderDirection === 'asc' ? asc(accounts.slug) : desc(accounts.slug))
-    : (orderDirection === 'asc' ? asc(accountFollows.createdAt) : desc(accountFollows.createdAt));
-
-  const followsData = await db.select({
-    followId: joinField,
-    accountId: accounts.id,
-    slug: accounts.slug,
-    name: accounts.name,
-    picture: accounts.picture,
-    bio: accounts.bio,
-  })
-    .from(accountFollows)
-    .innerJoin(accounts, eq(joinField, accounts.id))
-    .where(where)
-    .orderBy(orderByClause)
-    .limit(limit)
-    .offset(offset)
-    .all();
-
-  // Batch follow-check: collect all user IDs, single query, build Set
-  const candidateUsers = followsData.filter((u) => !!u.slug);
-  const candidateUserIds = candidateUsers.map((u) => u.accountId);
-
-  let followingSet = new Set<string>();
-  if (currentUserId && candidateUserIds.length > 0) {
-    const followRows = await db.select({ followingAccountId: accountFollows.followingAccountId })
-      .from(accountFollows)
-      .where(and(
-        eq(accountFollows.followerAccountId, currentUserId),
-        inArray(accountFollows.followingAccountId, candidateUserIds),
-      ))
-      .all();
-    followingSet = new Set(followRows.map((r) => r.followingAccountId));
-  }
-
-  const users: FollowUserResponse[] = [];
-  for (const user of candidateUsers) {
-    users.push({
-      username: user.slug,
-      name: user.name,
-      picture: user.picture,
-      bio: user.bio,
-      is_following: followingSet.has(user.accountId),
-    });
-  }
-
-  return { users, total, has_more: offset + users.length < total };
-}
-
-async function sendFollowNotificationIfNotMuted(
-  env: Env,
-  d1: D1Database,
-  targetUserId: string,
-  actor: { id: string; username: string; name: string; picture: string | null },
-  type: 'social.follow.requested' | 'social.followed',
-): Promise<void> {
-  const targetMutedActor = await isMutedBy(d1, targetUserId, actor.id);
-  if (targetMutedActor) return;
-
-  const isRequest = type === 'social.follow.requested';
-  const prefix = isRequest ? 'requester' : 'follower';
-  await createNotification(env, {
-    userId: targetUserId,
-    type,
-    title: isRequest ? 'New follow request' : 'New follower',
-    body: isRequest
-      ? `${actor.username} requested to follow you`
-      : `${actor.username} started following you`,
-    data: {
-      [`${prefix}_username`]: actor.username,
-      [`${prefix}_name`]: actor.name,
-      [`${prefix}_picture`]: actor.picture,
-    },
-  });
-}
-
-async function isMutedByViewer(
-  db: Database,
-  currentUserId: string | undefined,
-  targetUserId: string
-): Promise<boolean> {
-  if (!currentUserId) return false;
-  const row = await db.select({ muterAccountId: accountMutes.muterAccountId })
-    .from(accountMutes)
-    .where(and(
-      eq(accountMutes.muterAccountId, currentUserId),
-      eq(accountMutes.mutedAccountId, targetUserId),
-    ))
-    .get();
-  return !!row;
-}
-
-async function hasPendingFollowRequest(
-  db: Database,
-  requesterId: string | undefined,
-  targetId: string
-): Promise<boolean> {
-  if (!requesterId) return false;
-  const row = await db.select({ id: accountFollowRequests.id })
-    .from(accountFollowRequests)
-    .where(and(
-      eq(accountFollowRequests.requesterAccountId, requesterId),
-      eq(accountFollowRequests.targetAccountId, targetId),
-      eq(accountFollowRequests.status, 'pending'),
-    ))
-    .get();
-  return !!row;
-}
+export type { UserProfileResponse, ProfileRepoResponse, FollowUserResponse, FollowRequestResponse };
 
 const followListQuerySchema = z.object({
   limit: z.string().optional(),
@@ -232,12 +34,12 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const stats = await getUserStats(c.env.DB, profileUser.id);
@@ -288,11 +90,11 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const ALLOWED_SORT_COLUMNS = {
@@ -355,11 +157,11 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   // Count stars with public repos using a join
@@ -444,23 +246,23 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const privacy = await getUserPrivacySettings(c.env.DB, profileUser.id);
   const isSelf = !!currentUser && currentUser.id === profileUser.id;
   if (privacy.activity_visibility === 'private' && !isSelf) {
-    return forbidden(c, 'Activity is private');
+    throw new AuthorizationError('Activity is private');
   }
   if (privacy.activity_visibility === 'followers' && !isSelf) {
     const following = await isFollowing(c.env.DB, currentUser?.id, profileUser.id);
     if (!following) {
-      return forbidden(c, 'Activity is visible to followers only');
+      throw new AuthorizationError('Activity is visible to followers only');
     }
   }
 
@@ -471,7 +273,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
   if (beforeRaw) {
     const v = String(beforeRaw);
     if (!Number.isFinite(Date.parse(v))) {
-      return badRequest(c, 'Invalid before');
+      throw new BadRequestError('Invalid before');
     }
     before = v;
   }
@@ -500,11 +302,11 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const { users: followers, total, has_more } = await fetchFollowList(
@@ -529,11 +331,11 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   const blockFlags = await getBlockFlags(db, currentUser?.id, profileUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const { users: following, total, has_more } = await fetchFollowList(
@@ -552,7 +354,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
   async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
@@ -563,10 +365,10 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
   const db = getDb(c.env.DB);
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (profileUser.id !== currentUser.id) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const totalResult = await db.select({ count: count() })
@@ -641,7 +443,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .post('/:username/follow-requests/:id/accept', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
@@ -650,10 +452,10 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (profileUser.id !== currentUser.id) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const reqRow = await db.select({
@@ -669,7 +471,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
     ))
     .get();
   if (!reqRow) {
-    return notFound(c, 'Follow request');
+    throw new NotFoundError('Follow request');
   }
 
   try {
@@ -708,7 +510,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .post('/:username/follow-requests/:id/reject', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
@@ -717,10 +519,10 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const profileUser = await getUserByUsername(c.env.DB, username);
   if (!profileUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (profileUser.id !== currentUser.id) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const reqRow = await db.select({ id: accountFollowRequests.id })
@@ -732,7 +534,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
     ))
     .get();
   if (!reqRow) {
-    return notFound(c, 'Follow request');
+    throw new NotFoundError('Follow request');
   }
 
   await db.update(accountFollowRequests)
@@ -745,17 +547,17 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .post('/:username/block', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
   const db = getDb(c.env.DB);
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (targetUser.id === currentUser.id) {
-    return badRequest(c, 'Cannot block yourself');
+    throw new BadRequestError('Cannot block yourself');
   }
 
   try {
@@ -787,14 +589,14 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .delete('/:username/block', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
   const db = getDb(c.env.DB);
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   await db.delete(accountBlocks).where(
@@ -810,17 +612,17 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .post('/:username/mute', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
   const db = getDb(c.env.DB);
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (targetUser.id === currentUser.id) {
-    return badRequest(c, 'Cannot mute yourself');
+    throw new BadRequestError('Cannot mute yourself');
   }
 
   try {
@@ -830,7 +632,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
       createdAt: now(),
     });
   } catch {
-    // ignore
+    // Unique constraint violation means user is already muted -- safe to ignore
   }
 
   return c.json({ success: true, muted: true });
@@ -839,14 +641,14 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .delete('/:username/mute', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
   const db = getDb(c.env.DB);
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   await db.delete(accountMutes).where(
@@ -862,7 +664,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .post('/:username/follow', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
@@ -870,19 +672,19 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   if (currentUser.id === targetUser.id) {
-    return badRequest(c, 'Cannot follow yourself');
+    throw new BadRequestError('Cannot follow yourself');
   }
 
   const blockFlags = await getBlockFlags(db, currentUser.id, targetUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
   if (blockFlags.is_blocking) {
-    return badRequest(c, 'Unblock this user to follow');
+    throw new BadRequestError('Unblock this user to follow');
   }
 
   const existing = await db.select({ followerAccountId: accountFollows.followerAccountId })
@@ -894,7 +696,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
     .get();
 
   if (existing) {
-    return badRequest(c, 'Already following this user');
+    throw new BadRequestError('Already following this user');
   }
 
   const actor = {
@@ -965,7 +767,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 .delete('/:username/follow', async (c) => {
   const currentUser = c.get('user');
   if (!currentUser) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
 
   const username = c.req.param('username');
@@ -973,12 +775,12 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
 
   const targetUser = await getUserByUsername(c.env.DB, username);
   if (!targetUser) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const blockFlags = await getBlockFlags(db, currentUser.id, targetUser.id);
   if (blockFlags.blocked_by_target) {
-    return notFound(c, 'User');
+    throw new NotFoundError('User');
   }
 
   const existing = await db.select({ followerAccountId: accountFollows.followerAccountId })
@@ -1027,7 +829,7 @@ const profilesApi = new Hono<OptionalAuthRouteEnv>()
     });
   }
 
-  return badRequest(c, 'Not following this user');
+  throw new BadRequestError('Not following this user');
 });
 
 export default profilesApi;

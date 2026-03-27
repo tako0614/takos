@@ -5,23 +5,23 @@ import { useTakopacks } from '../../hooks/useTakopacks';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Modal, ModalFooter } from '../../components/ui/Modal';
-import type { Workspace, Takopack, TakopackDetail } from '../../types';
+import type { Space, Takopack, TakopackDetail } from '../../types';
 
 interface TakopackSectionProps {
-  workspaces: Workspace[];
-  selectedWorkspaceId: string | null;
-  setSelectedWorkspaceId: (id: string) => void;
+  spaces: Space[];
+  selectedSpaceId: string | null;
+  setSelectedSpaceId: (id: string) => void;
 }
 
 export function TakopackSection({
-  workspaces,
-  selectedWorkspaceId,
-  setSelectedWorkspaceId,
+  spaces,
+  selectedSpaceId,
+  setSelectedSpaceId,
 }: TakopackSectionProps) {
-  void workspaces;
-  void setSelectedWorkspaceId;
+  void spaces;
+  void setSelectedSpaceId;
   const { t } = useI18n();
-  const spaceId = selectedWorkspaceId || '';
+  const spaceId = selectedSpaceId || '';
 
   const {
     takopacks,
@@ -35,10 +35,10 @@ export function TakopackSection({
   } = useTakopacks({ spaceId });
 
   useEffect(() => {
-    if (selectedWorkspaceId) {
+    if (selectedSpaceId) {
       void refresh();
     }
-  }, [selectedWorkspaceId, refresh]);
+  }, [selectedSpaceId, refresh]);
 
   const handleCardClick = async (takopack: Takopack) => {
     await getTakopackDetail(takopack.id);

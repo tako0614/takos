@@ -73,6 +73,27 @@ describe('backup-maintenance', () => {
     expect(second.skipped).toBe(true);
   });
 
+  it('skips cleanly when the local database adapter does not support DB.dump()', async () => {
+    const offload = new MockR2Bucket();
+    const env = createMockEnv({
+      TAKOS_OFFLOAD: offload,
+      CF_ACCOUNT_ID: undefined,
+      CF_API_TOKEN: undefined,
+      DB: {
+        dump: vi.fn(async () => {
+          throw new Error('DB.dump() is not implemented for the local Postgres adapter');
+        }),
+      },
+    });
+
+    const result = await runD1DailyBackup(env as any, { retentionDays: 35, force: true });
+
+    expect(result).toEqual({
+      skipped: true,
+      reason: 'DB.dump() is not supported by this local database adapter; configure Cloudflare D1 export credentials instead.',
+    });
+  });
+
   it('enforces retention by deleting old backups (and keeps newer ones)', async () => {
     const offload = new MockR2Bucket();
     const env = createMockEnv({ TAKOS_OFFLOAD: offload });

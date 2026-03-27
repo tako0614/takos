@@ -87,9 +87,12 @@ export function formatUnifiedDiff(
   return `${header}\n${body}\n`;
 }
 
+/** Number of bytes sampled from the start of a blob to detect binary content. */
+const BINARY_DETECTION_SAMPLE_SIZE = 1024;
+
 export function decodeBlobContent(blob: Uint8Array): { text: string; isBinary: boolean } {
   let binaryScore = 0;
-  for (let i = 0; i < Math.min(blob.length, 1024); i++) {
+  for (let i = 0; i < Math.min(blob.length, BINARY_DETECTION_SAMPLE_SIZE); i++) {
     if (blob[i] === 0) {
       binaryScore++;
     }

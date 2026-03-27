@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { PullRequestStatus, AuthorType } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -36,7 +36,7 @@ import {
 import { buildDetailedRepoDiffPayload } from './diff';
 import { toGitBucket } from './git-store';
 import { logError } from '../../../shared/utils/logger';
-import { badRequest, notFound, conflict, internalError, errorResponse } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, InternalError, AppError } from '@takos/common/errors';
 import {
   buildPullRequestDetail,
   buildPullRequestList,
@@ -115,20 +115,20 @@ export default new Hono<AuthenticatedRouteEnv>()
     }>(c);
 
     if (!body) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     if (!body.title || body.title.trim().length === 0) {
-      return badRequest(c, 'Title is required');
+      throw new BadRequestError('Title is required');
     }
 
     if (!body.head_branch || body.head_branch.trim().length === 0) {
-      return badRequest(c, 'Head branch is required');
+      throw new BadRequestError('Head branch is required');
     }
 
     const db = getDb(c.env.DB);
@@ -198,7 +198,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     return c.json({
@@ -218,12 +218,12 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { db, pullRequest } = found;
 
@@ -249,12 +249,12 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { pullRequest } = found;
 
@@ -276,17 +276,17 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { db, pullRequest } = found;
 
     if (pullRequest.status !== 'open') {
-      return badRequest(c, 'Cannot update a closed or merged pull request');
+      throw new BadRequestError('Cannot update a closed or merged pull request');
     }
 
     const updateData: { title?: string; description?: string; updatedAt: string } = {
@@ -302,7 +302,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     if (Object.keys(updateData).length === 1) {
-      return badRequest(c, 'No valid updates provided');
+      throw new BadRequestError('No valid updates provided');
     }
 
     const updated = await db.update(pullRequests)
@@ -335,17 +335,17 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { db, pullRequest } = found;
 
     if (pullRequest.status !== 'open') {
-      return badRequest(c, 'Pull request is already closed or merged');
+      throw new BadRequestError('Pull request is already closed or merged');
     }
 
     const updated = await db.update(pullRequests)
@@ -390,24 +390,24 @@ export default new Hono<AuthenticatedRouteEnv>()
         : 'merge';
 
     if (mergeMethodRaw !== undefined && mergeMethod !== mergeMethodRaw) {
-      return badRequest(c, 'Invalid merge_method');
+      throw new BadRequestError('Invalid merge_method');
     }
 
     const commitMessage = typeof body.commit_message === 'string' ? body.commit_message.trim() : '';
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { db, pullRequest } = found;
 
     if (pullRequest.status !== 'open') {
-      return badRequest(c, 'Pull request is already closed or merged');
+      throw new BadRequestError('Pull request is already closed or merged');
     }
 
     try {
@@ -470,7 +470,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       });
     } catch (err: unknown) {
       logError('Failed to merge', err, { module: 'routes/pull-requests/base' });
-      return internalError(c, 'Failed to perform merge');
+      throw new InternalError('Failed to perform merge');
     }
   })
   .get('/repos/:repoId/pulls/:prNumber/conflicts', async (c) => {
@@ -480,21 +480,21 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { pullRequest } = found;
 
     if (pullRequest.status !== 'open') {
-      return badRequest(c, 'Pull request is not open');
+      throw new BadRequestError('Pull request is not open');
     }
 
     const bucketBinding = c.env.GIT_OBJECTS;
-    if (!bucketBinding) return internalError(c, 'Git storage not configured');
+    if (!bucketBinding) throw new InternalError('Git storage not configured');
     const bucket = toGitBucket(bucketBinding);
 
     try {
@@ -517,7 +517,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       return c.json(result);
     } catch (err: unknown) {
       if (err instanceof ConflictCheckError) {
-        return errorResponse(c, err.status, err.message);
+        throw new AppError(err.message, undefined, err.status);
       }
       throw err;
     }
@@ -532,26 +532,26 @@ export default new Hono<AuthenticatedRouteEnv>()
     }>(c, { resolutions: [] });
 
     if (!body || !body.resolutions || !Array.isArray(body.resolutions)) {
-      return badRequest(c, 'resolutions array is required');
+      throw new BadRequestError('resolutions array is required');
     }
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
     const { db, pullRequest } = found;
 
     if (pullRequest.status !== 'open') {
-      return badRequest(c, 'Pull request is not open');
+      throw new BadRequestError('Pull request is not open');
     }
 
     const bucketBinding = c.env.GIT_OBJECTS;
-    if (!bucketBinding) return internalError(c, 'Git storage not configured');
+    if (!bucketBinding) throw new InternalError('Git storage not configured');
     const bucket = toGitBucket(bucketBinding);
 
     // Validate and normalize resolutions in the route layer (early return on bad input)
@@ -560,16 +560,16 @@ export default new Hono<AuthenticatedRouteEnv>()
     for (const resolution of body.resolutions) {
       const normalizedPath = validateConflictResolutionPath(resolution.path);
       if (!normalizedPath) {
-        return badRequest(c, 'Invalid resolution path');
+        throw new BadRequestError('Invalid resolution path');
       }
       if (seenResolutionPaths.has(normalizedPath)) {
-        return badRequest(c, `Duplicate resolution path: ${normalizedPath}`);
+        throw new BadRequestError(`Duplicate resolution path: ${normalizedPath}`);
       }
       seenResolutionPaths.add(normalizedPath);
 
       const isDelete = resolution.delete === true;
       if (!isDelete && typeof resolution.content !== 'string') {
-        return badRequest(c, `Resolution content must be a string for path: ${normalizedPath}`);
+        throw new BadRequestError(`Resolution content must be a string for path: ${normalizedPath}`);
       }
 
       normalizedResolutions.push({
@@ -602,6 +602,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       });
     } catch (err: unknown) {
       logError('Failed to resolve conflicts', err, { module: 'routes/pull-requests/base' });
-      return internalError(c, 'Failed to resolve conflicts');
+      throw new InternalError('Failed to resolve conflicts');
     }
   });

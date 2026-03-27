@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildPlatform, createPlatformConfig, createPlatformServices } from '@/platform/adapters/shared';
-import { buildCloudflareWebPlatform } from '@/platform/adapters/cloudflare';
-import { buildLocalWebPlatform } from '@/platform/adapters/local';
+import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
+import { buildNodeWebPlatform } from '@/platform/adapters/node';
 
 function createBaseBindings(overrides: Record<string, unknown> = {}) {
   return {
@@ -42,8 +42,8 @@ describe('platform adapters', () => {
     }));
   });
 
-  it('attaches a cloudflare deploy provider only in the cloudflare adapter', () => {
-    const platform = buildCloudflareWebPlatform(createBaseBindings({
+  it('attaches a workers-dispatch deploy provider in the workers adapter', () => {
+    const platform = buildWorkersWebPlatform(createBaseBindings({
       CF_ACCOUNT_ID: 'cf-account',
       CF_API_TOKEN: 'cf-token',
       CF_ZONE_ID: 'zone-1',
@@ -51,8 +51,8 @@ describe('platform adapters', () => {
       BROWSER: { connect: vi.fn() },
     }) as never);
 
-    expect(platform.services.deploymentProviders?.get('cloudflare')).toEqual({
-      name: 'cloudflare',
+    expect(platform.services.deploymentProviders?.get('workers-dispatch')).toEqual({
+      name: 'workers-dispatch',
       config: {
         accountId: 'cf-account',
         apiToken: 'cf-token',
@@ -60,12 +60,12 @@ describe('platform adapters', () => {
         dispatchNamespace: 'dispatch-ns',
       },
     });
-    expect(platform.services.deploymentProviders?.defaultName).toBe('cloudflare');
+    expect(platform.services.deploymentProviders?.defaultName).toBe('workers-dispatch');
     expect(platform.services.documents.renderPdf).toBeTypeOf('function');
   });
 
-  it('attaches an oci deploy provider only in the local adapter', () => {
-    const platform = buildLocalWebPlatform(createBaseBindings({
+  it('attaches an oci deploy provider in the node adapter', () => {
+    const platform = buildNodeWebPlatform(createBaseBindings({
       OCI_ORCHESTRATOR_URL: 'http://orchestrator.internal',
       OCI_ORCHESTRATOR_TOKEN: 'secret-token',
     }) as never);

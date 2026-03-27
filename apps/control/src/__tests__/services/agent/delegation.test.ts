@@ -232,7 +232,7 @@ describe('buildDelegationPacket', () => {
     expect(packet.locale).toBe('ja');
   });
 
-  it('falls back to threadLocale and workspaceLocale', () => {
+  it('falls back to threadLocale and spaceLocale', () => {
     const { packet: p1 } = buildDelegationPacket({
       task: 'Fix',
       parentRunId: 'r1',
@@ -247,7 +247,7 @@ describe('buildDelegationPacket', () => {
       parentRunId: 'r1',
       parentThreadId: 't1',
       rootThreadId: 'rt1',
-      workspaceLocale: 'ja',
+      spaceLocale: 'ja',
     });
     expect(p2.locale).toBe('ja');
   });

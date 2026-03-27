@@ -1,7 +1,7 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
 import type { ToolDefinition, RegisteredTool, ToolCategory } from './types';
 import type { Env } from '../../shared/types';
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin';
 import { McpClient } from './mcp-client';
 import { loadMcpTools } from './loaders/mcp-tools';
@@ -10,7 +10,7 @@ import { logWarn } from '../../shared/utils/logger';
 export interface ToolResolverOptions {
   disabledBuiltinTools?: string[];
   mcpExposureContext?: {
-    role?: WorkspaceRole;
+    role?: SpaceRole;
     capabilities?: string[];
   };
 }

@@ -7,6 +7,9 @@ import {
   type SlidingWindowResult,
 } from './sliding-window';
 
+/** Milliseconds per second, used to convert ms timestamps to seconds for HTTP headers. */
+const MS_PER_SECOND = 1000;
+
 function getClientIpForRateLimit(c: Context): string | null {
   return c.req.header('CF-Connecting-IP') ?? null;
 }
@@ -107,14 +110,14 @@ export class InMemoryRateLimiter {
 
       c.header('X-RateLimit-Limit', String(info.total));
       c.header('X-RateLimit-Remaining', String(info.remaining));
-      c.header('X-RateLimit-Reset', String(Math.ceil(info.reset / 1000)));
+      c.header('X-RateLimit-Reset', String(Math.ceil(info.reset / MS_PER_SECOND)));
 
       if (info.remaining <= 0) {
-        c.header('Retry-After', String(Math.ceil((info.reset - Date.now()) / 1000)));
+        c.header('Retry-After', String(Math.ceil((info.reset - Date.now()) / MS_PER_SECOND)));
         return c.json(
           {
             error: this.config.message,
-            retryAfter: Math.ceil((info.reset - Date.now()) / 1000),
+            retryAfter: Math.ceil((info.reset - Date.now()) / MS_PER_SECOND),
           },
           429
         );
@@ -131,13 +134,16 @@ export class InMemoryRateLimiter {
   }
 }
 
+/** Standard rate-limit window duration (1 minute). */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
 export const RateLimiters = {
-  auth: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: 60_000, message: 'Too many authentication attempts.' }),
-  sensitive: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: 60_000, message: 'Too many requests.' }),
-  oauthToken: () => new InMemoryRateLimiter({ maxRequests: 20, windowMs: 60_000, message: 'Too many token requests.' }),
-  oauthAuthorize: () => new InMemoryRateLimiter({ maxRequests: 30, windowMs: 60_000, message: 'Too many authorization requests.' }),
-  oauthRevoke: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: 60_000, message: 'Too many revocation requests.' }),
-  oauthRegister: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: 60_000, message: 'Too many client registration requests.' }),
-  oauthDeviceCode: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: 60_000, message: 'Too many device authorization requests.' }),
-  oauthDeviceVerify: () => new InMemoryRateLimiter({ maxRequests: 60, windowMs: 60_000, message: 'Too many device verification requests.' }),
+  auth: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many authentication attempts.' }),
+  sensitive: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many requests.' }),
+  oauthToken: () => new InMemoryRateLimiter({ maxRequests: 20, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many token requests.' }),
+  oauthAuthorize: () => new InMemoryRateLimiter({ maxRequests: 30, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many authorization requests.' }),
+  oauthRevoke: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many revocation requests.' }),
+  oauthRegister: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many client registration requests.' }),
+  oauthDeviceCode: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many device authorization requests.' }),
+  oauthDeviceVerify: () => new InMemoryRateLimiter({ maxRequests: 60, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many device verification requests.' }),
 };

@@ -1,29 +1,31 @@
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 import type { ToolDefinition } from './types';
 import type {
   SensitiveReadPolicy,
   ToolClass,
-  WorkspaceOperationId,
-  WorkspaceOperationPolicy,
+  SpaceOperationId,
+  SpaceOperationPolicy,
 } from './tool-policy-types';
 import { TOOL_NAMESPACE_MAP } from './namespace-map';
 export type {
   SensitiveReadPolicy,
   ToolClass,
+  SpaceOperationId,
+  SpaceOperationPolicy,
   WorkspaceOperationId,
   WorkspaceOperationPolicy,
 } from './tool-policy-types';
 
 interface ToolPolicyMetadata {
   tool_class: ToolClass;
-  operation_id?: WorkspaceOperationId;
-  composed_operations?: WorkspaceOperationId[];
+  operation_id?: SpaceOperationId;
+  composed_operations?: SpaceOperationId[];
   sensitive_read_policy?: SensitiveReadPolicy;
 }
 
-const ALL_WORKSPACE_ROLES: WorkspaceRole[] = ['owner', 'admin', 'editor', 'viewer'];
-const EDITOR_PLUS_ROLES: WorkspaceRole[] = ['owner', 'admin', 'editor'];
-const ADMIN_ROLES: WorkspaceRole[] = ['owner', 'admin'];
+const ALL_SPACE_ROLES: SpaceRole[] = ['owner', 'admin', 'editor', 'viewer'];
+const EDITOR_PLUS_ROLES: SpaceRole[] = ['owner', 'admin', 'editor'];
+const ADMIN_ROLES: SpaceRole[] = ['owner', 'admin'];
 
 export const AGENT_DISABLED_BUILTIN_TOOLS = [
   'kv_get',
@@ -46,17 +48,17 @@ export const AGENT_DISABLED_BUILTIN_TOOLS = [
 
 const AGENT_DISABLED_TOOL_SET = new Set<string>(AGENT_DISABLED_BUILTIN_TOOLS);
 
-export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, WorkspaceOperationPolicy> = {
+export const SPACE_OPERATION_POLICIES: Record<SpaceOperationId, SpaceOperationPolicy> = {
   'workspace_storage.list': {
     id: 'workspace_storage.list',
     user_surface: 'GET /api/spaces/:spaceId/storage',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'workspace_storage.read': {
     id: 'workspace_storage.read',
     user_surface: 'GET /api/spaces/:spaceId/storage/:fileId/content',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'workspace_storage.write': {
@@ -92,7 +94,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'workspace_common_env.list': {
     id: 'workspace_common_env.list',
     user_surface: 'GET /api/spaces/:spaceId/common-env',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'masked',
   },
   'workspace_common_env.write': {
@@ -122,7 +124,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'service.list': {
     id: 'service.list',
     user_surface: 'GET /api/services/space/:spaceId',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'service.create': {
@@ -140,7 +142,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'service.env.read': {
     id: 'service.env.read',
     user_surface: 'GET /api/services/:id/env',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'masked',
   },
   'service.env.write': {
@@ -152,7 +154,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'service.bindings.read': {
     id: 'service.bindings.read',
     user_surface: 'GET /api/services/:id/bindings',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'service.bindings.write': {
@@ -164,7 +166,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'service.runtime.read': {
     id: 'service.runtime.read',
     user_surface: 'GET /api/services/:id/settings',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'service.runtime.write': {
@@ -176,7 +178,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'custom_domain.list': {
     id: 'custom_domain.list',
     user_surface: 'GET /api/services/:id/domains',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'custom_domain.add': {
@@ -200,13 +202,13 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'deployment.history': {
     id: 'deployment.history',
     user_surface: 'GET /api/services/:id/deployments',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'deployment.get': {
     id: 'deployment.get',
     user_surface: 'GET /api/services/:id/deployments/:deploymentId',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'masked',
   },
   'deployment.rollback': {
@@ -218,13 +220,13 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'skill.list': {
     id: 'skill.list',
     user_surface: 'GET /api/spaces/:spaceId/skills',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'skill.get': {
     id: 'skill.get',
     user_surface: 'GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'skill.create': {
@@ -254,31 +256,31 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'skill.context': {
     id: 'skill.context',
     user_surface: 'GET /api/spaces/:spaceId/skills-context',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'skill.catalog': {
     id: 'skill.catalog',
     user_surface: 'GET /api/spaces/:spaceId/skills-context',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'skill.describe': {
     id: 'skill.describe',
     user_surface: 'GET /api/spaces/:spaceId/official-skills/:skillId | GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'app_deployment.list': {
     id: 'app_deployment.list',
     user_surface: 'GET /api/spaces/:spaceId/app-deployments',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'app_deployment.get': {
     id: 'app_deployment.get',
     user_surface: 'GET /api/spaces/:spaceId/app-deployments/:appDeploymentId',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'app_deployment.deploy_from_repo': {
@@ -308,7 +310,7 @@ export const WORKSPACE_OPERATION_POLICIES: Record<WorkspaceOperationId, Workspac
   'mcp_server.list': {
     id: 'mcp_server.list',
     user_surface: 'GET /api/mcp/servers?spaceId=...',
-    allowed_roles: ALL_WORKSPACE_ROLES,
+    allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: 'none',
   },
   'mcp_server.create': {
@@ -558,9 +560,15 @@ function inferDefaultToolClass(_toolName: string): ToolClass {
   return 'agent_native';
 }
 
-export function getWorkspaceOperationPolicy(operationId: WorkspaceOperationId): WorkspaceOperationPolicy {
-  return WORKSPACE_OPERATION_POLICIES[operationId];
+export function getSpaceOperationPolicy(operationId: SpaceOperationId): SpaceOperationPolicy {
+  return SPACE_OPERATION_POLICIES[operationId];
 }
+
+/** @deprecated Use {@link getSpaceOperationPolicy} instead. */
+export const getWorkspaceOperationPolicy = getSpaceOperationPolicy;
+
+/** @deprecated Use {@link SPACE_OPERATION_POLICIES} instead. */
+export const WORKSPACE_OPERATION_POLICIES = SPACE_OPERATION_POLICIES;
 
 export function getToolPolicyMetadata(tool: ToolDefinition | string): ToolPolicyMetadata {
   const name = typeof tool === 'string' ? tool : tool.name;
@@ -598,11 +606,11 @@ export function applyBuiltinToolPolicyMetadata(tools: ToolDefinition[]): ToolDef
   return tools.map(applyToolPolicyMetadata);
 }
 
-export function canRoleAccessOperation(role: WorkspaceRole, operationId: WorkspaceOperationId): boolean {
-  return getWorkspaceOperationPolicy(operationId).allowed_roles.includes(role);
+export function canRoleAccessOperation(role: SpaceRole, operationId: SpaceOperationId): boolean {
+  return getSpaceOperationPolicy(operationId).allowed_roles.includes(role);
 }
 
-export function canRoleAccessTool(role: WorkspaceRole, tool: ToolDefinition): boolean {
+export function canRoleAccessTool(role: SpaceRole, tool: ToolDefinition): boolean {
   const metadata = getToolPolicyMetadata(tool);
 
   if (metadata.tool_class === 'workspace_mapped') {
@@ -617,7 +625,7 @@ export function canRoleAccessTool(role: WorkspaceRole, tool: ToolDefinition): bo
   return true;
 }
 
-export function filterToolsForRole(tools: ToolDefinition[], role?: WorkspaceRole): ToolDefinition[] {
+export function filterToolsForRole(tools: ToolDefinition[], role?: SpaceRole): ToolDefinition[] {
   if (!role) return tools;
   return tools.filter((tool) => canRoleAccessTool(role, tool));
 }
@@ -639,7 +647,7 @@ export function validateBuiltinToolPolicies(tools: readonly ToolDefinition[]): s
     if (metadata.tool_class === 'workspace_mapped' && !metadata.operation_id) {
       errors.push(`Tool "${tool.name}" is workspace_mapped but has no operation_id`);
     }
-    if (metadata.tool_class === 'workspace_mapped' && metadata.operation_id && !(metadata.operation_id in WORKSPACE_OPERATION_POLICIES)) {
+    if (metadata.tool_class === 'workspace_mapped' && metadata.operation_id && !(metadata.operation_id in SPACE_OPERATION_POLICIES)) {
       errors.push(`Tool "${tool.name}" references unknown operation "${metadata.operation_id}"`);
     }
   }

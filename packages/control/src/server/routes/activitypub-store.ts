@@ -1,7 +1,6 @@
 import { Hono, type Context } from 'hono';
-import type { Env } from '../../shared/types';
 import { CacheTTL, withCache } from '../middleware/cache';
-import { parseLimit, type PublicRouteEnv } from './shared/helpers';
+import { parseLimit, type PublicRouteEnv } from './shared/route-auth';
 import {
   findStoreBySlug,
   findStoreRepository,
@@ -9,7 +8,7 @@ import {
   searchStoreRepositories,
   type StoreRecord,
   type StoreRepositoryRecord,
-} from './activitypub-store/helpers';
+} from './activitypub-store/activitypub-queries';
 
 const activitypubStore = new Hono<PublicRouteEnv>();
 
@@ -216,6 +215,7 @@ activitypubStore.get('/.well-known/webfinger', withCache({
         store = decodeURIComponent(match[1]);
       }
     } catch {
+      // URL constructor throws on malformed resource URIs
       return c.json({ error: 'Invalid resource format' }, 400);
     }
   } else {
@@ -344,8 +344,8 @@ activitypubStore.post('/ap/stores/:store/inbox', async (c) => {
   }
 
   return c.json({
-    error: 'Store inbox is not implemented',
-    message: 'This store is pull-only. Fetch its outbox or repositories endpoints instead.',
+    error: 'not_implemented',
+    message: 'Store inbox is not implemented. Use outbox polling for updates.',
   }, 501);
 });
 

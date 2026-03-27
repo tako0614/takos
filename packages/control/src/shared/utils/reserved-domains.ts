@@ -1,3 +1,5 @@
+import { normalizeDomain } from './domains';
+
 export const RESERVED_SUBDOMAINS = new Set([
   // Administrative
   'admin',
@@ -215,7 +217,7 @@ export function hasReservedSubdomain(domain: string): boolean {
 }
 
 export function isDomainReserved(domain: string, tenantBaseDomain: string): boolean {
-  const normalized = domain.toLowerCase().trim().replace(/\.+$/, '');
+  const normalized = normalizeDomain(domain);
   const baseDomain = tenantBaseDomain.toLowerCase();
 
   // Cannot use the platform domain itself

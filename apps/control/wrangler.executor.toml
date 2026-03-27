@@ -61,6 +61,11 @@ index_name = "takos-embeddings"
 binding = "AI"
 
 # Egress service binding (for tool HTTP calls)
+# Service binding to main takos-web worker for control RPC forwarding
+[[services]]
+binding = "TAKOS_CONTROL"
+service = "takos"
+
 [[services]]
 binding = "TAKOS_EGRESS"
 service = "takos-worker"
@@ -129,6 +134,10 @@ index_name = "takos-embeddings-staging"
 
 [env.staging.ai]
 binding = "AI"
+
+[[env.staging.services]]
+binding = "TAKOS_CONTROL"
+service = "takos-staging"
 
 [[env.staging.services]]
 binding = "TAKOS_EGRESS"

@@ -14,7 +14,6 @@ import {
   RECONNECT_CLOSE_REASON,
 } from './shared';
 
-// TODO: Frontend notification WebSocket client not yet implemented
 /** User-scoped notification streaming (WebSocket + ring buffer replay). */
 export class NotificationNotifierDO implements DurableObject {
   private state: DurableObjectState;
@@ -91,7 +90,10 @@ export class NotificationNotifierDO implements DurableObject {
     }
 
     if (path === '/events' && request.method === 'GET') {
-      const after = parseInt(url.searchParams.get('after') || '0', 10);
+      const after = parseReplayCursor(url.searchParams.get('after'));
+      if (after === null) {
+        return jsonResponse({ error: 'Invalid after cursor' }, 400);
+      }
       const events = getEventsAfter(this.eventBuffer, after).map((event) => ({
         ...event,
         event_id: String(event.id),
@@ -146,6 +148,11 @@ export class NotificationNotifierDO implements DurableObject {
       return new Response('Too many connections', { status: 503 });
     }
 
+    const lastEventId = parseReplayCursor(url.searchParams.get('last_event_id'));
+    if (lastEventId === null) {
+      return jsonResponse({ error: 'Invalid last_event_id' }, 400);
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
@@ -160,8 +167,6 @@ export class NotificationNotifierDO implements DurableObject {
     scheduleCleanupAlarm(this.state).catch((err) => {
       logError('Failed to schedule cleanup alarm', err, { module: 'notificationnotifierdo' });
     });
-
-    const lastEventId = parseInt(url.searchParams.get('last_event_id') || '0', 10);
 
     server.send(JSON.stringify({
       type: 'connected',
@@ -242,4 +247,11 @@ export class NotificationNotifierDO implements DurableObject {
     }
   }
 
+}
+
+function parseReplayCursor(value: string | null): number | null {
+  if (value === null || value === '') return 0;
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }

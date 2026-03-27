@@ -159,7 +159,7 @@ export function validateGitAuthorEmail(email: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Git name / workspace-id validation
+// Git name / space-id validation
 // ---------------------------------------------------------------------------
 
 /**
@@ -169,7 +169,7 @@ export function validateGitAuthorEmail(email: string): void {
 const SAFE_NAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
 
 /**
- * Validates and sanitizes a workspace or repo name for use in git/HTTP paths.
+ * Validates and sanitizes a space or repo name for use in git/HTTP paths.
  *
  * Valid names: 1-128 chars, alphanumeric start/end, middle allows underscore/hyphen,
  * no consecutive underscores or hyphens, no path traversal, no control characters.
@@ -194,16 +194,16 @@ export function validateGitName(name: string): string | null {
 }
 
 /**
- * Pattern for workspace/space IDs: alphanumeric start, alphanumeric + underscore/hyphen middle, 1-128 chars total.
+ * Pattern for space IDs: alphanumeric start, alphanumeric + underscore/hyphen middle, 1-128 chars total.
  * This is intentionally less strict than validateGitName (no consecutive-separator check, single-char allowed).
  */
 const SPACE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 /**
- * Validates a workspace / space ID.
+ * Validates a space ID.
  * Throws on invalid input, returns the validated ID string on success.
  */
-export function validateWorkspaceId(spaceId: string): string {
+export function validateSpaceId(spaceId: string): string {
   if (typeof spaceId !== 'string' || spaceId.length === 0) {
     throw new Error('space_id is required');
   }
@@ -212,6 +212,9 @@ export function validateWorkspaceId(spaceId: string): string {
   }
   return spaceId;
 }
+
+/** @deprecated Use {@link validateSpaceId} instead. */
+export const validateWorkspaceId = validateSpaceId;
 
 /**
  * Validates a name parameter (space_id, repo_name, etc.) using SAFE_NAME_PATTERN.

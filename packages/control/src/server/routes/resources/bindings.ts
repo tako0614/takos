@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import {
   checkResourceAccess,
   createServiceBinding,
@@ -11,7 +11,7 @@ import {
 import { getDb, services } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
-import { forbidden, notFound, conflict, internalError } from '../../../shared/utils/error-response';
+import { AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takos/common/errors';
 
 const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
 
@@ -31,27 +31,27 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   const resource = await getResourceById(c.env.DB, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const hasAccess = resource.owner_id === user.id ||
     await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
 
   if (!hasAccess) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const db = getDb(c.env.DB);
   const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
   if (!principalId) {
-    return internalError(c, 'User principal not found');
+    throw new InternalError('User principal not found');
   }
   const service = await db.select().from(services).where(
     and(eq(services.id, body.service_id), eq(services.accountId, principalId))
   ).get();
 
   if (!service) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const id = generateId();
@@ -82,7 +82,7 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
     }, 201);
   } catch (err) {
     if (String(err).includes('UNIQUE constraint')) {
-      return conflict(c, 'Binding name already exists for this service');
+      throw new ConflictError('Binding name already exists for this service');
     }
     throw err;
   }
@@ -95,19 +95,19 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   const db = getDb(c.env.DB);
   const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
   if (!principalId) {
-    return internalError(c, 'User principal not found');
+    throw new InternalError('User principal not found');
   }
 
   const resource = await getResourceById(c.env.DB, resourceId);
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const hasAccess = resource.owner_id === user.id ||
     await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
 
   if (!hasAccess) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const service = await db.select().from(services).where(
@@ -115,7 +115,7 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!service) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   await deleteServiceBinding(c.env.DB, resourceId, serviceId);
@@ -130,12 +130,12 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   const db = getDb(c.env.DB);
   const principalId = await resolveActorPrincipalId(c.env.DB, user.id);
   if (!principalId) {
-    return internalError(c, 'User principal not found');
+    throw new InternalError('User principal not found');
   }
 
   const resource = await getResourceByName(c.env.DB, user.id, resourceName);
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const resourceId = resource._internal_id;
@@ -145,7 +145,7 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!service) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   await deleteServiceBinding(c.env.DB, resourceId, serviceId);

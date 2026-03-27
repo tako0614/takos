@@ -16,7 +16,7 @@ describe('shared DB model types', () => {
   });
 
   it('does not expose removed project_id placeholders on canonical shared models', () => {
-    expect(modelsSource).not.toMatch(/export interface WorkspaceFile[\s\S]*\bproject_id\b/);
+    expect(modelsSource).not.toMatch(/export interface SpaceFile[\s\S]*\bproject_id\b/);
     expect(modelsSource).not.toMatch(/export interface Thread[\s\S]*\bproject_id\b/);
   });
 

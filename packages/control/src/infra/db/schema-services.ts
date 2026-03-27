@@ -14,6 +14,7 @@ const servicesTable = sqliteTable('services', {
   activeDeploymentId: text('active_deployment_id'),
   fallbackDeploymentId: text('fallback_deployment_id'),
   currentVersion: integer('current_version').notNull().default(0),
+  workloadKind: text('workload_kind'),
   createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
   updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
 }, (table) => ({

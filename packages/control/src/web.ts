@@ -29,10 +29,11 @@ import { staticAssetsMiddleware } from './server/middleware/static-assets';
 import { isInvalidArrayBufferError } from './shared/utils/db-guards';
 import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError, logInfo, logWarn } from './shared/utils/logger';
-import { buildCloudflareWebPlatform } from './platform/adapters/cloudflare.ts';
+import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/types.ts';
 import { setPlatformContext } from './platform/context.ts';
 import { getPlatformConfig, getPlatformServices } from './platform/accessors.ts';
+import { createExecutorProxyRouter } from './runtime/executor-proxy-api';
 
 // Durable Object exports for wrangler.toml bindings.
 export { SessionDO } from './runtime/durable-objects/session';
@@ -200,6 +201,12 @@ app.route('/.well-known', wellKnown);
 app.route('/', activitypubStore);
 
 // ============================================================================
+// Internal Executor RPC Proxy (service-binding only, no public access)
+// ============================================================================
+
+app.route('/internal/executor-rpc', createExecutorProxyRouter());
+
+// ============================================================================
 // API Routes (under /api prefix)
 // ============================================================================
 
@@ -294,7 +301,7 @@ app.onError((err, c) => {
 // ============================================================================
 
 export function createWebWorker(
-  buildPlatform: (env: Env) => ControlPlatform<Env> = buildCloudflareWebPlatform,
+  buildPlatform: (env: Env) => ControlPlatform<Env> = buildWorkersWebPlatform,
 ) {
   return {
   async fetch(request: Request, env: Env, ctx: PlatformExecutionContext): Promise<Response> {
@@ -389,7 +396,7 @@ export function createWebWorker(
       }
 
       try {
-        const gcSummary = await runSnapshotGcBatch(bindings, { maxWorkspaces: 5 });
+        const gcSummary = await runSnapshotGcBatch(bindings, { maxSpaces: 5 });
         logInfo('snapshot GC batch completed', { module: 'cron', ...{
           cron,
           ...gcSummary,

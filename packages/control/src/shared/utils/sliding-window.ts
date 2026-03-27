@@ -75,6 +75,9 @@ export function cleanupExpiredEntries(
   }
 }
 
+/** Extra entries to evict beyond the limit to avoid repeated evictions. */
+const KEY_EVICTION_BUFFER = 100;
+
 export function enforceKeyLimit(entries: Map<string, number[]>, maxKeys: number): number {
   if (entries.size < maxKeys) {
     return 0;
@@ -82,7 +85,7 @@ export function enforceKeyLimit(entries: Map<string, number[]>, maxKeys: number)
 
   const entriesToRemove = Math.max(
     0,
-    Math.min(entries.size - maxKeys + 100, entries.size)
+    Math.min(entries.size - maxKeys + KEY_EVICTION_BUFFER, entries.size)
   );
 
   let removed = 0;

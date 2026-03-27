@@ -30,10 +30,10 @@ import sessionSessionsRoutes from './routes/sessions/sessions.js';
 import repoReadRoutes from './routes/repos/read.js';
 import repoWriteRoutes from './routes/repos/write.js';
 import {
-  enforceWorkspaceScopeMiddleware,
-  getWorkspaceIdFromBody,
-  getWorkspaceIdFromPath,
-} from './middleware/workspace-scope.js';
+  enforceSpaceScopeMiddleware,
+  getSpaceIdFromBody,
+  getSpaceIdFromPath,
+} from './middleware/space-scope.js';
 import gitInitRoutes from './routes/git/init.js';
 import gitHttpRoutes from './routes/git/http.js';
 import actionsRoutes from './routes/actions/index.js';
@@ -172,16 +172,16 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
   app.use('/repos/*', reposRateLimiter);
   app.use('/cli-proxy/*', cliProxyRateLimiter);
 
-  const sessionWorkspaceScope = enforceWorkspaceScopeMiddleware((c) => [
-    getWorkspaceIdFromBody(c, 'space_id'),
+  const sessionSpaceScope = enforceSpaceScopeMiddleware((c) => [
+    getSpaceIdFromBody(c, 'space_id'),
   ]);
-  const repoWorkspaceScope = enforceWorkspaceScopeMiddleware((c) => [
-    getWorkspaceIdFromBody(c, 'spaceId'),
-    getWorkspaceIdFromPath(c),
+  const repoSpaceScope = enforceSpaceScopeMiddleware((c) => [
+    getSpaceIdFromBody(c, 'spaceId'),
+    getSpaceIdFromPath(c),
   ]);
-  app.use('/session/*', sessionWorkspaceScope);
-  app.use('/sessions/*', sessionWorkspaceScope);
-  app.use('/repos/*', repoWorkspaceScope);
+  app.use('/session/*', sessionSpaceScope);
+  app.use('/sessions/*', sessionSpaceScope);
+  app.use('/repos/*', repoSpaceScope);
 
   app.route('/', cliProxyRoutes);
   app.route('/', execRoutes);

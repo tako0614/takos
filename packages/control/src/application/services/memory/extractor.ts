@@ -4,7 +4,7 @@ import { type LLMClient, createLLMClient } from '../agent';
 import { getDb, memories, messages as messagesTable } from '../../../infra/db';
 import { eq, asc } from 'drizzle-orm';
 import { generateId, now } from '../../../shared/utils';
-import { chatAndParseJsonArray } from './helpers';
+import { chatAndParseJsonArray } from './llm-parser';
 import { MEMORY_TYPES } from './memories';
 import { logError } from '../../../shared/utils/logger';
 

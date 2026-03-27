@@ -3,7 +3,7 @@ import { getDb, sessions, blobs, snapshots } from '../../../infra/db';
 import { and, eq, inArray, lte, lt, asc } from 'drizzle-orm';
 import { SnapshotManager } from '../sync/snapshot';
 
-export interface SnapshotGcWorkspaceResult {
+export interface SnapshotGcSpaceResult {
   spaceId: string;
   deletedBlobs: number;
   deletedSnapshots: number;
@@ -22,16 +22,16 @@ export interface SnapshotGcBatchSummary {
   deletedSnapshots: number;
   deletedSessionFiles: number;
   errors: number;
-  spaces: SnapshotGcWorkspaceResult[];
+  spaces: SnapshotGcSpaceResult[];
 }
 
-function addWorkspaceIds(
+function addSpaceIds(
   into: Set<string>,
   rows: Array<{ accountId: string }>,
-  maxWorkspaces: number
+  maxSpaces: number
 ): void {
   for (const row of rows) {
-    if (into.size >= maxWorkspaces) break;
+    if (into.size >= maxSpaces) break;
     if (row.accountId) into.add(row.accountId);
   }
 }
@@ -39,7 +39,7 @@ function addWorkspaceIds(
 export async function runSnapshotGcBatch(
   env: Env,
   options?: {
-    maxWorkspaces?: number;
+    maxSpaces?: number;
     candidateScanLimit?: number;
     staleSnapshotAgeMinutes?: number;
   }
@@ -57,7 +57,7 @@ export async function runSnapshotGcBatch(
   }
 
   const db = getDb(env.DB);
-  const maxWorkspaces = Math.max(1, Math.min(options?.maxWorkspaces ?? 5, 25));
+  const maxSpaces = Math.max(1, Math.min(options?.maxSpaces ?? 5, 25));
   const candidateScanLimit = Math.max(10, Math.min(options?.candidateScanLimit ?? 200, 1000));
   const staleSnapshotAgeMinutes = Math.max(1, Math.min(options?.staleSnapshotAgeMinutes ?? 30, 24 * 60));
   const snapshotCutoff = new Date(Date.now() - staleSnapshotAgeMinutes * 60 * 1000).toISOString();
@@ -71,23 +71,23 @@ export async function runSnapshotGcBatch(
     .orderBy(asc(sessions.updatedAt))
     .limit(candidateScanLimit)
     .all();
-  addWorkspaceIds(spaceIds, sessionRows, maxWorkspaces);
+  addSpaceIds(spaceIds, sessionRows, maxSpaces);
 
   let blobRows: Array<{ accountId: string }> = [];
   // Workspaces with orphaned blobs (refcount <= 0).
-  if (spaceIds.size < maxWorkspaces) {
+  if (spaceIds.size < maxSpaces) {
     blobRows = await db.select({ accountId: blobs.accountId })
       .from(blobs)
       .where(lte(blobs.refcount, 0))
       .orderBy(asc(blobs.createdAt))
       .limit(candidateScanLimit)
       .all();
-    addWorkspaceIds(spaceIds, blobRows, maxWorkspaces);
+    addSpaceIds(spaceIds, blobRows, maxSpaces);
   }
 
   let oldSnapshotRows: Array<{ accountId: string }> = [];
   // Workspaces with old pending/failed snapshots.
-  if (spaceIds.size < maxWorkspaces) {
+  if (spaceIds.size < maxSpaces) {
     oldSnapshotRows = await db.select({ accountId: snapshots.accountId })
       .from(snapshots)
       .where(
@@ -99,7 +99,7 @@ export async function runSnapshotGcBatch(
       .orderBy(asc(snapshots.createdAt))
       .limit(candidateScanLimit)
       .all();
-    addWorkspaceIds(spaceIds, oldSnapshotRows, maxWorkspaces);
+    addSpaceIds(spaceIds, oldSnapshotRows, maxSpaces);
   }
 
   const summary: SnapshotGcBatchSummary = {
@@ -117,7 +117,7 @@ export async function runSnapshotGcBatch(
   };
 
   for (const spaceId of spaceIds) {
-    const result: SnapshotGcWorkspaceResult = {
+    const result: SnapshotGcSpaceResult = {
       spaceId,
       deletedBlobs: 0,
       deletedSnapshots: 0,

@@ -3,13 +3,13 @@
  *
  * Manages tenant worker deployment, resource binding, and lifecycle.
  * Uses Cloudflare API to interact with dispatch namespaces.
+ *
+ * This file is a facade: domain logic lives in the per-resource modules
+ * (workers.ts, d1.ts, r2.ts, kv.ts, queues.ts, vectorize.ts, orchestrator.ts).
  */
 
-import type { Env } from '../../../shared/types';
 import type { WfpEnv } from './client';
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
 import {
-  CF_API_BASE,
   WfpClient,
   createWfpConfig,
   resolveWfpConfig,
@@ -17,111 +17,46 @@ import {
   type CFAPIResponse,
   type CloudflareAPIError,
 } from './client';
-import {
-  createAssetsUploadSession,
-  uploadAssets,
-  uploadAllAssets,
-  type AssetManifestEntry,
-  type AssetUploadFile,
-  type AssetsUploadSession,
-  type AssetsUploadCompletion,
-} from './assets';
 import { logWarn } from '../../../shared/utils/logger';
+import { BadRequestError } from '@takos/common/errors';
 
-export type { AssetManifestEntry, AssetUploadFile, AssetsUploadSession, AssetsUploadCompletion } from './assets';
+// Re-export public types from their canonical locations
+export type {
+  WorkerBinding,
+  CloudflareBindingRecord,
+  CreateWorkerOptions,
+} from './types';
+export type {
+  AssetManifestEntry,
+  AssetUploadFile,
+  AssetsUploadSession,
+  AssetsUploadCompletion,
+} from './assets';
 
-export interface WorkerBinding {
-  type: 'plain_text' | 'secret_text' | 'd1' | 'r2_bucket' | 'kv_namespace' | 'vectorize' | 'service';
-  name: string;
-  text?: string;
-  database_id?: string;
-  bucket_name?: string;
-  namespace_id?: string;
-  index_name?: string;
-  service?: string;
-  environment?: string;
-}
+// Re-export standalone functions
+export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator';
 
-/** Shape returned by the Cloudflare API GET /settings endpoint for bindings */
-export interface CloudflareBindingRecord {
-  type: string;
-  name: string;
-  text?: string;
-  id?: string;
-  database_id?: string;
-  bucket_name?: string;
-  namespace_id?: string;
-  index_name?: string;
-  service?: string;
-  environment?: string;
-}
+// Import types needed by the class
+import type {
+  WorkerBinding,
+  CloudflareBindingRecord,
+  CreateWorkerOptions,
+  WfpContext,
+} from './types';
+import type {
+  AssetManifestEntry,
+  AssetUploadFile,
+  AssetsUploadSession,
+} from './assets';
 
-/** Result shape returned by D1 query API */
-interface D1QueryResult<T> {
-  results: T[];
-}
-
-interface CreateWorkerOptions {
-  workerName: string;
-  workerScript: string;
-  bindings: WorkerBinding[];
-  compatibility_date?: string;
-  compatibility_flags?: string[];
-  limits?: {
-    cpu_ms?: number;
-    subrequests?: number;
-  };
-  /** JWT from assets upload completion (for static assets) */
-  assetsJwt?: string;
-}
-
-/**
- * Sanitize a SQL table name to prevent injection.
- * Strips all characters except alphanumerics and underscores.
- */
-function sanitizeTableName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_]/g, '');
-}
-
-/**
- * Extract the results array from a D1 query response.
- * D1 returns Array<{ results: T[] }> -- this unwraps the first element.
- */
-function extractD1Results<T>(raw: D1QueryResult<T>[]): T[] {
-  return raw?.[0]?.results ?? [];
-}
-
-/**
- * Build worker metadata for Cloudflare dispatch namespace deployment.
- * Shared between createWorker and createWorkerWithWasm.
- */
-function buildWorkerMetadata(options: {
-  bindings: Array<Record<string, unknown>>;
-  compatibility_date?: string;
-  compatibility_flags?: string[];
-  limits?: { cpu_ms?: number; subrequests?: number };
-  assetsJwt?: string;
-}): Record<string, unknown> {
-  const metadata: Record<string, unknown> = {
-    main_module: 'worker.js',
-    bindings: options.bindings,
-    compatibility_date: options.compatibility_date || CF_COMPATIBILITY_DATE,
-  };
-
-  if (options.compatibility_flags?.length) {
-    metadata.compatibility_flags = options.compatibility_flags;
-  }
-
-  if (options.limits) {
-    metadata.limits = options.limits;
-  }
-
-  if (options.assetsJwt) {
-    metadata.assets = { jwt: options.assetsJwt };
-  }
-
-  return metadata;
-}
+// Import submodule functions
+import * as workerOps from './workers';
+import * as d1Ops from './d1';
+import * as r2Ops from './r2';
+import * as kvOps from './kv';
+import * as queueOps from './queues';
+import * as vectorizeOps from './vectorize';
+import * as orchestratorOps from './orchestrator';
 
 
 export class WFPService {
@@ -135,6 +70,10 @@ export class WFPService {
     this.config = 'accountId' in env ? env : createWfpConfig(env);
     this.client = new WfpClient(this.config);
   }
+
+  // ---------------------------------------------------------------------------
+  // Internal context – implements WfpContext for submodules
+  // ---------------------------------------------------------------------------
 
   /** Build the dispatch namespace script path for a given worker */
   private scriptPath(workerName: string): string {
@@ -201,562 +140,6 @@ export class WFPService {
     throw lastError;
   }
 
-  /**
-   * Create or update a worker in the dispatch namespace
-   */
-  async createWorker(options: CreateWorkerOptions): Promise<void> {
-    const { workerName, workerScript, bindings, compatibility_date, compatibility_flags, limits, assetsJwt } = options;
-
-    const metadata = buildWorkerMetadata({
-      bindings: bindings.map(b => this.formatBinding(b)),
-      compatibility_date,
-      compatibility_flags,
-      limits,
-      assetsJwt,
-    });
-
-    const formData = new FormData();
-    formData.append('worker.js', new Blob([workerScript], { type: 'application/javascript+module' }), 'worker.js');
-    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-
-    await this.cfFetchWithRetry(
-      this.scriptPath(workerName),
-      {
-        method: 'PUT',
-        body: formData,
-      }
-    );
-  }
-
-  /**
-   * Create an assets upload session for a worker.
-   * Returns a JWT token and list of files that need uploading.
-   */
-  async createAssetsUploadSession(
-    workerName: string,
-    manifest: Record<string, AssetManifestEntry>
-  ): Promise<AssetsUploadSession> {
-    return createAssetsUploadSession(this.client, this.config, workerName, manifest);
-  }
-
-  /**
-   * Upload asset files using the session JWT.
-   * Returns the completion JWT from the response.
-   */
-  async uploadAssets(
-    sessionJwt: string,
-    files: Record<string, AssetUploadFile>  // hash -> { base64Content, contentType }
-  ): Promise<string> {
-    return uploadAssets(this.config, sessionJwt, files);
-  }
-
-  /**
-   * Helper: Upload all assets and return completion JWT
-   * Combines createAssetsUploadSession and uploadAssets
-   *
-   * Per Cloudflare docs:
-   * - If all assets are cached (buckets empty), session JWT IS the completion token
-   * - If files were uploaded, upload response contains completion JWT
-   */
-  async uploadAllAssets(
-    workerName: string,
-    files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>
-  ): Promise<string> {
-    return uploadAllAssets(this.client, this.config, workerName, files);
-  }
-
-  /**
-   * Delete a worker from the dispatch namespace
-   */
-  async deleteWorker(workerName: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.scriptPath(workerName),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * Get worker details
-   */
-  async getWorker(workerName: string): Promise<unknown> {
-    const response = await this.cfFetch(this.scriptPath(workerName));
-    return response.result;
-  }
-
-  /**
-   * Check if worker exists
-   * @returns true if worker exists, false if 404, throws on other errors
-   */
-  async workerExists(workerName: string): Promise<boolean> {
-    try {
-      await this.cfFetch(this.scriptPath(workerName));
-      return true;
-    } catch (error) {
-      const cfError = error as CloudflareAPIError;
-      if (cfError.statusCode === 404) {
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * List all workers in the dispatch namespace
-   */
-  async listWorkers(): Promise<Array<{
-    id: string;
-    script: string;
-    created_on: string;
-    modified_on: string;
-  }>> {
-    const response = await this.cfFetch<Array<{
-      id: string;
-      script: string;
-      created_on: string;
-      modified_on: string;
-    }>>(
-      this.accountPath(`/workers/dispatch/namespaces/${this.config.dispatchNamespace}/scripts`)
-    );
-    return response.result || [];
-  }
-
-  /**
-   * Update worker settings (bindings, environment variables, limits)
-   * This updates the worker metadata without changing the script
-   */
-  async updateWorkerSettings(options: {
-    workerName: string;
-    bindings?: Array<WorkerBinding | CloudflareBindingRecord | Record<string, unknown>>;
-    compatibility_date?: string;
-    compatibility_flags?: string[];
-    limits?: {
-      cpu_ms?: number;
-      subrequests?: number;
-    };
-  }): Promise<void> {
-    const { workerName, bindings, compatibility_date, compatibility_flags, limits } = options;
-
-    const settings: Record<string, unknown> = {};
-
-    if (bindings !== undefined) {
-      settings.bindings = bindings.map((b) => this.formatBindingForUpdate(b));
-    }
-
-    if (compatibility_date !== undefined) {
-      settings.compatibility_date = compatibility_date;
-    }
-
-    if (compatibility_flags !== undefined) {
-      settings.compatibility_flags = compatibility_flags;
-    }
-
-    if (limits !== undefined) {
-      settings.limits = limits;
-    }
-
-    await this.cfFetchWithRetry(
-      `${this.scriptPath(workerName)}/settings`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      }
-    );
-  }
-
-  /**
-   * Get worker settings
-   */
-  async getWorkerSettings(workerName: string): Promise<{
-    bindings: CloudflareBindingRecord[];
-    compatibility_date?: string;
-    compatibility_flags?: string[];
-    limits?: { cpu_ms?: number; subrequests?: number };
-  }> {
-    const response = await this.cfFetch<{
-      bindings: CloudflareBindingRecord[];
-      compatibility_date?: string;
-      compatibility_flags?: string[];
-      limits?: { cpu_ms?: number; subrequests?: number };
-    }>(
-      `${this.scriptPath(workerName)}/settings`
-    );
-    return response.result;
-  }
-
-  /**
-   * Create a D1 database for tenant
-   */
-  async createD1Database(name: string): Promise<string> {
-    const response = await this.cfFetchWithRetry<{ uuid: string }>(
-      this.accountPath('/d1/database'),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      }
-    );
-    if (!response.result?.uuid) {
-      throw new Error(`Failed to create D1 database: no UUID returned from API`);
-    }
-    return response.result.uuid;
-  }
-
-  /**
-   * Delete a D1 database
-   */
-  async deleteD1Database(databaseId: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath(`/d1/database/${databaseId}`),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * Run SQL on a D1 database
-   */
-  async runD1SQL(databaseId: string, sql: string): Promise<unknown> {
-    const response = await this.cfFetch(
-      this.accountPath(`/d1/database/${databaseId}/query`),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql }),
-      }
-    );
-    return response.result;
-  }
-
-  /**
-   * Type-safe D1 query for internal use.
-   * Callers specify the expected row shape via generic parameter T.
-   */
-  private async runD1SQLTyped<T>(databaseId: string, sql: string): Promise<D1QueryResult<T>[]> {
-    const response = await this.cfFetch<D1QueryResult<T>[]>(
-      this.accountPath(`/d1/database/${databaseId}/query`),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql }),
-      }
-    );
-    return response.result;
-  }
-
-  /**
-   * List tables in a D1 database
-   */
-  async listD1Tables(databaseId: string): Promise<Array<{ name: string }>> {
-    const result = await this.runD1SQLTyped<{ name: string }>(
-      databaseId,
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
-    );
-    return extractD1Results(result);
-  }
-
-  /**
-   * Get table info (columns) for a D1 table
-   */
-  async getD1TableInfo(databaseId: string, tableName: string): Promise<Array<{
-    cid: number;
-    name: string;
-    type: string;
-    notnull: number;
-    dflt_value: string | null;
-    pk: number;
-  }>> {
-    const safeName = sanitizeTableName(tableName);
-    const result = await this.runD1SQLTyped<{
-      cid: number;
-      name: string;
-      type: string;
-      notnull: number;
-      dflt_value: string | null;
-      pk: number;
-    }>(databaseId, `PRAGMA table_info(${safeName})`);
-    return extractD1Results(result);
-  }
-
-  /**
-   * Get row count for a D1 table
-   */
-  async getD1TableCount(databaseId: string, tableName: string): Promise<number> {
-    const safeName = sanitizeTableName(tableName);
-    const result = await this.runD1SQLTyped<{ count: number }>(
-      databaseId,
-      `SELECT COUNT(*) as count FROM ${safeName}`
-    );
-    return extractD1Results(result)[0]?.count ?? 0;
-  }
-
-  /**
-   * Create an R2 bucket for tenant
-   */
-  async createR2Bucket(name: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath('/r2/buckets'),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      }
-    );
-  }
-
-  /**
-   * Delete an R2 bucket
-   */
-  async deleteR2Bucket(name: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath(`/r2/buckets/${name}`),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * List objects in an R2 bucket
-   */
-  async listR2Objects(bucketName: string, options?: {
-    prefix?: string;
-    cursor?: string;
-    limit?: number;
-  }): Promise<{
-    objects: Array<{
-      key: string;
-      size: number;
-      uploaded: string;
-      etag: string;
-    }>;
-    truncated: boolean;
-    cursor?: string;
-  }> {
-    const params = new URLSearchParams();
-    if (options?.prefix) params.set('prefix', options.prefix);
-    if (options?.cursor) params.set('cursor', options.cursor);
-    if (options?.limit) params.set('per_page', options.limit.toString());
-
-    const response = await this.cfFetch<{
-      objects: Array<{
-        key: string;
-        size: number;
-        uploaded: string;
-        etag: string;
-      }>;
-      truncated: boolean;
-      cursor?: string;
-    }>(
-      this.accountPath(`/r2/buckets/${bucketName}/objects?${params.toString()}`)
-    );
-    return response.result || { objects: [], truncated: false };
-  }
-
-  /**
-   * Upload a file to R2 bucket using S3-compatible API.
-   * Uses raw fetch because the R2 object upload endpoint requires
-   * Content-Type on the request (not JSON-wrapped).
-   */
-  async uploadToR2(
-    bucketName: string,
-    key: string,
-    body: ReadableStream<Uint8Array> | ArrayBuffer | string,
-    options?: {
-      contentType?: string;
-    }
-  ): Promise<void> {
-    const response = await fetch(
-      `${CF_API_BASE}${this.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`)}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${this.config.apiToken}`,
-          'Content-Type': options?.contentType || 'application/octet-stream',
-        },
-        body,
-      }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to upload to R2: ${response.status} ${text}`);
-    }
-  }
-
-  /**
-   * Delete an object from an R2 bucket
-   */
-  async deleteR2Object(bucketName: string, key: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * Get R2 bucket usage stats
-   */
-  async getR2BucketStats(bucketName: string): Promise<{
-    objectCount: number;
-    payloadSize: number;
-    metadataSize: number;
-  }> {
-    const listResult = await this.listR2Objects(bucketName, { limit: 1000 });
-    const totalSize = listResult.objects.reduce((sum, obj) => sum + obj.size, 0);
-    return {
-      objectCount: listResult.objects.length,
-      payloadSize: totalSize,
-      metadataSize: 0,
-    };
-  }
-
-  /**
-   * Create a KV namespace
-   */
-  async createKVNamespace(title: string): Promise<string> {
-    const response = await this.cfFetchWithRetry<{ id: string }>(
-      this.accountPath('/storage/kv/namespaces'),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      }
-    );
-    if (!response.result?.id) {
-      throw new Error(`Failed to create KV namespace: no ID returned from API`);
-    }
-    return response.result.id;
-  }
-
-  /**
-   * Delete a KV namespace
-   */
-  async deleteKVNamespace(namespaceId: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath(`/storage/kv/namespaces/${namespaceId}`),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * Create a Vectorize index
-   */
-  async createVectorizeIndex(
-    name: string,
-    config: { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' }
-  ): Promise<string> {
-    const response = await this.cfFetchWithRetry<{ name: string }>(
-      this.accountPath('/vectorize/v2/indexes'),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          config: {
-            dimensions: config.dimensions,
-            metric: config.metric,
-          },
-        }),
-      }
-    );
-    if (!response.result?.name) {
-      throw new Error(`Failed to create Vectorize index: no name returned from API`);
-    }
-    return response.result.name;
-  }
-
-  /**
-   * Delete a Vectorize index
-   */
-  async deleteVectorizeIndex(name: string): Promise<void> {
-    await this.cfFetchWithRetry(
-      this.accountPath(`/vectorize/v2/indexes/${name}`),
-      { method: 'DELETE' }
-    );
-  }
-
-  /**
-   * Create or update a worker with WASM module support
-   * Used for deploying workers that require Prisma/WASM (like yurucommu)
-   */
-  async createWorkerWithWasm(
-    workerName: string,
-    workerScript: string,
-    wasmContent: ArrayBuffer | null,
-    options: {
-      bindings: Array<{
-        type: string;
-        name: string;
-        id?: string;
-        bucket_name?: string;
-        namespace_id?: string;
-        text?: string;
-      }>;
-      compatibility_date?: string;
-      compatibility_flags?: string[];
-      limits?: {
-        cpu_ms?: number;
-        subrequests?: number;
-      };
-      /** JWT from assets upload completion (for static assets) */
-      assetsJwt?: string;
-    }
-  ): Promise<void> {
-    const { bindings, compatibility_date, compatibility_flags, limits, assetsJwt } = options;
-
-    const formattedBindings = bindings.map(b => {
-      switch (b.type) {
-        case 'd1':
-          return { type: 'd1', name: b.name, id: b.id };
-        case 'r2_bucket':
-          return { type: 'r2_bucket', name: b.name, bucket_name: b.bucket_name };
-        case 'kv_namespace':
-          return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
-        case 'vectorize':
-          return { type: 'vectorize', name: b.name, index_name: b.index_name };
-        case 'plain_text':
-          return { type: 'plain_text', name: b.name, text: b.text };
-        default:
-          return b;
-      }
-    });
-
-    const metadata = buildWorkerMetadata({
-      bindings: formattedBindings,
-      compatibility_date,
-      compatibility_flags,
-      limits,
-      assetsJwt,
-    });
-
-    const formData = new FormData();
-    formData.append('worker.js', new Blob([workerScript], { type: 'application/javascript+module' }), 'worker.js');
-
-    if (wasmContent) {
-      formData.append('query_compiler_bg.wasm', new Blob([wasmContent], { type: 'application/wasm' }), 'query_compiler_bg.wasm');
-    }
-
-    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-
-    await this.cfFetchWithRetry(
-      this.scriptPath(workerName),
-      {
-        method: 'PUT',
-        body: formData,
-      }
-    );
-  }
-
-  /**
-   * Execute SQL query on a D1 database
-   */
-  async executeD1Query(databaseId: string, sql: string): Promise<unknown> {
-    return this.runD1SQL(databaseId, sql);
-  }
-
-  async queryD1<T>(databaseId: string, sql: string): Promise<T[]> {
-    const result = await this.runD1SQLTyped<T>(databaseId, sql);
-    return extractD1Results(result);
-  }
-
   private formatBinding(binding: WorkerBinding): Record<string, unknown> {
     switch (binding.type) {
       case 'plain_text':
@@ -769,18 +152,46 @@ export class WFPService {
         return { type: 'r2_bucket', name: binding.name, bucket_name: binding.bucket_name };
       case 'kv_namespace':
         return { type: 'kv_namespace', name: binding.name, namespace_id: binding.namespace_id };
+      case 'queue':
+        return {
+          type: 'queue',
+          name: binding.name,
+          ...(binding.queue_name ? { queue_name: binding.queue_name } : {}),
+          ...(typeof binding.delivery_delay === 'number' ? { delivery_delay: binding.delivery_delay } : {}),
+        };
+      case 'analytics_engine':
+        return {
+          type: 'analytics_engine',
+          name: binding.name,
+          ...(binding.dataset ? { dataset: binding.dataset } : {}),
+        };
+      case 'workflow':
+        return {
+          type: 'workflow',
+          name: binding.name,
+          ...(binding.workflow_name ? { workflow_name: binding.workflow_name } : {}),
+          ...(binding.class_name ? { class_name: binding.class_name } : {}),
+          ...(binding.script_name ? { script_name: binding.script_name } : {}),
+        };
       case 'vectorize':
         return { type: 'vectorize', name: binding.name, index_name: binding.index_name };
       case 'service':
         return { type: 'service', name: binding.name, service: binding.service, environment: binding.environment };
+      case 'durable_object_namespace':
+        return {
+          type: 'durable_object_namespace',
+          name: binding.name,
+          class_name: binding.class_name,
+          ...(binding.script_name ? { script_name: binding.script_name } : {}),
+        };
       default:
-        throw new Error(`Unknown binding type: ${binding.type}`);
+        throw new BadRequestError(`Unknown binding type: ${binding.type}`);
     }
   }
 
   private formatBindingForUpdate(binding: WorkerBinding | CloudflareBindingRecord | Record<string, unknown>): Record<string, unknown> {
     if (!binding || typeof binding !== 'object') {
-      throw new Error('Invalid worker binding for update: expected object');
+      throw new BadRequestError('Invalid worker binding for update: expected object');
     }
 
     const candidate = binding as Record<string, unknown>;
@@ -822,6 +233,30 @@ export class WFPService {
           name,
           ...(typeof candidate.namespace_id === 'string' ? { namespace_id: candidate.namespace_id } : {}),
         };
+      case 'queue':
+        if (!name) break;
+        return {
+          type: 'queue',
+          name,
+          ...(typeof candidate.queue_name === 'string' ? { queue_name: candidate.queue_name } : {}),
+          ...(typeof candidate.delivery_delay === 'number' ? { delivery_delay: candidate.delivery_delay } : {}),
+        };
+      case 'analytics_engine':
+        if (!name) break;
+        return {
+          type: 'analytics_engine',
+          name,
+          ...(typeof candidate.dataset === 'string' ? { dataset: candidate.dataset } : {}),
+        };
+      case 'workflow':
+        if (!name) break;
+        return {
+          type: 'workflow',
+          name,
+          ...(typeof candidate.workflow_name === 'string' ? { workflow_name: candidate.workflow_name } : {}),
+          ...(typeof candidate.class_name === 'string' ? { class_name: candidate.class_name } : {}),
+          ...(typeof candidate.script_name === 'string' ? { script_name: candidate.script_name } : {}),
+        };
       case 'vectorize':
         if (!name) break;
         return {
@@ -841,6 +276,14 @@ export class WFPService {
           ...(typeof candidate.service === 'string' ? { service: candidate.service } : {}),
           ...(typeof candidate.environment === 'string' ? { environment: candidate.environment } : {}),
         };
+      case 'durable_object_namespace':
+        if (!name) break;
+        return {
+          type: 'durable_object_namespace',
+          name,
+          ...(typeof candidate.class_name === 'string' ? { class_name: candidate.class_name } : {}),
+          ...(typeof candidate.script_name === 'string' ? { script_name: candidate.script_name } : {}),
+        };
       default:
         break;
     }
@@ -853,9 +296,272 @@ export class WFPService {
     };
   }
 
-  /**
-   * Deploy a worker with bindings from a bundle URL or pre-built script.
-   */
+  /** Lazily-built context object that submodules use to call into this instance. */
+  private get ctx(): WfpContext {
+    return {
+      config: this.config,
+      scriptPath: (w) => this.scriptPath(w),
+      accountPath: (s) => this.accountPath(s),
+      cfFetch: (p, o, t) => this.cfFetch(p, o, t),
+      cfFetchWithRetry: (p, o, m, t) => this.cfFetchWithRetry(p, o, m, t),
+      formatBinding: (b) => this.formatBinding(b),
+      formatBindingForUpdate: (b) => this.formatBindingForUpdate(b),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Worker CRUD  (delegated to workers.ts)
+  // ---------------------------------------------------------------------------
+
+  async createWorker(options: CreateWorkerOptions): Promise<void> {
+    return workerOps.createWorker(this.ctx, options);
+  }
+
+  async createAssetsUploadSession(
+    workerName: string,
+    manifest: Record<string, AssetManifestEntry>
+  ): Promise<AssetsUploadSession> {
+    return workerOps.createWorkerAssetsUploadSession(this.client, this.config, workerName, manifest);
+  }
+
+  async uploadAssets(
+    sessionJwt: string,
+    files: Record<string, AssetUploadFile>
+  ): Promise<string> {
+    return workerOps.uploadWorkerAssets(this.config, sessionJwt, files);
+  }
+
+  async uploadAllAssets(
+    workerName: string,
+    files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>
+  ): Promise<string> {
+    return workerOps.uploadAllWorkerAssets(this.client, this.config, workerName, files);
+  }
+
+  async deleteWorker(workerName: string): Promise<void> {
+    return workerOps.deleteWorker(this.ctx, workerName);
+  }
+
+  async getWorker(workerName: string): Promise<unknown> {
+    return workerOps.getWorker(this.ctx, workerName);
+  }
+
+  async workerExists(workerName: string): Promise<boolean> {
+    return workerOps.workerExists(this.ctx, workerName);
+  }
+
+  async listWorkers(): Promise<Array<{
+    id: string;
+    script: string;
+    created_on: string;
+    modified_on: string;
+  }>> {
+    return workerOps.listWorkers(this.ctx);
+  }
+
+  async updateWorkerSettings(options: {
+    workerName: string;
+    bindings?: Array<WorkerBinding | CloudflareBindingRecord | Record<string, unknown>>;
+    compatibility_date?: string;
+    compatibility_flags?: string[];
+    limits?: {
+      cpu_ms?: number;
+      subrequests?: number;
+    };
+  }): Promise<void> {
+    return workerOps.updateWorkerSettings(this.ctx, options);
+  }
+
+  async getWorkerSettings(workerName: string): Promise<{
+    bindings: CloudflareBindingRecord[];
+    compatibility_date?: string;
+    compatibility_flags?: string[];
+    limits?: { cpu_ms?: number; subrequests?: number };
+  }> {
+    return workerOps.getWorkerSettings(this.ctx, workerName);
+  }
+
+  async createWorkerWithWasm(
+    workerName: string,
+    workerScript: string,
+    wasmContent: ArrayBuffer | null,
+    options: {
+      bindings: Array<{
+        type: string;
+        name: string;
+        id?: string;
+        bucket_name?: string;
+        namespace_id?: string;
+        queue_name?: string;
+        delivery_delay?: number;
+        dataset?: string;
+        workflow_name?: string;
+        class_name?: string;
+        script_name?: string;
+        index_name?: string;
+        text?: string;
+      }>;
+      compatibility_date?: string;
+      compatibility_flags?: string[];
+      limits?: {
+        cpu_ms?: number;
+        subrequests?: number;
+      };
+      assetsJwt?: string;
+    }
+  ): Promise<void> {
+    return workerOps.createWorkerWithWasm(this.ctx, workerName, workerScript, wasmContent, options);
+  }
+
+  // ---------------------------------------------------------------------------
+  // D1  (delegated to d1.ts)
+  // ---------------------------------------------------------------------------
+
+  async createD1Database(name: string): Promise<string> {
+    return d1Ops.createD1Database(this.ctx, name);
+  }
+
+  async deleteD1Database(databaseId: string): Promise<void> {
+    return d1Ops.deleteD1Database(this.ctx, databaseId);
+  }
+
+  async runD1SQL(databaseId: string, sql: string): Promise<unknown> {
+    return d1Ops.runD1SQL(this.ctx, databaseId, sql);
+  }
+
+  async listD1Tables(databaseId: string): Promise<Array<{ name: string }>> {
+    return d1Ops.listD1Tables(this.ctx, databaseId);
+  }
+
+  async getD1TableInfo(databaseId: string, tableName: string): Promise<Array<{
+    cid: number;
+    name: string;
+    type: string;
+    notnull: number;
+    dflt_value: string | null;
+    pk: number;
+  }>> {
+    return d1Ops.getD1TableInfo(this.ctx, databaseId, tableName);
+  }
+
+  async getD1TableCount(databaseId: string, tableName: string): Promise<number> {
+    return d1Ops.getD1TableCount(this.ctx, databaseId, tableName);
+  }
+
+  async executeD1Query(databaseId: string, sql: string): Promise<unknown> {
+    return d1Ops.executeD1Query(this.ctx, databaseId, sql);
+  }
+
+  async queryD1<T>(databaseId: string, sql: string): Promise<T[]> {
+    return d1Ops.queryD1<T>(this.ctx, databaseId, sql);
+  }
+
+  // ---------------------------------------------------------------------------
+  // R2  (delegated to r2.ts)
+  // ---------------------------------------------------------------------------
+
+  async createR2Bucket(name: string): Promise<void> {
+    return r2Ops.createR2Bucket(this.ctx, name);
+  }
+
+  async deleteR2Bucket(name: string): Promise<void> {
+    return r2Ops.deleteR2Bucket(this.ctx, name);
+  }
+
+  async listR2Objects(bucketName: string, options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{
+    objects: Array<{
+      key: string;
+      size: number;
+      uploaded: string;
+      etag: string;
+    }>;
+    truncated: boolean;
+    cursor?: string;
+  }> {
+    return r2Ops.listR2Objects(this.ctx, bucketName, options);
+  }
+
+  async uploadToR2(
+    bucketName: string,
+    key: string,
+    body: ReadableStream<Uint8Array> | ArrayBuffer | string,
+    options?: {
+      contentType?: string;
+    }
+  ): Promise<void> {
+    return r2Ops.uploadToR2(this.ctx, bucketName, key, body, options);
+  }
+
+  async deleteR2Object(bucketName: string, key: string): Promise<void> {
+    return r2Ops.deleteR2Object(this.ctx, bucketName, key);
+  }
+
+  async getR2BucketStats(bucketName: string): Promise<{
+    objectCount: number;
+    payloadSize: number;
+    metadataSize: number;
+  }> {
+    return r2Ops.getR2BucketStats(this.ctx, bucketName);
+  }
+
+  // ---------------------------------------------------------------------------
+  // KV  (delegated to kv.ts)
+  // ---------------------------------------------------------------------------
+
+  async createKVNamespace(title: string): Promise<string> {
+    return kvOps.createKVNamespace(this.ctx, title);
+  }
+
+  async deleteKVNamespace(namespaceId: string): Promise<void> {
+    return kvOps.deleteKVNamespace(this.ctx, namespaceId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Queues  (delegated to queues.ts)
+  // ---------------------------------------------------------------------------
+
+  async createQueue(
+    queueName: string,
+    options?: { deliveryDelaySeconds?: number },
+  ): Promise<{ id: string; name: string }> {
+    return queueOps.createQueue(this.ctx, queueName, options);
+  }
+
+  async listQueues(): Promise<Array<{ id: string; name: string }>> {
+    return queueOps.listQueues(this.ctx);
+  }
+
+  async deleteQueue(queueId: string): Promise<void> {
+    return queueOps.deleteQueue(this.ctx, queueId);
+  }
+
+  async deleteQueueByName(queueName: string): Promise<void> {
+    return queueOps.deleteQueueByName(this.ctx, queueName);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vectorize  (delegated to vectorize.ts)
+  // ---------------------------------------------------------------------------
+
+  async createVectorizeIndex(
+    name: string,
+    config: { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' }
+  ): Promise<string> {
+    return vectorizeOps.createVectorizeIndex(this.ctx, name, config);
+  }
+
+  async deleteVectorizeIndex(name: string): Promise<void> {
+    return vectorizeOps.deleteVectorizeIndex(this.ctx, name);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Deployment orchestration  (delegated to orchestrator.ts)
+  // ---------------------------------------------------------------------------
+
   async deployWorkerWithBindings(
     workerName: string,
     options: {
@@ -867,274 +573,30 @@ export class WFPService {
         bucket_name?: string;
         namespace_id?: string;
         index_name?: string;
+        queue_name?: string;
+        delivery_delay?: number;
+        dataset?: string;
+        workflow_name?: string;
+        class_name?: string;
+        script_name?: string;
       }>;
       bundleUrl?: string;
       bundleScript?: string;
       compatibilityDate?: string;
       compatibilityFlags?: string[];
-      /** JWT from assets upload (for static assets) */
       assetsJwt?: string;
     }
   ): Promise<void> {
-    let workerScript: string;
-
-    if (options.bundleScript) {
-      workerScript = options.bundleScript;
-    } else if (options.bundleUrl) {
-      const response = await fetch(options.bundleUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch bundle from ${options.bundleUrl}: ${response.status}`);
-      }
-      workerScript = await response.text();
-    } else {
-      throw new Error('Either bundleUrl or bundleScript is required');
-    }
-
-    const wfpBindings: WorkerBinding[] = options.bindings.map(b => {
-      switch (b.type) {
-        case 'd1':
-          return { type: 'd1', name: b.name, database_id: b.id };
-        case 'r2':
-        case 'r2_bucket':
-          return { type: 'r2_bucket', name: b.name, bucket_name: b.bucket_name };
-        case 'kv':
-        case 'kv_namespace':
-          return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
-        case 'vectorize':
-          return { type: 'vectorize', name: b.name, index_name: b.index_name || b.id };
-        case 'plain_text':
-          return { type: 'plain_text', name: b.name, text: b.text || '' };
-        case 'secret_text':
-          return { type: 'secret_text', name: b.name, text: b.text || '' };
-        default:
-          return { type: 'plain_text', name: b.name, text: b.text || '' };
-      }
-    });
-
-    await this.createWorker({
+    return orchestratorOps.deployWorkerWithBindings(
+      this.ctx,
+      (opts) => this.createWorker(opts),
       workerName,
-      workerScript,
-      bindings: wfpBindings,
-      compatibility_date: options.compatibilityDate,
-      compatibility_flags: options.compatibilityFlags,
-      assetsJwt: options.assetsJwt,
-    });
+      options
+    );
   }
 }
 
 export function createWfpService(env: WfpEnv): WFPService | null {
   const config = resolveWfpConfig(env);
   return config ? new WFPService(config) : null;
-}
-
-/**
- * Get the takos worker script bundle
- *
- * Priority:
- * 1. R2 bucket (required)
- *
- * Embedded fallback is intentionally disabled to avoid silently deploying
- * stale worker bundles that drift from yurucommu source.
- */
-export async function getTakosWorkerScript(env: Pick<Env, 'WORKER_BUNDLES'>): Promise<string> {
-  if (!env.WORKER_BUNDLES) {
-    throw new Error(
-      'WORKER_BUNDLES is not configured. ' +
-      'Provisioning requires an explicit worker bundle in R2.'
-    );
-  }
-
-  const object = await env.WORKER_BUNDLES.get('worker.js');
-  if (!object) {
-    throw new Error('worker.js is missing in WORKER_BUNDLES');
-  }
-  try {
-    return await object.text();
-  } catch (e) {
-    throw new Error(
-      `Failed to read worker bundle: ${e instanceof Error ? e.message : String(e)}`
-    );
-  }
-}
-
-/**
- * Get the D1 migration SQL for takos tenant database
- */
-export function getTakosMigrationSQL(): string {
-  return `
--- Migration: 0001_initial
--- Description: Initial schema for takos tenant
-
--- Local user (single user per tenant)
-CREATE TABLE IF NOT EXISTS local_users (
-  id TEXT PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  display_name TEXT NOT NULL,
-  summary TEXT NOT NULL DEFAULT '',
-  avatar_url TEXT,
-  header_url TEXT,
-  public_key TEXT NOT NULL,
-  private_key TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
--- Sessions
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES local_users(id),
-  expires_at INTEGER NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-
--- Used JTIs (for replay protection)
-CREATE TABLE IF NOT EXISTS used_jtis (
-  jti TEXT PRIMARY KEY,
-  expires_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_used_jtis_expires_at ON used_jtis(expires_at);
-
--- Posts
-CREATE TABLE IF NOT EXISTS posts (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES local_users(id),
-  content TEXT NOT NULL,
-  content_warning TEXT,
-  visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public', 'unlisted', 'followers', 'direct')),
-  in_reply_to_id TEXT,
-  in_reply_to_actor TEXT,
-  published_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_posts_published_at ON posts(published_at);
-CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(visibility);
-
--- Remote actors (cached)
-CREATE TABLE IF NOT EXISTS remote_actors (
-  id TEXT PRIMARY KEY,
-  actor_url TEXT UNIQUE NOT NULL,
-  inbox TEXT NOT NULL,
-  shared_inbox TEXT,
-  public_key TEXT NOT NULL,
-  actor_json TEXT NOT NULL,
-  fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_remote_actors_actor_url ON remote_actors(actor_url);
-
--- Follows (both local->remote and remote->local)
-CREATE TABLE IF NOT EXISTS follows (
-  id TEXT PRIMARY KEY,
-  follower_actor TEXT NOT NULL,
-  following_actor TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  UNIQUE(follower_actor, following_actor)
-);
-
-CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_actor);
-CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_actor);
-CREATE INDEX IF NOT EXISTS idx_follows_status ON follows(status);
-
--- Inbox queue (for async processing)
-CREATE TABLE IF NOT EXISTS inbox_queue (
-  id TEXT PRIMARY KEY,
-  activity_type TEXT NOT NULL,
-  actor_url TEXT NOT NULL,
-  activity_json TEXT NOT NULL,
-  received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  processed_at TEXT,
-  error TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_inbox_queue_processed ON inbox_queue(processed_at);
-CREATE INDEX IF NOT EXISTS idx_inbox_queue_received ON inbox_queue(received_at);
-
--- Outbox queue (for delivery)
-CREATE TABLE IF NOT EXISTS outbox_queue (
-  id TEXT PRIMARY KEY,
-  activity_json TEXT NOT NULL,
-  target_inbox TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  last_attempt_at TEXT,
-  next_attempt_at TEXT,
-  completed_at TEXT,
-  error TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_outbox_queue_next_attempt ON outbox_queue(next_attempt_at);
-CREATE INDEX IF NOT EXISTS idx_outbox_queue_completed ON outbox_queue(completed_at);
-
--- Likes
-CREATE TABLE IF NOT EXISTS likes (
-  id TEXT PRIMARY KEY,
-  actor_url TEXT NOT NULL,
-  object_url TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  UNIQUE(actor_url, object_url)
-);
-
-CREATE INDEX IF NOT EXISTS idx_likes_object ON likes(object_url);
-
--- Announces (boosts/reblogs)
-CREATE TABLE IF NOT EXISTS announces (
-  id TEXT PRIMARY KEY,
-  actor_url TEXT NOT NULL,
-  object_url TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  UNIQUE(actor_url, object_url)
-);
-
-CREATE INDEX IF NOT EXISTS idx_announces_object ON announces(object_url);
-
--- Notifications
-CREATE TABLE IF NOT EXISTS notifications (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK(type IN ('follow', 'like', 'announce', 'mention', 'reply')),
-  actor_url TEXT NOT NULL,
-  object_url TEXT,
-  read_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read_at);
-CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
-
--- Migration: 0002_add_signature_columns
--- Description: Add HTTP Signature verification columns to inbox_queue
-
-ALTER TABLE inbox_queue ADD COLUMN signature_verified INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE inbox_queue ADD COLUMN signature_error TEXT;
-
-CREATE INDEX IF NOT EXISTS idx_inbox_queue_signature ON inbox_queue(signature_verified);
-
--- Migration: 0003_add_tenant_config
--- Description: Add tenant_config table for tenant configuration storage
-
-CREATE TABLE IF NOT EXISTS tenant_config (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
--- Migration: 0004_add_media_files
--- Description: Add media_files table for fast media lookup
-
-CREATE TABLE IF NOT EXISTS media_files (
-  id TEXT PRIMARY KEY,
-  r2_key TEXT NOT NULL,
-  content_type TEXT,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_media_files_key ON media_files(r2_key);
-`;
 }

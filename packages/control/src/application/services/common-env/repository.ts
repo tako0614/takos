@@ -16,7 +16,7 @@ export interface ReconcileUpdate {
   lastSyncError?: string | null;
 }
 
-export interface WorkspaceEnvRow {
+export interface SpaceEnvRow {
   id: string;
   space_id: string;
   name: string;
@@ -54,7 +54,7 @@ export type WorkerLinkRow = ServiceLinkRow;
 export class CommonEnvRepository {
   constructor(private readonly env: Pick<Env, 'DB'>) {}
 
-  async listWorkspaceEnvRows(spaceId: string): Promise<WorkspaceEnvRow[]> {
+  async listSpaceEnvRows(spaceId: string): Promise<SpaceEnvRow[]> {
     const db = getDb(this.env.DB);
     const rows = await db
       .select({
@@ -81,7 +81,7 @@ export class CommonEnvRepository {
     }));
   }
 
-  async listWorkspaceCommonEnvNames(spaceId: string): Promise<string[]> {
+  async listSpaceCommonEnvNames(spaceId: string): Promise<string[]> {
     const db = getDb(this.env.DB);
     const rows = await db
       .select({ name: accountEnvVars.name })

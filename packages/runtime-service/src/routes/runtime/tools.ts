@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.js';
 import { getWorkerResourceLimits } from '../../runtime/validation.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { badRequest } from '@takos/common/middleware/hono';
 interface ExecuteToolRequest {
   code: string;

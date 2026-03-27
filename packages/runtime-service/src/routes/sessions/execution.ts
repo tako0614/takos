@@ -10,20 +10,20 @@ import {
   verifyPathWithinAfterAccess,
   verifyPathWithinBeforeCreate,
 } from '../../runtime/paths.js';
-import { writeFileWithinWorkspace } from '../../runtime/secure-fs.js';
+import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
 import { isValidSessionId, validateCommandLine } from '../../runtime/validation.js';
 import { sessionStore } from './storage.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { writeAuditLog } from '../../utils/audit-log.js';
 import {
   getSessionOwnerSub,
   getOwnerSubFromServiceContext,
-  parseRequiredSessionWorkspaceIds,
+  parseRequiredSessionSpaceIds,
   resolveSessionWorkDir,
 } from './session-utils.js';
 import { forbidden, badRequest, internalError } from '@takos/common/middleware/hono';
 import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.js';
-import { hasWorkspaceScopeMismatch, WORKSPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/workspace-scope.js';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 
 import type { Context } from 'hono';
 
@@ -57,23 +57,23 @@ app.post('/session/exec', async (c) => {
   }
 
   try {
-    const ids = parseRequiredSessionWorkspaceIds(body);
+    const ids = parseRequiredSessionSpaceIds(body);
     const { commands, working_dir, env } = body;
 
     if (!ids || !commands || commands.length === 0) {
       return badRequest(c, 'session_id, space_id, and commands required');
     }
 
-    const { sessionId: session_id, spaceId: workspace_id } = ids;
+    const { sessionId: session_id, spaceId: space_id } = ids;
 
-    if (hasWorkspaceScopeMismatch(c, workspace_id)) {
-      return forbidden(c, WORKSPACE_SCOPE_MISMATCH_ERROR);
+    if (hasSpaceScopeMismatch(c, space_id)) {
+      return forbidden(c, SPACE_SCOPE_MISMATCH_ERROR);
     }
     const ownerSub = getSessionOwnerSub(c);
 
     void writeAuditLog(buildAuditEntry({ status: 'started' }));
 
-    const workDir = await sessionStore.getSessionDir(session_id, workspace_id, ownerSub);
+    const workDir = await sessionStore.getSessionDir(session_id, space_id, ownerSub);
     const execDir = working_dir ? resolvePathWithin(workDir, working_dir, 'working_dir', true) : workDir;
 
     await verifyNoSymlinkPathComponents(workDir, execDir, 'working_dir');
@@ -186,9 +186,9 @@ app.post('/session/init', async (c) => {
 
           const isBinary = file.encoding === 'base64' || file.is_binary;
           if (isBinary) {
-            await writeFileWithinWorkspace(workDir, filePath, Buffer.from(file.content, 'base64'));
+            await writeFileWithinSpace(workDir, filePath, Buffer.from(file.content, 'base64'));
           } else {
-            await writeFileWithinWorkspace(workDir, filePath, file.content, 'utf-8');
+            await writeFileWithinSpace(workDir, filePath, file.content, 'utf-8');
           }
 
           await verifyPathWithinAfterAccess(workDir, filePath, 'file');
@@ -236,16 +236,16 @@ app.post('/session/destroy', async (c) => {
     const authMethod = c.get('serviceAuthMethod');
     const ownerSub = getOwnerSubFromServiceContext(payload);
 
-    // When a JWT carries a workspace scope, enforce it
-    const scopedWorkspace = authMethod === 'jwt' && payload
+    // When a JWT carries a space scope, enforce it
+    const scopedSpaceId = authMethod === 'jwt' && payload
       ? payload.scope_space_id as string | undefined
       : undefined;
 
-    if (typeof scopedWorkspace === 'string') {
-      if (space_id && hasWorkspaceScopeMismatch(c, space_id)) {
-        return forbidden(c, WORKSPACE_SCOPE_MISMATCH_ERROR);
+    if (typeof scopedSpaceId === 'string') {
+      if (space_id && hasSpaceScopeMismatch(c, space_id)) {
+        return forbidden(c, SPACE_SCOPE_MISMATCH_ERROR);
       }
-      await sessionStore.destroySession(session_id, scopedWorkspace, ownerSub);
+      await sessionStore.destroySession(session_id, scopedSpaceId, ownerSub);
     } else {
       await sessionStore.destroySession(session_id, undefined, ownerSub);
     }

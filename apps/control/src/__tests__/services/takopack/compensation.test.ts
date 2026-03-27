@@ -96,6 +96,11 @@ describe('cleanupProvisionedResources', () => {
       d1: [{ binding: 'DB', id: 'cf-d1-1', name: 'd1-name', resourceId: 'res-d1', wasAdopted: false }],
       r2: [{ binding: 'STORAGE', name: 'r2-name', resourceId: 'res-r2', wasAdopted: false }],
       kv: [{ binding: 'KV', id: 'cf-kv-1', name: 'kv-name', resourceId: 'res-kv', wasAdopted: false }],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
     };
 
     await expect(cleanupProvisionedResources(env, resourcesResult)).resolves.toBeUndefined();
@@ -103,7 +108,16 @@ describe('cleanupProvisionedResources', () => {
 
   it('handles empty resource results', async () => {
     const env = { DB: {}, CF_ACCOUNT_ID: 'a', CF_API_TOKEN: 't' } as any;
-    const result = { d1: [], r2: [], kv: [] };
+    const result = {
+      d1: [],
+      r2: [],
+      kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
+    };
     await expect(cleanupProvisionedResources(env, result)).resolves.toBeUndefined();
   });
 });

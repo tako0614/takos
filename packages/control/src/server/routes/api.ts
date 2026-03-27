@@ -5,13 +5,14 @@ import { generalApiBodyLimit, searchBodyLimit } from '../middleware/body-size';
 import { billingGate, type BillingVariables } from '../middleware/billing';
 import { requireWeeklyRuntimeLimitForAgent } from '../middleware/plan-gates';
 import { validateApiOpaqueRouteParams } from '../middleware/param-validation';
-import workspacesBase from './workspaces/base';
-import workspacesMembers from './workspaces/members';
-import workspacesRepos from './workspaces/repositories';
-import workspacesStorage from './workspaces/storage';
-import workspacesCommonEnv from './workspaces/common-env';
-import workspacesStores from './workspaces/stores';
-import workspacesStoreRegistry from './workspaces/store-registry';
+import spacesBase from './spaces/base';
+import spacesMembers from './spaces/members';
+import spacesRepos from './spaces/repositories';
+import spacesStorage from './spaces/storage';
+import spacesCommonEnv from './spaces/common-env';
+import spacesStores from './spaces/stores';
+import spacesStoreRegistry from './spaces/store-registry';
+import seedRepositories from './seed-repositories';
 import threads from './threads';
 import runs from './runs';
 import search from './search';
@@ -332,13 +333,14 @@ export function createApiRouter({
   // ================================================================
   apiRouter.route('/setup', setup);
   apiRouter.route('/me', me);
-  apiRouter.route('/spaces', workspacesBase);
-  apiRouter.route('/spaces', workspacesMembers);
-  apiRouter.route('/spaces', workspacesRepos);
-  apiRouter.route('/spaces', workspacesStorage);
-  apiRouter.route('/spaces', workspacesCommonEnv);
-  apiRouter.route('/spaces', workspacesStores);
-  apiRouter.route('/spaces', workspacesStoreRegistry);
+  apiRouter.route('/spaces', spacesBase);
+  apiRouter.route('/spaces', spacesMembers);
+  apiRouter.route('/spaces', spacesRepos);
+  apiRouter.route('/spaces', spacesStorage);
+  apiRouter.route('/spaces', spacesCommonEnv);
+  apiRouter.route('/spaces', spacesStores);
+  apiRouter.route('/spaces', spacesStoreRegistry);
+  apiRouter.route('/', seedRepositories);
   apiRouter.route('/shortcuts', shortcuts);
   apiRouter.route('/', shortcutGroupRoutes); // Shortcut groups at /api/spaces/:id/shortcuts/groups
   apiRouter.route('/services', services);
@@ -351,7 +353,7 @@ export function createApiRouter({
   apiRouter.route('/', indexRoutes); // Index routes at /api/spaces/:id/index and /api/spaces/:id/graph
   apiRouter.route('/', memories); // Memory routes for memories and reminders
   apiRouter.route('/', skills); // Skills routes
-  apiRouter.route('/', sessions); // Session routes for Workspace File Sync
+  apiRouter.route('/', sessions); // Session routes for Space File Sync
   apiRouter.route('/', git); // Git routes for version control
   apiRouter.route('/', repos); // Repository management routes
   apiRouter.route('/', agentTasks); // Agent task routes

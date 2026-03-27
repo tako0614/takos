@@ -39,6 +39,7 @@ function stringifyPersistedData(value: unknown): string {
   try {
     return JSON.stringify(value);
   } catch {
+    // Circular references or non-serializable values -- coerce to string
     return String(value);
   }
 }

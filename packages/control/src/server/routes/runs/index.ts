@@ -8,8 +8,8 @@ import {
   RUN_TERMINAL_STATUSES,
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
-import { checkWorkspaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, errorResponse, notFound } from '../shared/helpers';
+import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
+import { badRequest, errorResponse, notFound } from '../shared/route-auth';
 import { checkRunAccess } from './access';
 import {
   persistAndEmitEvent,
@@ -21,7 +21,7 @@ import {
 import { registerRunCreateRoutes } from './create';
 import { registerRunListRoutes } from './list';
 import { buildSanitizedDOHeaders } from '../../../runtime/durable-objects/shared';
-import type { BaseVariables } from '../shared/helpers';
+import type { BaseVariables } from '../shared/route-auth';
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
@@ -254,7 +254,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
       return notFound(c, 'Artifact');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, artifactRow.accountId, user.id);
+    const access = await checkSpaceAccess(c.env.DB, artifactRow.accountId, user.id);
     if (!access) {
       return notFound(c, 'Artifact');
     }

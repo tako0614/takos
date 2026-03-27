@@ -7,8 +7,8 @@
 
 import type {
   User,
-  Workspace,
-  WorkspaceMember,
+  Space,
+  SpaceMembership,
   Thread,
   Message,
   Run,
@@ -19,7 +19,7 @@ import type {
   Service,
   Resource,
   App,
-  WorkspaceRole,
+  SpaceRole,
   ThreadStatus,
   MessageRole,
   RunStatus,
@@ -92,7 +92,7 @@ export function createUser(options: UserFactoryOptions = {}): User {
 
 export interface WorkspaceFactoryOptions {
   id?: string;
-  kind?: Workspace['kind'];
+  kind?: Space['kind'];
   name?: string;
   slug?: string | null;
   principal_id?: string;
@@ -105,7 +105,7 @@ export interface WorkspaceFactoryOptions {
   updated_at?: string;
 }
 
-export function createWorkspace(options: WorkspaceFactoryOptions = {}): Workspace {
+export function createWorkspace(options: WorkspaceFactoryOptions = {}): Space {
   const id = options.id || generateId('ws-');
   const now = new Date().toISOString();
   const kind = options.kind || 'team';
@@ -126,15 +126,15 @@ export function createWorkspace(options: WorkspaceFactoryOptions = {}): Workspac
   };
 }
 
-export interface WorkspaceMemberFactoryOptions {
+export interface SpaceMemberFactoryOptions {
   id?: string;
   space_id?: string;
   principal_id?: string;
-  role?: WorkspaceRole;
+  role?: SpaceRole;
   created_at?: string;
 }
 
-export function createWorkspaceMember(options: WorkspaceMemberFactoryOptions = {}): WorkspaceMember {
+export function createSpaceMember(options: SpaceMemberFactoryOptions = {}): SpaceMembership {
   const id = options.id || generateId('wsm-');
   const now = new Date().toISOString();
 
@@ -516,8 +516,8 @@ export function createApp(options: AppFactoryOptions = {}): App {
 
 export interface UserWithWorkspaceResult {
   user: User;
-  workspace: Workspace;
-  member: WorkspaceMember;
+  workspace: Space;
+  member: SpaceMembership;
 }
 
 /**
@@ -535,7 +535,7 @@ export function createUserWithWorkspace(
     kind: workspaceOptions.kind || 'user',
     name: workspaceOptions.name || `${user.name}'s Workspace`,
   });
-  const member = createWorkspaceMember({
+  const member = createSpaceMember({
     space_id: workspace.id,
     principal_id: user.principal_id,
     role: 'owner',

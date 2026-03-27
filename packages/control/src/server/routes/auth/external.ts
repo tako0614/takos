@@ -10,9 +10,9 @@ import {
   isValidRedirectUri,
 } from '../../../application/services/identity/auth-utils';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../shared/helpers';
+import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html';
-import { badRequest, forbidden } from '../../../shared/utils/error-response';
+import { BadRequestError, AuthorizationError } from '@takos/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
 
 function normalizeServiceName(value: string | null | undefined): string {
@@ -37,6 +37,7 @@ function resolveAuthPublicHost(baseUrl: string, fallbackHost: string): string {
   try {
     return new URL(baseUrl).host;
   } catch {
+    // Malformed base URL -- fall back to provided host
     return fallbackHost;
   }
 }
@@ -69,7 +70,7 @@ externalAuthRouter.get('/external/session', async (c) => {
   const sessionStore = getPlatformSessionStore(c);
   const expectedOrigin = `https://${platformConfig.adminDomain}`;
   if (origin && origin !== expectedOrigin) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   const cookieHeader = c.req.header('Cookie');
@@ -177,16 +178,16 @@ externalAuthRouter.get('/external/google', async (c) => {
   const dbBinding = getPlatformSqlBinding(c);
   const state = c.req.query('state');
   if (!state) {
-    return badRequest(c, 'Missing state');
+    throw new BadRequestError('Missing state');
   }
 
   if (!dbBinding || !platformConfig.googleClientId) {
-    return badRequest(c, 'External auth is not configured');
+    throw new BadRequestError('External auth is not configured');
   }
 
   const stateResult = await validateOAuthState(dbBinding, state);
   if (!stateResult.valid) {
-    return badRequest(c, 'Invalid state');
+    throw new BadRequestError('Invalid state');
   }
 
   const newState = await storeOAuthState(

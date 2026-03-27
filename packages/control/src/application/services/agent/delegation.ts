@@ -46,7 +46,7 @@ type BuildDelegationPacketInput = {
   threadSummary?: string | null;
   threadKeyPoints?: string[];
   threadLocale?: string | null;
-  workspaceLocale?: string | null;
+  spaceLocale?: string | null;
 };
 
 function normalizeText(value: unknown): string | null {
@@ -251,7 +251,7 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
   const locale = explicitLocale
     ?? getLocaleFromSource(parentRunSource)
     ?? (isDelegationLocale(input.threadLocale) ? input.threadLocale : null)
-    ?? (isDelegationLocale(input.workspaceLocale) ? input.workspaceLocale : null);
+    ?? (isDelegationLocale(input.spaceLocale) ? input.spaceLocale : null);
   if (!explicitLocale && locale) inferredFieldCount++;
 
   const packet: DelegationPacket = {

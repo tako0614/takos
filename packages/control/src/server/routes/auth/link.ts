@@ -8,8 +8,8 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
 import { generateId, now } from '../../../shared/utils';
 import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
-import type { OptionalAuthRouteEnv } from '../shared/helpers';
-import { unauthorized } from '../../../shared/utils/error-response';
+import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+import { AuthenticationError } from '@takos/common/errors';
 
 export const authLinkRouter = new Hono<OptionalAuthRouteEnv>();
 
@@ -17,7 +17,7 @@ export const authLinkRouter = new Hono<OptionalAuthRouteEnv>();
 authLinkRouter.get('/link/google', async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c, 'Login required');
+    throw new AuthenticationError('Login required');
   }
 
   const redirectUri = `https://${c.env.ADMIN_DOMAIN}/auth/link/google/callback`;
@@ -139,7 +139,7 @@ authLinkRouter.get('/link/google/callback', async (c) => {
 authLinkRouter.get('/api/auth/identities', async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c, 'Login required');
+    throw new AuthenticationError('Login required');
   }
 
   const db = getDb(c.env.DB);

@@ -4,7 +4,7 @@ import * as gitStore from '../../../application/services/git-smart';
 import { getDb, type Database } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { pullRequests, branches } from '../../../infra/db/schema';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { toPullRequestRecord, type PullRequestRecord } from './dto';
 import { toGitBucket, type GitBucket } from './git-store';
 

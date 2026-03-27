@@ -69,7 +69,7 @@ vi.mock('redis', () => ({
   createClient: redisMock.createClient,
 }));
 
-import { createTakosWebEnv, resetLocalPlatformStateForTests } from './local';
+import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder';
 import type { RoutingTarget } from '../../application/services/routing/types.ts';
 
 describe('local redis-backed bindings', () => {
@@ -81,7 +81,7 @@ describe('local redis-backed bindings', () => {
     process.env.REDIS_URL = 'redis://localhost:6379';
     redisMock.calls.length = 0;
     redisMock.stores.clear();
-    await resetLocalPlatformStateForTests();
+    await resetNodePlatformStateForTests();
   });
 
   afterEach(async () => {
@@ -92,13 +92,13 @@ describe('local redis-backed bindings', () => {
       process.env.REDIS_URL = REDIS_URL;
     }
     vi.useRealTimers();
-    await resetLocalPlatformStateForTests();
+    await resetNodePlatformStateForTests();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
   it('uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
-    const env = await createTakosWebEnv();
+    const env = await createNodeWebEnv();
     const target: RoutingTarget = {
       type: 'deployments',
       deployments: [{ routeRef: 'tenant-app', weight: 100, status: 'active' }],

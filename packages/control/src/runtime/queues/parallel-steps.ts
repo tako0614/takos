@@ -232,8 +232,8 @@ export async function executeStepLoopParallel(
       await ctx.engine.cancelRun(runId);
       if (state.runtimeStarted) {
         state.runtimeCancelled = true;
-        if (state.runtimeWorkspaceId) {
-          await runtimeDelete(ctx.env, `/actions/jobs/${jobId}`, state.runtimeWorkspaceId);
+        if (state.runtimeSpaceId) {
+          await runtimeDelete(ctx.env, `/actions/jobs/${jobId}`, state.runtimeSpaceId);
         }
       }
       await ctx.engine.storeJobLogs(jobId, state.logs.join('\n'));
@@ -381,7 +381,7 @@ async function executeSingleStep(
     env: ctx.env,
     jobId,
     stepNumber,
-    spaceId: state.runtimeWorkspaceId!,
+    spaceId: state.runtimeSpaceId!,
     shell: step.shell ?? jobDefinition.defaults?.run?.shell,
     workingDirectory: step['working-directory'] ?? jobDefinition.defaults?.run?.['working-directory'],
   });

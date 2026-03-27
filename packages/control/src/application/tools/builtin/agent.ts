@@ -4,7 +4,7 @@ import { getDb, runs, artifacts, threads, messages } from '../../../infra/db';
 import { createThreadRun } from '../../services/execution/run-creation';
 import { resolveRunModel } from '../../services/runs/create-thread-run-validation';
 import { createThread, updateThreadStatus } from '../../services/threads/threads';
-import { getWorkspaceLocale } from '../../services/identity/locale';
+import { getSpaceLocale } from '../../services/identity/locale';
 import {
   buildDelegationPacket,
 } from '../../services/agent/delegation';
@@ -256,7 +256,7 @@ export const spawnAgentHandler: ToolHandler = async (args, context) => {
 
   const db = getDb(context.db);
   const model = await resolveRunModel(context.db, context.spaceId, requestedModel);
-  const [parentThread, latestUserMessage, parentRunRow, workspaceLocale] = await Promise.all([
+  const [parentThread, latestUserMessage, parentRunRow, spaceLocale] = await Promise.all([
     db.select({
       title: threads.title,
       summary: threads.summary,
@@ -273,7 +273,7 @@ export const spawnAgentHandler: ToolHandler = async (args, context) => {
       input: runs.input,
       rootThreadId: runs.rootThreadId,
     }).from(runs).where(eq(runs.id, context.runId)).get(),
-    getWorkspaceLocale(context.db, context.spaceId),
+    getSpaceLocale(context.db, context.spaceId),
   ]);
 
   let threadKeyPoints: string[] = [];
@@ -304,7 +304,7 @@ export const spawnAgentHandler: ToolHandler = async (args, context) => {
     threadSummary: parentThread?.summary ?? null,
     threadKeyPoints,
     threadLocale: parentThread?.locale ?? null,
-    workspaceLocale,
+    spaceLocale,
   });
 
   const childThread = await createThread(context.db, context.spaceId, {

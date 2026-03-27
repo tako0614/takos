@@ -3,7 +3,7 @@ import { getDb, serviceCustomDomains } from '../../../infra/db';
 import { and, asc, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
 import { now } from '../../../shared/utils';
 import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
 import type { RoutingTarget } from '../routing/types';
 import { createServiceDesiredStateService } from '../platform/worker-desired-state';
 import { listServiceRouteRecordsByIds } from '../platform/workers';

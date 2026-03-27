@@ -1,29 +1,29 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, requireWorkspaceAccess } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseLimit, requireWorkspaceAccess } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
-  countServicesInWorkspace,
+  countServicesInSpace,
   createService,
   deleteService,
   getServiceForUser,
   getServiceForUserWithRole,
   listServicesForUser,
-  listServicesForWorkspace,
+  listServicesForSpace,
   WORKSPACE_SERVICE_LIMITS,
 } from '../../../application/services/platform/workers';
 import { getDb } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { deployments, serviceCustomDomains, serviceDeployments } from '../../../infra/db/schema';
-import { deleteHostnameRouting } from '../../../application/services/routing';
+import { deleteHostnameRouting } from '../../../application/services/routing/service';
 import { createCloudflareApiClient } from '../../../platform/providers/cloudflare/api-client.ts';
 import { deleteCloudflareCustomHostname } from '../../../platform/providers/cloudflare/custom-domains.ts';
 import { createCommonEnvService } from '../../../application/services/common-env';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger';
-import { notFound, internalError } from '../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 /** Shape of a single invocation record from the Cloudflare GraphQL Analytics API */
 interface CfInvocationRecord {
@@ -64,7 +64,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   const access = await requireWorkspaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
-  const workersList = await listServicesForWorkspace(c.env.DB, access.workspace.id);
+  const workersList = await listServicesForSpace(c.env.DB, access.space.id);
 
   return c.json({ services: workersList });
 })
@@ -82,35 +82,35 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   const spaceId = body.space_id || null;
 
-  let resolvedWorkspaceId: string;
+  let resolvedSpaceId: string;
   if (spaceId) {
     const access = await requireWorkspaceAccess(
       c,
       spaceId,
       user.id,
       ['owner', 'admin', 'editor'],
-      'Workspace not found or insufficient permissions'
+      'Space not found or insufficient permissions'
     );
     if (access instanceof Response) return access;
-    resolvedWorkspaceId = access.workspace.id;
+    resolvedSpaceId = access.space.id;
   } else {
     // Default to user's own account
-    resolvedWorkspaceId = user.id;
+    resolvedSpaceId = user.id;
   }
 
   const serviceType = body.service_type || 'app';
 
-  const currentCount = await countServicesInWorkspace(c.env.DB, resolvedWorkspaceId);
+  const currentCount = await countServicesInSpace(c.env.DB, resolvedSpaceId);
   if (currentCount >= WORKSPACE_SERVICE_LIMITS.maxServices) {
     return c.json({
-      error: `Workspace has reached the maximum number of services (${WORKSPACE_SERVICE_LIMITS.maxServices})`
+      error: `Space has reached the maximum number of services (${WORKSPACE_SERVICE_LIMITS.maxServices})`
     }, 429);
   }
 
   const platformDomain = c.env.TENANT_BASE_DOMAIN;
 
   const result = await createService(c.env.DB, {
-    spaceId: resolvedWorkspaceId,
+    spaceId: resolvedSpaceId,
     workerType: serviceType,
     slug: body.slug,
     config: body.config || null,
@@ -126,7 +126,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   return c.json({ service: worker });
@@ -139,12 +139,12 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   const sinceHours = parseLimit(c.req.query('since'), 1, 72);
 
   if (!c.env.CF_ACCOUNT_ID || !c.env.CF_API_TOKEN) {
-    return internalError(c, 'Cloudflare API not configured');
+    throw new InternalError('Cloudflare API not configured');
   }
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const desiredState = createServiceDesiredStateService(c.env);
@@ -184,7 +184,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   const cfClient = createCloudflareApiClient(c.env);
   if (!cfClient) {
-    return internalError(c, 'Cloudflare API not configured');
+    throw new InternalError('Cloudflare API not configured');
   }
 
   const gqlResponse = await cfClient.fetchRaw('/graphql', {
@@ -205,7 +205,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   const result = await gqlResponse.json() as CfGraphQLResponse;
 
   if (result.errors?.length) {
-    return internalError(c, result.errors[0].message);
+    throw new InternalError(result.errors[0].message);
   }
 
   const invocations = result.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive || [];
@@ -224,7 +224,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   );
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const db = getDb(c.env.DB);
