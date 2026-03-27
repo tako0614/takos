@@ -8,28 +8,6 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('@takos/control-hosts/container-runtime', () => {
-  const MockContainer = class {
-    ctx: any;
-    env: any;
-    defaultPort = 8080;
-    sleepAfter = '10m';
-    pingEndpoint = '';
-    envVars: Record<string, string> = {};
-    constructor(ctx: any, env: any) {
-      this.ctx = ctx;
-      this.env = env;
-    }
-    async fetch(req: Request): Promise<Response> {
-      return new Response('container response');
-    }
-  };
-  return {
-    Container: MockContainer,
-    HostContainerRuntime: MockContainer,
-  };
-});
-
 import {
   TakosRuntimeContainer,
   buildRuntimeContainerEnv,

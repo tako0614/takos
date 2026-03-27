@@ -1,5 +1,6 @@
 import { type WorkerBinding, WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { PlatformDeployProviderConfig } from '../../../platform/types.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import type {
   ArtifactKind,
   Deployment,
@@ -283,14 +284,14 @@ export function createOciDeploymentProvider(
 
       if (!response.ok) {
         const body = await response.text().catch((err) => {
-          console.warn('[oci-provider] Failed to read error response body', err);
+          logWarn('Failed to read error response body', { module: 'oci-provider', error: err instanceof Error ? err.message : String(err) });
           return '';
         });
         throw new Error(`OCI deployment orchestrator failed with ${response.status}: ${body.slice(0, 300)}`);
       }
 
       const responseBody = await response.json().catch((err) => {
-        console.warn('[oci-provider] Failed to parse deployment orchestrator JSON response', err);
+        logWarn('Failed to parse deployment orchestrator JSON response', { module: 'oci-provider', error: err instanceof Error ? err.message : String(err) });
         return null;
       }) as {
         resolved_endpoint?: { kind: string; base_url: string };

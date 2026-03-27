@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { safeJsonParseOrDefault } from '../../../../shared/utils';
-import { badRequest, parseLimit, parseOffset } from '../../shared/route-auth';
+import { parseLimit, parseOffset } from '../../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../../zod-validator';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import {
@@ -66,7 +67,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const body = c.req.valid('json');
 
     if (!body.workflow) {
-      return badRequest(c, 'workflow path is required');
+      throw new BadRequestError( 'workflow path is required');
     }
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);

@@ -1,5 +1,6 @@
 import { createClient } from 'redis';
 import type { DurableObjectNamespace, DurableObjectStub } from '../shared/types/bindings.ts';
+import { logWarn } from '../shared/utils/logger.ts';
 
 type RedisClient = ReturnType<typeof createClient>;
 
@@ -17,11 +18,11 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
     if (redisClientState) {
       void redisClientState.clientPromise
         .then((client) => client.quit().catch((err) => {
-          console.warn('[redis-durable-object] Failed to quit stale Redis client', err);
+          logWarn('Failed to quit stale Redis client', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
           return undefined;
         }))
         .catch((err) => {
-          console.warn('[redis-durable-object] Failed to resolve stale Redis client for quit', err);
+          logWarn('Failed to resolve stale Redis client for quit', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
           return undefined;
         });
     }
@@ -39,11 +40,11 @@ export async function disposeRedisDurableObjectClient(): Promise<void> {
   redisClientState = null;
   await state.clientPromise
     .then((client) => client.quit().catch((err) => {
-      console.warn('[redis-durable-object] Failed to quit Redis client during dispose', err);
+      logWarn('Failed to quit Redis client during dispose', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
       return undefined;
     }))
     .catch((err) => {
-      console.warn('[redis-durable-object] Failed to resolve Redis client for dispose', err);
+      logWarn('Failed to resolve Redis client for dispose', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
       return undefined;
     });
 }

@@ -33,7 +33,7 @@ async function ensureDir(): Promise<void> {
   try {
     await fs.mkdir(AUDIT_LOG_DIR, { recursive: true });
     dirEnsured = true;
-  } catch (err) { console.warn('[audit-log] failed to create audit log directory (non-critical)', err); }
+  } catch (err) { logger.warn('Failed to create audit log directory (non-critical)', { module: 'audit-log', error: err }); }
 }
 
 async function rotateIfNeeded(): Promise<void> {
@@ -46,17 +46,17 @@ async function rotateIfNeeded(): Promise<void> {
       const to = `${AUDIT_LOG_FILE}.${i + 1}`;
       try {
         await fs.rename(from, to);
-      } catch (err) { console.warn('[audit-log] failed to rotate audit log file (non-critical)', err); }
+      } catch (err) { logger.warn('Failed to rotate audit log file (non-critical)', { module: 'audit-log', error: err }); }
     }
 
     try {
       await fs.rename(AUDIT_LOG_FILE, `${AUDIT_LOG_FILE}.1`);
-    } catch (err) { console.warn('[audit-log] failed to rename current audit log for rotation (non-critical)', err); }
+    } catch (err) { logger.warn('Failed to rename current audit log for rotation (non-critical)', { module: 'audit-log', error: err }); }
 
     try {
       await fs.unlink(`${AUDIT_LOG_FILE}.${MAX_ROTATED_FILES + 1}`);
-    } catch (err) { console.warn('[audit-log] failed to delete oldest rotated audit log (non-critical)', err); }
-  } catch (err) { console.warn('[audit-log] failed to stat audit log for rotation check (non-critical)', err); }
+    } catch (err) { logger.warn('Failed to delete oldest rotated audit log (non-critical)', { module: 'audit-log', error: err }); }
+  } catch (err) { logger.warn('Failed to stat audit log for rotation check (non-critical)', { module: 'audit-log', error: err }); }
 }
 
 function redactCommand(cmd: string): string {

@@ -9,7 +9,8 @@ import { getUserConsentsWithClients, revokeConsent } from '../../application/ser
 import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
-import { badRequest, forbidden, notFound, conflict, internalError, parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takos/common/errors';
 import { logWarn } from '../../shared/utils/logger';
 import {
   ensureUserSettings,
@@ -51,7 +52,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .use('*', async (c, next) => {
     const user = c.get('user');
     if (user?.principal_kind && user.principal_kind !== 'user') {
-      return forbidden(c, '/api/me is only available to human accounts');
+      throw new AuthorizationError('/api/me is only available to human accounts');
     }
     await next();
   })
@@ -65,7 +66,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const personalSpace = await getOrCreatePersonalWorkspace(c.env, user.id);
 
     if (!personalSpace) {
-      return notFound(c, 'Personal space');
+      throw new NotFoundError('Personal space');
     }
 
     return c.json({ space: toPersonalSpaceResponse(personalSpace) });
@@ -90,21 +91,21 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }>(c);
 
     if (!body) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
 
     if (body.private_account !== undefined && typeof body.private_account !== 'boolean') {
-      return badRequest(c, 'private_account must be boolean');
+      throw new BadRequestError('private_account must be boolean');
     }
 
     let activityVisibility = body.activity_visibility;
     if (activityVisibility !== undefined) {
       if (typeof activityVisibility !== 'string') {
-        return badRequest(c, 'activity_visibility must be string');
+        throw new BadRequestError('activity_visibility must be string');
       }
       activityVisibility = activityVisibility.trim().toLowerCase();
       if (!['public', 'followers', 'private'].includes(activityVisibility)) {
-        return badRequest(c, 'activity_visibility must be one of public|followers|private');
+        throw new BadRequestError('activity_visibility must be one of public|followers|private');
       }
     }
 
@@ -121,13 +122,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const body = await parseJsonBody<{ username?: string }>(c);
 
     if (!body || typeof body.username !== 'string') {
-      return badRequest(c, 'username is required');
+      throw new BadRequestError('username is required');
     }
 
     const normalizedUsername = body.username.trim().replace(/^@+/, '').toLowerCase();
     const usernameError = validateUsername(normalizedUsername);
     if (usernameError) {
-      return badRequest(c, usernameError);
+      throw new BadRequestError(usernameError);
     }
 
     if (normalizedUsername === user.username) {
@@ -142,7 +143,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       .get();
 
     if (existingUser) {
-      return conflict(c, 'This username is already taken');
+      throw new ConflictError('This username is already taken');
     }
     await db.update(accounts).set({
       slug: normalizedUsername,
@@ -183,7 +184,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const success = await revokeConsent(c.env.DB, user.id, clientId);
 
     if (!success) {
-      return notFound(c, 'Consent');
+      throw new NotFoundError('Consent');
     }
 
     try {
@@ -257,21 +258,21 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const body = await parseJsonBody<ClientRegistrationRequest>(c);
 
     if (!body) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
 
     if (!body.client_name) {
-      return badRequest(c, 'client_name is required');
+      throw new BadRequestError('client_name is required');
     }
     if (!body.redirect_uris || body.redirect_uris.length === 0) {
-      return badRequest(c, 'redirect_uris is required');
+      throw new BadRequestError('redirect_uris is required');
     }
 
     try {
       const response = await createClient(c.env.DB, body, user.id);
       return c.json(response, 201);
     } catch (err) {
-      return badRequest(c, err instanceof Error ? err.message : 'Failed to create client');
+      throw new BadRequestError(err instanceof Error ? err.message : 'Failed to create client');
     }
   })
 
@@ -281,19 +282,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const body = await parseJsonBody<Partial<ClientRegistrationRequest>>(c);
 
     if (!body) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
 
     const clients = await getClientsByOwner(c.env.DB, user.id);
     const ownedClient = clients.find(cl => cl.client_id === clientId);
     if (!ownedClient) {
-      return notFound(c, 'Client');
+      throw new NotFoundError('Client');
     }
 
     try {
       const updated = await updateClient(c.env.DB, clientId, body);
       if (!updated) {
-        return notFound(c, 'Client');
+        throw new NotFoundError('Client');
       }
       return c.json({
         id: updated.id,
@@ -307,7 +308,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         status: updated.status,
       });
     } catch (err) {
-      return badRequest(c, err instanceof Error ? err.message : 'Failed to update client');
+      throw new BadRequestError(err instanceof Error ? err.message : 'Failed to update client');
     }
   })
 
@@ -318,12 +319,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const clients = await getClientsByOwner(c.env.DB, user.id);
     const ownedClient = clients.find(cl => cl.client_id === clientId);
     if (!ownedClient) {
-      return notFound(c, 'Client');
+      throw new NotFoundError('Client');
     }
 
     const success = await deleteClient(c.env.DB, clientId);
     if (!success) {
-      return internalError(c, 'Failed to delete client');
+      throw new InternalError('Failed to delete client');
     }
 
     return c.json({ success: true });
@@ -351,10 +352,10 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const body = await parseJsonBody<{ name: string; scopes?: string; expiresAt?: string }>(c);
     if (!body) {
-      return badRequest(c, 'Invalid JSON body');
+      throw new BadRequestError('Invalid JSON body');
     }
     if (!body.name?.trim()) {
-      return badRequest(c, 'name is required');
+      throw new BadRequestError('name is required');
     }
 
     const tokenBytes = generateRandomBytes(32);
@@ -399,7 +400,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     ).get();
 
     if (!token) {
-      return notFound(c, 'Token');
+      throw new NotFoundError('Token');
     }
 
     await db.delete(personalAccessTokens).where(eq(personalAccessTokens.id, tokenId));

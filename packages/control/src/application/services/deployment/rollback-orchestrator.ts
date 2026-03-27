@@ -7,6 +7,7 @@
  * focused on coordination.
  */
 import { safeJsonParseOrDefault } from '../../../shared/utils';
+import { logWarn } from '../../../shared/utils/logger';
 import type { Deployment, DeploymentEnv, RollbackInput } from './types';
 import {
   createDeploymentProvider,
@@ -229,7 +230,7 @@ export async function executeRollback(
     // Best-effort restore previous routing snapshot.
     if (routingRollbackSnapshot.length > 0) {
       await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
-        console.warn('Failed to restore routing snapshot during rollback (non-critical):', e);
+        logWarn('Failed to restore routing snapshot during rollback (non-critical)', { module: 'rollback-orchestrator', error: e instanceof Error ? e.message : String(e) });
       });
     }
     throw dbErr;
@@ -251,7 +252,7 @@ export async function executeRollback(
   if (env.WORKER_BUNDLES) {
     const snapshotKey = `deployment-snapshots/rollback-${targetDeployment.id}.json`;
     await env.WORKER_BUNDLES.delete(snapshotKey).catch((e) => {
-      console.warn('Failed to clean up rollback snapshot (non-critical):', e);
+      logWarn('Failed to clean up rollback snapshot (non-critical)', { module: 'rollback-orchestrator', error: e instanceof Error ? e.message : String(e) });
     });
   }
 

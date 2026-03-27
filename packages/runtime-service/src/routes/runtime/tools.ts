@@ -6,6 +6,9 @@ import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../sha
 import { getWorkerResourceLimits } from '../../runtime/validation.js';
 import { getErrorMessage } from '@takos/common/errors';
 import { badRequest } from '@takos/common/middleware/hono';
+import { createLogger } from '@takos/common/logger';
+const logger = createLogger({ service: 'takos-runtime' });
+
 interface ExecuteToolRequest {
   code: string;
   toolName: string;
@@ -65,7 +68,7 @@ app.post('/execute-tool', async (c) => {
         settled = true;
         clearTimeout(hardTimeout);
         // Await termination to ensure clean resource cleanup
-        worker.terminate().catch((err) => { console.warn('[runtime/tools] worker terminate failed (non-critical)', err); });
+        worker.terminate().catch((err) => { logger.warn('Worker terminate failed (non-critical)', { module: 'runtime/tools', error: err }); });
         action();
       }
 

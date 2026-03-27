@@ -1,3 +1,5 @@
+import { logWarn } from './logger.ts';
+
 export async function gzipCompressString(data: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const stream = new Blob([encoder.encode(data)]).stream();
@@ -43,7 +45,7 @@ export async function gzipDecompressToString(
 
     totalDecompressedSize += value.length;
     if (totalDecompressedSize > maxDecompressedBytes) {
-      try { reader.cancel(); } catch (err) { console.warn('[gzip] failed to cancel reader after size limit exceeded (non-critical)', err); }
+      try { reader.cancel(); } catch (err) { logWarn('Failed to cancel reader after size limit exceeded (non-critical)', { module: 'gzip', error: err instanceof Error ? err.message : String(err) }); }
       throw new Error(
         `Decompressed content exceeds limit (${Math.round(maxDecompressedBytes / 1024 / 1024)}MiB)`
       );

@@ -3,7 +3,8 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { SpaceRole } from '../../../shared/types';
-import { badRequest, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import {
   createSpaceMember,
@@ -112,7 +113,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const members = await listSpaceMembers(c.env.DB, access.space.id);
 
@@ -132,14 +132,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     if (!body.email || !body.role) {
-      return badRequest(c, 'Email and role are required');
+      throw new BadRequestError( 'Email and role are required');
     }
 
     if (body.role === 'owner') {
-      return badRequest(c, 'Cannot add owner role');
+      throw new BadRequestError( 'Cannot add owner role');
     }
 
     const targetUser = await getUserByEmail(c.env.DB, body.email);
@@ -210,14 +209,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     if (!body.role) {
-      return badRequest(c, 'Role is required');
+      throw new BadRequestError( 'Role is required');
     }
 
     if (body.role === 'owner') {
-      return badRequest(c, 'Cannot set owner role');
+      throw new BadRequestError( 'Cannot set owner role');
     }
 
     const targetMember = await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId);
@@ -282,7 +280,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const db = getDb(c.env.DB);
     const targetUser = await db.select({ id: accounts.id })

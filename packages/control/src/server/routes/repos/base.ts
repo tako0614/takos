@@ -4,13 +4,9 @@ import { z } from 'zod';
 import type { RepositoryVisibility } from '../../../shared/types';
 import { now, toIsoString } from '../../../shared/utils';
 import {
-  badRequest,
-  conflict,
-  handleDbError,
-  internalError,
-  notFound,
   requireSpaceAccess,
 } from '../shared/route-auth';
+import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from '@takos/common/errors';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
@@ -46,7 +42,7 @@ export function readableCommitErrorResponse(
   result: Extract<ResolveReadableCommitResult, { ok: false }>
 ): Response {
   if (result.reason === 'ref_not_found') {
-    return notFound(c, 'Ref');
+    throw new NotFoundError('Ref');
   }
 
   if (result.reason === 'commit_not_found') {
@@ -243,8 +239,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     user.id,
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions'
-  );
-  if (access instanceof Response) return access;
+  );
   const spaceId = access.space.id;
 
   const db = getDb(c.env.DB);
@@ -261,18 +256,23 @@ export default new Hono<AuthenticatedRouteEnv>()
     if (err instanceof RepositoryCreationError) {
       switch (err.code) {
         case 'INVALID_NAME':
-          return badRequest(c, err.message);
+          throw new BadRequestError(err.message);
         case 'SPACE_NOT_FOUND':
-          return notFound(c, err.message);
+          throw new AppError(err.message, ErrorCodes.NOT_FOUND, 404);
         case 'REPOSITORY_EXISTS':
-          return conflict(c, err.message);
+          throw new ConflictError(err.message);
         case 'GIT_STORAGE_NOT_CONFIGURED':
         case 'INIT_FAILED':
-          return internalError(c, err.message);
+          throw new InternalError(err.message);
       }
     }
     logError('Failed to create repository', err, { action: 'createRepository', userId: user.id, spaceId });
-    return handleDbError(c, err, 'workspace');
+    // Handle database constraint errors inline (replaces handleDbError)
+    const errStr = String(err);
+    if (errStr.includes('UNIQUE constraint')) throw new ConflictError('workspace already exists');
+    if (errStr.includes('FOREIGN KEY constraint')) throw new BadRequestError('Referenced workspace does not exist');
+    if (errStr.includes('NOT NULL constraint')) throw new ValidationError('Required field is missing');
+    throw new InternalError('Database operation failed');
   }
 
   const ownerUsername = await resolveOwnerUsername(db, createdRepository.space_id);
@@ -299,8 +299,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const spaceIdentifier = c.req.param('spaceId');
   const db = getDb(c.env.DB);
 
-  const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
   const spaceId = access.space.id;
 
   const ownerUsername = await resolveOwnerUsername(db, spaceId);
@@ -337,13 +336,13 @@ export default new Hono<AuthenticatedRouteEnv>()
     { allowPublicRead: true },
   );
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const repoResult = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
 
   if (!repoResult) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const userRole = user?.id ? repoAccess.role : null;
@@ -404,7 +403,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const db = getDb(c.env.DB);
@@ -421,17 +420,17 @@ export default new Hono<AuthenticatedRouteEnv>()
   if (body.default_branch !== undefined) {
     const nextDefaultBranch = body.default_branch.trim();
     if (!gitStore.isValidRefName(nextDefaultBranch)) {
-      return badRequest(c, 'Invalid default_branch');
+      throw new BadRequestError('Invalid default_branch');
     }
     const existingBranch = await gitStore.getBranch(c.env.DB, repoId, nextDefaultBranch);
     if (!existingBranch) {
-      return badRequest(c, 'default_branch does not exist');
+      throw new BadRequestError('default_branch does not exist');
     }
     data.defaultBranch = nextDefaultBranch;
   }
 
   if (Object.keys(data).length === 0) {
-    return badRequest(c, 'No valid updates provided');
+    throw new BadRequestError('No valid updates provided');
   }
 
   const timestamp = now();
@@ -459,7 +458,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   let repoObjectCandidates: Set<string> | null = null;

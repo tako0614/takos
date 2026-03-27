@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
 import type { BaseVariables } from '../shared/route-auth';
-import { notFound, errorResponse } from '../shared/route-auth';
+import { NotFoundError, AppError, ErrorCodes } from '@takos/common/errors';
 import { checkRunAccess } from './access';
 import { getPlatformServices } from '../../../platform/accessors.ts';
 
@@ -23,7 +23,7 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
     // Auth — same as WS route
     const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     // Get SSE notifier from platform services
@@ -31,7 +31,7 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
     const sseNotifier = services.sseNotifier;
     if (!sseNotifier) {
       // SSE not available (running on CF Workers — use WebSocket instead)
-      return errorResponse(c, 404, 'SSE not available in this environment. Use WebSocket endpoint instead.');
+      throw new AppError('SSE not available in this environment. Use WebSocket endpoint instead.', ErrorCodes.NOT_FOUND, 404);
     }
 
     // Parse Last-Event-ID from header or query parameter

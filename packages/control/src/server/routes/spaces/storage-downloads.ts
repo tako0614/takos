@@ -28,7 +28,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const fileId = c.req.param('fileId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
@@ -64,7 +63,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
@@ -96,7 +94,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const fileId = c.req.param('fileId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
@@ -157,7 +154,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const file = await getStorageItem(c.env.DB, access.space.id, fileId);
     if (!file) {
@@ -187,7 +183,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const path = c.req.valid('query').path || '/';
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');

@@ -19,8 +19,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       user.id,
       ['owner', 'admin'],
       'Workspace not found or insufficient permissions'
-    );
-    if (access instanceof Response) return access;
+    );
     const spaceId = access.space.id;
 
     const db = getDb(c.env.DB);

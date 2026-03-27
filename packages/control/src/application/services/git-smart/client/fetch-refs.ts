@@ -13,6 +13,7 @@
  */
 
 import { parsePktLines, pktLineText } from '../protocol/pkt-line';
+import { logWarn } from '../../../../shared/utils/logger';
 
 export interface RemoteRef {
   /** Fully qualified ref name, e.g. `refs/heads/main`. */
@@ -54,7 +55,7 @@ export async function fetchRemoteRefs(
 
   if (!response.ok) {
     const body = await response.text().catch((err) => {
-      console.warn('[fetch-refs] Failed to read error response body from remote git server', err);
+      logWarn('Failed to read error response body from remote git server', { module: 'fetch-refs', error: err instanceof Error ? err.message : String(err) });
       return '';
     });
     throw new Error(

@@ -8,27 +8,6 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('@takos/control-hosts/container-runtime', () => {
-  const MockContainer = class {
-    ctx: any;
-    env: any;
-    defaultPort = 8080;
-    sleepAfter = '15m';
-    pingEndpoint = 'internal/healthz';
-    constructor(ctx: any, env: any) {
-      this.ctx = ctx;
-      this.env = env;
-    }
-    async startAndWaitForPorts(_ports: number[]): Promise<void> {}
-    async destroy(): Promise<void> {}
-    renewActivityTimeout(): void {}
-  };
-  return {
-    Container: MockContainer,
-    HostContainerRuntime: MockContainer,
-  };
-});
-
 vi.mock('@/container-hosts/executor-proxy-config', () => ({
   generateProxyToken: vi.fn(() => 'mock-proxy-token-abc123'),
 }));

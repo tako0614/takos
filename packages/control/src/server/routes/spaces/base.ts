@@ -83,7 +83,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     const access = await requireSpaceAccess(c, 'me', user.id);
-    if (access instanceof Response) return access;
 
     const { workspace, repository } = await getWorkspaceWithRepository(c.env, access.space);
 
@@ -98,7 +97,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const { workspace, repository } = await getWorkspaceWithRepository(
       c.env,
@@ -116,7 +114,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const db = getDb(c.env.DB);
 
@@ -236,7 +233,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const updates: {
       name?: string;
@@ -302,7 +298,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const workspace = await getWorkspaceModelSettings(c.env.DB, access.space.id);
 
@@ -338,7 +333,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     // Tier-based selection (new API)
     if (body.tier !== undefined) {
@@ -397,7 +391,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       ['owner'],
       'Space not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     await deleteWorkspace(c.env.DB, access.space.id);
 
@@ -408,7 +401,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const items = await getUISidebarItems(c.env.DB, access.space.id);
     return c.json({ items });

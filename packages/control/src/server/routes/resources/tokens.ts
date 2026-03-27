@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { getResourceById, getResourceByName } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
@@ -90,7 +91,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!body.name?.trim()) {
-    return badRequest(c, 'Token name is required');
+    throw new BadRequestError( 'Token name is required');
   }
 
   const resource = await getResourceById(c.env.DB, resourceId);
@@ -156,7 +157,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!body.name?.trim()) {
-    return badRequest(c, 'Token name is required');
+    throw new BadRequestError( 'Token name is required');
   }
 
   const resource = await getResourceByName(c.env.DB, user.id, resourceName);

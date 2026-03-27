@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
-import { badRequest, parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
@@ -124,7 +125,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
   if (!resource.cf_id) {
-    return badRequest(c, 'D1 database not provisioned');
+    throw new BadRequestError( 'D1 database not provisioned');
   }
 
   try {
@@ -168,7 +169,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
   if (!resource.cf_id) {
-    return badRequest(c, 'D1 database not provisioned');
+    throw new BadRequestError( 'D1 database not provisioned');
   }
 
   const limit = parseLimit(c.req.query('limit'), 50, 1000);
@@ -182,7 +183,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
 
     const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
     if (safeName !== tableName) {
-      return badRequest(c, 'Invalid table name');
+      throw new BadRequestError( 'Invalid table name');
     }
 
     const [columns, count, rowsResult] = await Promise.all([
@@ -222,7 +223,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const body = c.req.valid('json');
 
   if (!body.sql?.trim()) {
-    return badRequest(c, 'SQL query is required');
+    throw new BadRequestError( 'SQL query is required');
   }
 
   const sqlTrimmed = body.sql.trim();
@@ -231,7 +232,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
 
   if (!resource.cf_id) {
-    return badRequest(c, 'D1 database not provisioned');
+    throw new BadRequestError( 'D1 database not provisioned');
   }
 
   try {
@@ -256,7 +257,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 
   if (!resource.cf_id) {
-    return badRequest(c, 'D1 database not provisioned');
+    throw new BadRequestError( 'D1 database not provisioned');
   }
 
   try {

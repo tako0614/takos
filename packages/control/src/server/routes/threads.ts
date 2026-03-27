@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, ThreadStatus, MessageRole } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {
@@ -34,8 +35,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const { status: statusQuery } = c.req.valid('query');
   const status = statusQuery as ThreadStatus | undefined;
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const threadsList = await listThreads(c.env.DB, access.space.id, { status });
   return c.json({ threads: threadsList });
@@ -57,12 +57,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const limit = parseLimit(validatedQuery.limit, 20, 100);
   const offset = parseOffset(validatedQuery.offset);
 
-  const access = await requireSpaceAccess(c, spaceId, user.id);
-  if (access instanceof Response) return access;
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   const resolvedSpaceId = access.space.id;
 
   if (!q) {
-    return badRequest(c, 'q is required');
+    throw new BadRequestError('q is required');
   }
 
   return c.json(await searchSpaceThreads({
@@ -88,8 +87,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     user.id,
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions'
-  );
-  if (access instanceof Response) return access;
+  );
 
   const thread = await createThread(c.env.DB, access.space.id, body);
 
@@ -102,7 +100,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json({
@@ -125,7 +123,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const mode: ThreadShareMode = body.mode === 'password' ? 'password' : 'public';
@@ -136,7 +134,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   } else if (typeof body.expires_in_days === 'number') {
     const days = body.expires_in_days;
     if (!Number.isFinite(days) || days <= 0 || days > 365) {
-      return badRequest(c, 'expires_in_days must be between 1 and 365');
+      throw new BadRequestError('expires_in_days must be between 1 and 365');
     }
     expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   }
@@ -163,7 +161,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create share';
-    return badRequest(c, message);
+    throw new BadRequestError(message);
   }
 })
 
@@ -173,7 +171,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const shares = await listThreadShares(c.env.DB, threadId);
@@ -197,12 +195,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const ok = await revokeThreadShare({ db: c.env.DB, threadId, shareId });
   if (!ok) {
-    return notFound(c, 'Share');
+    throw new NotFoundError('Share');
   }
 
   return c.json({ success: true });
@@ -222,7 +220,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const updates: { title?: string | null; locale?: 'ja' | 'en' | null; status?: ThreadStatus; context_window?: number } = {};
@@ -244,7 +242,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   }
 
   if (Object.keys(updates).length === 0) {
-    return badRequest(c, 'No valid updates provided');
+    throw new BadRequestError('No valid updates provided');
   }
 
   const thread = await updateThread(c.env.DB, threadId, updates);
@@ -258,7 +256,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   await updateThreadStatus(c.env.DB, threadId, 'deleted');
@@ -272,7 +270,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   await updateThreadStatus(c.env.DB, threadId, 'archived');
@@ -286,7 +284,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   await updateThreadStatus(c.env.DB, threadId, 'active');
@@ -305,7 +303,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await getThreadTimeline(c.env, threadId, limit, offset));
@@ -333,7 +331,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await getThreadHistory(c.env, threadId, {
@@ -361,12 +359,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const offset = parseOffset(validatedQuery.offset);
 
   if (!q) {
-    return badRequest(c, 'q is required');
+    throw new BadRequestError('q is required');
   }
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await searchThreadMessages({
@@ -395,14 +393,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const content = typeof body.content === 'string' ? body.content : '';
   const attachmentCount = Array.isArray(body.metadata?.attachments) ? body.metadata.attachments.length : 0;
 
   if (!content && attachmentCount === 0) {
-    return badRequest(c, 'Content is required');
+    throw new BadRequestError('Content is required');
   }
 
   let message;
@@ -413,7 +411,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     });
   } catch (err) {
     logError('Failed to create message', err, { action: 'create_message', threadId });
-    return internalError(c, 'Failed to create message');
+    throw new InternalError('Failed to create message');
   }
 
   return c.json({ message }, 201);
@@ -433,7 +431,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const response = await exportThread({
@@ -445,7 +443,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     format,
   });
   if (!response) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
   return response;
 });

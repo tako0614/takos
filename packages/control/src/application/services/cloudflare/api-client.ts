@@ -3,6 +3,13 @@
  *
  * All direct calls to `api.cloudflare.com` should go through this client
  * to ensure consistent auth, timeout, error handling, and retry logic.
+ *
+ * Timeout: delegates to the shared withTimeout utility (shared/utils/with-timeout)
+ * and converts timeout errors to CloudflareAPIError for retry metadata.
+ *
+ * Error handling: uses CloudflareAPIError / classifyAPIError from wfp/client.ts,
+ * intentionally separate from the generic ServiceCallError in
+ * shared/utils/service-client.ts (see that file's doc comment for rationale).
  */
 
 import {
@@ -11,6 +18,7 @@ import {
   classifyAPIError,
   createTimeoutError,
 } from '../wfp/client';
+import { withTimeout } from '../../../shared/utils/with-timeout';
 
 export interface CloudflareApiConfig {
   accountId: string;
@@ -25,21 +33,28 @@ export interface CloudflareApiConfig {
 export class CloudflareApiClient {
   constructor(private config: CloudflareApiConfig) {}
 
+  /**
+   * Delegates to the shared withTimeout utility, re-throwing timeouts as
+   * CloudflareAPIError (via createTimeoutError) to preserve the isRetryable
+   * flag expected by callers.
+   */
   private async withTimeout<T>(
     fn: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number
   ): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fn(controller.signal);
+      return await withTimeout(
+        (signal) => fn(signal!),
+        timeoutMs,
+        `Cloudflare API timeout after ${timeoutMs / 1000} seconds`,
+      );
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      // The shared withTimeout throws a plain Error on timeout.
+      // Convert to CloudflareAPIError so callers get isRetryable metadata.
+      if (error instanceof Error && error.message.startsWith('Cloudflare API timeout after')) {
         throw createTimeoutError(timeoutMs);
       }
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 

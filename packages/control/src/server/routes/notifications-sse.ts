@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../shared/types';
 import type { BaseVariables } from './shared/route-auth';
-import { errorResponse } from './shared/route-auth';
+import { AppError, ErrorCodes } from '@takos/common/errors';
 import { getPlatformServices } from '../../platform/accessors.ts';
 
 type NotificationSseRouteEnv = { Bindings: Env; Variables: BaseVariables };
@@ -23,7 +23,7 @@ export function createNotificationSseRouter(): Hono<NotificationSseRouteEnv> {
     const sseNotifier = services.sseNotifier;
     if (!sseNotifier) {
       // SSE not available (running on CF Workers — use WebSocket instead)
-      return errorResponse(c, 404, 'SSE not available in this environment. Use WebSocket endpoint instead.');
+      throw new AppError('SSE not available in this environment. Use WebSocket endpoint instead.', ErrorCodes.NOT_FOUND, 404);
     }
 
     // Parse Last-Event-ID from header or query parameter

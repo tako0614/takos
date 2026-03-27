@@ -4,6 +4,7 @@ import {
   type InMemoryDurableObjectNamespace,
 } from './in-memory-bindings.ts';
 import { readJsonFile, writeJsonFile } from './persistent-shared.ts';
+import { logWarn } from '../shared/utils/logger.ts';
 
 export function createPersistentDurableObjectNamespace(
   stateFile: string,
@@ -40,7 +41,7 @@ export function createPersistentDurableObjectNamespace(
         state.ids.push(key);
         void flushRegistry();
       }
-    }).catch((err) => console.warn('persistent-durable-objects: failed to load/flush registry on get', err));
+    }).catch((err) => logWarn('Failed to load/flush registry on get', { module: 'persistent-durable-objects', error: err instanceof Error ? err.message : String(err) }));
     return originalGet(id as Parameters<typeof originalGet>[0]);
   };
   namespace.getByName = (name: string) => namespace.get(namespace.idFromName(name));
@@ -50,7 +51,7 @@ export function createPersistentDurableObjectNamespace(
       const stub = factory?.(id) ?? createInMemoryDurableObjectNamespace().getByName(id);
       namespaces.set(id, stub);
     }
-  }).catch((err) => console.warn('persistent-durable-objects: failed to pre-load registry', err));
+  }).catch((err) => logWarn('Failed to pre-load registry', { module: 'persistent-durable-objects', error: err instanceof Error ? err.message : String(err) }));
 
   return namespace as InMemoryDurableObjectNamespace;
 }

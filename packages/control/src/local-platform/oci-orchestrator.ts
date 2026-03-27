@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { z } from 'zod';
-import { logInfo, logError } from '../shared/utils/logger.ts';
+import { logInfo, logError, logWarn } from '../shared/utils/logger.ts';
 import { serveNodeFetch } from './fetch-server.ts';
 import type { ContainerBackend } from './container-backend.ts';
 import { DockerContainerBackend } from './docker-container-backend.ts';
@@ -277,7 +277,7 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
         try {
           await backend.stop(cName);
           await backend.remove(cName);
-        } catch (err) { console.warn('[oci-orchestrator] stop/remove pre-existing container by name failed (non-critical)', err); }
+        } catch (err) { logWarn('stop/remove pre-existing container by name failed (non-critical)', { module: 'oci-orchestrator', error: err instanceof Error ? err.message : String(err) }); }
 
         await appendServiceLog(payload.space_id, routeRef, `PULLING ${imageRef}`);
         await backend.pullImage(imageRef);
@@ -328,7 +328,7 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
           try {
             await backend.stop(newContainerId);
             await backend.remove(newContainerId);
-          } catch (err) { console.warn('[oci-orchestrator] cleanup of partially created container failed (non-critical)', err); }
+          } catch (err) { logWarn('cleanup of partially created container failed (non-critical)', { module: 'oci-orchestrator', error: err instanceof Error ? err.message : String(err) }); }
         }
         return c.json({
           error: 'Container deployment failed',

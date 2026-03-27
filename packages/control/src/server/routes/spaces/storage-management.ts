@@ -31,7 +31,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const db = getDb(c.env.DB);
     const handlers = await db.select()
@@ -78,7 +77,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const path = queryPath || '/';
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const result = await listStorageFiles(c.env.DB, access.space.id, path);
 
@@ -99,7 +97,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
     if (!body.name) {
@@ -125,7 +122,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const fileId = c.req.param('fileId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) return access;
 
     const file = await getStorageItem(c.env.DB, access.space.id, fileId);
     if (!file) {
@@ -149,7 +145,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     try {
       const r2KeysToDelete = await deleteStorageItem(c.env.DB, access.space.id, fileId);
@@ -183,7 +178,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
 
@@ -234,7 +228,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
     if (!Array.isArray(body.file_ids) || body.file_ids.length === 0) {
@@ -280,7 +273,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
     if (!Array.isArray(body.file_ids) || body.file_ids.length === 0) {
@@ -327,7 +319,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
     if (!Array.isArray(body.renames) || body.renames.length === 0) {

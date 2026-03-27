@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import { logWarn } from '../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -294,14 +295,14 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
       if (subClient) {
         disconnects.push(
           subClient.quit().catch((err) => {
-            console.warn('[sse-notifier] Failed to quit Redis subscriber client', err);
+            logWarn('Failed to quit Redis subscriber client', { module: 'sse-notifier', error: err instanceof Error ? err.message : String(err) });
           }),
         );
       }
       if (pubClient) {
         disconnects.push(
           pubClient.quit().catch((err) => {
-            console.warn('[sse-notifier] Failed to quit Redis publisher client', err);
+            logWarn('Failed to quit Redis publisher client', { module: 'sse-notifier', error: err instanceof Error ? err.message : String(err) });
           }),
         );
       }

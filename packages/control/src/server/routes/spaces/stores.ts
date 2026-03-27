@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
-  badRequest,
-  notFound,
   requireSpaceAccess,
   type AuthenticatedRouteEnv,
 } from '../shared/route-auth';
+import { BadRequestError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import {
   createActivityPubStore,
@@ -27,7 +26,6 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/stores', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
-    if (access instanceof Response) return access;
 
     try {
       const stores = await listActivityPubStoresForWorkspace(c.env.DB, access.space.id);
@@ -52,11 +50,10 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
       if (!body.slug?.trim()) {
-        return badRequest(c, 'slug is required');
+        throw new BadRequestError( 'slug is required');
       }
 
       try {
@@ -79,7 +76,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         }, 201);
       } catch (error) {
         if (error instanceof Error) {
-          return badRequest(c, error.message);
+          throw new BadRequestError( error.message);
         }
         logError('Failed to create workspace store', error, { module: 'routes/spaces/stores' });
         throw new InternalError('Failed to create store');
@@ -90,7 +87,6 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const user = c.get('user');
       const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-      if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
 
@@ -101,7 +97,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           iconUrl: body.icon_url,
         });
         if (!store) {
-          return notFound(c, 'Store');
+          throw new NotFoundError( 'Store');
         }
 
         return c.json({
@@ -117,7 +113,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         });
       } catch (error) {
         if (error instanceof Error) {
-          return badRequest(c, error.message);
+          throw new BadRequestError( error.message);
         }
         logError('Failed to update workspace store', error, { module: 'routes/spaces/stores' });
         throw new InternalError('Failed to update store');
@@ -126,17 +122,16 @@ export default new Hono<AuthenticatedRouteEnv>()
   .delete('/:spaceId/stores/:storeSlug', async (c) => {
     const user = c.get('user');
     const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
-    if (access instanceof Response) return access;
 
     try {
       const deleted = await deleteActivityPubStore(c.env.DB, access.space.id, c.req.param('storeSlug'));
       if (!deleted) {
-        return notFound(c, 'Store');
+        throw new NotFoundError( 'Store');
       }
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof Error) {
-        return badRequest(c, error.message);
+        throw new BadRequestError( error.message);
       }
       logError('Failed to delete workspace store', error, { module: 'routes/spaces/stores' });
       throw new InternalError('Failed to delete store');

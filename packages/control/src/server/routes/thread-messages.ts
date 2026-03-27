@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, MessageRole } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {
@@ -25,7 +26,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await getThreadTimeline(c.env, threadId, limit, offset));
@@ -53,7 +54,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await getThreadHistory(c.env, threadId, {
@@ -81,12 +82,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const offset = parseOffset(validatedQuery.offset);
 
   if (!q) {
-    return badRequest(c, 'q is required');
+    throw new BadRequestError('q is required');
   }
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   return c.json(await searchThreadMessages({
@@ -115,14 +116,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
-    return notFound(c, 'Thread');
+    throw new NotFoundError('Thread');
   }
 
   const content = typeof body.content === 'string' ? body.content : '';
   const attachmentCount = Array.isArray(body.metadata?.attachments) ? body.metadata.attachments.length : 0;
 
   if (!content && attachmentCount === 0) {
-    return badRequest(c, 'Content is required');
+    throw new BadRequestError('Content is required');
   }
 
   let message;
@@ -133,7 +134,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     });
   } catch (err) {
     logError('Failed to create message', err, { action: 'create_message', threadId });
-    return internalError(c, 'Failed to create message');
+    throw new InternalError('Failed to create message');
   }
 
   return c.json({ message }, 201);

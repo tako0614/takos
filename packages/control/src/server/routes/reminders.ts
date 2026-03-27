@@ -7,7 +7,8 @@ import type {
   ReminderPriority,
 } from '../../shared/types';
 import { checkSpaceAccess } from '../../shared/utils';
-import { forbidden, notFound, internalError, parseLimit, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseLimit, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { AuthorizationError, NotFoundError, InternalError } from '@takos/common/errors';
 import { zValidator } from './zod-validator';
 import {
   listReminders,
@@ -31,9 +32,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) {
-      return access;
-    }
 
     const validatedQuery = c.req.valid('query');
     const status = validatedQuery.status as ReminderStatus | undefined;
@@ -54,12 +52,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const reminder = await getReminderById(c.env.DB, reminderId);
     if (!reminder) {
-      return notFound(c, 'Reminder');
+      throw new NotFoundError('Reminder');
     }
 
     const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id);
     if (!access) {
-      return forbidden(c);
+      throw new AuthorizationError();
     }
 
     return c.json(reminder);
@@ -79,9 +77,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
 
     const access = await requireSpaceAccess(c, spaceId, user.id);
-    if (access instanceof Response) {
-      return access;
-    }
 
     const body = c.req.valid('json');
 
@@ -96,7 +91,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     });
 
     if (!reminder) {
-      return internalError(c, 'Failed to create reminder');
+      throw new InternalError('Failed to create reminder');
     }
     return c.json(reminder, 201);
   })
@@ -116,12 +111,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const reminder = await getReminderById(c.env.DB, reminderId);
     if (!reminder) {
-      return notFound(c, 'Reminder');
+      throw new NotFoundError('Reminder');
     }
 
     const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return forbidden(c);
+      throw new AuthorizationError();
     }
 
     const body = c.req.valid('json');
@@ -144,12 +139,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const reminder = await getReminderById(c.env.DB, reminderId);
     if (!reminder) {
-      return notFound(c, 'Reminder');
+      throw new NotFoundError('Reminder');
     }
 
     const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return forbidden(c);
+      throw new AuthorizationError();
     }
 
     await deleteReminder(c.env.DB, reminderId);
@@ -164,12 +159,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const reminder = await getReminderById(c.env.DB, reminderId);
     if (!reminder) {
-      return notFound(c, 'Reminder');
+      throw new NotFoundError('Reminder');
     }
 
     const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
-      return forbidden(c);
+      throw new AuthorizationError();
     }
 
     const updated = await triggerReminder(c.env.DB, reminderId);

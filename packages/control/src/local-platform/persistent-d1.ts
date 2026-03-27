@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Pool, type PoolClient, type QueryResult } from 'pg';
 import type { D1PreparedStatement } from '../shared/types/bindings.ts';
 import { classifyTransactionSql, isExactTransactionControlSql, normalizePostgresSql, type ServerD1Database } from './d1-shared.ts';
+import { logWarn } from '../shared/utils/logger.ts';
 import {
   ensurePostgresAccountsTableShape,
   ensurePostgresServicesTableShape,
@@ -123,7 +124,7 @@ export async function createPostgresD1Database(connectionString: string): Promis
       } catch (error) {
         if (transactionKind === 'commit') {
           await client.query('ROLLBACK').catch((e) => {
-            console.warn('ROLLBACK failed after transaction error (non-critical):', e);
+            logWarn('ROLLBACK failed after transaction error (non-critical)', { module: 'persistent-d1', error: e instanceof Error ? e.message : String(e) });
           });
         }
         await releaseTransactionClient();

@@ -34,7 +34,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
@@ -77,7 +76,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
 
@@ -131,7 +129,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
@@ -174,7 +171,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions'
     );
-    if (access instanceof Response) return access;
 
     const body = c.req.valid('json');
     if (!body.file_id) {

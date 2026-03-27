@@ -61,7 +61,6 @@ export async function startSession(
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions',
   );
-  if (access instanceof Response) return access;
 
   const repoId = body.repo_id;
   const branch = body.branch;
@@ -165,7 +164,6 @@ export async function stopSession(
     'Permission denied - only workspace owners and admins can stop sessions',
     403,
   );
-  if (access instanceof Response) return access;
 
   if (session.status !== 'running') {
     throw new BadRequestError('Session is not running');
@@ -277,7 +275,6 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     'Permission denied - only workspace owners and admins can resume sessions',
     403,
   );
-  if (access instanceof Response) return access;
 
   if (sessionRow.status !== 'stopped') {
     throw new BadRequestError('Session is not stopped');

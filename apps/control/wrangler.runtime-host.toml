@@ -9,7 +9,7 @@
 # deploying.
 
 name = "takos-runtime-host"
-main = "src/runtime-host.ts"
+main = "../../packages/control/src/runtime/container-hosts/runtime-host.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
