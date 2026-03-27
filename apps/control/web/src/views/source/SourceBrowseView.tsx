@@ -1,0 +1,126 @@
+import type { RefObject } from 'react';
+import { Icons } from '../../lib/Icons';
+import { useI18n } from '../../store/i18n';
+import { CatalogRepoCard } from './components/CatalogRepoCard';
+import type { SourceItem, SourceItemTakopack, SourceFilter } from '../../hooks/useSourceData';
+
+interface SourceBrowseViewProps {
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+  items: SourceItem[];
+  loading: boolean;
+  hasMore: boolean;
+  filter: SourceFilter;
+  installingId: string | null;
+  getItemTakopack: (item: SourceItem) => SourceItemTakopack;
+  onSelect: (item: SourceItem) => void;
+  onInstall: (item: SourceItem) => void;
+  onStar: (item: SourceItem) => void;
+  onOpenRepo: (item: SourceItem) => void;
+  onRollback: (item: SourceItem) => void;
+  onUninstall: (item: SourceItem) => void;
+  loadMore: () => void;
+  isAuthenticated: boolean;
+  onRequireLogin: () => void;
+  onCreateRepo: () => void;
+}
+
+export function SourceBrowseView({
+  scrollContainerRef,
+  onScroll,
+  items,
+  loading,
+  hasMore,
+  filter,
+  installingId,
+  getItemTakopack,
+  onSelect,
+  onInstall,
+  onStar,
+  onOpenRepo,
+  onRollback,
+  onUninstall,
+  loadMore,
+  isAuthenticated,
+  onRequireLogin,
+  onCreateRepo,
+}: SourceBrowseViewProps) {
+  const { t } = useI18n();
+
+  return (
+    <div ref={scrollContainerRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-3 pb-6">
+      {loading && items.length === 0 && (
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 pt-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+            <div key={i} className="rounded-2xl bg-white dark:bg-zinc-800 h-44 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <Icons.Search className="w-7 h-7 text-zinc-400 opacity-60" />
+          </div>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {filter === 'mine' ? t('noRepositoriesYet')
+              : filter === 'starred' ? t('noStarredRepositories')
+              : t('nothingFound')}
+          </p>
+          {filter === 'mine' && (
+            <button
+              type="button"
+              className="px-5 py-2 rounded-full bg-blue-600 dark:bg-blue-500 text-white text-sm font-medium hover:bg-blue-700 dark:hover:bg-blue-400 transition-colors"
+              onClick={() => {
+                if (!isAuthenticated) {
+                  onRequireLogin();
+                  return;
+                }
+                onCreateRepo();
+              }}
+            >
+              {t('createRepository')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 pt-1">
+            {items.map((item) => (
+              <CatalogRepoCard
+                key={item.id}
+                item={item}
+                takopack={getItemTakopack(item)}
+                installingId={installingId}
+                onSelect={onSelect}
+                onInstall={onInstall}
+                onStar={onStar}
+                onOpenRepo={onOpenRepo}
+                onManage={(action, itm) => {
+                  if (action === 'rollback') onRollback(itm);
+                  else onUninstall(itm);
+                }}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loading}
+                className="px-6 py-2.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
+              >
+                {loading ? <Icons.Loader className="w-4 h-4 animate-spin inline mr-1.5" /> : null}
+                {t('loadMore')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

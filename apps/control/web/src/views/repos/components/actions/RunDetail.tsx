@@ -1,5 +1,5 @@
 import { Icons } from '../../../../lib/Icons';
-import { useI18n } from '../../../../providers/I18nProvider';
+import { useI18n } from '../../../../store/i18n';
 import type { WorkflowRunDetail, JobLogState } from './types';
 import { statusBadge } from './types';
 import { JobCard } from './JobCard';

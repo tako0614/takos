@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolHandler } from '../types';
 import { FILE_TOOLS, FILE_HANDLERS } from './file';
-import { RUNTIME_TOOLS, RUNTIME_HANDLERS } from './runtime';
+import { RUNTIME_TOOLS, RUNTIME_HANDLERS } from './runtime-tool-executor';
 import { STORAGE_TOOLS, STORAGE_HANDLERS } from './storage';
 import { MEMORY_TOOLS, MEMORY_HANDLERS } from './memory';
 import { INFO_UNIT_TOOLS, INFO_UNIT_HANDLERS } from './info-unit';
@@ -131,23 +131,3 @@ export function getToolsByCategory(category: keyof typeof TOOL_CATEGORIES): Tool
   const names = TOOL_CATEGORIES[category];
   return BUILTIN_TOOLS.filter(t => names.includes(t.name as never));
 }
-
-export * from './container';
-export * from './repo';
-export * from './file';
-export * from './platform';
-export * from './runtime';
-export * from './storage';
-export * from './memory';
-export * from './info-unit';
-export * from './web';
-export * from './artifact';
-export * from './deploy';
-export * from './agent';
-export * from './mcp';
-export * from './space-files';
-export * from './space-common-env';
-export * from './space-skills';
-export * from './space-app-deployments';
-export * from './space-source';
-export * from './browser';

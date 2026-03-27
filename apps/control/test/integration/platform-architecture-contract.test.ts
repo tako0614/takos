@@ -194,10 +194,6 @@ describe('platform architecture contract', () => {
       'src/server/routes/apps.ts',
       'src/server/routes/workers/slug.ts',
       'src/application/services/platform/custom-domains.ts',
-      'src/application/services/platform/bundle-deployment-orchestrator.ts',
-      'src/application/services/takopack/tools.ts',
-      'src/application/services/takopack/compensation.ts',
-      'src/application/services/takopack/workers.ts',
     ];
 
     for (const relativePath of scopedFiles) {
@@ -246,23 +242,19 @@ describe('platform architecture contract', () => {
     }
   });
 
-  it('keeps Prisma service storage pointed at services/route deployment fields', () => {
-    const prismaSchema = readApp('db/prisma/schema.prisma');
+  it('keeps baseline SQL service storage pointed at services/route deployment fields', () => {
+    const baselineSql = readApp('db/migrations/0001_baseline.sql');
 
-    expect(prismaSchema).toContain('model Service {');
-    expect(prismaSchema).toContain('routeRef  String?  @unique  @map("route_ref")');
-    expect(prismaSchema).toContain('activeDeploymentId  String?  @map("active_deployment_id")');
-    expect(prismaSchema).toContain('fallbackDeploymentId  String?  @map("fallback_deployment_id")');
-    expect(prismaSchema).toContain('activeServices  Service[]  @relation("ServiceActiveDeployment")');
-    expect(prismaSchema).toContain('model ServiceBinding {');
-    expect(prismaSchema).toContain('model ServiceCommonEnvLink {');
-    expect(prismaSchema).toContain('model ServiceEnvVar {');
-    expect(prismaSchema).toContain('model ServiceRuntimeSetting {');
-    expect(prismaSchema).toContain('@@map("services")');
-    expect(prismaSchema).not.toContain('workerName  String?  @unique  @map("worker_name")');
-    expect(prismaSchema).not.toContain('currentDeploymentId  String?  @map("current_deployment_id")');
-    expect(prismaSchema).not.toContain('previousDeploymentId  String?  @map("previous_deployment_id")');
-    expect(prismaSchema).not.toContain('@@map("workers")');
+    expect(baselineSql).toContain('CREATE TABLE "services"');
+    expect(baselineSql).toContain('"route_ref"');
+    expect(baselineSql).toContain('"active_deployment_id"');
+    expect(baselineSql).toContain('"fallback_deployment_id"');
+    expect(baselineSql).toContain('CREATE TABLE "service_bindings"');
+    expect(baselineSql).toContain('CREATE TABLE "service_common_env_links"');
+    expect(baselineSql).toContain('CREATE TABLE "service_env_vars"');
+    expect(baselineSql).toContain('CREATE TABLE "service_runtime_settings"');
+    expect(baselineSql).not.toContain('"current_deployment_id"');
+    expect(baselineSql).not.toContain('"previous_deployment_id"');
   });
 
   it('keeps local runtime scripts pointed at canonical package entrypoints without public node-wrapper exports', () => {

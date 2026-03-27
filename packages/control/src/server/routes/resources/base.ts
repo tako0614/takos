@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ResourceType } from '../../../shared/types';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { badRequest, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   checkResourceAccess,
@@ -50,7 +50,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   if (spaceId) {
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -204,7 +204,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   let spaceId = body.space_id?.trim() || '';
 
   if (spaceId) {
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,

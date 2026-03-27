@@ -1,8 +1,8 @@
 import { Fragment, useState, useEffect } from 'react';
 import { Icons } from '../../../lib/Icons';
 import type { RepoFile } from '../../../types';
-import { useI18n } from '../../../providers/I18nProvider';
-import { rpc, rpcJson } from '../../../lib/rpc';
+import { useI18n } from '../../../store/i18n';
+import { rpcJson, repoTree } from '../../../lib/rpc';
 
 interface FileTreeProps {
   repoId: string;
@@ -30,11 +30,7 @@ export function FileTree({ repoId, branch, basePath = '', onFileSelect }: FileTr
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await (rpc.repos[':repoId'] as any).tree[':ref'].$get({
-        param: { repoId, ref: branch },
-        query: currentPath ? { path: currentPath } : {},
-      });
+      const res = await repoTree(repoId, branch, currentPath ? { path: currentPath } : undefined);
       if (!res.ok) {
         let apiError = t('failedToFetchFiles');
         try {

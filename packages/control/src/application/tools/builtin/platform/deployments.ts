@@ -3,7 +3,7 @@ import { generateId, now, toIsoString } from '../../../../shared/utils';
 import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { deleteHostnameRouting } from '../../../services/routing/service';
-import { deleteCloudflareCustomHostname } from '../../../../platform/providers/cloudflare/custom-domains.ts';
+import { deleteCloudflareCustomHostname } from '../../../services/platform/custom-domains.ts';
 import { getServiceRouteRecord } from '../../../services/platform/workers';
 
 export const WORKER_LIST: ToolDefinition = {

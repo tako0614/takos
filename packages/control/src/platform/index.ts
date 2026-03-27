@@ -1,3 +1,43 @@
-export * from './accessors.ts';
-export * from './context.ts';
-export * from './types.ts';
+export {
+  getPlatform,
+  getPlatformBindings,
+  getPlatformConfig,
+  getPlatformServices,
+  getPlatformService,
+  getPlatformSqlBinding,
+  getPlatformSessionStore,
+  getPlatformRunNotifier,
+  getPlatformRuntimeHost,
+  getPlatformExecutorHost,
+  getPlatformBrowserHost,
+  getPlatformGitObjects,
+  getPlatformTenantSource,
+  getPlatformWorkflowQueue,
+} from './accessors.ts';
+
+export type {
+  PlatformContextVariables,
+  PlatformContext,
+} from './context.ts';
+export {
+  setPlatformContext,
+  getPlatformContext,
+} from './context.ts';
+
+export type {
+  PlatformSource,
+  PlatformServiceBinding,
+  WorkersDispatchDeployProviderConfig,
+  OciDeployProviderConfig,
+  EcsDeployProviderConfig,
+  CloudRunDeployProviderConfig,
+  K8sDeployProviderConfig,
+  PlatformDeployProviderConfig,
+  PlatformDeployProviderRegistry,
+  PlatformConfig,
+  PlatformRoutingService,
+  PlatformQueues,
+  PlatformObjects,
+  PlatformServices,
+  ControlPlatform,
+} from './types.ts';

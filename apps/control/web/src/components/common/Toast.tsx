@@ -1,47 +1,12 @@
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from '../../lib/Icons';
 import type { Toast } from '../../types';
-import { ToastContext } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  useEffect(() => {
-    const timeouts = timeoutsRef.current;
-    return () => {
-      timeouts.forEach((timeout) => clearTimeout(timeout));
-      timeouts.clear();
-    };
-  }, []);
-
-  const showToast = useCallback((type: Toast['type'], message: string) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setToasts(prev => [...prev, { id, type, message }]);
-    const timeoutId = setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-      timeoutsRef.current.delete(id);
-    }, 4000);
-    timeoutsRef.current.set(id, timeoutId);
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    const timeoutId = timeoutsRef.current.get(id);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutsRef.current.delete(id);
-    }
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  const contextValue = { toasts, showToast, dismissToast };
-
-  return (
-    <ToastContext.Provider value={contextValue}>
-      {children}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </ToastContext.Provider>
-  );
+/** Renders the global toast list. No provider needed -- reads Jotai atoms directly. */
+export function ToastRenderer() {
+  const { toasts, dismissToast } = useToast();
+  return <ToastContainer toasts={toasts} onDismiss={dismissToast} />;
 }
 
 const iconClasses: Record<Toast['type'], string> = {

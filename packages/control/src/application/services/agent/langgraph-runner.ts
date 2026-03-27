@@ -23,7 +23,7 @@ import { RunCancelledError } from './run-lifecycle';
 import { withTimeout } from '../../../shared/utils/with-timeout';
 import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
-import type { AgentMemoryRuntime } from '../memory-graph/runtime';
+import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
 
 type ToolExecutionRecord = {
   name: string;

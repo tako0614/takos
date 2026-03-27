@@ -13,6 +13,7 @@ function normalizeHostname(hostname: string): string {
 import { isPrivateIP } from '@takos/common/validation';
 import { validateEgressEnv, createEnvGuard } from '../../shared/utils/validate-env';
 import { logError, logInfo, logWarn } from '../../shared/utils/logger';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
 
 interface Env {
   RATE_LIMITER_DO?: DurableObjectNamespace;
@@ -204,10 +205,9 @@ export default {
     // Validate environment on first request (cached).
     const envError = envGuard(env as unknown as Record<string, unknown>);
     if (envError) {
-      return new Response(JSON.stringify({
-        error: 'Configuration Error',
+      return errorJsonResponse('Configuration Error', 503, {
         message: 'Egress worker is misconfigured. Please contact administrator.',
-      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      });
     }
 
     const startedAt = Date.now();
@@ -216,14 +216,14 @@ export default {
     const isInternal = request.headers.get('X-Takos-Internal') === '1';
 
     if (!isInternal) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Unauthorized', 401);
     }
 
     let url: URL;
     try {
       url = new URL(request.url);
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid URL' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Invalid URL', 400);
     }
 
     const spaceId = request.headers.get('X-Takos-Space-Id');
@@ -231,27 +231,27 @@ export default {
     const mode = request.headers.get('X-Takos-Egress-Mode');
 
     if (!['http:', 'https:'].includes(url.protocol)) {
-      return new Response(JSON.stringify({ error: 'Only HTTP/HTTPS URLs are allowed' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Only HTTP/HTTPS URLs are allowed', 400);
     }
 
     if (url.username || url.password) {
-      return new Response(JSON.stringify({ error: 'URLs with credentials are not allowed' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('URLs with credentials are not allowed', 400);
     }
 
     url.hostname = normalizeHostname(url.hostname);
 
     if (!url.hostname.includes('.') && !url.hostname.includes(':')) {
-      return new Response(JSON.stringify({ error: 'Hostname must be a public FQDN' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Hostname must be a public FQDN', 400);
     }
 
     const port = portOf(url);
     if (![80, 443].includes(port)) {
-      return new Response(JSON.stringify({ error: `Port ${port} is not allowed` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse(`Port ${port} is not allowed`, 400);
     }
 
     if (isBlockedHostname(url.hostname)) {
       logWarn('blocked hostname', { module: 'egress', ...{ url: safeLogUrl(url), spaceId, runId, mode } });
-      return new Response(JSON.stringify({ error: 'Access to internal/private networks is not allowed' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Access to internal/private networks is not allowed', 403);
     }
 
     let ips: string[] = [];
@@ -259,18 +259,18 @@ export default {
       ips = await resolveAllIPs(url.hostname);
     } catch (e) {
       logWarn('DNS resolve failed', { module: 'egress', ...{ url: safeLogUrl(url), err: String(e) } });
-      return new Response(JSON.stringify({ error: 'DNS resolution failed' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('DNS resolution failed', 502);
     }
 
     if (ips.length === 0) {
       logWarn('DNS resolve empty', { module: 'egress', ...{ url: safeLogUrl(url) } });
-      return new Response(JSON.stringify({ error: 'DNS resolution returned no addresses' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('DNS resolution returned no addresses', 502);
     }
 
     for (const ip of ips) {
       if (isPrivateIP(ip)) {
         logWarn('blocked resolved IP', { module: 'egress', ...{ url: safeLogUrl(url), ip } });
-        return new Response(JSON.stringify({ error: 'Resolved to private/internal IP address' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return errorJsonResponse('Resolved to private/internal IP address', 403);
       }
     }
 
@@ -281,7 +281,7 @@ export default {
     const rl = await rateLimitIfConfigured(env, spaceId);
     if (!rl.allowed) {
       logWarn('rate limited', { module: 'egress', ...{ spaceId, runId, mode, info: rl.info } });
-      return new Response(JSON.stringify({ error: 'Rate limited' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Rate limited', 429);
     }
 
     const maxBytes = Math.max(
@@ -302,7 +302,7 @@ export default {
     if (contentLength) {
       const requestSize = parseInt(contentLength, 10);
       if (requestSize > DEFAULT_MAX_REQUEST_BYTES) {
-        return new Response(JSON.stringify({ error: 'Request body too large' }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+        return errorJsonResponse('Request body too large', 413);
       }
     }
 
@@ -318,7 +318,7 @@ export default {
     } catch (e) {
       const elapsedMs = Date.now() - startedAt;
       logError('upstream fetch failed', { url: safeLogUrl(url), spaceId, runId, mode, elapsedMs, err: String(e) }, { module: 'egress' });
-      return new Response(JSON.stringify({ error: 'Upstream fetch failed' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Upstream fetch failed', 502);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -332,13 +332,13 @@ export default {
         runId,
         mode,
       } });
-      return new Response(JSON.stringify({ error: 'Redirects are not allowed' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Redirects are not allowed', 400);
     }
 
     // Early rejection if Content-Length exceeds limit
     const upstreamContentLength = upstream.headers.get('content-length');
     if (upstreamContentLength && parseInt(upstreamContentLength, 10) > maxBytes) {
-      return new Response(JSON.stringify({ error: 'Response too large' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+      return errorJsonResponse('Response too large', 502);
     }
 
     const resHeaders = new Headers();
@@ -367,7 +367,9 @@ export default {
       },
     });
 
-    upstream.body.pipeTo(writable).catch(() => {});
+    upstream.body.pipeTo(writable).catch((e) => {
+      logWarn('upstream body pipe failed (non-critical)', { module: 'egress', error: e, url: safeLogUrl(url), spaceId, runId });
+    });
 
     return new Response(readable, { status: upstream.status, headers: resHeaders });
   },

@@ -7,34 +7,41 @@ import {
   createPlatformConfig,
   createPlatformServices,
   createRoutingService,
+  getString,
+  getServiceRegistry,
 } from './shared.ts';
+import type { PlatformEnvRecord } from './shared.ts';
 import type {
   ControlPlatform,
   PlatformDeployProviderConfig,
   PlatformServiceBinding,
+  PlatformServices,
   PlatformSource,
 } from '../types.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
 
-type PlatformEnvRecord = Record<string, unknown>;
+// ---------------------------------------------------------------------------
+// PDF rendering (optional — requires puppeteer-core or puppeteer + Chrome)
+// ---------------------------------------------------------------------------
 
-function getString(env: PlatformEnvRecord, key: string): string | undefined {
-  const value = env[key];
-  return typeof value === 'string' ? value : undefined;
-}
+async function buildNodeDocuments(env: PlatformEnvRecord): Promise<PlatformServices['documents']> {
+  const cdpUrl = getString(env, 'CHROME_CDP_URL');
+  const executablePath = getString(env, 'PUPPETEER_EXECUTABLE_PATH');
 
-function getServiceRegistry(env: PlatformEnvRecord) {
-  const dispatcher = env.DISPATCHER;
-  if (!dispatcher || typeof dispatcher !== 'object') {
-    return undefined;
+  if (!cdpUrl && !executablePath) {
+    return {};
   }
-  return {
-    get(name: string, options?: { deploymentId?: string }) {
-      return (dispatcher as {
-        get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
-      }).get(name, options);
-    },
-  };
+
+  try {
+    const { createNodePdfRenderer } = await import(
+      '../providers/node/pdf-render.ts'
+    );
+    const renderPdf = createNodePdfRenderer({ cdpUrl, executablePath });
+    return { renderPdf };
+  } catch {
+    // puppeteer-core / puppeteer is not installed — degrade gracefully.
+    return {};
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +139,7 @@ function resolveSourceLabel(env: PlatformEnvRecord): PlatformSource {
 // Unified Node.js platform builder
 // ---------------------------------------------------------------------------
 
-function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings & PlatformEnvRecord): ControlPlatform<TBindings> {
+async function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings & PlatformEnvRecord): Promise<ControlPlatform<TBindings>> {
   const source = resolveSourceLabel(env);
 
   const config = createPlatformConfig({
@@ -149,6 +156,8 @@ function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings & Pla
 
   const providers = detectDeploymentProviders(env);
   const defaultName = resolveDefaultProviderName(env, providers);
+
+  const documents = await buildNodeDocuments(env);
 
   const services = createPlatformServices({
     routing: createRoutingService({
@@ -201,8 +210,10 @@ function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings & Pla
     assets: {
       binding: env.ASSETS as PlatformServiceBinding | undefined,
     },
+    documents,
     serviceRegistry: getServiceRegistry(env),
     deploymentProviders: createDeploymentProviderRegistry(providers, defaultName),
+    sseNotifier: (env as Record<string, unknown>).SSE_NOTIFIER as PlatformServices['sseNotifier'],
   });
 
   return buildPlatform(source, env, config, services);
@@ -212,14 +223,14 @@ function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings & Pla
 // Public API — matches the shape of the per-platform adapters
 // ---------------------------------------------------------------------------
 
-export function buildNodeWebPlatform(env: Env): ControlPlatform<Env> {
+export function buildNodeWebPlatform(env: Env): Promise<ControlPlatform<Env>> {
   return buildNodePlatformFromEnv(env as Env & PlatformEnvRecord);
 }
 
-export function buildNodeDispatchPlatform(env: DispatchEnv): ControlPlatform<DispatchEnv> {
+export function buildNodeDispatchPlatform(env: DispatchEnv): Promise<ControlPlatform<DispatchEnv>> {
   return buildNodePlatformFromEnv(env as DispatchEnv & PlatformEnvRecord);
 }
 
-export function buildNodeWorkerPlatform(env: WorkerEnv): ControlPlatform<WorkerEnv> {
+export function buildNodeWorkerPlatform(env: WorkerEnv): Promise<ControlPlatform<WorkerEnv>> {
   return buildNodePlatformFromEnv(env as WorkerEnv & PlatformEnvRecord);
 }

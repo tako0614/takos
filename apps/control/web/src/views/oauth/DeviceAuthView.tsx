@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { Button } from '../../components/ui/Button';
 import { ConsentLayout, ConsentLogo } from './ConsentLayout';
 import { ScopeList } from './ScopeList';

@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { createCloudflareApiClient } from '../../../../platform/providers/cloudflare/api-client.ts';
+import { createCloudflareApiClient } from '../../../services/cloudflare/api-client.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../../platform/providers/cloudflare/wfp.ts';
 import { generateId, now } from '../../../../shared/utils';
 import { getDb, resources } from '../../../../infra/db';

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useToast } from './useToast';
-import { useI18n } from '../providers/I18nProvider';
-import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import { useI18n } from '../store/i18n';
+import { useConfirmDialog } from '../store/confirm-dialog';
 import type { StorageFile } from '../types';
 
 interface UseStorageBulkOperationsParams {
@@ -38,7 +38,6 @@ interface UseStorageBulkOperationsResult {
   handleBulkRename: () => Promise<void>;
   handleBulkDelete: () => Promise<void>;
   normalizePath: (path: string) => string;
-  DialogComponent: React.ReactNode;
 }
 
 export function useStorageBulkOperations({
@@ -51,7 +50,7 @@ export function useStorageBulkOperations({
 }: UseStorageBulkOperationsParams): UseStorageBulkOperationsResult {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { confirm, DialogComponent } = useConfirmDialog();
+  const { confirm } = useConfirmDialog();
 
   const [showBulkMoveModal, setShowBulkMoveModal] = useState(false);
   const [bulkMovePath, setBulkMovePath] = useState('');
@@ -159,6 +158,5 @@ export function useStorageBulkOperations({
     handleBulkRename,
     handleBulkDelete,
     normalizePath,
-    DialogComponent,
   };
 }

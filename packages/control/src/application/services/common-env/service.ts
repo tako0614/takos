@@ -6,7 +6,6 @@ import {
   type CommonEnvReconcileTrigger,
 } from './reconcile-jobs';
 import {
-  CommonEnvRepository,
   type LinkSource,
   type SyncState,
 } from './repository';
@@ -37,29 +36,27 @@ import {
 
 export class CommonEnvService {
   private readonly jobs: CommonEnvReconcileJobStore;
-  private readonly repo: CommonEnvRepository;
   private readonly reconciler: CommonEnvReconciler;
   private readonly orchestrator: CommonEnvOrchestrator;
   private readonly txManager: D1TransactionManager;
 
   constructor(private env: Env) {
     this.jobs = new CommonEnvReconcileJobStore(env);
-    this.repo = new CommonEnvRepository(env);
-    this.reconciler = new CommonEnvReconciler(env, this.repo);
-    this.orchestrator = new CommonEnvOrchestrator(this.repo, this.jobs, this.reconciler);
+    this.reconciler = new CommonEnvReconciler(env);
+    this.orchestrator = new CommonEnvOrchestrator(env, this.jobs, this.reconciler);
     this.txManager = new D1TransactionManager(env.DB);
   }
 
   private get spaceEnvDeps() {
-    return { env: this.env, repo: this.repo, txManager: this.txManager };
+    return { env: this.env, txManager: this.txManager };
   }
 
   private get serviceLinkDeps() {
-    return { env: this.env, repo: this.repo, txManager: this.txManager };
+    return { env: this.env, txManager: this.txManager };
   }
 
   private get manualLinkDeps() {
-    return { env: this.env, repo: this.repo, txManager: this.txManager, orchestrator: this.orchestrator };
+    return { env: this.env, txManager: this.txManager, orchestrator: this.orchestrator };
   }
 
   // --- Space env CRUD ---

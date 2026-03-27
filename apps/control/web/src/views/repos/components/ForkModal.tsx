@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type CSSProperties, type FormEvent, type ChangeEvent } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { Modal, ModalFooter } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -7,7 +7,7 @@ import type { Repository, Space } from '../../../types';
 import { rpc, rpcJson } from '../../../lib/rpc';
 import { useToast } from '../../../hooks/useToast';
 import { Icons } from '../../../lib/Icons';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface ForkApiResponse {
   repository: Repository;

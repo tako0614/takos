@@ -249,7 +249,7 @@ export async function renameStorageItem(d1: D1Database, spaceId: string, fileId:
       await updateDescendantPaths(d1, spaceId, file.path, newPath, timestamp);
     } catch (err) {
       // Rollback parent update to keep consistency; preserve original error
-      try { await revertParentUpdate(db, spaceId, fileId, file.name, file.path, file.parent_id, file.updated_at); } catch { /* rollback best-effort */ }
+      try { await revertParentUpdate(db, spaceId, fileId, file.name, file.path, file.parent_id, file.updated_at); } catch (err) { console.warn('[space-storage] rename rollback of parent update failed (non-critical)', err); }
       throw err;
     }
   }
@@ -281,7 +281,7 @@ export async function moveStorageItem(d1: D1Database, spaceId: string, fileId: s
       await updateDescendantPaths(d1, spaceId, oldPath, newPath, timestamp);
     } catch (err) {
       // Rollback parent update to keep consistency; preserve original error
-      try { await revertParentUpdate(db, spaceId, fileId, file.name, file.path, file.parent_id, file.updated_at); } catch { /* rollback best-effort */ }
+      try { await revertParentUpdate(db, spaceId, fileId, file.name, file.path, file.parent_id, file.updated_at); } catch (err) { console.warn('[space-storage] move rollback of parent update failed (non-critical)', err); }
       throw err;
     }
   }
@@ -469,7 +469,7 @@ export async function cleanupOrphanedUploads(d1: D1Database, r2Bucket: R2Bucket,
 
     const r2Keys = orphans.map(o => o.r2Key).filter((k): k is string => !!k);
     if (r2Keys.length > 0) {
-      try { await deleteR2Objects(r2Bucket, r2Keys); } catch { /* best-effort */ }
+      try { await deleteR2Objects(r2Bucket, r2Keys); } catch (err) { console.warn('[space-storage] R2 orphan cleanup failed (non-critical)', err); }
     }
 
     totalCleaned += orphans.length;

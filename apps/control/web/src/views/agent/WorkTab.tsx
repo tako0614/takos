@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { useToast } from '../../hooks/useToast';
 import { useRouter } from '../../hooks/useRouter';
-import { useConfirmDialog } from '../../providers/ConfirmDialogProvider';
+import { useConfirmDialog } from '../../store/confirm-dialog';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { getErrorMessage } from '../../lib/errors';
 import { Icons } from '../../lib/Icons';
@@ -84,8 +84,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
       });
       const data = await rpcJson<{ tasks: AgentTask[] }>(res);
       setTasks(data.tasks || []);
-    } catch (err) {
-      console.error('Failed to fetch tasks:', err);
+    } catch {
       setTasks([]);
       showToast('error', t('failedToLoad'));
     } finally {
@@ -275,8 +274,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
       showToast('success', t('taskRunStarted'));
       await fetchTasks();
       navigate({ view: 'chat', spaceId, threadId, runId: runResponse.run.id, messageId: undefined });
-    } catch (err) {
-      console.error(err);
+    } catch {
       showToast('error', t('taskRunFailed'));
     } finally {
       setStartingTaskId(null);

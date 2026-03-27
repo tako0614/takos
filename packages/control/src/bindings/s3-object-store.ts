@@ -6,6 +6,10 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
   type HeadObjectCommandOutput,
   type GetObjectCommandOutput,
 } from '@aws-sdk/client-s3';
@@ -461,11 +465,100 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
     },
 
     // ----- createMultipartUpload -----
-    createMultipartUpload(
-      _key: string,
-      _options?: unknown,
-    ): never {
-      throw new Error('createMultipartUpload is not supported');
+    async createMultipartUpload(
+      key: string,
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: { contentType?: string; [k: string]: unknown } | Headers;
+      },
+    ) {
+      const contentType =
+        options?.httpMetadata instanceof Headers
+          ? options.httpMetadata.get('content-type') ?? undefined
+          : options?.httpMetadata?.contentType;
+
+      const output = await getClient().send(
+        new CreateMultipartUploadCommand({
+          Bucket: config.bucket,
+          Key: key,
+          ...(contentType ? { ContentType: contentType } : {}),
+          ...(options?.customMetadata
+            ? { Metadata: options.customMetadata }
+            : {}),
+        }),
+      );
+
+      const uploadId = output.UploadId;
+      if (!uploadId) {
+        throw new Error('S3 CreateMultipartUpload did not return an UploadId');
+      }
+
+      return {
+        key,
+        uploadId,
+
+        async uploadPart(
+          partNumber: number,
+          value: ReadableStream | ArrayBuffer | string,
+        ): Promise<{ partNumber: number; etag: string }> {
+          const body = await normaliseBody(value);
+          const partOutput = await getClient().send(
+            new UploadPartCommand({
+              Bucket: config.bucket,
+              Key: key,
+              UploadId: uploadId,
+              PartNumber: partNumber,
+              Body: body,
+            }),
+          );
+
+          const etag = (partOutput.ETag ?? '').replace(/"/g, '');
+          if (!etag) {
+            throw new Error(
+              `S3 UploadPart did not return an ETag for part ${partNumber}`,
+            );
+          }
+
+          return { partNumber, etag };
+        },
+
+        async complete(
+          parts: Array<{ partNumber: number; etag: string }>,
+        ): Promise<R2Object> {
+          await getClient().send(
+            new CompleteMultipartUploadCommand({
+              Bucket: config.bucket,
+              Key: key,
+              UploadId: uploadId,
+              MultipartUpload: {
+                Parts: parts.map((p) => ({
+                  PartNumber: p.partNumber,
+                  ETag: `"${p.etag}"`,
+                })),
+              },
+            }),
+          );
+
+          // Return the final object metadata via head
+          const obj = await store.head(key);
+          if (!obj) {
+            throw new Error(
+              `Object ${key} not found after completing multipart upload`,
+            );
+          }
+          return obj;
+        },
+
+        async abort(): Promise<void> {
+          await getClient().send(
+            new AbortMultipartUploadCommand({
+              Bucket: config.bucket,
+              Key: key,
+              UploadId: uploadId,
+            }),
+          );
+        },
+      };
     },
   };
 

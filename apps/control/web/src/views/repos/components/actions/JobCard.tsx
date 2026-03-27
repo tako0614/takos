@@ -1,6 +1,6 @@
 import { Icons } from '../../../../lib/Icons';
 import { formatDetailedRelativeDate } from '../../../../lib/format';
-import { useI18n } from '../../../../providers/I18nProvider';
+import { useI18n } from '../../../../store/i18n';
 import type { WorkflowJob, JobLogState } from './types';
 import { statusBadge } from './types';
 

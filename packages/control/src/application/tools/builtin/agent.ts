@@ -3,7 +3,7 @@ import type { RunStatus } from '../../../shared/types';
 import { getDb, runs, artifacts, threads, messages } from '../../../infra/db';
 import { createThreadRun } from '../../services/execution/run-creation';
 import { resolveRunModel } from '../../services/runs/create-thread-run-validation';
-import { createThread, updateThreadStatus } from '../../services/threads/threads';
+import { createThread, updateThreadStatus } from '../../services/threads/thread-service';
 import { getSpaceLocale } from '../../services/identity/locale';
 import {
   buildDelegationPacket,

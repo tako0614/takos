@@ -102,9 +102,7 @@ vi.mock('@/shared/utils/logger', async (importOriginal) => {
 
 import {
   CONTAINER_START,
-  CONTAINER_STATUS,
   CONTAINER_COMMIT,
-  CONTAINER_STOP,
   CREATE_REPOSITORY,
   CONTAINER_TOOLS,
   CONTAINER_HANDLERS,

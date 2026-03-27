@@ -42,7 +42,7 @@ function isValidRouteParam(key: string, value: string): boolean {
   return isValidOpaqueId(value);
 }
 
-// Fail-close guard: rejects malformed route params before they reach Prisma
+// Fail-close guard: rejects malformed route params before they reach the database
 export const validateApiOpaqueRouteParams: MiddlewareHandler<{
   Bindings: Env;
 }> = async (c, next) => {

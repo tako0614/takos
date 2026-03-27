@@ -15,7 +15,7 @@ enabled = true
 ADMIN_DOMAIN = "admin.example.com"
 TENANT_BASE_DOMAIN = "app.example.com"
 GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
-# RoutingDO rollout phase (1-4). Default is 1 when unset.
+# RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
 ROUTING_DO_PHASE = "4"
 WFP_DISPATCH_NAMESPACE = "your-dispatch-namespace"
 CF_ACCOUNT_ID = "replace-with-account-id"

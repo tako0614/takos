@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { getSpaceIdentifier } from '../../lib/spaces';
 import { useSidebarCallbacks } from './SidebarContext';
 import { ThreadList } from './ThreadList';

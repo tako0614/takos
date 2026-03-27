@@ -65,7 +65,7 @@ app.post('/execute-tool', async (c) => {
         settled = true;
         clearTimeout(hardTimeout);
         // Await termination to ensure clean resource cleanup
-        worker.terminate().catch(() => {/* best-effort */});
+        worker.terminate().catch((err) => { console.warn('[runtime/tools] worker terminate failed (non-critical)', err); });
         action();
       }
 

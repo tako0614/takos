@@ -170,7 +170,7 @@ import {
 } from '@/db/schema-services';
 
 // ---- helpers ----
-import { nowIso } from '@/db/schema-helpers';
+const nowIso = () => new Date().toISOString();
 
 // ===================================================================
 // Helper: extract column names, index names, unique index names

@@ -26,9 +26,9 @@ import { eq, and, lt } from 'drizzle-orm';
 import { revokeTokensByAuthorizationCode } from './token';
 import { toIsoString } from '../../../shared/utils';
 
-type PrismaOAuthAuthorizationCodeModel = typeof oauthAuthorizationCodes.$inferSelect;
+type OAuthAuthorizationCodeRow = typeof oauthAuthorizationCodes.$inferSelect;
 
-function toApiAuthorizationCode(row: PrismaOAuthAuthorizationCodeModel): OAuthAuthorizationCode {
+function toApiAuthorizationCode(row: OAuthAuthorizationCodeRow): OAuthAuthorizationCode {
   return {
     id: row.id,
     code_hash: row.codeHash,

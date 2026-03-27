@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getWorkspaceIdFromPath,
-  collectRequestedWorkspaceIds,
-  getScopedWorkspaceId,
-  hasWorkspaceScopeMismatch,
-  hasAnyWorkspaceScopeMismatch,
-  WORKSPACE_SCOPE_MISMATCH_ERROR,
+  getSpaceIdFromPath,
+  collectRequestedSpaceIds,
+  getScopedSpaceId,
+  hasSpaceScopeMismatch,
+  hasAnySpaceScopeMismatch,
+  SPACE_SCOPE_MISMATCH_ERROR,
 } from '../../middleware/space-scope.js';
 
 function createContext(overrides: {
@@ -28,135 +28,135 @@ function createContext(overrides: {
 }
 
 // ---------------------------------------------------------------------------
-// getWorkspaceIdFromPath
+// getSpaceIdFromPath
 // ---------------------------------------------------------------------------
 
-describe('getWorkspaceIdFromPath', () => {
+describe('getSpaceIdFromPath', () => {
   it('extracts workspace ID from /repos/:spaceId/:repo path', () => {
     const c = createContext({ path: '/repos/ws1/myrepo' });
-    expect(getWorkspaceIdFromPath(c as any)).toBe('ws1');
+    expect(getSpaceIdFromPath(c as any)).toBe('ws1');
   });
 
   it('extracts workspace ID from deeper paths', () => {
     const c = createContext({ path: '/repos/ws1/myrepo/branches' });
-    expect(getWorkspaceIdFromPath(c as any)).toBe('ws1');
+    expect(getSpaceIdFromPath(c as any)).toBe('ws1');
   });
 
   it('returns null for non-repos path', () => {
     const c = createContext({ path: '/api/health' });
-    expect(getWorkspaceIdFromPath(c as any)).toBeNull();
+    expect(getSpaceIdFromPath(c as any)).toBeNull();
   });
 
   it('returns null for too-short repos path', () => {
     const c = createContext({ path: '/repos/ws1' });
-    expect(getWorkspaceIdFromPath(c as any)).toBeNull();
+    expect(getSpaceIdFromPath(c as any)).toBeNull();
   });
 
   it('returns null for empty repos path', () => {
     const c = createContext({ path: '/repos' });
-    expect(getWorkspaceIdFromPath(c as any)).toBeNull();
+    expect(getSpaceIdFromPath(c as any)).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// collectRequestedWorkspaceIds
+// collectRequestedSpaceIds
 // ---------------------------------------------------------------------------
 
-describe('collectRequestedWorkspaceIds', () => {
+describe('collectRequestedSpaceIds', () => {
   it('returns unique non-empty strings', () => {
-    expect(collectRequestedWorkspaceIds(['ws1', 'ws2', 'ws1'])).toEqual(['ws1', 'ws2']);
+    expect(collectRequestedSpaceIds(['ws1', 'ws2', 'ws1'])).toEqual(['ws1', 'ws2']);
   });
 
   it('filters out non-string values', () => {
-    expect(collectRequestedWorkspaceIds([null, undefined, 123, 'ws1'])).toEqual(['ws1']);
+    expect(collectRequestedSpaceIds([null, undefined, 123, 'ws1'])).toEqual(['ws1']);
   });
 
   it('filters out empty strings', () => {
-    expect(collectRequestedWorkspaceIds(['', 'ws1', ''])).toEqual(['ws1']);
+    expect(collectRequestedSpaceIds(['', 'ws1', ''])).toEqual(['ws1']);
   });
 
   it('returns empty array for all-invalid input', () => {
-    expect(collectRequestedWorkspaceIds([null, undefined, '', 0])).toEqual([]);
+    expect(collectRequestedSpaceIds([null, undefined, '', 0])).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// getScopedWorkspaceId
+// getScopedSpaceId
 // ---------------------------------------------------------------------------
 
-describe('getScopedWorkspaceId', () => {
+describe('getScopedSpaceId', () => {
   it('returns scope_space_id from service token', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(getScopedWorkspaceId(c as any)).toBe('ws1');
+    expect(getScopedSpaceId(c as any)).toBe('ws1');
   });
 
   it('returns undefined when no service token', () => {
     const c = createContext({ serviceToken: null });
-    expect(getScopedWorkspaceId(c as any)).toBeUndefined();
+    expect(getScopedSpaceId(c as any)).toBeUndefined();
   });
 
   it('returns undefined when scope_space_id is not a string', () => {
     const c = createContext({ serviceToken: { scope_space_id: 123 } as any });
-    expect(getScopedWorkspaceId(c as any)).toBeUndefined();
+    expect(getScopedSpaceId(c as any)).toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// hasWorkspaceScopeMismatch
+// hasSpaceScopeMismatch
 // ---------------------------------------------------------------------------
 
-describe('hasWorkspaceScopeMismatch', () => {
+describe('hasSpaceScopeMismatch', () => {
   it('returns false when no service token', () => {
     const c = createContext({ serviceToken: null });
-    expect(hasWorkspaceScopeMismatch(c as any, 'ws1')).toBe(false);
+    expect(hasSpaceScopeMismatch(c as any, 'ws1')).toBe(false);
   });
 
   it('returns false when spaceId matches scope', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasWorkspaceScopeMismatch(c as any, 'ws1')).toBe(false);
+    expect(hasSpaceScopeMismatch(c as any, 'ws1')).toBe(false);
   });
 
   it('returns true when spaceId does not match scope', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasWorkspaceScopeMismatch(c as any, 'ws2')).toBe(true);
+    expect(hasSpaceScopeMismatch(c as any, 'ws2')).toBe(true);
   });
 
   it('returns false when spaceId is empty/null/undefined', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasWorkspaceScopeMismatch(c as any, '')).toBe(false);
-    expect(hasWorkspaceScopeMismatch(c as any, null)).toBe(false);
-    expect(hasWorkspaceScopeMismatch(c as any, undefined)).toBe(false);
+    expect(hasSpaceScopeMismatch(c as any, '')).toBe(false);
+    expect(hasSpaceScopeMismatch(c as any, null)).toBe(false);
+    expect(hasSpaceScopeMismatch(c as any, undefined)).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// hasAnyWorkspaceScopeMismatch
+// hasAnySpaceScopeMismatch
 // ---------------------------------------------------------------------------
 
-describe('hasAnyWorkspaceScopeMismatch', () => {
+describe('hasAnySpaceScopeMismatch', () => {
   it('returns false when all match', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasAnyWorkspaceScopeMismatch(c as any, ['ws1', 'ws1'])).toBe(false);
+    expect(hasAnySpaceScopeMismatch(c as any, ['ws1', 'ws1'])).toBe(false);
   });
 
   it('returns true when any mismatch', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasAnyWorkspaceScopeMismatch(c as any, ['ws1', 'ws2'])).toBe(true);
+    expect(hasAnySpaceScopeMismatch(c as any, ['ws1', 'ws2'])).toBe(true);
   });
 
   it('returns false for empty array', () => {
     const c = createContext({ serviceToken: { scope_space_id: 'ws1' } });
-    expect(hasAnyWorkspaceScopeMismatch(c as any, [])).toBe(false);
+    expect(hasAnySpaceScopeMismatch(c as any, [])).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// WORKSPACE_SCOPE_MISMATCH_ERROR
+// SPACE_SCOPE_MISMATCH_ERROR
 // ---------------------------------------------------------------------------
 
-describe('WORKSPACE_SCOPE_MISMATCH_ERROR', () => {
+describe('SPACE_SCOPE_MISMATCH_ERROR', () => {
   it('is the expected string', () => {
-    expect(WORKSPACE_SCOPE_MISMATCH_ERROR).toBe(
+    expect(SPACE_SCOPE_MISMATCH_ERROR).toBe(
       'Token workspace scope does not match requested workspace',
     );
   });

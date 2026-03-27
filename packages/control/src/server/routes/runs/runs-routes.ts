@@ -27,7 +27,7 @@ type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
 import { zValidator } from '../zod-validator';
 
-type PrismaArtifactRow = {
+type ArtifactRow = {
   id: string;
   runId: string;
   accountId: string;
@@ -53,7 +53,7 @@ type RunNotifierNamespace = {
   get(id: unknown): { fetch(input: unknown, init?: unknown): Promise<Response> };
 };
 
-function prismaArtifactToApi(row: PrismaArtifactRow): Artifact {
+function artifactRowToApi(row: ArtifactRow): Artifact {
   return {
     id: row.id,
     run_id: row.runId,
@@ -193,7 +193,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     const rows = await db.select().from(artifacts).where(eq(artifacts.runId, runId)).orderBy(asc(artifacts.createdAt)).all();
 
     return c.json({
-      artifacts: rows.map((row) => prismaArtifactToApi(row as unknown as PrismaArtifactRow)),
+      artifacts: rows.map((row) => artifactRowToApi(row as unknown as ArtifactRow)),
     });
   });
 
@@ -239,7 +239,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
       }).returning().get();
 
       return c.json({
-        artifact: prismaArtifactToApi(created as unknown as PrismaArtifactRow),
+        artifact: artifactRowToApi(created as unknown as ArtifactRow),
       }, 201);
     },
   );
@@ -260,7 +260,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     }
 
     return c.json({
-      artifact: prismaArtifactToApi(artifactRow as unknown as PrismaArtifactRow),
+      artifact: artifactRowToApi(artifactRow as unknown as ArtifactRow),
     });
   });
 }

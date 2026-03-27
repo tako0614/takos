@@ -14,7 +14,7 @@ vi.mock('@/services/runs/create-thread-run-validation', () => ({
   resolveRunModel: vi.fn(),
 }));
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   createThread: vi.fn(),
   updateThreadStatus: vi.fn(),
 }));
@@ -76,7 +76,7 @@ vi.mock('@/db', () => {
 import { spawnAgentHandler, waitAgentHandler } from '@/tools/builtin/agent';
 import { createThreadRun } from '@/services/execution/run-creation';
 import { resolveRunModel } from '@/services/runs/create-thread-run-validation';
-import { createThread, updateThreadStatus } from '@/services/threads/threads';
+import { createThread, updateThreadStatus } from '@/services/threads/thread-service';
 import { getSpaceLocale } from '@/services/identity/locale';
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {

@@ -13,7 +13,7 @@ export interface ResourceOrphanGcSummary {
 }
 
 /**
- * Garbage-collect orphaned takopack resources.
+ * Garbage-collect orphaned app deployment resources.
  * Resources are marked as orphaned (orphaned_at set) when removed from a manifest during update.
  * After the grace period, this job permanently deletes the Cloudflare resource and DB record.
  */

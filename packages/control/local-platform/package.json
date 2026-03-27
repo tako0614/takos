@@ -14,7 +14,6 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./bootstrap": "./src/bootstrap.ts",
     "./runtime": "./src/runtime.ts",
     "./web": "./src/web.ts",
     "./dispatch": "./src/dispatch.ts",
@@ -26,6 +25,9 @@
     "./run-smoke": "./src/run-smoke.ts",
     "./run-smoke-proxyless": "./src/run-smoke-proxyless.ts",
     "./package.json": "./package.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
   },
   "files": [
     "src",

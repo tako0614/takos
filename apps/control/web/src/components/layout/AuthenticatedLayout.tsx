@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useSetAtom } from 'jotai';
 import { UnifiedSidebar } from '../navigation/UnifiedSidebar';
 import { SidebarProvider, type SidebarCallbacks } from '../navigation/SidebarContext';
 import { MobileBottomNav, type NavItem } from './MobileBottomNav';
@@ -6,10 +7,10 @@ import { MobileDrawer } from './MobileDrawer';
 import { MobileHeader } from './MobileHeader';
 import { getSpaceIdentifier } from '../../lib/spaces';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useI18n } from '../../providers/I18nProvider';
-import { useAuth } from '../../contexts/AuthContext';
-import { useModals } from '../../contexts/ModalContext';
-import { useNavigation } from '../../contexts/NavigationContext';
+import { useI18n } from '../../store/i18n';
+import { useAuth } from '../../hooks/useAuth';
+import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal';
+import { useNavigation } from '../../store/navigation';
 import type { View } from '../../types';
 
 function getMobileActiveItem(view: View): NavItem {
@@ -28,11 +29,9 @@ export function AuthenticatedLayout({ children }: { children: React.ReactNode })
   const { t } = useI18n();
   const { isMobile } = useBreakpoint();
   const { user, handleLogout: authLogout } = useAuth();
-  const {
-    setShowCreateSpace,
-    setShowAgentModal,
-    setShowSearch,
-  } = useModals();
+  const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
+  const setShowAgentModal = useSetAtom(showAgentModalAtom);
+  const setShowSearch = useSetAtom(showSearchAtom);
   const {
     route,
     navigate,

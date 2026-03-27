@@ -3,9 +3,10 @@ import * as path from 'path';
 import { isPathWithinBase } from '../paths.js';
 import { successResult } from './process-spawner.js';
 import type { StepResult, ActionContext } from './executor.js';
-import { appendOutput, buildCombinedResult } from './action-result-helpers.js';
+import { appendOutput, buildCombinedResult } from './action-result-converter.js';
 import {
   type InterpolationContext,
+  type ActionOutputDefinition,
   interpolateString,
   evaluateCondition,
   resolveEnv,
@@ -16,6 +17,7 @@ import {
 // Re-export expression utilities so existing consumers continue to work.
 export {
   type InterpolationContext,
+  type ActionOutputDefinition,
   resolveExpressionValue,
   interpolateString,
   evaluateCondition,
@@ -40,11 +42,6 @@ export interface ActionStep {
   'working-directory'?: string;
   'continue-on-error'?: boolean;
   'timeout-minutes'?: number;
-}
-
-export interface ActionOutputDefinition {
-  description?: string;
-  value?: string;
 }
 
 export interface ActionRuns {

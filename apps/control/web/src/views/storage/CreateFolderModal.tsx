@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { useToast } from '../../hooks/useToast';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';

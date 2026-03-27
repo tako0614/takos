@@ -3,7 +3,7 @@ import type { Env, User } from '../../shared/types';
 import { verifyAccessToken, isAccessTokenValid } from '../../application/services/oauth/token';
 import { parseScopes } from '../../application/services/oauth/scopes';
 import { getSession, getSessionIdFromCookie } from '../../application/services/identity/session';
-import { getCachedUser } from '../../shared/utils/user-cache';
+import { getCachedUser } from '../../application/services/identity/user-cache';
 import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
 import { AuthenticationError } from '@takos/common/errors';

@@ -7,7 +7,7 @@ import {
   installGracefulShutdown,
   type ConcurrencyGuard,
 } from '@takos/agent-core/executor-utils';
-import { executeRun } from '@takos/control-core/agent/public-runner';
+import { executeRun } from '@takos/control-agent/public-runner';
 import {
   buildExecutorRuntimeConfig,
   createExecutorApp,

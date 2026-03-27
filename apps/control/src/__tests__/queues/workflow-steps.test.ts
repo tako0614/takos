@@ -8,7 +8,7 @@ vi.mock('@/services/execution/runtime', () => ({
   callRuntimeRequest: mocks.callRuntimeRequest,
 }));
 
-// Needed by workflow-helpers import chain
+// Needed by workflow-runtime-client import chain
 vi.mock('@/db', async () => {
   const actual = await vi.importActual<typeof import('@/db')>('@/db');
   return { ...actual, getDb: vi.fn() };

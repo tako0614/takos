@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   badRequest,
   notFound,
-  requireWorkspaceAccess,
+  requireSpaceAccess,
   parseLimit,
   parseOffset,
   type AuthenticatedRouteEnv,
@@ -97,7 +97,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/store-registry', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     if (access instanceof Response) return access;
 
     try {
@@ -113,7 +113,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', addStoreSchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -133,7 +133,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .delete('/:spaceId/store-registry/:entryId', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     try {
@@ -152,7 +152,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', updateStoreSchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -186,7 +186,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .post('/:spaceId/store-registry/:entryId/refresh', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     try {
@@ -205,7 +205,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/store-registry/:entryId/repositories', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));
@@ -254,7 +254,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/store-registry/:entryId/repositories/search', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));
@@ -311,7 +311,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', installSchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -343,7 +343,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/store-registry/updates', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     if (access instanceof Response) return access;
 
     try {
@@ -385,7 +385,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', markSeenSchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id);
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
       if (access instanceof Response) return access;
 
       const body = c.req.valid('json');
@@ -407,7 +407,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .post('/:spaceId/store-registry/:entryId/poll', async (c) => {
     const user = c.get('user');
-    const access = await requireWorkspaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     const entry = await getRegistryEntry(c.env.DB, access.space.id, c.req.param('entryId'));

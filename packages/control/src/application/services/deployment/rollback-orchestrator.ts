@@ -228,7 +228,9 @@ export async function executeRollback(
   } catch (dbErr) {
     // Best-effort restore previous routing snapshot.
     if (routingRollbackSnapshot.length > 0) {
-      await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch(() => {});
+      await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
+        console.warn('Failed to restore routing snapshot during rollback (non-critical):', e);
+      });
     }
     throw dbErr;
   }
@@ -248,7 +250,9 @@ export async function executeRollback(
   // Clean up routing snapshot after successful rollback
   if (env.WORKER_BUNDLES) {
     const snapshotKey = `deployment-snapshots/rollback-${targetDeployment.id}.json`;
-    await env.WORKER_BUNDLES.delete(snapshotKey).catch(() => {});
+    await env.WORKER_BUNDLES.delete(snapshotKey).catch((e) => {
+      console.warn('Failed to clean up rollback snapshot (non-critical):', e);
+    });
   }
 
   return (await getDeploymentById(env.DB, targetDeployment.id)) ?? targetDeployment;

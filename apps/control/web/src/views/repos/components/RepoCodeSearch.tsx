@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../../lib/Icons';
 import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 type SearchMatch = {
   path: string;

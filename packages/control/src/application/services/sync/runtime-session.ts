@@ -12,29 +12,16 @@
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Env } from '../../../shared/types';
-import { getDb, sessions, repositories } from '../../../infra/db';
+import { getDb, sessions } from '../../../infra/db';
 import { and, eq } from 'drizzle-orm';
-import * as gitStore from '../git-smart';
-import { isProbablyBinaryContent } from '../../../shared/utils/content-type';
-import { callRuntimeRequest } from '../execution/runtime';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { callRuntimeRequest } from '../execution/runtime-request-handler';
+import { logError } from '../../../shared/utils/logger';
+import { extractResponseError, buildRepoFiles, syncSnapshotToRepo } from './git-sync';
+import type { SessionFileEntry, SyncResult, SessionSnapshot } from './git-sync-types';
 
-/** A file entry used for session init and repo file transfer. */
-interface SessionFileEntry {
-  path: string;
-  content: string;
-  encoding?: 'utf-8' | 'base64';
-  is_binary?: boolean;
-}
-
-/** Shared result type for sync operations. */
-interface SyncResult {
-  success: boolean;
-  committed: boolean;
-  commitHash?: string;
-  pushed: boolean;
-  error?: string;
-}
+// Re-export types that were originally exported from this file
+export type { SyncResult, SessionSnapshot, SessionFileEntry } from './git-sync-types';
+export type { SessionRepoMount } from './git-sync-types';
 
 export interface SessionInitResult {
   success: boolean;
@@ -43,13 +30,6 @@ export interface SessionInitResult {
   git_mode?: boolean;
   branch?: string;
   work_dir?: string;
-}
-
-export interface SessionRepoMount {
-  repoId: string;
-  repoName: string;
-  branch?: string;
-  mountPath?: string;
 }
 
 export interface GitCloneResult {
@@ -75,54 +55,20 @@ export interface GitPushResult {
   error?: string;
 }
 
-export interface SessionSnapshot {
-  files: Array<{
-    path: string;
-    content: string;
-    size: number;
-    is_binary?: boolean;
-    encoding?: 'utf-8' | 'base64';
-  }>;
-  file_count: number;
-  total_size?: number;
-}
-
-/** Extract an error message from a failed HTTP response. */
-async function extractResponseError(response: Response, fallbackMessage: string): Promise<string> {
-  try {
-    const body = await response.json() as Record<string, unknown>;
-    if (typeof body?.error === 'string') return body.error;
-    return JSON.stringify(body);
-  } catch {
-    return `HTTP ${response.status} ${response.statusText}: ${fallbackMessage}`;
-  }
-}
-
-function toBase64(data: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < data.length; i += chunkSize) {
-    binary += String.fromCharCode(...data.slice(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
-function fromBase64(data: string): Uint8Array {
-  const binary = atob(data);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  return buffer;
-}
-
 export type RuntimeSessionManagerEnv = Pick<Env, 'DB' | 'RUNTIME_HOST' | 'GIT_OBJECTS' | 'TENANT_SOURCE'>;
+
+interface SessionRepoMountInternal {
+  repoId: string;
+  repoName: string;
+  branch?: string;
+  mountPath?: string;
+}
 
 export class RuntimeSessionManager {
   private repoId?: string;
   private branch?: string;
   private repoName?: string;
-  private repositories: SessionRepoMount[] = [];
+  private repositories: SessionRepoMountInternal[] = [];
   private primaryRepoId?: string;
 
   constructor(
@@ -148,7 +94,7 @@ export class RuntimeSessionManager {
   }
 
   /** Set multiple repositories for a session (multi-repo mounts). */
-  setRepositories(repos: SessionRepoMount[], primaryRepoId?: string): void {
+  setRepositories(repos: SessionRepoMountInternal[], primaryRepoId?: string): void {
     this.repositories = repos;
     this.primaryRepoId = primaryRepoId || repos[0]?.repoId;
     if (this.primaryRepoId) {
@@ -270,7 +216,7 @@ export class RuntimeSessionManager {
   }
 
   /** Initialize session by fetching files from the Git store for multiple repositories. */
-  private async _doInitSessionFromRepos(repos: SessionRepoMount[]): Promise<SessionInitResult> {
+  private async _doInitSessionFromRepos(repos: SessionRepoMountInternal[]): Promise<SessionInitResult> {
     const bucket = this.storage || this.env.GIT_OBJECTS || this.env.TENANT_SOURCE;
     if (!bucket) {
       throw new Error('R2 storage bucket not configured (need GIT_OBJECTS or TENANT_SOURCE)');
@@ -280,7 +226,7 @@ export class RuntimeSessionManager {
     let primaryBranch: string | undefined;
 
     for (const repo of repos) {
-      const repoFiles = await this.buildRepoFiles(bucket, repo);
+      const repoFiles = await buildRepoFiles(this.db, bucket, repo);
       files.push(...repoFiles);
       if (!primaryBranch && repo.repoId === this.primaryRepoId) {
         primaryBranch = repo.branch;
@@ -316,61 +262,6 @@ export class RuntimeSessionManager {
       git_mode: true,
       branch: primaryBranch,
     };
-  }
-
-  private async buildRepoFiles(
-    bucket: R2Bucket,
-    repo: SessionRepoMount
-  ): Promise<SessionFileEntry[]> {
-    const drizzle = getDb(this.db);
-
-    const repoInfo = await drizzle.select({
-      id: repositories.id,
-      name: repositories.name,
-      defaultBranch: repositories.defaultBranch,
-    })
-      .from(repositories)
-      .where(eq(repositories.id, repo.repoId))
-      .get();
-
-    if (!repoInfo) {
-      throw new Error(`Repository not found: ${repo.repoId}`);
-    }
-
-    const branchToUse = repo.branch || repoInfo.defaultBranch;
-    const mountPath = (repo.mountPath || '').replace(/\/+$/, '');
-
-    const files: SessionFileEntry[] = [];
-
-    const commitSha = await gitStore.resolveRef(this.db, repo.repoId, branchToUse);
-    if (!commitSha) return files;
-
-    const commit = await gitStore.getCommitData(bucket, commitSha);
-    if (!commit) return files;
-
-    const treeFiles = await gitStore.flattenTree(bucket, commit.tree);
-
-    for (const file of treeFiles) {
-      try {
-        const blob = await gitStore.getBlob(bucket, file.sha);
-        if (!blob) continue;
-        const isBinary = isProbablyBinaryContent(blob);
-        const encoded = isBinary
-          ? toBase64(blob)
-          : new TextDecoder().decode(blob);
-        const filePath = mountPath ? `${mountPath}/${file.path}` : file.path;
-        files.push({
-          path: filePath,
-          content: encoded,
-          encoding: isBinary ? 'base64' : 'utf-8',
-          is_binary: isBinary,
-        });
-      } catch (err) {
-        logWarn(`Failed to fetch file ${file.path}: ${err}`, { module: 'services/sync/runtime-session' });
-      }
-    }
-
-    return files;
   }
 
   /** Clone a repository to the session's work directory. */
@@ -509,116 +400,7 @@ export class RuntimeSessionManager {
       };
     }
 
-    if (!options.repoId) {
-      return {
-        success: false,
-        committed: false,
-        pushed: false,
-        error: 'Repository ID not set',
-      };
-    }
-
-    const prefix = options.pathPrefix ? options.pathPrefix.replace(/^\/+|\/+$/g, '') : '';
-    const prefixWithSlash = prefix ? `${prefix}/` : '';
-
-    const filteredFiles = snapshot.files
-      .filter((file) => {
-        if (file.path === '.takos-session') return false;
-        if (!prefix) return true;
-        return file.path === prefix || file.path.startsWith(prefixWithSlash);
-      })
-      .map((file) => {
-        const relativePath = prefix ? file.path.replace(prefixWithSlash, '') : file.path;
-        return { ...file, path: relativePath };
-      })
-      .filter((file) => Boolean(file.path));
-
-    if (filteredFiles.length === 0) {
-      return {
-        success: true,
-        committed: false,
-        pushed: false,
-      };
-    }
-
-    const branchName = options.branch || 'main';
-    const currentCommitSha = await gitStore.resolveRef(this.db, options.repoId, branchName);
-
-    const fileEntries: Array<{ path: string; sha: string; mode?: string }> = [];
-
-    for (const file of filteredFiles) {
-      const contentBytes = file.encoding === 'base64'
-        ? fromBase64(file.content)
-        : new TextEncoder().encode(file.content);
-
-      const blobSha = await gitStore.putBlob(bucket, contentBytes);
-
-      fileEntries.push({
-        path: file.path,
-        sha: blobSha,
-      });
-    }
-
-    const treeOid = await gitStore.buildTreeFromPaths(bucket, fileEntries);
-
-    if (currentCommitSha) {
-      const currentCommit = await gitStore.getCommitData(bucket, currentCommitSha);
-      if (currentCommit && currentCommit.tree === treeOid) {
-        return {
-          success: true,
-          committed: false,
-          pushed: false,
-        };
-      }
-    }
-
-    const authorInfo = options.author || { name: 'Takos Agent', email: 'agent@takos.io' };
-    const unixTimestamp = Math.floor(Date.now() / 1000);
-
-    const commit = await gitStore.createCommit(this.db, bucket, options.repoId, {
-      tree: treeOid,
-      parents: currentCommitSha ? [currentCommitSha] : [],
-      author: {
-        name: authorInfo.name,
-        email: authorInfo.email,
-        timestamp: unixTimestamp,
-        tzOffset: '+0000',
-      },
-      committer: {
-        name: authorInfo.name,
-        email: authorInfo.email,
-        timestamp: unixTimestamp,
-        tzOffset: '+0000',
-      },
-      message: options.message,
-    });
-
-    const commitOid = commit.sha;
-
-    const updateResult = await gitStore.updateBranch(
-      this.db,
-      options.repoId,
-      branchName,
-      currentCommitSha,
-      commitOid
-    );
-
-    if (!updateResult.success) {
-      return {
-        success: false,
-        committed: true,
-        commitHash: commitOid,
-        pushed: false,
-        error: 'Failed to update branch ref (concurrent modification)',
-      };
-    }
-
-    return {
-      success: true,
-      committed: true,
-      commitHash: commitOid,
-      pushed: true,
-    };
+    return syncSnapshotToRepo(this.db, bucket, snapshot, options);
   }
 
   /** Sync session changes back to the Git store. */

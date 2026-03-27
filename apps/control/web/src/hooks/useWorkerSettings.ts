@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
-import { useConfirmDialog } from '../providers/ConfirmDialogProvider';
-import { useI18n } from '../providers/I18nProvider';
+import { useConfirmDialog } from '../store/confirm-dialog';
+import { useI18n } from '../store/i18n';
 import { useToast } from './useToast';
 import type { Resource, Worker } from '../types';
 import type {

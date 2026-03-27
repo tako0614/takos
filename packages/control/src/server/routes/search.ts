@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { badRequest, parseJsonBody, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
+import { badRequest, parseJsonBody, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import {
   quickSearchPaths,
   searchWorkspace,
@@ -160,7 +160,7 @@ search.post('/spaces/:spaceId/search', async (c) => {
     return badRequest(c, 'Invalid JSON body');
   }
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) {
     return access;
   }
@@ -202,7 +202,7 @@ search.get('/spaces/:spaceId/search/quick', async (c) => {
   const spaceId = c.req.param('spaceId');
   const query = c.req.query('q');
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) {
     return access;
   }

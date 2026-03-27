@@ -6,7 +6,7 @@ import {
   validateRef,
   validatePathParam,
   requireRepoParams,
-} from './validation-helpers.js';
+} from './repo-validation.js';
 import { badRequest, internalError, notFound } from '@takos/common/middleware/hono';
 
 const app = new Hono();

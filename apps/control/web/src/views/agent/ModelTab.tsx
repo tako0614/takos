@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { useToast } from '../../hooks/useToast';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
@@ -49,8 +49,7 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
       });
       await rpcJson(res);
       showToast('success', t('modelSettingsSaved'));
-    } catch (err) {
-      console.error('Failed to save model settings:', err);
+    } catch {
       showToast('error', t('modelSettingsFailed'));
     } finally {
       setSaving(false);

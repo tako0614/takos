@@ -5,16 +5,11 @@
  */
 
 import { encrypt, decrypt, type EncryptedData } from '../../../../shared/utils/crypto';
+import { base64UrlEncode } from '../../../../shared/utils/encoding-utils';
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
 // ---------------------------------------------------------------------------
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
 
 function generateRandomToken(): string {
   const raw = new Uint8Array(32);

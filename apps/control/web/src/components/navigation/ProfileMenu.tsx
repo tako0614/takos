@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { useSidebarCallbacks } from './SidebarContext';
 import type { User } from '../../types';
 
@@ -23,7 +23,7 @@ export function ProfileMenu({ user }: ProfileMenuProps) {
   useEffect(() => {
     if (!showProfileMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.unified-profile-menu')) {
+      if (e.target instanceof Element && !e.target.closest('.unified-profile-menu')) {
         setShowProfileMenu(false);
       }
     };

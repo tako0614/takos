@@ -5,7 +5,7 @@ import {
   getVerifiedRepoPath,
   validateRef,
   requireRepoParams,
-} from './validation-helpers.js';
+} from './repo-validation.js';
 import { badRequest, internalError, notFound } from '@takos/common/middleware/hono';
 import { ErrorCodes } from '@takos/common/errors';
 

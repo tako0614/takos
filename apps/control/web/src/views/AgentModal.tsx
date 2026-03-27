@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useI18n, type TranslationKey } from '../providers/I18nProvider';
+import { useI18n, type TranslationKey } from '../store/i18n';
 import { Icons } from '../lib/Icons';
 import type { Space } from '../types';
 import { SkillsTab } from './agent/SkillsTab';

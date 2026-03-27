@@ -4,7 +4,7 @@ import * as gitStore from '../git-smart';
 import { getDb, branches, pullRequests } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { now, toIsoString, toRequiredIsoString } from '../../../shared/utils';
-import { decodeBlobContent } from '../../../shared/utils/diff';
+import { decodeBlobContent } from '../../../shared/utils/unified-diff';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 

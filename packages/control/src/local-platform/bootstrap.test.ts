@@ -18,6 +18,7 @@ import {
   clearNodePlatformDataForTests,
   createNodeWebEnv,
   resetNodePlatformStateForTests,
+  LOCAL_DEV_DEFAULTS,
 } from '../node-platform/env-builder';
 import { createLocalTenantWorkerRuntimeRegistry } from './tenant-worker-runtime';
 import type { WorkerBinding } from '../application/services/wfp/index.ts';
@@ -196,7 +197,7 @@ async function seedTenantWorkerBundle(params: {
   } = params;
   const db = getDb(env.DB);
   const resolvedDeploymentId = deploymentId;
-  const encryptionKey = env.ENCRYPTION_KEY ?? 'local-encryption-key';
+  const encryptionKey = env.ENCRYPTION_KEY ?? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY;
   const bindingsSnapshotEncrypted = bindingsSnapshot?.length
     ? JSON.stringify(await encrypt(JSON.stringify(bindingsSnapshot), encryptionKey, resolvedDeploymentId))
     : null;

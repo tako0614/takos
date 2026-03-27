@@ -201,7 +201,9 @@ export async function importExternalRepository(
   } catch (err) {
     // Clean up on failure
     logError('Import failed during indexing, cleaning up', err, { module: 'external-import' });
-    await db.delete(repositories).where(eq(repositories.id, repoId)).catch(() => {});
+    await db.delete(repositories).where(eq(repositories.id, repoId)).catch((cleanupErr) => {
+      logError('Failed to clean up repository after import failure (non-critical)', cleanupErr, { module: 'external-import' });
+    });
     throw err;
   }
 

@@ -13,11 +13,11 @@ process.env.JWT_PUBLIC_KEY ||= testServiceJwtKeys.publicKey;
 // Route tests focus on route behavior. Allow missing service-token scope to pass.
 vi.mock('../middleware/space-scope.js', async () => {
   const actual = await vi.importActual<any>('../middleware/space-scope.js');
-  const original = actual.enforceWorkspaceScopeMiddleware as (getIds: any) => any;
+  const original = actual.enforceSpaceScopeMiddleware as (getIds: any) => any;
 
   return {
     ...actual,
-    enforceWorkspaceScopeMiddleware: (getIds: any) => {
+    enforceSpaceScopeMiddleware: (getIds: any) => {
       const middleware = original(getIds);
       return async (c: any, next: any) => {
         const token = c.get?.('serviceToken') as { scope_space_id?: string } | undefined;

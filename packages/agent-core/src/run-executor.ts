@@ -29,7 +29,7 @@ export function shouldResetRunToQueuedOnContainerError(
 /**
  * Function signature for the agent runner's `executeRun`.
  * Used for dependency injection — callers pass the concrete implementation
- * (resolved from @takos/control-core/agent/public-runner) into agent-core's executor.
+ * (resolved from @takos/control-agent/public-runner) into agent-core's executor.
  */
 export type ExecuteRunFn = (
   env: Record<string, unknown>,
@@ -420,7 +420,9 @@ export async function executeRunInContainer(
     logger.error(`[${tag}] Failed to fetch API keys for run ${runId}, aborting`, { error: err });
     try {
       await controlRpc.resetRun({ runId, serviceId, workerId });
-    } catch { /* best-effort */ }
+    } catch (resetErr) {
+      logger.warn(`[${tag}] Failed to reset run ${runId} after API key fetch failure (best-effort)`, { error: resetErr });
+    }
     throw err;
   }
 
@@ -435,7 +437,9 @@ export async function executeRunInContainer(
     logger.error(`[${tag}] ${msg}`);
     try {
       await controlRpc.resetRun({ runId, serviceId, workerId });
-    } catch { /* best-effort */ }
+    } catch (resetErr) {
+      logger.warn(`[${tag}] Failed to reset run ${runId} after missing LLM keys (best-effort)`, { error: resetErr });
+    }
     throw new Error(msg);
     }
   }
@@ -549,7 +553,9 @@ export async function executeRunInContainer(
     // Wait for the aborting AgentRunner to settle before checking status
     if (abortController.signal.aborted && runPromise) {
       await Promise.race([
-        runPromise.catch(() => {}),
+        runPromise.catch((settleErr) => {
+          logger.warn(`[${tag}] Run promise settled with error during abort grace period`, { error: settleErr });
+        }),
         sleep(ABORT_SETTLE_GRACE_MS),
       ]);
     }

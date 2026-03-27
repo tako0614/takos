@@ -1,21 +1,11 @@
 import type { Env } from '../../../shared/types';
-import type { Snapshot, SnapshotTree, TreeEntry, BlobFetcher } from './types';
+import type { Snapshot, SnapshotTree, BlobFetcher } from './types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, snapshots, blobs, files, sessions, sessionFiles, accounts } from '../../../infra/db';
 import { eq, and, inArray, lte, lt, ne, sql } from 'drizzle-orm';
 import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
-
-/** Concatenate an array of Uint8Array chunks into a single Uint8Array. */
-function concatChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return result;
-}
+import { SnapshotStorage } from './snapshot-storage';
 
 /** Extract non-empty blob hashes from a snapshot tree. */
 function extractTreeHashes(tree: SnapshotTree): string[] {
@@ -35,68 +25,16 @@ function parseParentIds(raw: string | null, snapshotId?: string): string[] {
     }
 }
 
-async function gzipCompress(data: string): Promise<ArrayBuffer> {
-    const encoder = new TextEncoder();
-    const stream = new Blob([encoder.encode(data)]).stream();
-    const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
-    const reader = compressedStream.getReader();
-    const chunks: Uint8Array[] = [];
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-    }
-
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    return concatChunks(chunks, totalLength).buffer as ArrayBuffer;
-}
-
-const MAX_DECOMPRESSED_SIZE = 512 * 1024 * 1024; // 512MB
-const COMPRESSION_RATIO_LIMIT = 100; // 100:1 ratio limit
-
-async function gzipDecompress(data: ArrayBuffer, maxSize: number = MAX_DECOMPRESSED_SIZE): Promise<string> {
-    const stream = new Blob([data]).stream();
-    const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
-    const reader = decompressedStream.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalDecompressedSize = 0;
-    const compressedSize = data.byteLength;
-
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            totalDecompressedSize += value.length;
-
-            if (totalDecompressedSize > maxSize) {
-                reader.cancel();
-                throw new Error(`Decompression bomb detected: decompressed size exceeds ${maxSize / 1024 / 1024}MB limit`);
-            }
-
-            const currentRatio = totalDecompressedSize / compressedSize;
-            if (currentRatio > COMPRESSION_RATIO_LIMIT && compressedSize > 1024) {
-                reader.cancel();
-                throw new Error(`Decompression bomb detected: compression ratio ${currentRatio.toFixed(0)}:1 exceeds limit of ${COMPRESSION_RATIO_LIMIT}:1`);
-            }
-
-            chunks.push(value);
-        }
-    } catch (error) {
-        try { reader.releaseLock(); } catch { /* ignore */ }
-        throw error;
-    }
-
-    const decoder = new TextDecoder();
-    return decoder.decode(concatChunks(chunks, totalDecompressedSize));
-}
-
 export class SnapshotManager {
+    private storage: SnapshotStorage;
+
     constructor(
         private env: Env,
-        private spaceId: string
-    ) { }
+        private spaceId: string,
+        storage?: SnapshotStorage,
+    ) {
+        this.storage = storage ?? new SnapshotStorage(env, spaceId);
+    }
 
     /**
      * Create a new snapshot from a tree.
@@ -111,26 +49,8 @@ export class SnapshotManager {
     ): Promise<Snapshot> {
         const db = getDb(this.env.DB);
         const snapshotId = generateId();
-        const treeKey = `trees/${this.spaceId}/${snapshotId}.json.gz`;
 
-        if (!this.env.TENANT_SOURCE) {
-            throw new Error('Storage not configured (TENANT_SOURCE)');
-        }
-
-        const jsonData = JSON.stringify(tree);
-        const compressedData = await gzipCompress(jsonData);
-
-        await this.env.TENANT_SOURCE.put(treeKey, compressedData, {
-            httpMetadata: {
-                contentType: 'application/json',
-                contentEncoding: 'gzip',
-            },
-            customMetadata: {
-                'snapshot-id': snapshotId,
-                'workspace-id': this.spaceId,
-                'uncompressed-size': String(jsonData.length),
-            }
-        });
+        const { treeKey } = await this.storage.putTree(snapshotId, tree);
 
         const timestamp = now();
         await db.insert(snapshots)
@@ -203,7 +123,7 @@ export class SnapshotManager {
                 await this.decreaseBlobRefcount(hashes);
             }
 
-            await this.env.TENANT_SOURCE?.delete(snapshot.tree_key);
+            await this.storage.deleteTree(snapshot.tree_key);
 
             await db.delete(snapshots)
                 .where(eq(snapshots.id, snapshotId))
@@ -297,12 +217,19 @@ export class SnapshotManager {
             throw new Error(`Snapshot not found: ${snapshotId}`);
         }
 
-        if (!this.env.TENANT_SOURCE) {
-            throw new Error('Storage not configured (TENANT_SOURCE)');
+        let tree: SnapshotTree | null;
+        try {
+            tree = await this.storage.getTree(snapshot.tree_key);
+        } catch (parseError) {
+            // Re-throw configuration errors (e.g. missing TENANT_SOURCE)
+            if (parseError instanceof Error && parseError.message.includes('not configured')) {
+                throw parseError;
+            }
+            logError(`Failed to parse tree JSON for snapshot ${snapshotId}`, parseError, { module: 'services/sync/snapshot' });
+            return {};
         }
 
-        const object = await this.env.TENANT_SOURCE.get(snapshot.tree_key);
-        if (!object) {
+        if (!tree) {
             logError(`Tree object not found for snapshot ${snapshotId}: ${snapshot.tree_key}`, undefined, { module: 'services/sync/snapshot' });
             try {
                 await db.delete(snapshots)
@@ -315,33 +242,13 @@ export class SnapshotManager {
             return {};
         }
 
-        let tree: SnapshotTree;
-        if (snapshot.tree_key.endsWith('.gz')) {
-            const compressedData = await object.arrayBuffer();
-            const jsonData = await gzipDecompress(compressedData);
-            try {
-                tree = JSON.parse(jsonData) as SnapshotTree;
-            } catch (parseError) {
-                logError(`Failed to parse tree JSON for snapshot ${snapshotId}`, parseError, { module: 'services/sync/snapshot' });
-                return {};
-            }
-        } else {
-            try {
-                tree = await object.json<SnapshotTree>();
-            } catch (parseError) {
-                logError(`Failed to parse tree JSON for snapshot ${snapshotId}`, parseError, { module: 'services/sync/snapshot' });
-                return {};
-            }
-        }
-
         if (!this.validateTree(tree)) {
             logError(`Invalid tree structure for snapshot ${snapshotId}`, undefined, { module: 'services/sync/snapshot' });
             return {};
         }
 
-        const expectedKeyPrefix = `trees/${this.spaceId}/${snapshotId}`;
-        if (!snapshot.tree_key.startsWith(expectedKeyPrefix)) {
-            logError(`Snapshot integrity check failed: tree_key ${snapshot.tree_key} does not match expected prefix ${expectedKeyPrefix}`, undefined, { module: 'services/sync/snapshot' });
+        if (!this.storage.validateTreeKeyIntegrity(snapshot.tree_key, snapshotId)) {
+            logError(`Snapshot integrity check failed: tree_key ${snapshot.tree_key} does not match expected prefix`, undefined, { module: 'services/sync/snapshot' });
             return {};
         }
 
@@ -382,46 +289,19 @@ export class SnapshotManager {
     /** Create a blob fetcher for this workspace (with integrity check). */
     createBlobFetcher(): BlobFetcher {
         return async (hash: string): Promise<string | null> => {
-            if (!this.env.TENANT_SOURCE) {
-                return null;
-            }
-
-            const blobKey = `blobs/${this.spaceId}/${hash}`;
-            const blob = await this.env.TENANT_SOURCE.get(blobKey);
-
-            if (!blob) {
-                return null;
-            }
-
-            const content = await blob.text();
-            const actualHash = await computeSHA256(content);
-            if (actualHash !== hash) {
-                logError(`Blob integrity check failed for ${this.spaceId}: expected ${hash}, got ${actualHash}`, undefined, { module: 'services/sync/snapshot' });
-                return null;
-            }
-
-            return content;
+            return this.storage.getBlob(hash);
         };
     }
 
     /** Write a blob and return its hash and size. Refcount starts at 1. */
     async writeBlob(content: string): Promise<{ hash: string; size: number }> {
-        if (!this.env.TENANT_SOURCE) {
-            throw new Error('Storage not configured (TENANT_SOURCE)');
-        }
-
         const db = getDb(this.env.DB);
         const hash = await computeSHA256(content);
         const size = new TextEncoder().encode(content).length;
-        const blobKey = `blobs/${this.spaceId}/${hash}`;
-        const existing = await this.env.TENANT_SOURCE.head(blobKey);
-        if (!existing) {
-            await this.env.TENANT_SOURCE.put(blobKey, content, {
-                customMetadata: {
-                    'workspace-id': this.spaceId,
-                    'size': String(size),
-                }
-            });
+
+        const exists = await this.storage.blobExists(hash);
+        if (!exists) {
+            await this.storage.putBlob(hash, content, size);
         }
 
         const existingBlob = await db.select()
@@ -532,10 +412,7 @@ export class SnapshotManager {
                 )
                 .run();
 
-            if (this.env.TENANT_SOURCE) {
-                const blobKeys = deletedHashes.map(hash => `blobs/${this.spaceId}/${hash}`);
-                await this.env.TENANT_SOURCE.delete(blobKeys);
-            }
+            await this.storage.deleteBlobs(deletedHashes);
         }
     }
 
@@ -661,9 +538,8 @@ export class SnapshotManager {
             hashesToDelete.push(blob.hash);
         }
 
-        if (hashesToDelete.length > 0 && this.env.TENANT_SOURCE) {
-            const blobKeys = hashesToDelete.map(hash => `blobs/${this.spaceId}/${hash}`);
-            await this.env.TENANT_SOURCE.delete(blobKeys);
+        if (hashesToDelete.length > 0) {
+            await this.storage.deleteBlobs(hashesToDelete);
             deletedBlobs = hashesToDelete.length;
         }
 
@@ -750,7 +626,7 @@ export class SnapshotManager {
                     // Tree may already be deleted
                 }
 
-                await this.env.TENANT_SOURCE?.delete(s.treeKey);
+                await this.storage.deleteTree(s.treeKey);
                 await db.delete(snapshots)
                     .where(eq(snapshots.id, s.id))
                     .run();

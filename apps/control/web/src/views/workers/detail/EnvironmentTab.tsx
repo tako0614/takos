@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
+import { useI18n } from '../../../store/i18n';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import type { EnvVar } from '../types';
 

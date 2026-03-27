@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useToast } from './useToast';
-import { useI18n } from '../providers/I18nProvider';
+import { useI18n } from '../store/i18n';
 import type { Resource } from '../types';
 
 export interface ResourceAccessToken {

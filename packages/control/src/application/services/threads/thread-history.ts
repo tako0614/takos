@@ -15,7 +15,7 @@ import type {
 } from '../../../shared/types';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { toIsoString } from '../../../shared/utils';
-import { listThreadMessages } from './threads';
+import { listThreadMessages } from './thread-service';
 import { logError } from '../../../shared/utils/logger';
 
 type PendingSessionDiffSummary = {

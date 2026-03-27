@@ -364,28 +364,4 @@ function findCompressedEnd(
   return bestLen;
 }
 
-// Legacy async inflate functions kept for backward compatibility with tests
-// that may reference them directly.
-
-/**
- * @deprecated Use inflateSyncWithConsumed instead.
- * Kept for backward compatibility with existing tests.
- */
-async function inflateFromStream(
-  data: Uint8Array,
-  startOffset: number,
-  expectedSize?: number,
-): Promise<{ data: Uint8Array; endOffset: number }> {
-  if (expectedSize === undefined) {
-    // Without expected size, fall back to trying full remaining data
-    const compressed = data.subarray(startOffset);
-    const result = inflateSync(compressed);
-    const consumed = findCompressedEnd(data, startOffset, result, result.length);
-    return { data: result, endOffset: startOffset + consumed };
-  }
-
-  const result = inflateSyncWithConsumed(data, startOffset, expectedSize);
-  return { data: result.data, endOffset: startOffset + result.consumed };
-}
-
-export { applyDelta, inflateFromStream };
+export { applyDelta };

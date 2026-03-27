@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAvailableToolsPrompt, DEFAULT_CORE_PROMPT, SYSTEM_PROMPTS } from '@/services/agent/prompts';
+import { buildAvailableToolsPrompt, DEFAULT_CORE_PROMPT, SYSTEM_PROMPTS } from '@/services/agent/prompt-builder';
 
 describe('agent prompts', () => {
   it('keeps the default prompt focused on task completion with tool use', () => {

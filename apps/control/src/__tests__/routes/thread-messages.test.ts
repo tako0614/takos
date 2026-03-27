@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getThreadHistory: vi.fn(),
 }));
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   checkThreadAccess: mocks.checkThreadAccess,
   createMessage: mocks.createMessage,
 }));

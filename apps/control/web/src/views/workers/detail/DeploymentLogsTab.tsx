@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../hooks/useToast';
-import { useConfirmDialog } from '../../../providers/ConfirmDialogProvider';
+import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
@@ -155,9 +155,8 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
       await rpcJson(res);
       showToast('success', t('rollbackApplied'));
       await loadDeployments();
-    } catch (err) {
+    } catch {
       showToast('error', t('failedToRollback'));
-      console.error('Rollback failed:', err);
     } finally {
       setRollingBackVersion(null);
     }

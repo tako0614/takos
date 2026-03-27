@@ -1,7 +1,7 @@
 import type { Repository, Branch } from '../../../types';
 import { Icons } from '../../../lib/Icons';
 import { UpstreamSyncWidget } from './UpstreamSyncWidget';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 interface RepoDetailSidebarProps {
   repo: Repository;

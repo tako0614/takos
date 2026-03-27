@@ -3,17 +3,62 @@
  * GitHub Actions compatible CI engine
  */
 
-// Re-export all types
-export * from './types.js';
+// Public types
+export type {
+  // Trigger types
+  BranchFilter,
+  PullRequestTriggerConfig,
+  PullRequestEventType,
+  WorkflowDispatchInput,
+  WorkflowDispatchConfig,
+  ScheduleTriggerConfig,
+  RepositoryDispatchConfig,
+  WorkflowCallInput,
+  WorkflowCallOutput,
+  WorkflowCallSecret,
+  WorkflowCallConfig,
+  WorkflowTrigger,
+  // Step / Job / Workflow types
+  Step,
+  MatrixConfig,
+  JobStrategy,
+  ContainerConfig,
+  JobOutputs,
+  PermissionLevel,
+  Permissions,
+  ConcurrencyConfig,
+  JobDefaults,
+  Job,
+  Workflow,
+  // Execution state types
+  RunStatus,
+  Conclusion,
+  StepResult,
+  JobResult,
+  WorkflowResult,
+  // Context types
+  GitHubContext,
+  RunnerContext,
+  JobContext,
+  StepsContext,
+  NeedsContext,
+  StrategyContext,
+  MatrixContext,
+  InputsContext,
+  ExecutionContext,
+  // Parser / scheduler types
+  ParsedWorkflow,
+  DiagnosticSeverity,
+  WorkflowDiagnostic,
+  ExecutionPlan,
+  StepExecutor,
+  ActionResolver,
+} from './types.js';
 
-// Re-export context module
-export * from './context.js';
-
-// Re-export parser module
+// Parser — public API
 export { parseWorkflow } from './parser/workflow.js';
-export { evaluateCondition, interpolateString } from './parser/expression.js';
 export { validateWorkflow, type ValidationResult } from './parser/validator.js';
 
-// Re-export scheduler module
+// Scheduler — public API
 export { createExecutionPlan } from './scheduler/job.js';
 

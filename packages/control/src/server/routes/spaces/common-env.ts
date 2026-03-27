@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { parseJsonBody, requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { createCommonEnvService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env/common-env-handlers';
 import { logError } from '../../../shared/utils/logger';
@@ -10,7 +10,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     try {
@@ -26,7 +26,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     const body = await parseJsonBody<{
@@ -72,7 +72,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const envName = c.req.param('name');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id, ['owner', 'admin']);
+    const access = await requireSpaceAccess(c, spaceId, user.id, ['owner', 'admin']);
     if (access instanceof Response) return access;
 
     try {

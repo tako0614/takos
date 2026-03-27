@@ -22,7 +22,7 @@ vi.mock('@/utils', async (importOriginal) => {
   };
 });
 
-import { checkThreadAccess, createThread, listThreadMessages } from '@/services/threads/threads';
+import { checkThreadAccess, createThread, listThreadMessages } from '@/services/threads/thread-service';
 
 /**
  * Creates a chainable mock Drizzle client supporting the common patterns:

@@ -269,7 +269,7 @@ services:
   executor:
     build:
       context: .
-      dockerfile: apps/executor/Dockerfile
+      dockerfile: packages/executor-service/Dockerfile
     depends_on:
       executor-host:
         condition: service_healthy
@@ -292,7 +292,7 @@ services:
   browser:
     build:
       context: .
-      dockerfile: apps/browser/Dockerfile
+      dockerfile: packages/browser-service/Dockerfile
     depends_on:
       browser-host:
         condition: service_healthy

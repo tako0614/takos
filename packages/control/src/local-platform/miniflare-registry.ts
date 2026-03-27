@@ -6,7 +6,7 @@ import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts'
 import type { WorkerBinding } from '../application/services/wfp/index.ts';
 import { deployments, getDb } from '../infra/db/index.ts';
 import { services } from '../infra/db/schema-services';
-import { CF_COMPATIBILITY_DATE } from '../shared/constants.ts';
+import { CF_COMPATIBILITY_DATE } from '../shared/constants/app.ts';
 import { decrypt, decryptEnvVars, type EncryptedData } from '../shared/utils/crypto.ts';
 import { createForwardingFetcher, type ServiceTargetMap } from './url-registry.ts';
 import type {
@@ -18,6 +18,14 @@ import type {
   TenantWorkerScheduledResult,
   TenantWorkflowInvocation,
 } from './tenant-worker-runtime.ts';
+import {
+  createVectorizeServiceHandler,
+  createAiServiceHandler,
+  createAnalyticsServiceHandler,
+  createWorkflowServiceHandler,
+} from './tenant-binding-rpc.ts';
+import { generateWrapperScript, type PolyfillBindingEntry } from './tenant-binding-polyfills.ts';
+import { parseTenantResourceLimits } from './tenant-resource-limits.ts';
 
 type FetcherLike = Fetcher;
 
@@ -28,6 +36,14 @@ type LocalTenantWorkerRegistryOptions = {
   bundleCacheRoot?: string | null;
   persistRoot?: string | null;
   serviceTargets?: ServiceTargetMap;
+  /** PostgreSQL pool for pgvector-backed Vectorize bindings. */
+  pgPool?: { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
+  /** OpenAI API key for AI bindings. */
+  openAiApiKey?: string;
+  /** OpenAI-compatible base URL for AI bindings. */
+  openAiBaseUrl?: string;
+  /** OTEL collector endpoint for Analytics Engine bindings. */
+  otelEndpoint?: string;
 };
 
 type DeploymentRuntimeRecord = {
@@ -506,6 +522,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
       const plainBindings: Record<string, string> = { ...envVars };
       const d1Databases: Record<string, string> = {};
       const kvNamespaces: Record<string, string> = {};
+      const polyfillBindings: PolyfillBindingEntry[] = [];
       const r2Buckets: Record<string, string> = {};
       const queueProducers: Record<string, string | { queueName: string; deliveryDelay?: number }> = {};
       const durableObjects: Record<string, string | { className: string; scriptName?: string; useSQLite?: boolean }> = {};
@@ -527,11 +544,23 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
           case 'r2_bucket':
             if (binding.bucket_name) r2Buckets[binding.name] = binding.bucket_name;
             break;
-          case 'vectorize':
-            throw new Error(
-              `Local tenant runtime does not support vectorize bindings yet (${binding.name}). ` +
-              'Deploy on Cloudflare to use Vectorize-backed tenant workers.'
-            );
+          case 'vectorize': {
+            if (!options.pgPool) {
+              throw new Error(
+                `Vectorize binding "${binding.name}" requires PostgreSQL with pgvector. ` +
+                'Set POSTGRES_URL and PGVECTOR_ENABLED=true.',
+              );
+            }
+            const { createPgVectorStore } = await import('../bindings/pgvector-store.ts');
+            const vectorStore = createPgVectorStore({
+              pool: options.pgPool,
+              tableName: `vector_${binding.index_name ?? binding.name}`.replace(/[^a-z0-9_]/gi, '_'),
+            });
+            const rpcName = `__TAKOS_VECTORIZE_${binding.name}`;
+            serviceBindings[rpcName] = createVectorizeServiceHandler(vectorStore);
+            polyfillBindings.push({ name: binding.name, type: 'vectorize', rpcBindingName: rpcName });
+            break;
+          }
           case 'queue':
             queueProducers[binding.name] = typeof binding.delivery_delay === 'number'
               ? {
@@ -540,16 +569,29 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
                 }
               : (binding.queue_name || binding.name);
             break;
-          case 'analytics_engine':
-            throw new Error(
-              `Local tenant runtime does not support analytics engine bindings yet (${binding.name}). ` +
-              'Deploy on Cloudflare to use Analytics Engine-backed tenant workers.'
-            );
-          case 'workflow':
-            throw new Error(
-              `Local tenant runtime does not support workflow bindings yet (${binding.name}). ` +
-              'Workflow export invocation still requires a dedicated Takos-managed runner.'
-            );
+          case 'analytics_engine': {
+            const { createAnalyticsEngineBinding } = await import('../bindings/analytics-engine-binding.ts');
+            const analyticsBinding = createAnalyticsEngineBinding({
+              dataset: binding.dataset ?? binding.name,
+              otelEndpoint: options.otelEndpoint,
+            });
+            const analyticsRpcName = `__TAKOS_ANALYTICS_${binding.name}`;
+            serviceBindings[analyticsRpcName] = createAnalyticsServiceHandler(analyticsBinding);
+            polyfillBindings.push({ name: binding.name, type: 'analytics_engine', rpcBindingName: analyticsRpcName });
+            break;
+          }
+          case 'workflow': {
+            const { createWorkflowBinding } = await import('../bindings/workflow-binding.ts');
+            const workflowBinding = createWorkflowBinding({
+              db: options.db,
+              serviceId: deployment.serviceId,
+              workflowName: binding.workflow_name ?? binding.name,
+            });
+            const workflowRpcName = `__TAKOS_WORKFLOW_${binding.name}`;
+            serviceBindings[workflowRpcName] = createWorkflowServiceHandler(workflowBinding);
+            polyfillBindings.push({ name: binding.name, type: 'workflow', rpcBindingName: workflowRpcName });
+            break;
+          }
           case 'durable_object_namespace':
             if (binding.class_name) {
               durableObjects[binding.name] = {
@@ -572,13 +614,44 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
         }
       }
 
+      // -- Inject AI binding if OPENAI_API_KEY is available --
+      if (options.openAiApiKey) {
+        const { createOpenAiAiBinding } = await import('../bindings/openai-ai-binding.ts');
+        const aiBinding = createOpenAiAiBinding({
+          apiKey: options.openAiApiKey,
+          baseUrl: options.openAiBaseUrl,
+        });
+        const aiRpcName = '__TAKOS_AI';
+        serviceBindings[aiRpcName] = createAiServiceHandler(aiBinding);
+        // Only add polyfill if not already declared as a binding
+        // (AI is auto-injected, not explicitly declared like vectorize)
+        polyfillBindings.push({ name: 'AI', type: 'ai', rpcBindingName: aiRpcName });
+      }
+
+      // -- Generate wrapper script if polyfill bindings are needed --
+      const resourceLimits = parseTenantResourceLimits();
+      const wrapperSource = generateWrapperScript({
+        bindings: polyfillBindings,
+        maxSubrequests: resourceLimits.maxSubrequests || undefined,
+      });
+
+      let entryScript = preparedBundle.bundleContent;
+      let entryScriptPath = 'bundle.mjs';
+
+      if (wrapperSource) {
+        // Write wrapper alongside bundle
+        await writeFile(path.join(preparedBundle.workerDir, '__takos_entry.mjs'), wrapperSource, 'utf-8');
+        entryScript = wrapperSource;
+        entryScriptPath = '__takos_entry.mjs';
+      }
+
       const mf = new Miniflare({
         name: deployment.artifactRef,
         rootPath: preparedBundle.workerDir,
         modules: true,
         modulesRoot: preparedBundle.workerDir,
-        script: preparedBundle.bundleContent,
-        scriptPath: 'bundle.mjs',
+        script: entryScript,
+        scriptPath: entryScriptPath,
         compatibilityDate: runtimeConfig.compatibility_date ?? CF_COMPATIBILITY_DATE,
         compatibilityFlags: runtimeConfig.compatibility_flags ?? [],
         bindings: plainBindings,

@@ -16,13 +16,13 @@ import { externalAuthRouter } from './server/routes/auth/external';
 import { authSessionRouter } from './server/routes/auth/session';
 import { authCliRouter } from './server/routes/auth/cli';
 import { authLinkRouter } from './server/routes/auth/link';
-import oauth from './server/routes/oauth';
+import oauth from './server/routes/oauth/oauth-routes';
 import wellKnown from './server/routes/well-known';
-import activitypubStore from './server/routes/activitypub-store';
+import activitypubStore from './server/routes/activitypub-store/activitypub-store-routes';
 import { registerProfileRoutes } from './server/routes/profiles/register';
 import { smartHttpRoutes } from './server/routes/smart-http';
 import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessions, runSnapshotGcBatch } from './application/services/maintenance';
-import { runR2OrphanedObjectGcBatch } from './application/services/r2';
+import { runR2OrphanedObjectGcBatch } from './application/services/r2/orphaned-object-gc';
 import { runCommonEnvScheduledMaintenance } from './application/services/common-env';
 import { requireAuth, optionalAuth } from './server/middleware/auth';
 import { staticAssetsMiddleware } from './server/middleware/static-assets';
@@ -207,6 +207,46 @@ app.route('/', activitypubStore);
 app.route('/internal/executor-rpc', createExecutorProxyRouter());
 
 // ============================================================================
+// Internal Scheduled Trigger (for k8s CronJob / EventBridge / Cloud Scheduler)
+// ============================================================================
+// Allows external cron systems to trigger the same maintenance jobs that
+// CF Workers cron triggers run.  Access is restricted to loopback or
+// cluster-internal hostnames.
+
+app.post('/internal/scheduled', async (c) => {
+  const hostname = new URL(c.req.url).hostname;
+  if (!isSelfHostLoopback(hostname) && !isSelfHostInternalHostname(hostname)) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+
+  const cron = c.req.query('cron') ?? '*/15 * * * *';
+  const env = c.env as Env;
+  const errors: Array<{ job: string; error: string }> = [];
+
+  try {
+    if (cron === '*/15 * * * *' || cron === '* * * * *') {
+      await runCustomDomainReverification(env, { batchSize: 200 });
+      await reconcileStuckDomains(env);
+    }
+    if (cron === '0 * * * *' || cron === '* * * * *') {
+      await cleanupDeadSessions(env);
+      await runSnapshotGcBatch(env, { maxSpaces: 5 });
+      await runR2OrphanedObjectGcBatch(env, {
+        dryRun: false, minAgeMinutes: 24 * 60, listLimit: 200, maxDeletes: 200,
+      });
+    }
+    await runCommonEnvScheduledMaintenance({ env, cron, errors });
+  } catch (error) {
+    errors.push({ job: 'scheduled-http', error: error instanceof Error ? error.message : String(error) });
+  }
+
+  if (errors.length > 0) {
+    return c.json({ status: 'error', cron, errors }, 500);
+  }
+  return c.json({ status: 'ok', cron });
+});
+
+// ============================================================================
 // API Routes (under /api prefix)
 // ============================================================================
 
@@ -274,7 +314,7 @@ app.notFound(async (c) => {
 // S14: Error handler - never expose stack traces or sensitive error details in production
 app.onError((err, c) => {
   if (isInvalidArrayBufferError(err)) {
-    logWarn(`Rejected malformed lookup payload on ${c.req.method} ${c.req.path}`, { module: 'prisma_guard' });
+    logWarn(`Rejected malformed lookup payload on ${c.req.method} ${c.req.path}`, { module: 'db_guard' });
     return c.json({
       error: 'Bad Request',
       code: 'BAD_REQUEST',
@@ -301,11 +341,11 @@ app.onError((err, c) => {
 // ============================================================================
 
 export function createWebWorker(
-  buildPlatform: (env: Env) => ControlPlatform<Env> = buildWorkersWebPlatform,
+  buildPlatform: (env: Env) => ControlPlatform<Env> | Promise<ControlPlatform<Env>> = buildWorkersWebPlatform,
 ) {
   return {
   async fetch(request: Request, env: Env, ctx: PlatformExecutionContext): Promise<Response> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const bindings = platform.bindings;
     const requestBindings = {
       ...bindings,
@@ -349,7 +389,7 @@ export function createWebWorker(
 
   // Scheduled jobs (cron)
   async scheduled(controller: PlatformScheduledController, env: Env): Promise<void> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const bindings = platform.bindings;
     const cron = controller.cron;
     const errors: Array<{ job: string; error: string }> = [];

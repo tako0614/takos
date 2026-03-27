@@ -10,7 +10,7 @@ import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows } from '../
 import { eq, and, inArray, max } from 'drizzle-orm';
 
 import { createWorkflowJobs, enqueueFirstPhaseJobs } from '../actions';
-import { callRuntimeRequest } from '../execution/runtime';
+import { callRuntimeRequest } from '../execution/runtime-request-handler';
 import type { Env, WorkflowJobQueueMessage } from '../../../shared/types';
 import * as gitStore from '../git-smart';
 import { logError, logWarn } from '../../../shared/utils/logger';

@@ -1,4 +1,5 @@
 import type { AgentExecutorControlConfig } from './executor-dispatch';
+import { base64UrlEncode } from '../../shared/utils/encoding-utils';
 
 export interface AgentExecutorProxyConfigEnv {
   CONTROL_RPC_BASE_URL?: string;
@@ -15,9 +16,7 @@ export interface AgentExecutorContainerEnvVars extends Record<string, string> {
 export function generateProxyToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  // base64url encode without padding
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return base64UrlEncode(bytes);
 }
 
 export function buildAgentExecutorProxyConfig(

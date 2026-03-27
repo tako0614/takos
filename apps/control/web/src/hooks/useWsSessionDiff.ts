@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { TranslationKey } from '../providers/I18nProvider';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { TranslationKey } from '../store/i18n';
+import { rpc, rpcJson, sessionDiff as fetchSessionDiffRpc, sessionMerge } from '../lib/rpc';
 import type { Run, SessionDiff } from '../types';
 
 export interface SessionDiffState {
@@ -42,10 +42,7 @@ export function useWsSessionDiff({
 
   const fetchSessionDiff = useCallback(async (sessionId: string): Promise<void> => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await (rpc.sessions[':sessionId'] as any).diff.$get({
-        param: { sessionId },
-      });
+      const res = await fetchSessionDiffRpc(sessionId);
       const data = await rpcJson<SessionDiff>(res);
       if (data.changes.length > 0) {
         setSessionDiff({ sessionId, diff: data });
@@ -76,13 +73,9 @@ export function useWsSessionDiff({
     const { sessionId, diff } = currentSessionDiff as SessionDiffState;
     setIsMerging(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await (rpc.sessions[':sessionId'] as any).merge.$post({
-        param: { sessionId },
-        json: {
-          expected_head: diff.workspace_head,
-          use_diff3: true,
-        },
+      const res = await sessionMerge(sessionId, {
+        expected_head: diff.workspace_head,
+        use_diff3: true,
       });
       await rpcJson(res);
       setSessionDiff(null);

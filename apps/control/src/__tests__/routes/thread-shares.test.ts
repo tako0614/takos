@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   revokeThreadShare: vi.fn(),
 }));
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   checkThreadAccess: mocks.checkThreadAccess,
 }));
 

@@ -12,7 +12,7 @@ import { SnapshotManager } from '../sync/snapshot';
 import { generateId } from '../../../shared/utils';
 import { getDb, sessions, accounts, accountMetadata, files, runs } from '../../../infra/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime';
+import { callRuntimeRequest } from '../execution/runtime-request-handler';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 

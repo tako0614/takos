@@ -34,7 +34,7 @@ const SUCCESS_CALLBACK_HTML = `
                     if (window.history && window.history.replaceState) {
                       window.history.replaceState({}, document.title, window.location.pathname);
                     }
-                    try { window.history.pushState({}, document.title, '/auth-complete'); } catch(e) {}
+                    try { window.history.pushState({}, document.title, '/auth-complete'); } catch(e) { /* history.pushState is not critical - may fail in sandboxed iframes */ }
                   })();
                 </script>
               </body>

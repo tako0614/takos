@@ -1,30 +1,174 @@
-/**
- * Drizzle ORM Database Client
- *
- * Replaces the Prisma 3-layer DateTime workaround with direct Drizzle D1 access.
- * Drizzle stores DateTime as text() and returns strings directly - no normalization needed.
- */
+export { getDb, type Database } from './client';
 
-import { drizzle } from 'drizzle-orm/d1';
-import type { D1Database } from '../../shared/types/bindings.ts';
-import * as schema from './schema';
+// Accounts
+export {
+  accountBlocks,
+  accountEnvVars,
+  accountFollowRequests,
+  accountFollows,
+  accountMemberships,
+  accountMetadata,
+  accountModeration,
+  accountMutes,
+  accountSettings,
+  accountStats,
+  accountStorageFiles,
+  accounts,
+  authIdentities,
+} from './schema';
 
-export type Database = ReturnType<typeof drizzle<typeof schema>>;
+// Auth
+export {
+  authServices,
+  authSessions,
+  personalAccessTokens,
+  serviceTokens,
+} from './schema';
 
-// Cache Drizzle client per D1Database binding. Each Cloudflare Workers request
-// receives a fresh D1Database object, so WeakMap naturally scopes the client
-// to a single request lifetime without cross-request contamination. Within
-// a request the same binding is reused, avoiding repeated drizzle()
-// construction (hundreds of calls per request).
-const clientCache = new WeakMap<D1Database, Database>();
+// Billing
+export {
+  billingAccounts,
+  billingPlanFeatures,
+  billingPlanQuotas,
+  billingPlanRates,
+  billingPlans,
+  billingTransactions,
+  usageEvents,
+  usageRollups,
+} from './schema';
 
-export function getDb(db: D1Database): Database {
-  const cached = clientCache.get(db);
-  if (cached) return cached;
+// Repos
+export {
+  blobs,
+  branches,
+  chunks,
+  commits,
+  files,
+  gitCommits,
+  gitFileChanges,
+  indexJobs,
+  prComments,
+  prReviews,
+  pullRequests,
+  repoForks,
+  repoReleaseAssets,
+  repoReleases,
+  repoRemotes,
+  repoStars,
+  repositories,
+  snapshots,
+  tags,
+} from './schema';
 
-  const client = drizzle(db, { schema });
-  clientCache.set(db, client);
-  return client;
-}
+// Agents
+export {
+  agentTasks,
+  artifacts,
+  infoUnits,
+  lgCheckpoints,
+  lgWrites,
+  memories,
+  messages,
+  reminders,
+  runEvents,
+  runs,
+  skills,
+  threadShares,
+  threads,
+  toolOperations,
+} from './schema';
 
-export * from './schema';
+// Services
+export {
+  serviceBindings,
+  serviceCommonEnvLinks,
+  services,
+  physicalServices,
+  physicalServiceBindings,
+  physicalServiceCommonEnvLinks,
+} from './schema';
+
+// OAuth
+export {
+  mcpOauthPending,
+  mcpServers,
+  oauthAuditLogs,
+  oauthAuthorizationCodes,
+  oauthClients,
+  oauthConsents,
+  oauthDeviceCodes,
+  oauthStates,
+  oauthTokens,
+} from './schema';
+
+// Platform
+export {
+  dlqEntries,
+  edges,
+  fileHandlerMatchers,
+  fileHandlers,
+  infraEndpointRoutes,
+  infraEndpoints,
+  infraWorkers,
+  moderationAuditLogs,
+  nodes,
+  notificationPreferences,
+  notificationSettings,
+  notifications,
+  reports,
+  resourceAccess,
+  resourceAccessTokens,
+  resources,
+  serviceEndpoints,
+  sessionFiles,
+  sessionRepos,
+  sessions,
+  serviceRuntimes,
+  shortcutGroupItems,
+  shortcutGroups,
+  shortcuts,
+  storeRegistry,
+  storeRegistryUpdates,
+  uiExtensions,
+} from './schema';
+
+// Workflows
+export {
+  workflowArtifacts,
+  workflowJobs,
+  workflowRuns,
+  workflowSecrets,
+  workflowSteps,
+  workflows,
+} from './schema';
+
+// Workers
+export {
+  apps,
+  bundleDeploymentEvents,
+  bundleDeployments,
+  commonEnvAuditLogs,
+  commonEnvReconcileJobs,
+  customDomains,
+  deploymentEvents,
+  deployments,
+  managedTakosTokens,
+  serviceCommonEnvAuditLogs,
+  serviceCommonEnvReconcileJobs,
+  serviceCustomDomains,
+  serviceDeployments,
+  serviceEnvVars,
+  serviceManagedTakosTokens,
+  serviceMcpEndpoints,
+  serviceRuntimeFlags,
+  serviceRuntimeLimits,
+  serviceRuntimeSettings,
+  workerBindings,
+  workerCommonEnvLinks,
+  workerEnvVars,
+  workerMcpEndpoints,
+  workerRuntimeFlags,
+  workerRuntimeLimits,
+  workerRuntimeSettings,
+  workers,
+} from './schema';

@@ -3,13 +3,11 @@ export type View = 'loading' | 'login' | 'home' | 'app' | 'profile' | 'repos' | 
 export const DEPLOY_SECTIONS = [
   'workers',
   'resources',
-  'takopack',
 ] as const;
 export type DeploySection = (typeof DEPLOY_SECTIONS)[number];
 export const DEPLOY_NAV_SECTIONS = [
   'workers',
   'resources',
-  'takopack',
 ] as const satisfies readonly DeploySection[];
 
 const DEPLOY_SECTION_SET = new Set<string>(DEPLOY_SECTIONS);

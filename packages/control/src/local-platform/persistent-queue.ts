@@ -52,7 +52,7 @@ export function createPersistentQueue<T = unknown>(queueFile: string, queueName 
 
   void loadMessages().then((messages) => {
     queue.sent.splice(0, queue.sent.length, ...messages.messages);
-  });
+  }).catch((err) => console.warn('persistent-queue: failed to pre-load messages', err));
 
   return queue as unknown as LocalQueue<T>;
 }

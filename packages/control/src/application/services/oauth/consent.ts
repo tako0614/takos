@@ -7,9 +7,9 @@ import { getDb } from '../../../infra/db';
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { revokeAllUserClientTokens } from './token';
 
-type PrismaOAuthConsentModel = typeof oauthConsents.$inferSelect;
+type OAuthConsentRow = typeof oauthConsents.$inferSelect;
 
-function toApiConsent(row: PrismaOAuthConsentModel): OAuthConsent {
+function toApiConsent(row: OAuthConsentRow): OAuthConsent {
   return {
     id: row.id,
     user_id: row.accountId,

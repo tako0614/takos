@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../hooks/useToast';
 import { Icons } from '../../../lib/Icons';
 import { rpc, rpcJson } from '../../../lib/rpc';

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import type { Resource } from '../../types';
 import type { ResourceDetailTab } from './types';
 import { Breadcrumb } from '../../components/ui/Breadcrumb';

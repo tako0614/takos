@@ -17,7 +17,7 @@ import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
 import type { PublicRouteEnv } from '../shared/route-auth';
-import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser, type FormBody } from './helpers';
+import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser, type FormBody } from './request-utils';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 import {
   isDeviceUserCodeLimited,

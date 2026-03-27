@@ -7,7 +7,7 @@ import { zValidator } from './zod-validator';
 import {
   checkThreadAccess,
   createMessage,
-} from '../../application/services/threads/threads';
+} from '../../application/services/threads/thread-service';
 import { searchThreadMessages } from '../../application/services/threads/thread-search';
 import { getThreadTimeline } from '../../application/services/threads/thread-timeline';
 import { getThreadHistory } from '../../application/services/threads/thread-history';

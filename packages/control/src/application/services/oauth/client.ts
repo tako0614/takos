@@ -14,9 +14,9 @@ import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 
-type PrismaOAuthClientModel = typeof oauthClients.$inferSelect;
+type OAuthClientRow = typeof oauthClients.$inferSelect;
 
-function toApiClient(row: PrismaOAuthClientModel): OAuthClient {
+function toApiClient(row: OAuthClientRow): OAuthClient {
   return {
     id: row.id,
     client_id: row.clientId,

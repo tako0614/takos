@@ -5,10 +5,10 @@ import { createWorkerRuntime } from '../runtime/worker/index.ts';
 import { createNodeWebEnv } from '../node-platform/env-builder.ts';
 import {
   buildLocalMessageBatch,
-  isLocalQueue,
+  isConsumableQueue,
   LOCAL_DLQ_QUEUE_NAMES,
   LOCAL_QUEUE_RETRY_LIMITS,
-  type LocalQueue,
+  type ConsumableQueue,
   type LocalQueueRecord,
 } from './queue-runtime.ts';
 import { logError, logInfo } from '../shared/utils/logger.ts';
@@ -72,25 +72,25 @@ function createScheduledEvent(scheduledTime: number): PlatformScheduledEvent {
   } as PlatformScheduledEvent;
 }
 
-function requireLocalQueue<T>(queue: unknown, label: string): LocalQueue<T> {
-  if (!isLocalQueue(queue)) {
-    throw new Error(`${label} is not a local queue implementation`);
+function requireConsumableQueue<T>(queue: unknown, label: string): ConsumableQueue<T> {
+  if (!isConsumableQueue(queue)) {
+    throw new Error(`${label} is not a consumable queue implementation (missing queueName or receive())`);
   }
-  return queue as LocalQueue<T>;
+  return queue as ConsumableQueue<T>;
 }
 
-function getWorkerQueues(env: WorkerEnv): Array<LocalQueue<unknown>> {
+function getWorkerQueues(env: WorkerEnv): Array<ConsumableQueue<unknown>> {
   return [
-    requireLocalQueue(env.RUN_QUEUE, 'RUN_QUEUE'),
-    requireLocalQueue(env.INDEX_QUEUE, 'INDEX_QUEUE'),
-    requireLocalQueue(env.WORKFLOW_QUEUE, 'WORKFLOW_QUEUE'),
-    requireLocalQueue(env.DEPLOY_QUEUE, 'DEPLOY_QUEUE'),
+    requireConsumableQueue(env.RUN_QUEUE, 'RUN_QUEUE'),
+    requireConsumableQueue(env.INDEX_QUEUE, 'INDEX_QUEUE'),
+    requireConsumableQueue(env.WORKFLOW_QUEUE, 'WORKFLOW_QUEUE'),
+    requireConsumableQueue(env.DEPLOY_QUEUE, 'DEPLOY_QUEUE'),
   ];
 }
 
 async function dispatchRecord(
   env: WorkerEnv,
-  queue: LocalQueue<unknown>,
+  queue: ConsumableQueue<unknown>,
   record: LocalQueueRecord<unknown>,
 ): Promise<boolean> {
   let acked = false;

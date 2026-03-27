@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 
 interface StorageNewDropdownProps {
@@ -15,7 +15,7 @@ export function StorageNewDropdown({ onNewFolder, onUpload }: StorageNewDropdown
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);

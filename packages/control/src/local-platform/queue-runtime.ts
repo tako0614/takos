@@ -29,11 +29,26 @@ export type LocalQueueRecord<T = unknown> = {
   attempts?: number;
 };
 
-export type LocalQueue<T = unknown> = QueueBinding<T> & {
+/**
+ * A queue that supports both send and receive — the minimal contract
+ * required by the worker poll loop.  Cloud-backed queues (SQS, Pub/Sub)
+ * implement this interface directly, while local/in-memory/Redis queues
+ * extend it via {@link LocalQueue}.
+ */
+export type ConsumableQueue<T = unknown> = QueueBinding<T> & {
   queueName: LocalQueueName;
-  sent: LocalQueueRecord<T>[];
   receive(): Promise<LocalQueueRecord<T> | null>;
 };
+
+export type LocalQueue<T = unknown> = ConsumableQueue<T> & {
+  sent: LocalQueueRecord<T>[];
+};
+
+export function isConsumableQueue(value: unknown): value is ConsumableQueue<unknown> {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<ConsumableQueue<unknown>>;
+  return typeof candidate.queueName === 'string' && typeof candidate.receive === 'function';
+}
 
 export function isLocalQueue(value: unknown): value is LocalQueue<unknown> {
   if (!value || typeof value !== 'object') return false;

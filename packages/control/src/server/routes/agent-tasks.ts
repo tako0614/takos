@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, AgentTask, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../shared/types';
+import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../shared/types';
 import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../shared/utils';
-import { createThread } from '../../application/services/threads/threads';
+import { createThread } from '../../application/services/threads/thread-service';
 import { analyzeTask } from '../../application/services/agent/workflow';
 import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../application/services/agent';
 import { BUILTIN_TOOLS } from '../../application/tools/builtin';
@@ -23,17 +23,14 @@ const BUILTIN_TOOL_NAMES = filterAgentAllowedToolNames(BUILTIN_TOOLS.map((tool) 
 
 type AgentTaskRow = typeof agentTasks.$inferSelect;
 
-/** Convert DB camelCase result to snake_case API shape */
-function toApiTask(row: AgentTaskRow): AgentTask {
-  const threadId = row.threadId ?? null;
-  const lastRunId = row.lastRunId ?? null;
-
+/** Convert DB camelCase result to snake_case API shape (base fields only) */
+function toApiTask(row: AgentTaskRow): AgentTaskBase {
   return {
     id: row.id,
     space_id: row.accountId,
     created_by: row.createdByAccountId ?? null,
-    thread_id: threadId,
-    last_run_id: lastRunId,
+    thread_id: row.threadId ?? null,
+    last_run_id: row.lastRunId ?? null,
     title: row.title,
     description: row.description ?? null,
     status: row.status as AgentTaskStatus,
@@ -46,17 +43,10 @@ function toApiTask(row: AgentTaskRow): AgentTask {
     completed_at: toIsoString(row.completedAt),
     created_at: toIsoString(row.createdAt) || '',
     updated_at: toIsoString(row.updatedAt) || '',
-    thread_title: null,
-    latest_run: null,
-    resume_target: threadId ? {
-      thread_id: threadId,
-      run_id: lastRunId,
-      reason: lastRunId ? 'latest' : 'thread',
-    } : null,
   };
 }
 
-async function fetchTask(d1: Env['DB'], taskId: string): Promise<AgentTask | null> {
+async function fetchTask(d1: Env['DB'], taskId: string): Promise<AgentTaskBase | null> {
   const db = getDb(d1);
   const result = await db.select().from(agentTasks).where(eq(agentTasks.id, taskId)).get();
   return result ? toApiTask(result) : null;
@@ -90,16 +80,30 @@ function buildThreadRunFocus(runs: Array<{
   };
 }
 
-async function enrichTasks(env: Env, tasks: AgentTask[]): Promise<AgentTask[]> {
+async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<AgentTask[]> {
   if (tasks.length === 0) {
-    return tasks;
+    return tasks.map((task) => ({
+      ...task,
+      thread_title: null,
+      latest_run: null,
+      resume_target: task.thread_id ? {
+        thread_id: task.thread_id,
+        run_id: task.last_run_id,
+        reason: task.last_run_id ? 'latest' as const : 'thread' as const,
+      } : null,
+    }));
   }
 
   const db = getDb(env.DB);
   const threadIds = Array.from(new Set(tasks.map((task) => task.thread_id).filter((value): value is string => !!value)));
 
   if (threadIds.length === 0) {
-    return tasks;
+    return tasks.map((task) => ({
+      ...task,
+      thread_title: null,
+      latest_run: null,
+      resume_target: null,
+    }));
   }
 
   const [threadRows, runRows] = await Promise.all([
@@ -154,9 +158,14 @@ async function enrichTasks(env: Env, tasks: AgentTask[]): Promise<AgentTask[]> {
     artifactCountByRunId.set(row.runId, (artifactCountByRunId.get(row.runId) ?? 0) + 1);
   }
 
-  return tasks.map((task) => {
+  return tasks.map((task): AgentTask => {
     if (!task.thread_id) {
-      return task;
+      return {
+        ...task,
+        thread_title: null,
+        latest_run: null,
+        resume_target: null,
+      };
     }
 
     const focus = focusByThreadId.get(task.thread_id);
@@ -185,8 +194,9 @@ async function enrichTasks(env: Env, tasks: AgentTask[]): Promise<AgentTask[]> {
   });
 }
 
-async function enrichTask(env: Env, task: AgentTask): Promise<AgentTask> {
-  return (await enrichTasks(env, [task]))[0] ?? task;
+async function enrichTask(env: Env, task: AgentTaskBase): Promise<AgentTask> {
+  const [enriched] = await enrichTasks(env, [task]);
+  return enriched ?? { ...task, thread_title: null, latest_run: null, resume_target: null };
 }
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rpc } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { MessageBubble } from '../chat/MessageBubble';

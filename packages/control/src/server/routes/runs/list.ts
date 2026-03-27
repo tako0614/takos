@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { checkThreadAccess } from '../../../application/services/threads/threads';
+import { checkThreadAccess } from '../../../application/services/threads/thread-service';
 import { parseLimit } from '../shared/route-auth';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
@@ -11,7 +11,7 @@ import { zValidator } from '../zod-validator';
 import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
-import { asPrismaRunRow, prismaRunToApi } from '../../../application/services/runs/shared';
+import { asRunRow, runRowToApi } from '../../../application/services/runs/shared';
 import { toIsoString } from '../../../shared/utils';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';
@@ -97,7 +97,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
         .limit(limit)
         .all();
 
-      const runsList = result.map((row) => prismaRunToApi(asPrismaRunRow({ ...row, spaceId: row.accountId })));
+      const runsList = result.map((row) => runRowToApi(asRunRow({ ...row, spaceId: row.accountId })));
       const lastRow = result[result.length - 1];
       const nextCursor = result.length === limit && lastRow
         ? encodeRunListCursor(toIsoString(lastRow.createdAt), lastRow.id)

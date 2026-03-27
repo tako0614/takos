@@ -1,3 +1,0 @@
--- Historical migration stub.
--- The canonical service schema is now enforced by local bootstrap and the package-owned schema helpers.
--- This file is kept to preserve migration ordering for existing installations.

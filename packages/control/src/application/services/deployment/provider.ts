@@ -282,11 +282,17 @@ export function createOciDeploymentProvider(
       });
 
       if (!response.ok) {
-        const body = await response.text().catch(() => '');
+        const body = await response.text().catch((err) => {
+          console.warn('[oci-provider] Failed to read error response body', err);
+          return '';
+        });
         throw new Error(`OCI deployment orchestrator failed with ${response.status}: ${body.slice(0, 300)}`);
       }
 
-      const responseBody = await response.json().catch(() => null) as {
+      const responseBody = await response.json().catch((err) => {
+        console.warn('[oci-provider] Failed to parse deployment orchestrator JSON response', err);
+        return null;
+      }) as {
         resolved_endpoint?: { kind: string; base_url: string };
         logs_ref?: string;
       } | null;

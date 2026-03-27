@@ -1,6 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { ALL_SCOPES } from '../../../shared/types/oauth';
 import { computeSHA256 } from '../../../shared/utils/hash';
+import { base64UrlEncode } from '../../../shared/utils/encoding-utils';
 import { getDb, personalAccessTokens, serviceManagedTakosTokens } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 
@@ -14,11 +15,6 @@ function generateRandomBytes(length: number): Uint8Array {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return bytes;
-}
-
-function toBase64Url(bytes: Uint8Array): string {
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 function parseScopesPayload(raw: string | null | undefined): string[] | null {
@@ -142,7 +138,7 @@ export async function issueTakosAccessToken(): Promise<{
   tokenPrefix: string;
 }> {
   const tokenBytes = generateRandomBytes(32);
-  const token = `tak_pat_${toBase64Url(tokenBytes)}`;
+  const token = `tak_pat_${base64UrlEncode(tokenBytes)}`;
   const tokenHash = await computeSHA256(token);
   const tokenPrefix = token.slice(0, 12);
   return {

@@ -2,7 +2,7 @@ import { getDb, sessions } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { listThreadMessages } from './threads';
+import { listThreadMessages } from './thread-service';
 import { logError } from '../../../shared/utils/logger';
 
 export async function getThreadTimeline(env: Env, threadId: string, limit: number, offset: number) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { asPrismaRunRow, prismaRunToApi, type PrismaRunRow } from '@/services/runs/shared';
+import { asRunRow, runRowToApi, type RunRow } from '@/services/runs/shared';
 
-function makeRunRow(overrides: Partial<PrismaRunRow> = {}): PrismaRunRow {
+function makeRunRow(overrides: Partial<RunRow> = {}): RunRow {
   return {
     id: 'run-1',
     threadId: 'thread-1',
@@ -26,8 +26,8 @@ function makeRunRow(overrides: Partial<PrismaRunRow> = {}): PrismaRunRow {
   };
 }
 
-describe('asPrismaRunRow', () => {
-  it('casts a generic record to PrismaRunRow', () => {
+describe('asRunRow', () => {
+  it('casts a generic record to RunRow', () => {
     const raw: Record<string, unknown> = {
       id: 'run-1',
       threadId: 'thread-1',
@@ -50,16 +50,16 @@ describe('asPrismaRunRow', () => {
       createdAt: '2026-03-01T00:00:00.000Z',
     };
 
-    const result = asPrismaRunRow(raw);
+    const result = asRunRow(raw);
     expect(result.id).toBe('run-1');
     expect(result.threadId).toBe('thread-1');
   });
 });
 
-describe('prismaRunToApi', () => {
-  it('converts a PrismaRunRow to a Run API object', () => {
+describe('runRowToApi', () => {
+  it('converts a RunRow to a Run API object', () => {
     const row = makeRunRow();
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
 
     expect(run.id).toBe('run-1');
     expect(run.thread_id).toBe('thread-1');
@@ -84,13 +84,13 @@ describe('prismaRunToApi', () => {
 
   it('defaults rootThreadId to threadId when null', () => {
     const row = makeRunRow({ rootThreadId: null });
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
     expect(run.root_thread_id).toBe('thread-1');
   });
 
   it('defaults rootRunId to id when null', () => {
     const row = makeRunRow({ rootRunId: null });
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
     expect(run.root_run_id).toBe('run-1');
   });
 
@@ -107,7 +107,7 @@ describe('prismaRunToApi', () => {
       workerHeartbeat,
     });
 
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
 
     expect(run.started_at).toBe('2026-03-01T01:00:00.000Z');
     expect(run.completed_at).toBe('2026-03-01T02:00:00.000Z');
@@ -122,7 +122,7 @@ describe('prismaRunToApi', () => {
       workerHeartbeat: '2026-03-01T01:30:00.000Z',
     });
 
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
 
     expect(run.started_at).toBe('2026-03-01T01:00:00.000Z');
     expect(run.completed_at).toBe('2026-03-01T02:00:00.000Z');
@@ -141,7 +141,7 @@ describe('prismaRunToApi', () => {
       workerId: 'worker-abc',
     });
 
-    const run = prismaRunToApi(row);
+    const run = runRowToApi(row);
 
     expect(run.session_id).toBe('session-1');
     expect(run.parent_run_id).toBe('parent-run-1');
@@ -157,7 +157,7 @@ describe('prismaRunToApi', () => {
     const statuses = ['pending', 'queued', 'running', 'completed', 'failed', 'cancelled'] as const;
     for (const status of statuses) {
       const row = makeRunRow({ status });
-      const run = prismaRunToApi(row);
+      const run = runRowToApi(row);
       expect(run.status).toBe(status);
     }
   });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { TranslationKey } from '../providers/I18nProvider';
+import type { TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type {
   Message,
@@ -17,7 +17,7 @@ import type {
 import { isRunInRootTree } from '../views/chat/timeline';
 import { useWsSessionDiff, type SessionDiffState, type PendingSessionDiffSummary } from './useWsSessionDiff';
 import { useWsMessageProcessor, ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor';
-import { useWsConnectionManager } from './useWsConnectionManager';
+import { useConnectionManagerWithFallback } from './useConnectionManagerWithFallback';
 
 export type { SessionDiffState } from './useWsSessionDiff';
 
@@ -93,8 +93,8 @@ export function useWebSocketConnection({
   const currentRunIdRef = useRef<string | null>(null);
   const lastEventIdRef = useRef<number>(0);
 
-  // --- Connection manager sub-hook ---
-  const connection = useWsConnectionManager({
+  // --- Connection manager sub-hook (WS with SSE fallback) ---
+  const connection = useConnectionManagerWithFallback({
     t,
     isMountedRef,
     startMessagePolling,

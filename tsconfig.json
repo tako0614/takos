@@ -22,9 +22,7 @@
     { "path": "./apps/control" },
     { "path": "./apps/runtime" },
     { "path": "./apps/cli" },
-    { "path": "./apps/executor" },
-    { "path": "./apps/docs-site" },
-    { "path": "./apps/browser" }
+    { "path": "./apps/docs-site" }
   ],
   "exclude": [
     "node_modules",

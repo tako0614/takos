@@ -16,7 +16,7 @@ import {
   runtimeDelete,
   getRunStatus,
   getStepDisplayName,
-} from './workflow-helpers';
+} from './workflow-runtime-client';
 import { evaluateCondition } from './workflow-expressions';
 import { emitWorkflowEvent } from './workflow-events';
 import { executeStep } from './workflow-steps';

@@ -15,6 +15,7 @@
  */
 
 import { constantTimeEqual } from '@/shared/utils/hash';
+import { base64UrlEncode } from '@/shared/utils/encoding-utils';
 
 /**
  * Abstraction over Durable Object storage for token persistence.
@@ -74,8 +75,7 @@ export class DOTokenManager<T extends Record<string, unknown>> {
   private generateRandomToken(): string {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
-    const base64 = btoa(String.fromCharCode(...bytes));
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return base64UrlEncode(bytes);
   }
 
   /**

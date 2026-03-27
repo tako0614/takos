@@ -10,6 +10,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 import { logError } from '../../../shared/utils/logger';
+import { errorJsonResponse } from '../../../shared/utils/http-response';
 
 function buildSafeTitle(value: string | null | undefined): string {
   return (value || 'thread')
@@ -93,10 +94,7 @@ export async function exportThread(
 
   if (params.format === 'pdf') {
     if (!params.renderPdf) {
-      return new Response(JSON.stringify({ error: 'PDF export requires Browser rendering (BROWSER binding)' }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorJsonResponse('PDF export requires Browser rendering (BROWSER binding)', 503);
     }
 
     const html = `<!doctype html>
@@ -134,15 +132,9 @@ export async function exportThread(
       logError('PDF export failed', err, { module: 'services/threads/threads/thread-export' });
       const message = err instanceof Error ? err.message : String(err);
       const status = message.includes('not supported') ? 501 : 500;
-      return new Response(JSON.stringify({ error: 'Failed to generate PDF' }), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorJsonResponse('Failed to generate PDF', status);
     }
   }
 
-  return new Response(JSON.stringify({ error: 'Invalid format. Supported: markdown, json, pdf' }), {
-    status: 400,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return errorJsonResponse('Invalid format. Supported: markdown, json, pdf', 400);
 }

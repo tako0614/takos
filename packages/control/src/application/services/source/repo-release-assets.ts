@@ -1,5 +1,25 @@
 import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
-import type { ReleaseAsset } from '../takopack/types';
+
+export interface ReleaseAsset {
+  id: string;
+  name: string;
+  content_type: string;
+  size: number;
+  r2_key: string;
+  download_count: number;
+  bundle_format?: string;
+  bundle_meta?: {
+    name?: string;
+    app_id?: string;
+    version: string;
+    description?: string;
+    icon?: string;
+    category?: 'app' | 'service' | 'library' | 'template' | 'social';
+    tags?: string[];
+    dependencies?: Array<{ repo: string; version: string }>;
+  };
+  created_at: string;
+}
 
 type ReleaseAssetRow = {
   id: string;

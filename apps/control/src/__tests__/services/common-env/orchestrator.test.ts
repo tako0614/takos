@@ -1,20 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CommonEnvOrchestrator } from '@/services/common-env/orchestrator';
-import type { CommonEnvRepository } from '@/services/common-env/repository';
 import type { CommonEnvReconcileJobStore } from '@/services/common-env/reconcile-jobs';
 import type { CommonEnvReconciler } from '@/services/common-env/reconciler';
+import type { Env } from '@/shared/types';
 
-function createMockRepo(): CommonEnvRepository {
-  return {
-    listServiceIdsLinkedToEnvKey: vi.fn().mockResolvedValue([]),
-    listWorkerIdsLinkedToEnvKey: vi.fn().mockResolvedValue([]),
-    listServiceLinks: vi.fn().mockResolvedValue([]),
-    listWorkerLinks: vi.fn().mockResolvedValue([]),
-    getWorker: vi.fn().mockResolvedValue(null),
-    updateLinkRuntime: vi.fn().mockResolvedValue(undefined),
-    listWorkspaceEnvRows: vi.fn().mockResolvedValue([]),
-    listWorkspaceCommonEnvNames: vi.fn().mockResolvedValue([]),
-  } as unknown as CommonEnvRepository;
+vi.mock('@/services/common-env/repository', () => ({
+  listServiceIdsLinkedToEnvKey: vi.fn().mockResolvedValue([]),
+}));
+
+import * as repositoryModule from '@/services/common-env/repository';
+
+function createMockEnv(): Pick<Env, 'DB'> {
+  return { DB: {} as Env['DB'] };
 }
 
 function createMockJobs(): CommonEnvReconcileJobStore & { enqueue: ReturnType<typeof vi.fn> } {
@@ -42,16 +39,17 @@ function createMockReconciler(): CommonEnvReconciler {
 }
 
 describe('CommonEnvOrchestrator', () => {
-  let repo: ReturnType<typeof createMockRepo>;
+  let env: Pick<Env, 'DB'>;
   let jobs: ReturnType<typeof createMockJobs>;
   let reconciler: ReturnType<typeof createMockReconciler>;
   let orchestrator: CommonEnvOrchestrator;
 
   beforeEach(() => {
-    repo = createMockRepo();
+    vi.clearAllMocks();
+    env = createMockEnv();
     jobs = createMockJobs();
     reconciler = createMockReconciler();
-    orchestrator = new CommonEnvOrchestrator(repo, jobs, reconciler);
+    orchestrator = new CommonEnvOrchestrator(env, jobs, reconciler);
   });
 
   describe('enqueueWorkerReconcile', () => {
@@ -74,11 +72,11 @@ describe('CommonEnvOrchestrator', () => {
 
   describe('reconcileWorkersForEnvKey', () => {
     it('finds linked workers and enqueues jobs for them', async () => {
-      (repo.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1', 'w-2']);
+      (repositoryModule.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1', 'w-2']);
 
       await orchestrator.reconcileWorkersForEnvKey('space-1', 'my_var', 'workspace_env_put');
 
-      expect(repo.listServiceIdsLinkedToEnvKey).toHaveBeenCalledWith('space-1', 'MY_VAR');
+      expect(repositoryModule.listServiceIdsLinkedToEnvKey).toHaveBeenCalledWith(env, 'space-1', 'MY_VAR');
       expect(jobs.enqueueForServices).toHaveBeenCalledWith({
         spaceId: 'space-1',
         serviceIds: ['w-1', 'w-2'],
@@ -88,7 +86,7 @@ describe('CommonEnvOrchestrator', () => {
     });
 
     it('uses default trigger when not specified', async () => {
-      (repo.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1']);
+      (repositoryModule.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1']);
 
       await orchestrator.reconcileWorkersForEnvKey('space-1', 'my_var');
 

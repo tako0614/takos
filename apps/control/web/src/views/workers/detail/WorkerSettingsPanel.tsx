@@ -1,5 +1,5 @@
-import { useI18n } from '../../../providers/I18nProvider';
-import type { TranslationKey } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
+import type { TranslationKey } from '../../../store/i18n';
 import { Icons } from '../../../lib/Icons';
 import type { Resource, Worker } from '../../../types';
 import type {

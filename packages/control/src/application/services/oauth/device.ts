@@ -8,13 +8,13 @@ import { getDb } from '../../../infra/db';
 import { eq, and, isNull } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
 
-type PrismaOAuthDeviceCodeModel = typeof oauthDeviceCodes.$inferSelect;
+type OAuthDeviceCodeRow = typeof oauthDeviceCodes.$inferSelect;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
   return toIsoString(value);
 }
 
-function toApiDeviceCode(row: PrismaOAuthDeviceCodeModel): OAuthDeviceCode {
+function toApiDeviceCode(row: OAuthDeviceCodeRow): OAuthDeviceCode {
   return {
     id: row.id,
     device_code_hash: row.deviceCodeHash,

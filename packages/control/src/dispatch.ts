@@ -9,6 +9,7 @@ import type {
 } from './shared/types/bindings.ts';
 import { validateDispatchEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError } from './shared/utils/logger';
+import { jsonResponse, errorJsonResponse } from './shared/utils/http-response';
 import { buildWorkersDispatchPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/types.ts';
 
@@ -52,26 +53,22 @@ export interface DispatchEnv {
 const envGuard = createEnvGuard(validateDispatchEnv);
 
 export function createDispatchWorker(
-  buildPlatform: (env: DispatchEnv) => ControlPlatform<DispatchEnv> = buildWorkersDispatchPlatform,
+  buildPlatform: (env: DispatchEnv) => ControlPlatform<DispatchEnv> | Promise<ControlPlatform<DispatchEnv>> = buildWorkersDispatchPlatform,
 ) {
   return {
   async fetch(request: Request, env: DispatchEnv, ctx: PlatformExecutionContext): Promise<Response> {
-    const platform = buildPlatform(env);
+    const platform = await buildPlatform(env);
     const envError = envGuard(platform.bindings as unknown as Record<string, unknown>);
     if (envError) {
-      return new Response(JSON.stringify({
-        error: 'Configuration Error',
+      return errorJsonResponse('Configuration Error', 503, {
         message: 'Dispatch worker is misconfigured. Please contact administrator.',
-      }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      });
     }
 
     const url = new URL(request.url);
 
     if (url.pathname === '/health' && request.method === 'GET') {
-      return new Response(JSON.stringify({ status: 'ok', service: 'takos-dispatch' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ status: 'ok', service: 'takos-dispatch' });
     }
 
     // Service-binding calls use hostname "internal"; use X-Forwarded-Host only in that case.
@@ -88,12 +85,7 @@ export function createDispatchWorker(
       const target = resolved.target;
 
       if (!target) {
-        return new Response(JSON.stringify({
-          error: 'Not found',
-        }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorJsonResponse('Not found', 404);
       }
 
       const headers = new Headers(request.headers);
@@ -108,12 +100,7 @@ export function createDispatchWorker(
         const endpoint = selectHttpEndpointFromHttpEndpointSet(target.endpoints, url.pathname, request.method);
         if (!endpoint) {
           logError(`Routing misconfigured for hostname: ${hostname}`, undefined, { module: 'dispatch' });
-          return new Response(JSON.stringify({
-            error: 'Service unavailable',
-          }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return errorJsonResponse('Service unavailable', 503);
         }
 
         headers.set('X-Tenant-Endpoint', endpoint.name);
@@ -124,23 +111,12 @@ export function createDispatchWorker(
 
         const routeRef = endpoint.target.ref;
         if (!routeRef) {
-          return new Response(JSON.stringify({
-            error: 'Local service target not configured',
-          }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return errorJsonResponse('Local service target not configured', 503);
         }
         headers.set('X-Tenant-Worker', routeRef);
         const userWorker = platform.services.serviceRegistry?.get(routeRef);
         if (!userWorker) {
-          return new Response(JSON.stringify({
-            error: 'Local service target not configured',
-            worker: routeRef,
-          }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return errorJsonResponse('Local service target not configured', 503, { worker: routeRef });
         }
         const workerRequest = new Request(request.url, {
           method: request.method,
@@ -155,12 +131,7 @@ export function createDispatchWorker(
       const routeRef = deploymentTarget?.routeRef ?? null;
       if (!routeRef || !deploymentTarget) {
         logError(`Routing misconfigured for hostname: ${hostname}`, undefined, { module: 'dispatch' });
-        return new Response(JSON.stringify({
-          error: 'Service unavailable',
-        }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorJsonResponse('Service unavailable', 503);
       }
       headers.set('X-Tenant-Worker', routeRef);
       if (deploymentTarget.deploymentId) {
@@ -173,13 +144,7 @@ export function createDispatchWorker(
         deploymentId: deploymentTarget.deploymentId,
       });
       if (!userWorker) {
-        return new Response(JSON.stringify({
-          error: 'Local service target not configured',
-          worker: routeRef,
-        }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorJsonResponse('Local service target not configured', 503, { worker: routeRef });
       }
       const workerRequest = new Request(request.url, {
         method: request.method,
@@ -200,21 +165,13 @@ export function createDispatchWorker(
         errorName === 'WorkerNotFound';
 
       if (isNotFound) {
-        return new Response(JSON.stringify({
-          error: 'Tenant worker not found',
+        return errorJsonResponse('Tenant worker not found', 503, {
           message: 'The tenant worker may be provisioning or has been deleted',
-        }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
         });
       }
 
-      return new Response(JSON.stringify({
-        error: 'Dispatch failed',
+      return errorJsonResponse('Dispatch failed', 500, {
         message: 'An error occurred while routing to the tenant',
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
       });
     }
   },

@@ -5,7 +5,7 @@ import { createMockEnv } from '../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
 }));
 
 vi.mock('@/db', async (importOriginal) => {
@@ -17,7 +17,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -78,7 +78,7 @@ describe('apps routes workspace scope', () => {
         return chain;
       }),
     });
-    mocks.requireWorkspaceAccess.mockResolvedValue({
+    mocks.requireSpaceAccess.mockResolvedValue({
       workspace: {
         id: 'ws-1',
       },
@@ -96,6 +96,6 @@ describe('apps routes workspace scope', () => {
     );
 
     expect(response.status).toBe(404);
-    expect(mocks.requireWorkspaceAccess).toHaveBeenCalled();
+    expect(mocks.requireSpaceAccess).toHaveBeenCalled();
   });
 });

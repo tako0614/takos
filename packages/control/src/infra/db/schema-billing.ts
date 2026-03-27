@@ -1,5 +1,4 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { nowIso } from './schema-helpers';
 
 // 18. BillingAccount
 export const billingAccounts = sqliteTable('billing_accounts', {
@@ -12,8 +11,8 @@ export const billingAccounts = sqliteTable('billing_accounts', {
   stripeSubscriptionId: text('stripe_subscription_id'),
   subscriptionStartedAt: text('subscription_started_at'),
   subscriptionPeriodEnd: text('subscription_period_end'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxStripeCustomer: index('idx_billing_accounts_stripe_customer_id').on(table.stripeCustomerId),
   idxStatus: index('idx_billing_accounts_status').on(table.status),
@@ -55,8 +54,8 @@ export const billingPlans = sqliteTable('billing_plans', {
   displayName: text('display_name').notNull(),
   description: text('description'),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   idxName: index('idx_billing_plans_name').on(table.name),
   idxIsDefault: index('idx_billing_plans_is_default').on(table.isDefault),
@@ -72,7 +71,7 @@ export const billingTransactions = sqliteTable('billing_transactions', {
   description: text('description'),
   referenceId: text('reference_id'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxType: index('idx_billing_transactions_type').on(table.type),
   idxReference: index('idx_billing_transactions_reference_id').on(table.referenceId),
@@ -93,7 +92,7 @@ export const usageEvents = sqliteTable('usage_events', {
   referenceId: text('reference_id'),
   referenceType: text('reference_type'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   idxReference: index('idx_usage_events_reference_id').on(table.referenceId),
   idxMeterType: index('idx_usage_events_meter_type').on(table.meterType),
@@ -112,7 +111,7 @@ export const usageRollups = sqliteTable('usage_rollups', {
   periodStart: text('period_start').notNull(),
   units: real('units').notNull().default(0),
   costCents: integer('cost_cents').notNull().default(0),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqBillingScope: uniqueIndex('idx_usage_rollups_billing_scope').on(table.billingAccountId, table.scopeType, table.accountId, table.meterType, table.periodStart),
   idxPeriodStart: index('idx_usage_rollups_period_start').on(table.periodStart),

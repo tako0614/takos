@@ -94,7 +94,7 @@ export async function readRunEventSegmentFromR2(
       if (typeof parsed.data !== 'string') continue;
       if (typeof parsed.created_at !== 'string') continue;
       events.push(parsed);
-    } catch { /* ignored - skip malformed lines */ }
+    } catch (_err) { /* ignored - skip malformed lines */ }
   }
 
   events.sort((a, b) => a.event_id - b.event_id);

@@ -1,0 +1,127 @@
+import type { RefObject } from 'react';
+import { Icons } from '../../lib/Icons';
+import { useI18n } from '../../store/i18n';
+import type { SourceItem } from '../../hooks/useSourceData';
+
+export interface SuggestionUser {
+  username: string;
+  name?: string;
+  avatar_url?: string | null;
+}
+
+export interface SuggestionRepo {
+  name: string;
+  description?: string | null;
+  owner: { username: string };
+}
+
+interface SourceSearchBarProps {
+  searchRef: RefObject<HTMLInputElement | null>;
+  query: string;
+  setQuery: (q: string) => void;
+  isSearchMode: boolean;
+  searchFocused: boolean;
+  setSearchFocused: (v: boolean) => void;
+  suggesting: boolean;
+  suggestions: { users: SuggestionUser[]; repos: SuggestionRepo[] };
+  onExitSearch: () => void;
+  onFocusSearch: () => void;
+  onNavigateToRepo: (username: string, repoName: string) => void;
+}
+
+export function SourceSearchBar({
+  searchRef,
+  query,
+  setQuery,
+  isSearchMode,
+  searchFocused,
+  setSearchFocused,
+  suggesting,
+  suggestions,
+  onExitSearch,
+  onFocusSearch,
+  onNavigateToRepo,
+}: SourceSearchBarProps) {
+  const { t } = useI18n();
+
+  return (
+    <div className="relative">
+      {isSearchMode ? (
+        <button
+          type="button"
+          className="absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+          onClick={onExitSearch}
+        >
+          <Icons.ChevronLeft className="w-5 h-5" />
+        </button>
+      ) : (
+        <Icons.Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+      )}
+      <input
+        ref={searchRef}
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => { setSearchFocused(true); onFocusSearch(); }}
+        onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+        placeholder={t('searchReposAndPackages')}
+        className="w-full h-12 md:h-11 pl-10 pr-10 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm text-base md:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 border-none outline-none focus:ring-2 focus:ring-blue-400/30 dark:focus:ring-blue-500/30 transition-all"
+      />
+      {suggesting && (
+        <Icons.Loader className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 animate-spin" />
+      )}
+      {query && !suggesting && (
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-400 hover:text-zinc-600 transition-colors"
+          onClick={() => setQuery('')}
+        >
+          <Icons.X className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* Suggestions dropdown */}
+      {searchFocused && query.trim() && (suggestions.users.length > 0 || suggestions.repos.length > 0) && (
+        <div className="absolute z-20 left-0 right-0 mt-2 rounded-2xl bg-white dark:bg-zinc-900 shadow-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+          {suggestions.users.length > 0 && (
+            <div className="py-1">
+              <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{t('usersLabel')}</p>
+              {suggestions.users.map((user) => (
+                <div
+                  key={user.username}
+                  className="flex items-center gap-2 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setQuery(`@${user.username}`)}
+                >
+                  {user.avatar_url
+                    ? <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full" />
+                    : <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px]">{user.username.charAt(0).toUpperCase()}</div>
+                  }
+                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">@{user.username}</span>
+                  {user.name && <span className="text-xs text-zinc-400">{user.name}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {suggestions.repos.length > 0 && (
+            <div className={suggestions.users.length > 0 ? 'border-t border-zinc-100 dark:border-zinc-800 py-1' : 'py-1'}>
+              <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{t('repositories')}</p>
+              {suggestions.repos.map((repo) => (
+                <button
+                  key={`${repo.owner.username}/${repo.name}`}
+                  type="button"
+                  className="w-full text-left px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onNavigateToRepo(repo.owner.username, repo.name)}
+                >
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{repo.owner.username}/{repo.name}</p>
+                  {repo.description && <p className="text-xs text-zinc-400 truncate">{repo.description}</p>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

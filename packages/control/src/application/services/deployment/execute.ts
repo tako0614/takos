@@ -240,7 +240,9 @@ export async function executeDeploymentPipeline(
           await applyRoutingDbUpdates(env, routingCtx, nowIso);
         } catch (dbErr) {
           if (routingRollbackSnapshot) {
-            await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch(() => {});
+            await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
+              logError('Failed to restore routing snapshot during rollback', e, { module: 'deployment' });
+            });
           }
           throw dbErr;
         }
@@ -276,7 +278,9 @@ export async function executeDeploymentPipeline(
         })
         .where(eq(services.id, deploymentServiceId))
         .run();
-    } catch { /* ignored */ }
+    } catch (e) {
+      logError('Failed to update service status to deployed (non-critical)', e, { module: 'deployment' });
+    }
 
     const runtimeConfig = safeJsonParseOrDefault<Partial<ServiceRuntimeConfigState>>(
       deployment.runtime_config_snapshot_json,
@@ -301,7 +305,9 @@ export async function executeDeploymentPipeline(
     // Clean up routing snapshot after successful deployment
     if (env.WORKER_BUNDLES) {
       const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
-      await env.WORKER_BUNDLES.delete(snapshotKey).catch(() => {});
+      await env.WORKER_BUNDLES.delete(snapshotKey).catch((e) => {
+        logError('Failed to clean up deployment snapshot (non-critical)', e, { module: 'deployment' });
+      });
     }
 
     const finalDeployment = await getDeploymentById(env.DB, deploymentId);
@@ -346,7 +352,9 @@ export async function executeDeploymentPipeline(
           })
           .where(eq(services.id, deploymentServiceId))
           .run();
-      } catch { /* ignored */ }
+      } catch (e) {
+        logError('Failed to update service status to failed (non-critical)', e, { module: 'deployment' });
+      }
     }
 
     await logDeploymentEvent(env.DB, deploymentId, 'failed', deployment.current_step, errorMessage);

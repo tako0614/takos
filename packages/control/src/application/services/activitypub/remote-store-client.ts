@@ -3,6 +3,9 @@
  * Handles WebFinger resolution, actor fetching, and repository browsing.
  */
 
+/** Opaque JSON object from a remote AP endpoint. */
+type JsonObject = Record<string, unknown>;
+
 const AP_ACCEPT = 'application/activity+json, application/ld+json; q=0.9';
 const JRD_ACCEPT = 'application/jrd+json, application/json; q=0.9';
 const FETCH_TIMEOUT_MS = 10_000;
@@ -246,7 +249,7 @@ export async function fetchRemoteStoreActor(actorUrl: string): Promise<RemoteSto
     throw new RemoteStoreError('Failed to fetch remote store actor');
   }
 
-  const body = await response.json() as Record<string, unknown>;
+  const body = await response.json() as JsonObject;
 
   const icon = body.icon as { type?: string; url?: string } | null | undefined;
 
@@ -263,9 +266,9 @@ export async function fetchRemoteStoreActor(actorUrl: string): Promise<RemoteSto
     followers: String(body.followers ?? ''),
     publicKey: body.publicKey
       ? {
-          id: String((body.publicKey as Record<string, unknown>).id ?? ''),
-          owner: String((body.publicKey as Record<string, unknown>).owner ?? ''),
-          publicKeyPem: String((body.publicKey as Record<string, unknown>).publicKeyPem ?? ''),
+          id: String((body.publicKey as JsonObject).id ?? ''),
+          owner: String((body.publicKey as JsonObject).owner ?? ''),
+          publicKeyPem: String((body.publicKey as JsonObject).publicKeyPem ?? ''),
         }
       : null,
     repositories: extractTkgField(body, 'repositories'),
@@ -292,7 +295,7 @@ export async function fetchRemoteRepositories(
     throw new RemoteStoreError('Failed to fetch repositories from remote store');
   }
 
-  const body = await response.json() as Record<string, unknown>;
+  const body = await response.json() as JsonObject;
   return parseCollection(body);
 }
 
@@ -315,7 +318,7 @@ export async function searchRemoteRepositories(
     throw new RemoteStoreError('Failed to search repositories on remote store');
   }
 
-  const body = await response.json() as Record<string, unknown>;
+  const body = await response.json() as JsonObject;
   return parseCollection(body);
 }
 
@@ -337,7 +340,7 @@ export async function fetchRemoteOutbox(
     throw new RemoteStoreError('Failed to fetch outbox from remote store');
   }
 
-  const body = await response.json() as Record<string, unknown>;
+  const body = await response.json() as JsonObject;
   return parseOutbox(body);
 }
 
@@ -348,15 +351,15 @@ export function extractTkgField(body: Record<string, unknown>, field: string): s
   const tkgKey = `tkg:${field}`;
   const value = body[tkgKey] ?? body[field];
   if (typeof value === 'string') return value;
-  if (typeof value === 'object' && value !== null && '@id' in (value as Record<string, unknown>)) {
-    return String((value as Record<string, unknown>)['@id']);
+  if (typeof value === 'object' && value !== null && '@id' in (value as JsonObject)) {
+    return String((value as JsonObject)['@id']);
   }
   return undefined;
 }
 
 function parseCollection(body: Record<string, unknown>): RemoteCollection {
   const orderedItems = Array.isArray(body.orderedItems)
-    ? (body.orderedItems as Record<string, unknown>[]).map(parseRepositoryOrActivity)
+    ? (body.orderedItems as JsonObject[]).map(parseRepositoryOrActivity)
     : undefined;
 
   return {
@@ -373,7 +376,7 @@ function parseRepositoryOrActivity(item: Record<string, unknown>): RemoteReposit
   // If it's an activity (Create/Update), extract the object
   const type = String(item.type ?? '');
   if (type === 'Create' || type === 'Update') {
-    const obj = item.object as Record<string, unknown> | undefined;
+    const obj = item.object as JsonObject | undefined;
     if (obj && typeof obj === 'object') {
       return parseRepositoryObject(obj, String(item.published ?? ''));
     }
@@ -400,7 +403,7 @@ function parseRepositoryObject(obj: Record<string, unknown>, fallbackPublished?:
 }
 
 function parseOutbox(body: Record<string, unknown>): RemoteOutboxResult {
-  const rawItems = Array.isArray(body.orderedItems) ? body.orderedItems as Record<string, unknown>[] : undefined;
+  const rawItems = Array.isArray(body.orderedItems) ? body.orderedItems as JsonObject[] : undefined;
 
   const activities = rawItems?.map((item): RemoteActivity => {
     const activityId = String(item.id ?? '');
@@ -410,7 +413,7 @@ function parseOutbox(body: Record<string, unknown>): RemoteOutboxResult {
     // Extract the inner object if this is an activity wrapper
     const innerObj = (item.type === 'Create' || item.type === 'Update')
       && item.object && typeof item.object === 'object'
-      ? item.object as Record<string, unknown>
+      ? item.object as JsonObject
       : item;
 
     return {

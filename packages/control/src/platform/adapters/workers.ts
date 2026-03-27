@@ -8,30 +8,12 @@ import {
   createPlatformConfig,
   createPlatformServices,
   createRoutingService,
+  getString,
+  getServiceRegistry,
 } from './shared.ts';
+import type { PlatformEnvRecord } from './shared.ts';
 import type { ControlPlatform, PlatformServiceBinding } from '../types.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
-
-type PlatformEnvRecord = Record<string, unknown>;
-
-function getString(env: PlatformEnvRecord, key: string): string | undefined {
-  const value = env[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getServiceRegistry(env: PlatformEnvRecord) {
-  const dispatcher = env.DISPATCHER;
-  if (!dispatcher || typeof dispatcher !== 'object') {
-    return undefined;
-  }
-  return {
-    get(name: string, options?: { deploymentId?: string }) {
-      return (dispatcher as {
-        get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
-      }).get(name, options);
-    },
-  };
-}
 
 function createWorkersDispatchDeploymentRegistry(env: Record<string, unknown>) {
   const accountId = typeof env.CF_ACCOUNT_ID === 'string' ? env.CF_ACCOUNT_ID : undefined;

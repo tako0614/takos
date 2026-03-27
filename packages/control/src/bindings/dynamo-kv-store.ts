@@ -48,7 +48,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     async get(
       key: string,
       type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<any> {
+    ): Promise<string | null> {
       const command = new GetItemCommand({
         TableName: config.tableName,
         Key: { pk: { S: key } },
@@ -61,12 +61,16 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
 
       const raw = item.value.S;
 
+      // Return type is declared as `string | null` to match the default
+      // KVNamespace.get() overload.  When `type` is 'json', 'arrayBuffer',
+      // or 'stream' the actual runtime value differs — this mirrors the
+      // overloaded behaviour of the Cloudflare KVNamespace interface.
       switch (type) {
         case 'json':
-          return JSON.parse(raw);
+          return JSON.parse(raw) as string;
         case 'arrayBuffer': {
           const encoder = new TextEncoder();
-          return encoder.encode(raw).buffer;
+          return encoder.encode(raw).buffer as unknown as string;
         }
         case 'stream': {
           const encoder = new TextEncoder();
@@ -76,7 +80,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
               controller.enqueue(bytes);
               controller.close();
             },
-          });
+          }) as unknown as string;
         }
         case 'text':
         default:
@@ -87,7 +91,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     async getWithMetadata(
       key: string,
       type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<{ value: any; metadata: any; cacheStatus: null }> {
+    ): Promise<{ value: unknown; metadata: Record<string, string> | null; cacheStatus: null }> {
       const command = new GetItemCommand({
         TableName: config.tableName,
         Key: { pk: { S: key } },
@@ -100,7 +104,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
       }
 
       const raw = item.value.S;
-      let value: any;
+      let value: unknown;
 
       switch (type) {
         case 'json':
@@ -128,7 +132,9 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
           break;
       }
 
-      const metadata = item.metadata?.S ? JSON.parse(item.metadata.S) : null;
+      const metadata: Record<string, string> | null = item.metadata?.S
+        ? (JSON.parse(item.metadata.S) as Record<string, string>)
+        : null;
 
       return { value, metadata, cacheStatus: null };
     },
@@ -202,7 +208,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     async list(
       options?: { prefix?: string; limit?: number; cursor?: string },
     ): Promise<{
-      keys: Array<{ name: string; expiration?: number; metadata?: any }>;
+      keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }>;
       list_complete: boolean;
       cursor?: string;
     }> {
@@ -245,14 +251,14 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
           return exp === 0 || exp > now;
         })
         .map((item) => {
-          const entry: { name: string; expiration?: number; metadata?: any } = {
+          const entry: { name: string; expiration?: number; metadata?: Record<string, string> } = {
             name: item.pk!.S!,
           };
           if (item.expiration?.N) {
             entry.expiration = Number(item.expiration.N);
           }
           if (item.metadata?.S) {
-            entry.metadata = JSON.parse(item.metadata.S);
+            entry.metadata = JSON.parse(item.metadata.S) as Record<string, string>;
           }
           return entry;
         });
@@ -271,5 +277,8 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
         ...(cursor ? { cursor } : {}),
       };
     },
+  // Cast required: this object structurally implements the KVNamespace
+  // interface, but TypeScript cannot verify compatibility with the
+  // Cloudflare Workers type definitions without the runtime environment.
   } as unknown as KVNamespace;
 }

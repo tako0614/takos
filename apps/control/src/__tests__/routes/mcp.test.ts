@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   listServers: vi.fn(),
   deleteServer: vi.fn(),
   updateServer: vi.fn(),
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
 }));
 
 vi.mock('@/services/platform/mcp', () => ({
@@ -23,12 +23,12 @@ vi.mock('@/services/platform/mcp', () => ({
   updateMcpServer: mocks.updateServer,
 }));
 
-// Mock requireWorkspaceAccess helper
+// Mock requireSpaceAccess helper
 vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -176,7 +176,7 @@ describe('GET /mcp/oauth/callback', () => {
 describe('GET /mcp/servers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
     mocks.listServers.mockResolvedValue([]);
   });
 
@@ -231,7 +231,7 @@ describe('GET /mcp/servers', () => {
 describe('DELETE /mcp/servers/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
   });
 
   it('returns 404 when server not found', async () => {
@@ -268,7 +268,7 @@ describe('DELETE /mcp/servers/:id', () => {
 describe('PATCH /mcp/servers/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
   });
 
   it('returns 404 when server not found', async () => {

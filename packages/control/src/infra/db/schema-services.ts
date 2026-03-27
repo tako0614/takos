@@ -1,5 +1,4 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { nowIso } from './schema-helpers';
 
 const servicesTable = sqliteTable('services', {
   id: text('id').primaryKey(),
@@ -15,8 +14,8 @@ const servicesTable = sqliteTable('services', {
   fallbackDeploymentId: text('fallback_deployment_id'),
   currentVersion: integer('current_version').notNull().default(0),
   workloadKind: text('workload_kind'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqIdAccount: uniqueIndex('idx_services_id_account').on(table.id, table.accountId),
   idxStatus: index('idx_services_status').on(table.status),
@@ -36,7 +35,7 @@ export const serviceBindings = sqliteTable('service_bindings', {
   bindingName: text('binding_name').notNull(),
   bindingType: text('binding_type').notNull(),
   config: text('config').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqServiceBinding: uniqueIndex('idx_service_bindings_service_binding').on(table.serviceId, table.bindingName),
   idxService: index('idx_service_bindings_service_id').on(table.serviceId),
@@ -55,9 +54,9 @@ export const serviceCommonEnvLinks = sqliteTable('service_common_env_links', {
   lastObservedFingerprint: text('last_observed_fingerprint'),
   lastReconciledAt: text('last_reconciled_at'),
   lastSyncError: text('last_sync_error'),
-  stateUpdatedAt: text('state_updated_at').notNull().$defaultFn(() => nowIso()),
-  createdAt: text('created_at').notNull().$defaultFn(() => nowIso()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => nowIso()).$onUpdateFn(() => nowIso()),
+  stateUpdatedAt: text('state_updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
 }, (table) => ({
   uniqServiceEnvSource: uniqueIndex('idx_service_common_env_links_service_env_source').on(
     table.serviceId,

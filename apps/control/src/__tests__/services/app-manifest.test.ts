@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   appManifestToBundleDocs,
-  buildBundlePackageData,
   extractBuildSourcesFromManifestJson,
   parseAppManifestYaml,
 } from '@/services/source/app-manifest';
-import { parsePackage } from '@/services/takopack/manifest';
 
 describe('app manifest service', () => {
   it('rejects legacy local build fields', () => {
@@ -168,59 +166,6 @@ spec:
       schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
       queues: [{ queue: 'jobs', export: 'handleJob' }],
     });
-  });
-
-  it('round-trips build source labels through bundle manifest json', async () => {
-    const manifest = parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: sample-app
-spec:
-  version: 1.0.0
-  services:
-    api:
-      type: worker
-      build:
-        fromWorkflow:
-          path: .takos/workflows/build.yml
-          job: build-api
-          artifact: api-dist
-          artifactPath: dist/api.mjs
-  routes:
-    - service: api
-      path: /
-`);
-
-    const docs = appManifestToBundleDocs(manifest, new Map([
-      ['api', {
-        service_name: 'api',
-        workflow_path: '.takos/workflows/build.yml',
-        workflow_job: 'build-api',
-        workflow_artifact: 'api-dist',
-        artifact_path: 'dist/api.mjs',
-        workflow_run_id: 'run-1',
-        workflow_job_id: 'job-1',
-        source_sha: 'sha-1',
-      }],
-    ]));
-
-    const bundleData = await buildBundlePackageData(docs, new Map([
-      ['dist/api.mjs', new TextEncoder().encode('export default {};').buffer],
-    ]));
-    const parsed = await parsePackage(bundleData);
-    const buildSources = extractBuildSourcesFromManifestJson(JSON.stringify(parsed.manifest));
-
-    expect(buildSources).toEqual([{
-      service_name: 'api',
-      workflow_path: '.takos/workflows/build.yml',
-      workflow_job: 'build-api',
-      workflow_artifact: 'api-dist',
-      artifact_path: 'dist/api.mjs',
-      workflow_run_id: 'run-1',
-      workflow_job_id: 'job-1',
-      source_sha: 'sha-1',
-    }]);
   });
 
   it('emits vectorize resources and worker bindings into bundle docs', () => {
@@ -406,54 +351,4 @@ spec:
     }));
   });
 
-  it('round-trips vectorize through takopack manifest parsing', async () => {
-    const manifest = parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: vector-app
-spec:
-  version: 1.0.0
-  resources:
-    semantic-index:
-      type: vectorize
-      binding: SEARCH_INDEX
-      vectorize:
-        dimensions: 1536
-        metric: cosine
-  services:
-    api:
-      type: worker
-      build:
-        fromWorkflow:
-          path: .takos/workflows/build.yml
-          job: build-api
-          artifact: api-dist
-          artifactPath: dist/api.mjs
-      bindings:
-        vectorize: [semantic-index]
-`);
-
-    const docs = appManifestToBundleDocs(manifest, new Map([
-      ['api', {
-        service_name: 'api',
-        workflow_path: '.takos/workflows/build.yml',
-        workflow_job: 'build-api',
-        workflow_artifact: 'api-dist',
-        artifact_path: 'dist/api.mjs',
-      }],
-    ]));
-
-    const bundleData = await buildBundlePackageData(docs, new Map([
-      ['dist/api.mjs', new TextEncoder().encode('export default {};').buffer],
-    ]));
-    const parsed = await parsePackage(bundleData);
-
-    expect(parsed.manifest.resources?.vectorize).toEqual([{
-      binding: 'SEARCH_INDEX',
-      dimensions: 1536,
-      metric: 'cosine',
-    }]);
-    expect(parsed.manifest.workers?.[0]?.bindings.vectorize).toEqual(['SEARCH_INDEX']);
-  });
 });

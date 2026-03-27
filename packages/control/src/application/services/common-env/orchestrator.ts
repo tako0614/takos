@@ -1,83 +1,19 @@
+import type { Env } from '../../../shared/types';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import {
   CommonEnvReconcileJobStore,
   type CommonEnvReconcileTrigger,
 } from './reconcile-jobs';
-import { CommonEnvRepository } from './repository';
+import { listServiceIdsLinkedToEnvKey } from './repository';
 import { CommonEnvReconciler } from './reconciler';
 import { logError } from '../../../shared/utils/logger';
 
 export class CommonEnvOrchestrator {
   constructor(
-    private readonly repo: CommonEnvRepository,
+    private readonly env: Pick<Env, 'DB'>,
     private readonly jobs: CommonEnvReconcileJobStore,
     private readonly reconciler: CommonEnvReconciler
   ) {}
-
-  private async listLinkedServiceIds(spaceId: string, envName: string): Promise<string[]> {
-    const repo = this.repo as CommonEnvRepository & {
-      listServiceIdsLinkedToEnvKey?: (spaceId: string, envName: string) => Promise<string[]>;
-      listWorkerIdsLinkedToEnvKey?: (spaceId: string, envName: string) => Promise<string[]>;
-    };
-    return repo.listServiceIdsLinkedToEnvKey?.(spaceId, envName)
-      ?? repo.listWorkerIdsLinkedToEnvKey?.(spaceId, envName)
-      ?? [];
-  }
-
-  private async reconcileServiceCommonEnv(spaceId: string, serviceId: string, options?: {
-    targetKeys?: Set<string>;
-    trigger?: CommonEnvReconcileTrigger;
-  }): Promise<void> {
-    const reconciler = this.reconciler as CommonEnvReconciler & {
-      reconcileServiceCommonEnv?: (
-        spaceId: string,
-        serviceId: string,
-        options?: {
-          targetKeys?: Set<string>;
-          trigger?: CommonEnvReconcileTrigger;
-        }
-      ) => Promise<void>;
-      reconcileWorkerCommonEnv?: (
-        spaceId: string,
-        workerId: string,
-        options?: {
-          targetKeys?: Set<string>;
-          trigger?: CommonEnvReconcileTrigger;
-        }
-      ) => Promise<void>;
-    };
-    await reconciler.reconcileServiceCommonEnv?.(spaceId, serviceId, options)
-      ?? reconciler.reconcileWorkerCommonEnv?.(spaceId, serviceId, options);
-  }
-
-  private async markServiceLinksApplyFailed(params: {
-    spaceId: string;
-    serviceId: string;
-    targetKeys?: Set<string>;
-    error: unknown;
-  }): Promise<void> {
-    const reconciler = this.reconciler as CommonEnvReconciler & {
-      markServiceLinksApplyFailed?: (params: {
-        spaceId: string;
-        serviceId: string;
-        targetKeys?: Set<string>;
-        error: unknown;
-      }) => Promise<void>;
-      markWorkerLinksApplyFailed?: (params: {
-        spaceId: string;
-        workerId: string;
-        targetKeys?: Set<string>;
-        error: unknown;
-      }) => Promise<void>;
-    };
-    await reconciler.markServiceLinksApplyFailed?.(params)
-      ?? reconciler.markWorkerLinksApplyFailed?.({
-        spaceId: params.spaceId,
-        workerId: params.serviceId,
-        targetKeys: params.targetKeys,
-        error: params.error,
-      });
-  }
 
   async enqueueServiceReconcile(params: {
     spaceId: string;
@@ -121,7 +57,7 @@ export class CommonEnvOrchestrator {
     trigger: CommonEnvReconcileTrigger = 'workspace_env_put'
   ): Promise<void> {
     const envName = normalizeEnvName(envNameRaw);
-    const serviceIds = await this.listLinkedServiceIds(spaceId, envName);
+    const serviceIds = await listServiceIdsLinkedToEnvKey(this.env, spaceId, envName);
     await this.jobs.enqueueForServices({
       spaceId,
       serviceIds,
@@ -172,7 +108,7 @@ export class CommonEnvOrchestrator {
       const normalizedTargetKeys = keys ? new Set(uniqueEnvNames(keys)) : undefined;
 
       try {
-        await this.reconcileServiceCommonEnv(job.accountId, job.serviceId, {
+        await this.reconciler.reconcileServiceCommonEnv(job.accountId, job.serviceId, {
           targetKeys: normalizedTargetKeys,
           trigger: job.trigger,
         });
@@ -180,7 +116,7 @@ export class CommonEnvOrchestrator {
         completed += 1;
       } catch (error) {
         try {
-          await this.markServiceLinksApplyFailed({
+          await this.reconciler.markServiceLinksApplyFailed({
             spaceId: job.accountId,
             serviceId: job.serviceId,
             targetKeys: normalizedTargetKeys,

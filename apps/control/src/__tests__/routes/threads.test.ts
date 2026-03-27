@@ -18,11 +18,11 @@ const mocks = vi.hoisted(() => ({
   getThreadTimeline: vi.fn(),
   getThreadHistory: vi.fn(),
   exportThread: vi.fn(),
-  requireWorkspaceAccess: vi.fn(),
+  requireSpaceAccess: vi.fn(),
   getPlatformServices: vi.fn(),
 }));
 
-vi.mock('@/services/threads/threads', () => ({
+vi.mock('@/services/threads/thread-service', () => ({
   checkThreadAccess: mocks.checkThreadAccess,
   createMessage: mocks.createMessage,
   createThread: mocks.createThread,
@@ -58,7 +58,7 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
   return {
     ...actual,
-    requireWorkspaceAccess: mocks.requireWorkspaceAccess,
+    requireSpaceAccess: mocks.requireSpaceAccess,
   };
 });
 
@@ -98,7 +98,7 @@ describe('threads routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireWorkspaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
+    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
     mocks.getPlatformServices.mockReturnValue({
       documents: { renderPdf: vi.fn() },
     });

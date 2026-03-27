@@ -65,7 +65,9 @@ export async function rollbackDeploymentSteps(ctx: RollbackContext): Promise<voi
         'rollback_failed',
         'update_routing',
         `Failed to restore routing: ${extractErrorMessage(routingCleanupError)}`,
-      ).catch(() => {});
+      ).catch((e) => {
+        logError('Failed to log rollback event for routing', e, { module: 'deployment' });
+      });
     }
   }
 
@@ -83,7 +85,9 @@ export async function rollbackDeploymentSteps(ctx: RollbackContext): Promise<voi
         'rollback_failed',
         'deploy_worker',
         `Failed to roll back deployment artifact: ${extractErrorMessage(wfpCleanupError)}`,
-      ).catch(() => {});
+      ).catch((e) => {
+        logError('Failed to log rollback event for deploy_worker', e, { module: 'deployment' });
+      });
     }
   }
 

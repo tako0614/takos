@@ -11,7 +11,7 @@ import { getDb } from '../../infra/db';
 import { runs } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
-import type { AgentExecutorEnv } from './executor-utils';
+import { ok, err, classifyProxyError, type AgentExecutorEnv } from './executor-utils';
 
 type Env = AgentExecutorEnv;
 
@@ -20,55 +20,6 @@ interface AiRunBinding {
 }
 
 const MAX_PROXY_PUT_BYTES = 100 * 1024 * 1024; // 100MB
-
-export function ok(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-export function err(message: string, status = 500): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-export function classifyProxyError(e: unknown): { status: number; message: string } {
-  const name = e instanceof Error ? e.name : '';
-  const msg = e instanceof Error ? e.message : String(e);
-
-  if (name === 'AbortError' || name === 'TimeoutError' || msg.includes('timed out') || msg.includes('timeout')) {
-    return { status: 504, message: 'Proxy request timed out' };
-  }
-
-  if (msg.includes('SQLITE_BUSY') || msg.includes('database is locked')) {
-    return { status: 503, message: 'Database busy, retry later' };
-  }
-  if (msg.includes('SQLITE_CONSTRAINT')) {
-    return { status: 409, message: 'Database constraint violation' };
-  }
-  if (msg.includes('SQLITE_ERROR') || msg.includes('D1_ERROR')) {
-    return { status: 400, message: 'Database query error' };
-  }
-
-  if (
-    name === 'NetworkError' ||
-    msg.includes('ECONNREFUSED') ||
-    msg.includes('ECONNRESET') ||
-    msg.includes('ENOTFOUND') ||
-    msg.includes('fetch failed') ||
-    msg.includes('network')
-  ) {
-    return { status: 502, message: 'Upstream connection failed' };
-  }
-
-  if (e instanceof TypeError || e instanceof RangeError) {
-    return { status: 400, message: 'Invalid request' };
-  }
-
-  return { status: 500, message: 'Internal proxy error' };
-}
 
 function headersToRecord(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries());

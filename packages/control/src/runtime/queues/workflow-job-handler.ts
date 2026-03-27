@@ -16,7 +16,7 @@ import {
   getRunContext,
   getSpaceIdFromRepoId,
   markJobSkipped,
-} from './workflow-helpers';
+} from './workflow-runtime-client';
 import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from './workflow-secrets';
 import { emitWorkflowEvent } from './workflow-events';
 import {

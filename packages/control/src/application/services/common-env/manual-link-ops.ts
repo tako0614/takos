@@ -5,7 +5,7 @@ import { generateId, now } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
-import type { CommonEnvRepository, ServiceLinkRow, SyncState } from './repository';
+import type { ServiceLinkRow, SyncState } from './repository';
 import type { CommonEnvOrchestrator } from './orchestrator';
 import type { CommonEnvReconcileTrigger } from './reconcile-jobs';
 import { getChanges } from './link-state';
@@ -14,22 +14,14 @@ import {
   upsertManagedTakosTokenConfig,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
-import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+import { serviceCommonEnvLinks } from '../../../infra/db';
 import { listServiceLinksFromRepo } from './service-link-ops';
+import { db, runInTransaction } from './db-helpers';
 
 export interface ManualLinkDeps {
   env: Env;
-  repo: CommonEnvRepository;
   txManager: D1TransactionManager;
   orchestrator: CommonEnvOrchestrator;
-}
-
-function db(deps: ManualLinkDeps) {
-  return getDb(deps.env.DB);
-}
-
-function runInTransaction<T>(deps: ManualLinkDeps, fn: () => Promise<T>): Promise<T> {
-  return deps.txManager.runInTransaction(fn);
 }
 
 async function enqueueServiceReconcile(deps: ManualLinkDeps, params: {

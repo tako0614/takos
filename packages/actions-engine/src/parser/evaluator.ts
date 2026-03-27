@@ -364,34 +364,34 @@ export class ExpressionEvaluator {
   }
 
   private compare(left: unknown, op: string, right: unknown): boolean {
-    switch (op) {
-      case '==':
-        return left === right;
-      case '!=':
-        return left !== right;
-      case '<':
-      case '>':
-      case '<=':
-      case '>=': {
-        const l = Number(left);
-        const r = Number(right);
-        if (Number.isNaN(l) || Number.isNaN(r)) {
-          throw new ExpressionError(
-            `Comparison operator '${op}' received a NaN operand`,
-            this.expression
-          );
-        }
-        if (op === '<') return l < r;
-        if (op === '>') return l > r;
-        if (op === '<=') return l <= r;
-        return l >= r;
-      }
-      default:
-        throw new ExpressionError(
-          `Unknown comparison operator: ${op}`,
-          this.expression
-        );
+    if (op === '==' || op === '!=') {
+      return op === '==' ? left === right : left !== right;
     }
+
+    const NUMERIC_OPERATORS: Record<string, (l: number, r: number) => boolean> = {
+      '<': (l, r) => l < r,
+      '>': (l, r) => l > r,
+      '<=': (l, r) => l <= r,
+      '>=': (l, r) => l >= r,
+    };
+
+    const numericOp = NUMERIC_OPERATORS[op];
+    if (!numericOp) {
+      throw new ExpressionError(
+        `Unknown comparison operator: ${op}`,
+        this.expression
+      );
+    }
+
+    const l = Number(left);
+    const r = Number(right);
+    if (Number.isNaN(l) || Number.isNaN(r)) {
+      throw new ExpressionError(
+        `Comparison operator '${op}' received a NaN operand`,
+        this.expression
+      );
+    }
+    return numericOp(l, r);
   }
 
   private toBoolean(value: unknown): boolean {
@@ -411,37 +411,29 @@ export class ExpressionEvaluator {
   }
 
   private callFunction(name: string, args: unknown[]): unknown {
-    switch (name) {
-      case 'contains':
-        return this.fnContains(args);
-      case 'startsWith':
-        return this.fnStartsWith(args);
-      case 'endsWith':
-        return this.fnEndsWith(args);
-      case 'format':
-        return this.fnFormat(args);
-      case 'join':
-        return this.fnJoin(args);
-      case 'toJSON':
-        return this.fnToJSON(args);
-      case 'fromJSON':
-        return this.fnFromJSON(args);
-      case 'hashFiles':
-        return this.fnHashFiles(args);
-      case 'success':
-        return this.fnSuccess();
-      case 'always':
-        return this.fnAlways();
-      case 'cancelled':
-        return this.fnCancelled();
-      case 'failure':
-        return this.fnFailure();
-      default:
-        throw new ExpressionError(
-          `Unknown function: ${name}`,
-          this.tokenSource()
-        );
+    const FUNCTIONS: Record<string, () => unknown> = {
+      'contains': () => this.fnContains(args),
+      'startsWith': () => this.fnStartsWith(args),
+      'endsWith': () => this.fnEndsWith(args),
+      'format': () => this.fnFormat(args),
+      'join': () => this.fnJoin(args),
+      'toJSON': () => this.fnToJSON(args),
+      'fromJSON': () => this.fnFromJSON(args),
+      'hashFiles': () => this.fnHashFiles(args),
+      'success': () => this.fnSuccess(),
+      'always': () => this.fnAlways(),
+      'cancelled': () => this.fnCancelled(),
+      'failure': () => this.fnFailure(),
+    };
+
+    const fn = FUNCTIONS[name];
+    if (!fn) {
+      throw new ExpressionError(
+        `Unknown function: ${name}`,
+        this.tokenSource()
+      );
     }
+    return fn();
   }
 
   private fnContains(args: unknown[]): boolean {

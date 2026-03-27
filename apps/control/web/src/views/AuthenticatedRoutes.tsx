@@ -17,9 +17,9 @@ import { RepoDetailPage } from './repos/RepoDetailPage';
 import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces';
 import { buildPath } from '../hooks/useRouter';
 import { useBreakpoint } from '../hooks/useBreakpoint';
-import { useI18n } from '../providers/I18nProvider';
-import { useAuth } from '../contexts/AuthContext';
-import { useNavigation } from '../contexts/NavigationContext';
+import { useI18n } from '../store/i18n';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigation } from '../store/navigation';
 import type { DeploySection, RouteState, Thread, View } from '../types';
 
 function SurfaceMessage({ title, description }: { title: string; description?: string }) {

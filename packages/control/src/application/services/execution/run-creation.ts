@@ -1,7 +1,7 @@
 import { generateId, now } from '../../../shared/utils';
 import type { Env, SpaceRole, RunQueueMessage } from '../../../shared/types';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { checkThreadAccess } from '../threads/threads';
+import { checkThreadAccess } from '../threads/thread-service';
 import { buildRunFailedPayload } from '../run-notifier';
 import { persistAndEmitEvent } from './run-events';
 import {

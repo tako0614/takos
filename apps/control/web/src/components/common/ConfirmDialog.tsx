@@ -1,6 +1,7 @@
-import { useState, useCallback, useMemo, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../providers/I18nProvider';
+import { useI18n } from '../../store/i18n';
+import { useConfirmDialogState, useConfirmDialogActions } from '../../store/confirm-dialog';
 import { Modal, ModalFooter, Button } from '../ui';
 
 interface ConfirmDialogProps {
@@ -93,57 +94,24 @@ export function ConfirmDialog({
   );
 }
 
-export function useConfirmDialog() {
-  const [dialogState, setDialogState] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    danger?: boolean;
-    onConfirm: () => void;
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
+/**
+ * Global confirm-dialog renderer driven by Jotai atoms.
+ * Mount this once near the app root (replaces the old ConfirmDialogProvider).
+ */
+export function ConfirmDialogRenderer() {
+  const state = useConfirmDialogState();
+  const { handleConfirm, handleCancel } = useConfirmDialogActions();
 
-  const confirm = useCallback((options: {
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    danger?: boolean;
-  }): Promise<boolean> => {
-    return new Promise(resolve => {
-      setDialogState({
-        isOpen: true,
-        ...options,
-        onConfirm: () => {
-          setDialogState(prev => ({ ...prev, isOpen: false }));
-          resolve(true);
-        },
-      });
-    });
-  }, []);
-
-  const cancel = useCallback(() => {
-    setDialogState(prev => ({ ...prev, isOpen: false }));
-  }, []);
-
-  const DialogComponent = useMemo(() => (
+  return (
     <ConfirmDialog
-      isOpen={dialogState.isOpen}
-      title={dialogState.title}
-      message={dialogState.message}
-      confirmText={dialogState.confirmText}
-      cancelText={dialogState.cancelText}
-      danger={dialogState.danger}
-      onConfirm={dialogState.onConfirm}
-      onCancel={cancel}
+      isOpen={state.isOpen}
+      title={state.title}
+      message={state.message}
+      confirmText={state.confirmText}
+      cancelText={state.cancelText}
+      danger={state.danger}
+      onConfirm={handleConfirm}
+      onCancel={handleCancel}
     />
-  ), [dialogState, cancel]);
-
-  return { confirm, DialogComponent };
+  );
 }

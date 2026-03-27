@@ -2,8 +2,31 @@ import { getDb } from '../../../infra/db';
 import { bundleDeployments, deployments } from '../../../infra/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import type { RolloutState, TakopackRolloutObject } from '../takopack/types';
 import { getErrorRate } from './rollout-health';
+
+export interface RolloutSpec {
+  strategy: 'staged' | 'immediate';
+  stages?: Array<{
+    weight: number;
+    pauseMinutes: number;
+  }>;
+  healthCheck?: {
+    errorRateThreshold: number;
+    minRequests: number;
+  };
+  autoPromote: boolean;
+}
+
+export interface RolloutState {
+  status: 'in_progress' | 'paused' | 'completed' | 'aborted' | 'failed';
+  currentStageIndex: number;
+  stages: Array<{ weight: number; pauseMinutes: number }>;
+  healthCheck: { errorRateThreshold: number; minRequests: number } | null;
+  autoPromote: boolean;
+  stageEnteredAt: string;
+  deploymentId: string;
+  serviceId: string;
+}
 import { upsertHostnameRouting } from '../routing/service';
 
 const DEFAULT_STAGES = [
@@ -33,7 +56,7 @@ export class RolloutService {
 
   async initiateRollout(params: {
     bundleDeploymentId: string;
-    rolloutSpec: TakopackRolloutObject['spec'];
+    rolloutSpec: RolloutSpec;
     deploymentId: string;
     serviceId: string;
     hostname: string;

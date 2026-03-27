@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   createWorkspaceWithDefaultRepo,
@@ -82,7 +82,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError('Personal space');
     }
 
-    const access = await requireWorkspaceAccess(c, 'me', user.id);
+    const access = await requireSpaceAccess(c, 'me', user.id);
     if (access instanceof Response) return access;
 
     const { workspace, repository } = await getWorkspaceWithRepository(c.env, access.space);
@@ -97,7 +97,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const { workspace, repository } = await getWorkspaceWithRepository(
@@ -115,7 +115,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const db = getDb(c.env.DB);
@@ -229,7 +229,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const body = c.req.valid('json');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -301,7 +301,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const workspace = await getWorkspaceModelSettings(c.env.DB, access.space.id);
@@ -331,7 +331,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const body = c.req.valid('json');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -390,7 +390,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -407,7 +407,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const items = await getUISidebarItems(c.env.DB, access.space.id);

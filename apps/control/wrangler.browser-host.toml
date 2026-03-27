@@ -25,10 +25,10 @@ tag = "v1"
 new_sqlite_classes = ["BrowserSessionContainer"]
 
 # Container configuration — standard-2: 1 vCPU / 6 GiB (Chromium requires 1GB+ RAM)
-# Image is built from apps/browser/Dockerfile with monorepo root as context.
+# Image is built from packages/browser-service/Dockerfile with monorepo root as context.
 [[containers]]
 class_name = "BrowserSessionContainer"
-image = "../browser/Dockerfile"
+image = "../../packages/browser-service/Dockerfile"
 image_build_context = "../.."
 instance_type = "standard-2"
 max_instances = 25
@@ -53,7 +53,7 @@ class_name = "BrowserSessionContainer"
 
 [[env.staging.containers]]
 class_name = "BrowserSessionContainer"
-image = "../browser/Dockerfile"
+image = "../../packages/browser-service/Dockerfile"
 image_build_context = "../.."
 instance_type = "standard-2"
 max_instances = 5

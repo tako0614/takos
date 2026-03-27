@@ -1,0 +1,37 @@
+{
+  "name": "@takos/control-server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./routes/api": "../src/server/routes/api.ts",
+    "./routes/auth/cli": "../src/server/routes/auth/cli.ts",
+    "./routes/auth/external": "../src/server/routes/auth/external.ts",
+    "./routes/auth/link": "../src/server/routes/auth/link.ts",
+    "./routes/auth/provisioning": "../src/server/routes/auth/provisioning.ts",
+    "./routes/auth/session": "../src/server/routes/auth/session.ts",
+    "./routes/auth-api": "../src/server/routes/auth-api.ts",
+    "./routes/oauth": "../src/server/routes/oauth/oauth-routes.ts",
+    "./routes/well-known": "../src/server/routes/well-known.ts",
+    "./routes/smart-http": "../src/server/routes/smart-http.ts",
+    "./routes/setup": "../src/server/routes/setup.ts",
+    "./routes/rpc-types": "../src/server/routes/rpc-types.ts",
+    "./middleware/auth": "../src/server/middleware/auth.ts",
+    "./middleware/billing": "../src/server/middleware/billing.ts",
+    "./middleware/body-size": "../src/server/middleware/body-size.ts",
+    "./middleware/cache": "../src/server/middleware/cache.ts",
+    "./middleware/content-type": "../src/server/middleware/content-type.ts",
+    "./middleware/git-auth": "../src/server/middleware/git-auth.ts",
+    "./middleware/oauth-auth": "../src/server/middleware/oauth-auth.ts",
+    "./middleware/param-validation": "../src/server/middleware/param-validation.ts",
+    "./middleware/plan-gates": "../src/server/middleware/plan-gates.ts",
+    "./middleware/space-access": "../src/server/middleware/space-access.ts",
+    "./middleware/static-assets": "../src/server/middleware/static-assets.ts",
+    "./middleware/trust-tier": "../src/server/middleware/trust-tier.ts",
+    "./middleware/turnstile": "../src/server/middleware/turnstile.ts",
+    "./utils/spa-fallback": "../src/server/utils/spa-fallback.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "package.json"
+  ]
+}

@@ -26,7 +26,7 @@ import toolsRoutes from './routes/runtime/tools.js';
 import sessionExecutionRoutes from './routes/sessions/execution.js';
 import sessionFilesRoutes from './routes/sessions/files.js';
 import sessionSnapshotRoutes from './routes/sessions/snapshot.js';
-import sessionSessionsRoutes from './routes/sessions/sessions.js';
+import sessionSessionsRoutes from './routes/sessions/session-routes.js';
 import repoReadRoutes from './routes/repos/read.js';
 import repoWriteRoutes from './routes/repos/write.js';
 import {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Icons } from '../lib/Icons';
-import { useI18n } from '../providers/I18nProvider';
+import { useI18n } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 
 interface SetupPageProps {

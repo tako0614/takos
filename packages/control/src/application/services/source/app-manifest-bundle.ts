@@ -158,8 +158,6 @@ export function appManifestToBundleDocs(
   return docs;
 }
 
-export const appManifestToTakopackObjects = appManifestToBundleDocs;
-
 function toManifestDocYaml(doc: BundleDoc): string {
   return YAML.stringify(doc).trimEnd();
 }

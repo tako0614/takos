@@ -9,7 +9,7 @@ import {
   handleDbError,
   internalError,
   notFound,
-  requireWorkspaceAccess,
+  requireSpaceAccess,
 } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
@@ -237,7 +237,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const spaceIdentifier = c.req.param('spaceId');
   const body = c.req.valid('json');
 
-  const access = await requireWorkspaceAccess(
+  const access = await requireSpaceAccess(
     c,
     spaceIdentifier,
     user.id,
@@ -299,7 +299,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const spaceIdentifier = c.req.param('spaceId');
   const db = getDb(c.env.DB);
 
-  const access = await requireWorkspaceAccess(c, spaceIdentifier, user.id);
+  const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
   if (access instanceof Response) return access;
   const spaceId = access.space.id;
 

@@ -26,7 +26,7 @@ export interface SpaceEnvRow {
   updated_at: string;
 }
 
-export interface ServiceRow {
+export interface CommonEnvServiceRow {
   id: string;
   space_id: string;
   route_ref: string | null;
@@ -48,156 +48,138 @@ export interface ServiceLinkRow {
   updated_at: string;
 }
 
-export type WorkerRow = ServiceRow;
+export type WorkerRow = CommonEnvServiceRow;
 export type WorkerLinkRow = ServiceLinkRow;
 
-export class CommonEnvRepository {
-  constructor(private readonly env: Pick<Env, 'DB'>) {}
+export async function listSpaceEnvRows(env: Pick<Env, 'DB'>, spaceId: string): Promise<SpaceEnvRow[]> {
+  const db = getDb(env.DB);
+  const rows = await db
+    .select({
+      id: accountEnvVars.id,
+      accountId: accountEnvVars.accountId,
+      name: accountEnvVars.name,
+      valueEncrypted: accountEnvVars.valueEncrypted,
+      isSecret: accountEnvVars.isSecret,
+      createdAt: accountEnvVars.createdAt,
+      updatedAt: accountEnvVars.updatedAt,
+    })
+    .from(accountEnvVars)
+    .where(eq(accountEnvVars.accountId, spaceId))
+    .orderBy(desc(accountEnvVars.updatedAt));
 
-  async listSpaceEnvRows(spaceId: string): Promise<SpaceEnvRow[]> {
-    const db = getDb(this.env.DB);
-    const rows = await db
-      .select({
-        id: accountEnvVars.id,
-        accountId: accountEnvVars.accountId,
-        name: accountEnvVars.name,
-        valueEncrypted: accountEnvVars.valueEncrypted,
-        isSecret: accountEnvVars.isSecret,
-        createdAt: accountEnvVars.createdAt,
-        updatedAt: accountEnvVars.updatedAt,
-      })
-      .from(accountEnvVars)
-      .where(eq(accountEnvVars.accountId, spaceId))
-      .orderBy(desc(accountEnvVars.updatedAt));
-
-    return rows.map((r) => ({
-      id: r.id,
-      space_id: r.accountId,
-      name: r.name,
-      value_encrypted: r.valueEncrypted,
-      is_secret: r.isSecret,
-      created_at: r.createdAt,
-      updated_at: r.updatedAt,
-    }));
-  }
-
-  async listSpaceCommonEnvNames(spaceId: string): Promise<string[]> {
-    const db = getDb(this.env.DB);
-    const rows = await db
-      .select({ name: accountEnvVars.name })
-      .from(accountEnvVars)
-      .where(eq(accountEnvVars.accountId, spaceId));
-
-    return rows.map((row) => row.name);
-  }
-
-  async listServiceLinks(spaceId: string, serviceId: string): Promise<ServiceLinkRow[]> {
-    const db = getDb(this.env.DB);
-    const rows = await db
-      .select({
-        id: serviceCommonEnvLinks.id,
-        accountId: serviceCommonEnvLinks.accountId,
-        serviceId: serviceCommonEnvLinks.serviceId,
-        envName: serviceCommonEnvLinks.envName,
-        source: serviceCommonEnvLinks.source,
-        lastAppliedFingerprint: serviceCommonEnvLinks.lastAppliedFingerprint,
-        syncState: serviceCommonEnvLinks.syncState,
-        syncReason: serviceCommonEnvLinks.syncReason,
-        lastObservedFingerprint: serviceCommonEnvLinks.lastObservedFingerprint,
-        lastReconciledAt: serviceCommonEnvLinks.lastReconciledAt,
-        lastSyncError: serviceCommonEnvLinks.lastSyncError,
-        createdAt: serviceCommonEnvLinks.createdAt,
-        updatedAt: serviceCommonEnvLinks.updatedAt,
-      })
-      .from(serviceCommonEnvLinks)
-      .where(and(
-        eq(serviceCommonEnvLinks.accountId, spaceId),
-        eq(serviceCommonEnvLinks.serviceId, serviceId),
-      ));
-
-    return rows.map((r) => ({
-      id: r.id,
-      space_id: r.accountId,
-      service_id: r.serviceId,
-      env_name: r.envName,
-      source: r.source as LinkSource,
-      last_applied_fingerprint: r.lastAppliedFingerprint,
-      sync_state: r.syncState as SyncState,
-      sync_reason: r.syncReason,
-      last_observed_fingerprint: r.lastObservedFingerprint,
-      last_reconciled_at: r.lastReconciledAt,
-      last_sync_error: r.lastSyncError,
-      created_at: r.createdAt,
-      updated_at: r.updatedAt,
-    }));
-  }
-
-  async listServiceIdsLinkedToEnvKey(spaceId: string, envName: string): Promise<string[]> {
-    const db = getDb(this.env.DB);
-    const rows = await db
-      .selectDistinct({ serviceId: serviceCommonEnvLinks.serviceId })
-      .from(serviceCommonEnvLinks)
-      .where(and(
-        eq(serviceCommonEnvLinks.accountId, spaceId),
-        eq(sql`UPPER(${serviceCommonEnvLinks.envName})`, envName),
-      ));
-
-    return rows.map((row) => row.serviceId);
-  }
-
-  async getService(spaceId: string, serviceId: string): Promise<ServiceRow | null> {
-    const r = await getServiceRouteRecord(this.env.DB, serviceId);
-    if (!r || r.accountId !== spaceId) return null;
-    return {
-      id: r.id,
-      space_id: r.accountId,
-      route_ref: r.routeRef,
-    };
-  }
-
-  async listWorkerLinks(spaceId: string, workerId: string): Promise<WorkerLinkRow[]> {
-    return this.listServiceLinks(spaceId, workerId);
-  }
-
-  async listWorkerIdsLinkedToEnvKey(spaceId: string, envName: string): Promise<string[]> {
-    return this.listServiceIdsLinkedToEnvKey(spaceId, envName);
-  }
-
-  async getWorker(spaceId: string, workerId: string): Promise<WorkerRow | null> {
-    return this.getService(spaceId, workerId);
-  }
-
-  async updateLinkRuntime(update: ReconcileUpdate): Promise<void> {
-    const db = getDb(this.env.DB);
-    const ts = now();
-
-    const setFields: Record<string, unknown> = {
-      lastReconciledAt: ts,
-      stateUpdatedAt: ts,
-      updatedAt: ts,
-    };
-
-    if (update.lastAppliedFingerprint !== undefined) {
-      setFields.lastAppliedFingerprint = update.lastAppliedFingerprint;
-    }
-    if (update.syncState !== undefined) {
-      setFields.syncState = update.syncState;
-    }
-    if (update.syncReason !== undefined) {
-      setFields.syncReason = update.syncReason;
-    }
-    if (update.lastObservedFingerprint !== undefined) {
-      setFields.lastObservedFingerprint = update.lastObservedFingerprint;
-    }
-    if (update.lastSyncError !== undefined) {
-      setFields.lastSyncError = update.lastSyncError;
-    }
-
-    await db
-      .update(serviceCommonEnvLinks)
-      .set(setFields)
-      .where(eq(serviceCommonEnvLinks.id, update.rowId));
-  }
+  return rows.map((r) => ({
+    id: r.id,
+    space_id: r.accountId,
+    name: r.name,
+    value_encrypted: r.valueEncrypted,
+    is_secret: r.isSecret,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  }));
 }
 
-export { CommonEnvRepository as ServiceCommonEnvRepository };
+export async function listSpaceCommonEnvNames(env: Pick<Env, 'DB'>, spaceId: string): Promise<string[]> {
+  const db = getDb(env.DB);
+  const rows = await db
+    .select({ name: accountEnvVars.name })
+    .from(accountEnvVars)
+    .where(eq(accountEnvVars.accountId, spaceId));
+
+  return rows.map((row) => row.name);
+}
+
+export async function listServiceLinks(env: Pick<Env, 'DB'>, spaceId: string, serviceId: string): Promise<ServiceLinkRow[]> {
+  const db = getDb(env.DB);
+  const rows = await db
+    .select({
+      id: serviceCommonEnvLinks.id,
+      accountId: serviceCommonEnvLinks.accountId,
+      serviceId: serviceCommonEnvLinks.serviceId,
+      envName: serviceCommonEnvLinks.envName,
+      source: serviceCommonEnvLinks.source,
+      lastAppliedFingerprint: serviceCommonEnvLinks.lastAppliedFingerprint,
+      syncState: serviceCommonEnvLinks.syncState,
+      syncReason: serviceCommonEnvLinks.syncReason,
+      lastObservedFingerprint: serviceCommonEnvLinks.lastObservedFingerprint,
+      lastReconciledAt: serviceCommonEnvLinks.lastReconciledAt,
+      lastSyncError: serviceCommonEnvLinks.lastSyncError,
+      createdAt: serviceCommonEnvLinks.createdAt,
+      updatedAt: serviceCommonEnvLinks.updatedAt,
+    })
+    .from(serviceCommonEnvLinks)
+    .where(and(
+      eq(serviceCommonEnvLinks.accountId, spaceId),
+      eq(serviceCommonEnvLinks.serviceId, serviceId),
+    ));
+
+  return rows.map((r) => ({
+    id: r.id,
+    space_id: r.accountId,
+    service_id: r.serviceId,
+    env_name: r.envName,
+    source: r.source as LinkSource,
+    last_applied_fingerprint: r.lastAppliedFingerprint,
+    sync_state: r.syncState as SyncState,
+    sync_reason: r.syncReason,
+    last_observed_fingerprint: r.lastObservedFingerprint,
+    last_reconciled_at: r.lastReconciledAt,
+    last_sync_error: r.lastSyncError,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  }));
+}
+
+export async function listServiceIdsLinkedToEnvKey(env: Pick<Env, 'DB'>, spaceId: string, envName: string): Promise<string[]> {
+  const db = getDb(env.DB);
+  const rows = await db
+    .selectDistinct({ serviceId: serviceCommonEnvLinks.serviceId })
+    .from(serviceCommonEnvLinks)
+    .where(and(
+      eq(serviceCommonEnvLinks.accountId, spaceId),
+      eq(sql`UPPER(${serviceCommonEnvLinks.envName})`, envName),
+    ));
+
+  return rows.map((row) => row.serviceId);
+}
+
+export async function getService(env: Pick<Env, 'DB'>, spaceId: string, serviceId: string): Promise<CommonEnvServiceRow | null> {
+  const r = await getServiceRouteRecord(env.DB, serviceId);
+  if (!r || r.accountId !== spaceId) return null;
+  return {
+    id: r.id,
+    space_id: r.accountId,
+    route_ref: r.routeRef,
+  };
+}
+
+export async function updateLinkRuntime(env: Pick<Env, 'DB'>, update: ReconcileUpdate): Promise<void> {
+  const db = getDb(env.DB);
+  const ts = now();
+
+  const setFields: Record<string, unknown> = {
+    lastReconciledAt: ts,
+    stateUpdatedAt: ts,
+    updatedAt: ts,
+  };
+
+  if (update.lastAppliedFingerprint !== undefined) {
+    setFields.lastAppliedFingerprint = update.lastAppliedFingerprint;
+  }
+  if (update.syncState !== undefined) {
+    setFields.syncState = update.syncState;
+  }
+  if (update.syncReason !== undefined) {
+    setFields.syncReason = update.syncReason;
+  }
+  if (update.lastObservedFingerprint !== undefined) {
+    setFields.lastObservedFingerprint = update.lastObservedFingerprint;
+  }
+  if (update.lastSyncError !== undefined) {
+    setFields.lastSyncError = update.lastSyncError;
+  }
+
+  await db
+    .update(serviceCommonEnvLinks)
+    .set(setFields)
+    .where(eq(serviceCommonEnvLinks.id, update.rowId));
+}

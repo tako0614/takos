@@ -159,7 +159,7 @@ function resolvePackageOwner(account: PackageWithTakopack['release']['repository
 const SORT_ALIASES: Record<string, string> = { popular: 'downloads', new: 'created' };
 
 // ---------------------------------------------------------------------------
-// Query helpers — replaces Prisma nested includes with joined queries
+// Query helpers — joined Drizzle queries for package exploration
 // ---------------------------------------------------------------------------
 
 interface ReleaseRow {

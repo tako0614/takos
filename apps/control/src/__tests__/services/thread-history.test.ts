@@ -10,8 +10,8 @@ vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof imp
   getDb: mocks.getDb,
 }));
 
-vi.mock('@/services/threads/threads', async () => {
-  const actual = await vi.importActual<typeof import('@/services/threads/threads')>('@/services/threads/threads');
+vi.mock('@/services/threads/thread-service', async () => {
+  const actual = await vi.importActual<typeof import('@/services/threads/thread-service')>('@/services/threads/thread-service');
   return {
     ...actual,
     listThreadMessages: mocks.listThreadMessages,

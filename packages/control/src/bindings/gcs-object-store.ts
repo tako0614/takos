@@ -1,5 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import type { FileMetadata, GetFilesOptions } from '@google-cloud/storage';
+import { randomUUID } from 'node:crypto';
 import type {
   R2Bucket,
   R2Object,
@@ -386,11 +387,158 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
     },
 
     // ----- createMultipartUpload -----
-    createMultipartUpload(
-      _key: string,
-      _options?: unknown,
-    ): never {
-      throw new Error('createMultipartUpload is not supported');
+    async createMultipartUpload(
+      key: string,
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: { contentType?: string; [k: string]: unknown } | Headers;
+      },
+    ) {
+      const uploadId = randomUUID();
+
+      // Store options for use during complete()
+      const contentType =
+        options?.httpMetadata instanceof Headers
+          ? options.httpMetadata.get('content-type') ?? undefined
+          : options?.httpMetadata?.contentType;
+      const customMetadata = options?.customMetadata;
+
+      // Track uploaded parts as temporary GCS objects
+      const partPrefix = `__multipart_tmp/${uploadId}/`;
+      const uploadedParts = new Map<number, { tempKey: string; etag: string }>();
+
+      return {
+        key,
+        uploadId,
+
+        async uploadPart(
+          partNumber: number,
+          value: ReadableStream | ArrayBuffer | string,
+        ): Promise<{ partNumber: number; etag: string }> {
+          const body = await normaliseBody(value);
+          const tempKey = `${partPrefix}${String(partNumber).padStart(6, '0')}`;
+          const file = getBucket().file(tempKey);
+
+          await file.save(body ?? '', {
+            resumable: false,
+          });
+
+          const [metadata] = await file.getMetadata();
+          const rawEtag = typeof metadata.etag === 'string' ? metadata.etag : '';
+          const etag = rawEtag.replace(/"/g, '') || `part-${partNumber}-${uploadId.slice(0, 8)}`;
+
+          uploadedParts.set(partNumber, { tempKey, etag });
+
+          return { partNumber, etag };
+        },
+
+        async complete(
+          parts: Array<{ partNumber: number; etag: string }>,
+        ): Promise<R2Object> {
+          // Sort parts by partNumber and collect the temp key references
+          const sortedParts = [...parts].sort(
+            (a, b) => a.partNumber - b.partNumber,
+          );
+
+          const sourceKeys: string[] = sortedParts.map((p) => {
+            const partInfo = uploadedParts.get(p.partNumber);
+            if (!partInfo) {
+              throw new Error(
+                `Part ${p.partNumber} not found in this upload session`,
+              );
+            }
+            return partInfo.tempKey;
+          });
+
+          const bucket = getBucket();
+          const destFile = bucket.file(key);
+
+          if (sourceKeys.length === 0) {
+            // No parts -- create an empty object
+            await destFile.save('', {
+              ...(contentType ? { contentType } : {}),
+              ...(customMetadata ? { metadata: customMetadata } : {}),
+            });
+          } else if (sourceKeys.length === 1) {
+            // Single part -- copy directly (combine requires >= 2 sources)
+            await bucket.file(sourceKeys[0]!).copy(destFile);
+            if (contentType || customMetadata) {
+              const metadataUpdate: FileMetadata = {};
+              if (contentType) metadataUpdate.contentType = contentType;
+              if (customMetadata) metadataUpdate.metadata = customMetadata;
+              await destFile.setMetadata(metadataUpdate);
+            }
+          } else {
+            // GCS combine supports up to 32 source objects per call.
+            // For more parts, combine in stages.
+            const COMBINE_LIMIT = 32;
+            let currentKeys = sourceKeys;
+            let stageIndex = 0;
+
+            while (currentKeys.length > COMBINE_LIMIT) {
+              const nextKeys: string[] = [];
+              for (let i = 0; i < currentKeys.length; i += COMBINE_LIMIT) {
+                const batch = currentKeys.slice(i, i + COMBINE_LIMIT);
+                if (batch.length === 1) {
+                  nextKeys.push(batch[0]!);
+                } else {
+                  const intermediateKey = `${partPrefix}__stage_${stageIndex}_${i}`;
+                  await bucket.combine(batch, intermediateKey);
+                  nextKeys.push(intermediateKey);
+                }
+              }
+              currentKeys = nextKeys;
+              stageIndex++;
+            }
+
+            await bucket.combine(currentKeys, key);
+
+            // Set metadata on the combined object
+            if (contentType || customMetadata) {
+              const metadataUpdate: FileMetadata = {};
+              if (contentType) metadataUpdate.contentType = contentType;
+              if (customMetadata) metadataUpdate.metadata = customMetadata;
+              await destFile.setMetadata(metadataUpdate);
+            }
+          }
+
+          // Clean up all temporary objects
+          const [tempFiles] = await bucket.getFiles({
+            prefix: partPrefix,
+          });
+          await Promise.all(
+            tempFiles.map((f) =>
+              f.delete().catch(() => {
+                // best-effort cleanup
+              }),
+            ),
+          );
+
+          // Return the final object metadata
+          const obj = await store.head(key);
+          if (!obj) {
+            throw new Error(
+              `Object ${key} not found after completing multipart upload`,
+            );
+          }
+          return obj;
+        },
+
+        async abort(): Promise<void> {
+          // Delete all temporary part objects
+          const [tempFiles] = await getBucket().getFiles({
+            prefix: partPrefix,
+          });
+          await Promise.all(
+            tempFiles.map((f) =>
+              f.delete().catch(() => {
+                // best-effort cleanup
+              }),
+            ),
+          );
+          uploadedParts.clear();
+        },
+      };
     },
   };
 

@@ -2,7 +2,7 @@ import type { ToolContext } from '../../types';
 import type { D1Database } from '../../../../shared/types/bindings.ts';
 import { getDb, sessions } from '../../../../infra/db';
 import { eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../../../services/execution/runtime';
+import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler';
 import { toIsoString } from '../../../../shared/utils';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../../shared/constants';
 

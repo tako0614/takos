@@ -22,9 +22,6 @@ export interface LLMConfig {
   googleApiKey?: string;
 }
 
-/** @deprecated Use estimateTokens from prompt-budget.ts instead */
-export const CHARS_PER_TOKEN = 4;
-
 export class LLMClient {
   private provider: LLMProvider;
   private config: LLMConfig;

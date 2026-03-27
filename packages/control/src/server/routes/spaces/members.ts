@@ -3,7 +3,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { SpaceRole } from '../../../shared/types';
-import { badRequest, requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { badRequest, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   createSpaceMember,
@@ -111,7 +111,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireWorkspaceAccess(c, spaceId, user.id);
+    const access = await requireSpaceAccess(c, spaceId, user.id);
     if (access instanceof Response) return access;
 
     const members = await listSpaceMembers(c.env.DB, access.space.id);
@@ -125,7 +125,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const body = c.req.valid('json') as { email: string; role: SpaceRole };
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -203,7 +203,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const targetUserId = targetUser.id;
     const body = c.req.valid('json') as { role: SpaceRole };
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -275,7 +275,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const targetUsername = c.req.param('username');
 
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,

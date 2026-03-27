@@ -10,7 +10,7 @@ import { checkRepoAccess } from '../../../application/services/source/repos';
 import { readableCommitErrorResponse, getTreeFlattenLimitError } from './base';
 import { validatePath } from '../../../shared/utils/path-validation';
 import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
-import { decodeBlobContent } from '../../../shared/utils/diff';
+import { decodeBlobContent } from '../../../shared/utils/unified-diff';
 import { createEmbeddingsService } from '../../../application/services/execution/embeddings';
 import { generateId } from '../../../shared/utils';
 import type { IndexJobQueueMessage } from '../../../shared/types';

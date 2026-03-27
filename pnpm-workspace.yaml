@@ -14,8 +14,6 @@ packages:
   - 'apps/control'
   - 'apps/runtime'
   - 'apps/cli'
-  - 'apps/executor'
-  - 'apps/browser'
   - 'apps/docs-site'
 
   # --- Shared packages ---

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendOutput, buildCombinedResult } from '../../runtime/actions/action-result-helpers.js';
+import { appendOutput, buildCombinedResult } from '../../runtime/actions/action-result-converter.js';
 
 // ---------------------------------------------------------------------------
 // appendOutput

@@ -2,7 +2,6 @@ import { getDb } from '../../../infra/db';
 import { workflowRuns, workflowJobs } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { createBundleDeploymentOrchestrator } from './bundle-deployment-orchestrator';
 import { checkRepoAccess } from '../source/repos';
 import * as gitStore from '../git-smart';
 import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts';
@@ -17,7 +16,6 @@ import {
   type AppDeploymentBuildSource,
   type AppManifest,
 } from '../source/app-manifest';
-import { buildParsedPackageFromParts } from '../takopack/manifest';
 
 type RepoRefType = 'branch' | 'tag' | 'commit';
 
@@ -41,9 +39,6 @@ type ResolvedBuildArtifacts = {
   buildSources: AppDeploymentBuildSource[];
   packageFiles: Map<string, ArrayBuffer | Uint8Array>;
 };
-
-type BundleListItem = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['list']>>[number];
-type BundleDetail = Awaited<ReturnType<ReturnType<typeof createBundleDeploymentOrchestrator>['get']>>;
 
 export function encodeSourceRef(refType: RepoRefType | undefined, ref: string | undefined, commitSha?: string): string | undefined {
   const normalizedRef = String(ref || '').trim();
@@ -116,60 +111,6 @@ function looksLikeInlineSql(value: string): boolean {
   if (!sql) return false;
   if (/\n/.test(sql) && /;/.test(sql)) return true;
   return /^(--|\/\*|\s*(create|alter|drop|insert|update|delete|pragma|begin|commit|with)\b)/i.test(sql);
-}
-
-function toPublicSourceType(item: { sourceType: string | null | undefined; sourceRepoId: string | null | undefined }): string | null {
-  if (item.sourceRepoId) return 'repo';
-  return item.sourceType || null;
-}
-
-function toAppDeploymentSummary(item: BundleListItem) {
-  const sourceRef = decodeSourceRef(item.sourceTag);
-  return {
-    id: item.id,
-    app_id: item.appId,
-    name: item.name,
-    version: item.version,
-    description: item.description,
-    icon: item.icon,
-    deployed_at: item.installedAt,
-    source: {
-      type: toPublicSourceType(item),
-      repo_id: item.sourceRepoId,
-      ref: sourceRef.ref,
-      ref_type: sourceRef.ref_type,
-    },
-  };
-}
-
-function toAppDeploymentDetail(item: BundleDetail) {
-  if (!item) return null;
-  const sourceRef = decodeSourceRef(item.sourceTag);
-  const hostnames = Array.isArray(item.hostnames)
-    ? item.hostnames.filter((hostname): hostname is string => typeof hostname === 'string' && hostname.length > 0)
-    : [];
-  return {
-    id: item.id,
-    app_id: item.appId,
-    name: item.name,
-    version: item.version,
-    description: item.description,
-    icon: item.icon,
-    manifest_json: item.manifestJson,
-    deployed_at: item.installedAt,
-    source: {
-      type: toPublicSourceType(item),
-      repo_id: item.sourceRepoId,
-      ref: sourceRef.ref,
-      ref_type: sourceRef.ref_type,
-    },
-    hostname: hostnames[0] ?? null,
-    hostnames,
-    build_sources: extractBuildSourcesFromManifestJson(item.manifestJson),
-    groups: item.groups,
-    ui_extensions: item.uiExtensions,
-    mcp_servers: item.mcpServers,
-  };
 }
 
 async function readRepoTextFileAtCommit(
@@ -429,92 +370,26 @@ export class AppDeploymentService {
     };
   }
 
-  async deployFromRepoRef(spaceId: string, userId: string, input: CreateAppDeploymentInput) {
-    const target = await this.resolveRepoTarget(spaceId, userId, input);
-    const { raw: manifestRaw } = await readRepoManifestAtCommit(this.env, target.treeSha);
-    const manifest = parseAppManifestYaml(manifestRaw);
-    const { buildSources, packageFiles } = await this.resolveBuildArtifacts(target, manifest);
-    const docs = appManifestToBundleDocs(
-      manifest,
-      new Map(buildSources.map((source) => [source.service_name, source])),
-    );
-    const { manifestYaml, normalizedFiles, checksums } = await buildParsedPackageFromDocs(docs, packageFiles);
-    const parsed = buildParsedPackageFromParts({ manifestYaml, files: normalizedFiles, checksums });
-
-    const service = createBundleDeploymentOrchestrator(this.env);
-    const sourceTag = encodeSourceRef(target.refType, target.ref, target.commitSha);
-    const result = await service.installResolvedPackage(spaceId, userId, {
-      manifest: parsed.manifest,
-      files: parsed.files,
-      normalizedApplyReport: parsed.applyReport,
-      options: {
-        source: {
-          type: 'git',
-          repoId: target.repoId,
-          ...(sourceTag ? { tag: sourceTag } : {}),
-        },
-        skipDependencyResolution: true,
-        requireAutoEnvApproval: true,
-        oauthAutoEnvApproved: input.approveOauthAutoEnv === true,
-        approveSourceChange: input.approveSourceChange === true,
-      },
-    });
-
-    const sourceRef = decodeSourceRef(result.sourceTag);
-    return {
-      app_deployment_id: result.bundleDeploymentId,
-      app_id: result.appId,
-      name: result.name,
-      version: result.version,
-      apply_report: result.applyReport,
-      resources_created: result.resourcesCreated,
-      source: {
-        type: 'repo',
-        repo_id: result.sourceRepoId || target.repoId,
-        ref: sourceRef.ref || target.ref,
-        ref_type: sourceRef.ref_type || target.refType,
-        commit_sha: target.commitSha,
-      },
-      build_sources: buildSources,
-    };
+  async deployFromRepoRef(_spaceId: string, _userId: string, _input: CreateAppDeploymentInput): Promise<never> {
+    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
-  async list(spaceId: string) {
-    const service = createBundleDeploymentOrchestrator(this.env);
-    const items = await service.list(spaceId);
-    return items.map(toAppDeploymentSummary);
+  async list(_spaceId: string): Promise<never> {
+    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
-  async get(spaceId: string, appDeploymentId: string) {
-    const service = createBundleDeploymentOrchestrator(this.env);
-    return toAppDeploymentDetail(await service.get(spaceId, appDeploymentId));
+  async get(_spaceId: string, _appDeploymentId: string): Promise<never> {
+    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
-  async remove(spaceId: string, appDeploymentId: string) {
-    const service = createBundleDeploymentOrchestrator(this.env);
-    await service.uninstall(spaceId, appDeploymentId);
+  async remove(_spaceId: string, _appDeploymentId: string): Promise<never> {
+    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
-  async rollback(spaceId: string, userId: string, appDeploymentId: string, options?: {
+  async rollback(_spaceId: string, _userId: string, _appDeploymentId: string, _options?: {
     approveOauthAutoEnv?: boolean;
-  }) {
-    const service = createBundleDeploymentOrchestrator(this.env);
-    const result = await service.rollbackToPrevious(spaceId, userId, appDeploymentId, {
-      requireAutoEnvApproval: true,
-      oauthAutoEnvApproved: options?.approveOauthAutoEnv === true,
-    });
-
-    return {
-      app_deployment_id: result.installed.bundleDeploymentId,
-      previous_version: result.previousVersion,
-      target_version: result.targetVersion,
-      deployed: {
-        app_id: result.installed.appId,
-        name: result.installed.name,
-        version: result.installed.version,
-        apply_report: result.installed.applyReport,
-      },
-    };
+  }): Promise<never> {
+    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 }
 

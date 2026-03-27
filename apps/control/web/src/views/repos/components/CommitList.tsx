@@ -3,7 +3,7 @@ import { Icons } from '../../../lib/Icons';
 import type { Commit } from '../../../types';
 import { formatDetailedRelativeDate } from '../../../lib/format';
 import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../providers/I18nProvider';
+import { useI18n } from '../../../store/i18n';
 
 interface CommitListProps {
   repoId: string;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, requireWorkspaceAccess } from '../shared/route-auth';
+import { parseLimit, requireSpaceAccess } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
@@ -17,8 +17,8 @@ import { getDb } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { deployments, serviceCustomDomains, serviceDeployments } from '../../../infra/db/schema';
 import { deleteHostnameRouting } from '../../../application/services/routing/service';
-import { createCloudflareApiClient } from '../../../platform/providers/cloudflare/api-client.ts';
-import { deleteCloudflareCustomHostname } from '../../../platform/providers/cloudflare/custom-domains.ts';
+import { createCloudflareApiClient } from '../../../application/services/cloudflare/api-client.ts';
+import { deleteCloudflareCustomHostname } from '../../../application/services/platform/custom-domains.ts';
 import { createCommonEnvService } from '../../../application/services/common-env';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
@@ -61,7 +61,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
 
-  const access = await requireWorkspaceAccess(c, spaceId, user.id);
+  const access = await requireSpaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
   const workersList = await listServicesForSpace(c.env.DB, access.space.id);
@@ -84,7 +84,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   let resolvedSpaceId: string;
   if (spaceId) {
-    const access = await requireWorkspaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,

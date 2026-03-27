@@ -31,9 +31,6 @@ export interface SessionSpaceIds {
   spaceId: string;
 }
 
-/** @deprecated Use {@link SessionSpaceIds} instead. */
-export type SessionWorkspaceIds = SessionSpaceIds;
-
 function asBodyRecord(body: unknown): BodyRecord {
   if (body && typeof body === 'object') {
     return body as BodyRecord;
@@ -89,9 +86,3 @@ export async function resolveSessionWorkDir(
   const workDir = await sessionStore.getSessionDir(sessionId, spaceId, ownerSub);
   return { sessionId, spaceId, ownerSub, workDir };
 }
-
-/** @deprecated Use {@link parseRequiredSessionSpaceIds} instead. */
-export const parseRequiredSessionWorkspaceIds = parseRequiredSessionSpaceIds;
-
-/** @deprecated Use {@link parseRequiredSpaceId} instead. */
-export const parseRequiredWorkspaceId = parseRequiredSpaceId;

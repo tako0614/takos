@@ -7,9 +7,9 @@ import type { ArtifactKind, Deployment, DeploymentEvent } from './types';
 type DeploymentInsert = typeof deployments.$inferInsert;
 type DeploymentUpdate = Partial<typeof deployments.$inferInsert>;
 
-export type PrismaDeployment = typeof deployments.$inferSelect;
+export type DeploymentRow = typeof deployments.$inferSelect;
 
-export function toApiDeployment(d: PrismaDeployment): Deployment {
+export function toApiDeployment(d: DeploymentRow): Deployment {
   return {
     id: d.id,
     service_id: d.serviceId,

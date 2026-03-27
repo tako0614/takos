@@ -38,3 +38,44 @@ export async function rpcJson<T>(response: Response): Promise<T> {
   return response.json();
 }
 
+// ---------------------------------------------------------------------------
+// Typed RPC helpers for routes whose path params contain colons that break
+// hono/client's type inference (e.g. /repos/:repoId/tree/:ref).
+// These centralise the `as any` casts so consumers stay type-safe.
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/** GET /repos/:repoId/tree/:ref */
+export function repoTree(repoId: string, ref: string, query?: Record<string, string>) {
+  return (rpc.repos[':repoId'] as any).tree[':ref'].$get({
+    param: { repoId, ref },
+    query: query ?? {},
+  }) as Promise<Response>;
+}
+
+/** GET /repos/:repoId/blob/:ref */
+export function repoBlob(repoId: string, ref: string, query?: Record<string, string>) {
+  return (rpc.repos[':repoId'] as any).blob[':ref'].$get({
+    param: { repoId, ref },
+    query: query ?? {},
+  }) as Promise<Response>;
+}
+
+/** GET /sessions/:sessionId/diff */
+export function sessionDiff(sessionId: string) {
+  return (rpc.sessions[':sessionId'] as any).diff.$get({
+    param: { sessionId },
+  }) as Promise<Response>;
+}
+
+/** POST /sessions/:sessionId/merge */
+export function sessionMerge(sessionId: string, json: Record<string, unknown>) {
+  return (rpc.sessions[':sessionId'] as any).merge.$post({
+    param: { sessionId },
+    json,
+  }) as Promise<Response>;
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
