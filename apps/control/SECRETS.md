@@ -1,208 +1,196 @@
 # Takos OSS Deployment Template - Secrets Configuration
 
-This document describes the secret contract for the `apps/control` Cloudflare
-Workers.
+This document describes the current secret contract for the tracked Cloudflare deployment templates in `apps/control`.
 
-Secrets are managed via `wrangler secret put <name>` and must never be stored
-in version control. This file is a public template, not a record of the Takos
-team's live production setup.
+Secrets are managed with `wrangler secret put`. Non-secret configuration belongs in `wrangler*.toml` `[vars]` / `[env.*.vars]`.
 
-Non-secret runtime config belongs in `wrangler*.toml` `[vars]` / `[env.staging.vars]`, not in Wrangler secrets.
+## Worker mapping
 
-## Worker Mapping
+Use `--config` to target the correct worker template.
 
-Secrets are scoped per Worker script. Use `--config` to target the right Worker.
+| Script name | Config | Responsibility |
+| --- | --- | --- |
+| `takos` / `takos-staging` | `wrangler.toml` | web/API worker, auth, setup, billing webhook, cron |
+| `takos-dispatch` | `wrangler.dispatch.toml` | tenant hostname dispatch |
+| `takos-worker` | `wrangler.worker.toml` | background queues, egress, recovery cron |
+| `takos-runtime-host` | `wrangler.runtime-host.toml` | runtime container host |
+| `takos-executor-host` | `wrangler.executor.toml` | executor container host |
+| `takos-browser-host` | `wrangler.browser-host.toml` | browser container host |
 
-| Worker | Config | Responsibility | Public Entry |
-|---|---|---|---|
-| `takos-web` | `wrangler.toml` | Admin domain (SPA + API gateway) + cron + public OAuth/OIDC provider | `admin.example.com` (and `staging-admin.example.com`) |
-| `takos-dispatch` | `wrangler.dispatch.toml` | Tenant domain routing (WFP dispatch) | `*.app.example.com`, `*.staging-app.example.com` |
-| `takos-worker` | `wrangler.worker.toml` | Unified background worker: run/index/workflow/deployment queues + egress proxy + cron | Queue + Service binding |
-| `takos-runtime-host` | `wrangler.runtime-host.toml` | Runtime container host (CF Containers) | Service binding |
-| `takos-executor` | `wrangler.executor.toml` | Agent executor container host (CF Containers) | Service binding |
-
-## Quick Examples
+## Quick examples
 
 ```bash
-# takos-worker (staging)
+wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml --env production
 wrangler secret put OPENAI_API_KEY --config wrangler.worker.toml --env staging
+wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml --env production
 ```
 
-Non-secret examples:
+## Required / optional by worker
 
-```toml
-# wrangler.toml
-[vars]
-GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+### `wrangler.toml`
 
-# wrangler.executor.toml
-[env.staging.vars]
-CONTROL_RPC_BASE_URL = "https://your-executor-staging.workers.dev"
-```
+Required secrets:
 
-## Required Secrets (By Worker)
-
-### takos-web (`wrangler.toml`)
-
-Required:
 - `GOOGLE_CLIENT_SECRET`
 - `PLATFORM_PRIVATE_KEY`
 - `PLATFORM_PUBLIC_KEY`
-- `CF_API_TOKEN`
 - `ENCRYPTION_KEY`
 
-Required vars:
-- `GOOGLE_CLIENT_ID`
+Required when Cloudflare management is enabled:
 
-Billing (required if billing is enabled):
+- `CF_API_TOKEN`
+
+Optional:
+
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+- `TURNSTILE_SECRET_KEY`
+- `OPENAI_API_KEY`
+- `SERPER_API_KEY`
+- `AUDIT_IP_HASH_KEY`
 
-Optional vars:
+Primary non-secret vars:
+
+- `ADMIN_DOMAIN`
+- `TENANT_BASE_DOMAIN`
+- `GOOGLE_CLIENT_ID`
+- `CF_ACCOUNT_ID`
 - `CF_ZONE_ID`
+- `WFP_DISPATCH_NAMESPACE`
 - `STRIPE_PLUS_PRICE_ID`
 - `STRIPE_PRO_TOPUP_PACKS_JSON`
 
-Optional:
-- `OPENAI_API_KEY` (required for direct index rebuild/file jobs and OpenAI-backed web features)
-- `SERPER_API_KEY` (only if you run web_search in the web worker)
-- `TURNSTILE_SECRET_KEY` (Cloudflare Turnstile bot protection on auth endpoints; if not set, Turnstile is disabled)
-- `AUDIT_IP_HASH_KEY` (if audit IP hashing is enabled)
+### `wrangler.dispatch.toml`
 
-Must not be configured:
-- `HOSTED_SERVICE_SECRET`
-- `SERVICE_API_KEY`
-- `SERVICE_SIGNING_ACTIVE_KID`
-- `SERVICE_SIGNING_KEYS`
-- `YURUCOMMU_HOSTED_API_KEY`
+Required secrets:
 
-### takos-dispatch (`wrangler.dispatch.toml`)
-
-Required:
 - none
 
-Notes:
-- `takos-dispatch` は tenant domain routing のみを担当する。
-- tenant app の OAuth callback / code exchange は tenant app 自身が Takos の public `/oauth/*` endpoint を直接利用して完結させる。
+Primary non-secret vars:
 
-### takos-worker (`wrangler.worker.toml`)
+- `ADMIN_DOMAIN`
+- `ROUTING_DO_PHASE`
 
-Required:
-- `ENCRYPTION_KEY` (decrypting workflow secret values — must match `takos-web`)
+### `wrangler.worker.toml`
 
-Required (agent functionality):
-- At least one LLM provider key: `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` or `GOOGLE_API_KEY`
+Required secrets:
 
-Optional:
-- `SERPER_API_KEY` (web_search)
-- `CF_API_TOKEN` (needed if workflow steps or agent runs must execute Cloudflare-management tools)
+- `ENCRYPTION_KEY`
 
-### takos-runtime-host (`wrangler.runtime-host.toml`)
+Required for agent functionality:
 
-Required:
-- none (proxy auth uses DO-local random tokens; no JWT keys needed)
+- at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`
 
 Optional:
-- `JWT_PUBLIC_KEY` (defense-in-depth: verifies takos-control → container requests)
 
-### takos-executor (`wrangler.executor.toml`)
-
-Required:
-- none (proxy auth uses DO-local random tokens; no JWT keys needed)
-
-Optional:
-- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` (proxied to container on demand)
 - `SERPER_API_KEY`
+- `CF_API_TOKEN`
 
-## Secret Details
+Primary non-secret vars:
 
-### Authentication (takos-web)
+- `ADMIN_DOMAIN`
+- `TENANT_BASE_DOMAIN`
+- `CF_ACCOUNT_ID`
+- `CF_ZONE_ID`
+- `WFP_DISPATCH_NAMESPACE`
 
-| Name | Kind | Description | Required |
-|------|------|-------------|----------|
-| `GOOGLE_CLIENT_ID` | var | OAuth 2.0 client ID from Google Cloud Console | Yes |
-| `GOOGLE_CLIENT_SECRET` | secret | OAuth 2.0 client secret from Google Cloud Console | Yes |
+### `wrangler.runtime-host.toml`
 
-**Setup:**
-1. Go to Google Cloud Console and create OAuth 2.0 credentials (Web application)
-2. Add redirect URIs for each environment:
-   - production: `https://admin.example.com/auth/callback`
-   - staging: `https://staging-admin.example.com/auth/callback`
+Required secrets:
 
-### Platform Keys (JWT Signing) (takos-web)
+- none
 
-| Secret | Description | Required |
-|--------|-------------|----------|
-| `PLATFORM_PRIVATE_KEY` | RSA private key (PEM) for signing JWTs | Yes |
-| `PLATFORM_PUBLIC_KEY` | RSA public key (PEM) for verifying JWTs | Yes |
+Optional:
+
+- `JWT_PUBLIC_KEY`
+
+Primary non-secret vars:
+
+- `ADMIN_DOMAIN`
+- `PROXY_BASE_URL`
+
+### `wrangler.executor.toml`
+
+Required secrets:
+
+- none
+
+Optional:
+
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `GOOGLE_API_KEY`
+- `EXECUTOR_PROXY_SECRET`
+
+Primary non-secret vars:
+
+- `ADMIN_DOMAIN`
+- `CONTROL_RPC_BASE_URL`
+
+### `wrangler.browser-host.toml`
+
+Required secrets:
+
+- none
+
+Primary non-secret vars:
+
+- `ADMIN_DOMAIN`
+
+## Key details
+
+### Google OAuth
+
+```bash
+wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml --env production
+```
+
+`GOOGLE_CLIENT_ID` is a non-secret var. The callback URL must match the deployed admin domain.
+
+### Platform keys
 
 ```bash
 openssl genrsa -out platform-private.pem 2048
 openssl rsa -in platform-private.pem -pubout -out platform-public.pem
 
 wrangler secret put PLATFORM_PRIVATE_KEY --config wrangler.toml --env production < platform-private.pem
-wrangler secret put PLATFORM_PUBLIC_KEY  --config wrangler.toml --env production < platform-public.pem
+wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.toml --env production < platform-public.pem
 ```
 
-### Cloudflare API
-
-| Name | Kind | Description | Required |
-|------|------|-------------|----------|
-| `CF_API_TOKEN` | secret | Cloudflare API token for Workers management | Yes (takos-web, takos-worker) |
-| `CF_ZONE_ID` | var | Cloudflare Zone ID (for custom domains) | Optional |
-
-**CF_API_TOKEN permissions (minimum):**
-- Workers Scripts: Edit
-- Workers Routes: Edit
-- Workers for Platforms: Admin
-- D1: Edit (only if managed programmatically)
-
-### AI Services (takos-worker)
-
-| Secret | Description | Required |
-|--------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for GPT models | At least one required |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude models | At least one required |
-| `GOOGLE_API_KEY` | Google AI API key for Gemini models | At least one required |
-| `SERPER_API_KEY` | Serper.dev API key for web search | Optional |
-
-### Data Encryption
-
-| Secret | Description | Required |
-|--------|-------------|----------|
-| `ENCRYPTION_KEY` | 32-byte key for encrypting sensitive data | Yes (takos-web, takos-worker) |
+### Encryption
 
 ```bash
+openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml --env production
 openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.toml --env production
 ```
 
-### Stripe (Billing) (takos-web)
+Use the same key on the web/API worker and the background worker.
 
-| Name | Kind | Description | Required |
-|------|------|-------------|----------|
-| `STRIPE_SECRET_KEY` | secret | Stripe API secret key (`sk_live_...` or `sk_test_...`) | Yes (if billing enabled) |
-| `STRIPE_WEBHOOK_SECRET` | secret | Stripe webhook signing secret (`whsec_...`) | Yes (if billing enabled) |
-| `STRIPE_PLUS_PRICE_ID` | var | Stripe Plus subscription Price ID (`price_...`) | Yes (if billing enabled) |
-| `STRIPE_PRO_TOPUP_PACKS_JSON` | var | JSON catalog for Pro top-up packs | Yes (if billing enabled) |
+### Cloudflare API token
+
+When you manage WFP/custom-domain resources from Takos itself, provision `CF_API_TOKEN`.
+
+Minimum permissions usually include:
+
+- Workers Scripts: Edit
+- Workers Routes: Edit
+- Workers for Platforms: Admin
+- D1: Edit
+
+### Billing
+
+If billing is enabled, configure:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PLUS_PRICE_ID`
+- `STRIPE_PRO_TOPUP_PACKS_JSON`
 
 Webhook endpoint:
-- production: `https://admin.example.com/api/billing/webhook`
 
-### Turnstile (Bot Protection) (takos-web)
+- `https://<admin-domain>/api/billing/webhook`
 
-| Secret | Description | Required |
-|--------|-------------|----------|
-| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret key for bot protection on auth endpoints | No (if not set, Turnstile verification is skipped) |
-
-**Setup:**
-1. Go to Cloudflare Dashboard > Turnstile and create a site widget
-2. Copy the secret key
-
-```bash
-wrangler secret put TURNSTILE_SECRET_KEY --config wrangler.toml --env production
-```
-
-## Listing / Deleting Secrets
+## Listing / deleting
 
 ```bash
 wrangler secret list --config wrangler.toml --env production

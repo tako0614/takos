@@ -41,9 +41,9 @@ export default defineConfig({
       {
         text: "独自仕様",
         items: [
+          { text: "仕様の読み方", link: "/specs/reading-the-spec" },
           { text: "仕様の全体像", link: "/specs/" },
           { text: ".takos/app.yml", link: "/specs/app-manifest" },
-          { text: "Deployment model", link: "/specs/deployment-model" },
           { text: "Deploy System v1", link: "/specs/deploy-system" },
           { text: "CLI / Auth model", link: "/specs/cli-and-auth" },
           { text: "OAuth", link: "/specs/oauth" },
@@ -63,7 +63,6 @@ export default defineConfig({
           { text: "Control plane", link: "/architecture/control-plane" },
           { text: "Tenant runtime", link: "/architecture/tenant-runtime" },
           { text: "互換性と制限", link: "/architecture/compatibility-and-limitations" },
-          { text: "Release system", link: "/architecture/release-system" },
           { text: "Resource governance", link: "/architecture/resource-governance" },
           { text: "Billing", link: "/architecture/billing" },
         ],
@@ -72,6 +71,7 @@ export default defineConfig({
         text: "運用と参照",
         items: [
           { text: "運用モデル", link: "/operations/" },
+          { text: "Platform Matrix", link: "/operations/platform-matrix" },
           { text: "参照", link: "/reference/" },
           { text: "API リファレンス", link: "/reference/api" },
           { text: "CLI command reference", link: "/reference/commands" },

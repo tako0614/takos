@@ -24,30 +24,31 @@ packages.
 ## Quickstart
 
 ```bash
-pnpm install
-pnpm build:all
-pnpm test:all
+corepack pnpm install
+corepack pnpm build:all
+corepack pnpm test:all
 ```
 
 Docs preview:
 
 ```bash
-pnpm docs:dev
+corepack pnpm docs:dev
 ```
 
 For local control-plane development:
 
 ```bash
-pnpm dev:takos
+corepack pnpm dev:takos
 ```
 
 For the local stack:
 
 ```bash
 cp .env.local.example .env.local
-pnpm local:up
+corepack pnpm local:up
+corepack pnpm local:smoke
 # or:
-# TAKOS_LOCAL_ENV_FILE=/path/to/local.env pnpm local:up
+# TAKOS_LOCAL_ENV_FILE=/path/to/local.env corepack pnpm local:up
 ```
 
 ## Documentation
@@ -62,9 +63,15 @@ private-only and does not belong in OSS product flow.
 
 ## Deployment Configuration
 
-Tracked `wrangler*.toml`, `.env.example`, and secrets docs in this repository
-are OSS-safe templates. Replace placeholder domains, IDs, and resource names
-with your own before deploying.
+Cloudflare deployment templates live under `apps/control/`.
+
+- `wrangler*.toml`
+- `.env.example`
+- `.env.self-host.example`
+- `SECRETS.md`
+
+Local stack configuration lives in `.env.local.example`. Helm/self-host
+packaging lives in `deploy/helm/takos/`.
 
 ## Contributing
 

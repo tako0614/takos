@@ -183,7 +183,7 @@ workers_dev = true
 [env.staging.vars]
 ADMIN_DOMAIN = "test.takos.jp"
 TENANT_BASE_DOMAIN = "app.test.takos.jp"
-GOOGLE_CLIENT_ID = "your-staging-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = "809769910884-jkcj6uqe8gjsh4cllghulfq5k213ve5m.apps.googleusercontent.com"
 ROUTING_DO_PHASE = "4"
 WFP_DISPATCH_NAMESPACE = "takos-staging-tenants"
 CF_ACCOUNT_ID = "a10162d23653f1ad1193dabf520a5dd0"

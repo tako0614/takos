@@ -1,45 +1,65 @@
 # Takos overview
 
-Takos は、AI を含むアプリケーションや worker ベースのサービスを、同じ control plane で管理・配備・実行するための platform です。
+Takos は、AI を含む app と worker ベースの service を、同じ control plane で管理・配備・実行するための platform です。
+この overview は、細部の仕様より前に「Takos をどの単位で理解すればよいか」を揃える入口です。
 
-## Takos が提供するもの
+## このページで依存してよい範囲
 
-- workspace 単位の分離
-- repo と workflow artifact を起点にした app deploy
-- worker を中心にした service graph
-- resource と binding の一貫した扱い
-- thread / run / artifact を中心にした AI 実行モデル
-- Cloudflare と local をまたぐ運用面
+- Takos の全体像
+- docs の読み順
+- public 用語と internal 用語の大まかな対応
 
-## Takos の基本像
+## このページで依存してはいけない範囲
 
-Takos では、利用者が目にする主な単位は次です。
+- provider 固有の lower-level route
+- internal table 名
+- 個別 API / CLI / manifest の詳細契約
 
-- Workspace: 所有と隔離の単位
-- Repo: deploy の入力になる source と artifact の単位
-- Worker: 公開 surface での deployable unit
-- Resource: D1, R2, KV などの backing resource
-- Binding: service から resource や他 service へ渡す接続
-- Thread / Run: AI 対話と実行の単位
+## Takos が扱う基本単位
 
-## control plane と tenant runtime
+- Workspace / Space: 所有と隔離
+- Repo: source と workflow artifact の起点
+- Worker: public surface での deployable unit
+- Resource / Binding: backing capability と接続
+- Thread / Run / Artifact: AI 実行の履歴と結果
 
-Takos は control plane と tenant runtime を分けて扱います。
+## public と internal の読み分け
 
-- control plane: API, deployment, routing, run lifecycle
-- tenant runtime: deploy された worker bundle や image が実際に処理を受ける面
+Takos Docs では、次の 3 層を分けて読みます。
 
-この分離によって、local と Cloudflare で control plane の adapter を変えつつ、tenant 側の contract を揃えやすくしています。
+1. public contract
+2. implementation note
+3. internal model
 
-現時点の `.takos/app.yml` v1alpha1 では `worker` service を正本にしています。  
-internal routing model には `http-url` target がありますが、manifest の public contract としてはまだ予約領域です。
+採用判断に使うのは `specs/` と `reference/` です。
+`architecture/` は、Takos が内側でどう動いているかを理解するための章です。
 
-## 想定する読者
+## 代表的なユースケース
 
-この docs は次の読者を想定します。
+### app を配備したい人
 
-- Takos を導入する platform operator
-- Takos の上で app を配備する builder
-- Takos CLI や `.takos/app.yml` を使う開発者
+- `.takos/app.yml` を書く
+- workflow artifact を用意する
+- `takos deploy` または `app-deployments` API を使う
 
-実装コードの追跡より、Takos の contract と動作モデルを把握したい人向けです。
+### operator
+
+- space / repo / resource / route の関係を把握する
+- rollout / rollback / provider 差分を確認する
+
+### internal 実装者
+
+- public contract と internal model の境界を確認してから code を追う
+
+## 最初に読むページ
+
+- docs の trust boundary は [仕様の読み方](/specs/reading-the-spec)
+- manifest と deploy は [独自仕様](/specs/)
+- CLI / API は [参照](/reference/)
+- internal 構成は [アーキテクチャ](/architecture/)
+
+## 次に読むページ
+
+- [仕様の読み方](/specs/reading-the-spec)
+- [中核概念](/concepts/)
+- [独自仕様](/specs/)

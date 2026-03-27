@@ -1,47 +1,76 @@
 # Package / Ecosystem
 
-Takos のエコシステムは、`.takos/app.yml` manifest を含むリポジトリ (パッケージ) の集合です。パッケージはワークスペースにデプロイされ、MCP 経由でエージェントにツールを提供します。
+Takos の ecosystem は、`.takos/app.yml` を持つ repo を workspace/space に持ち込み、app deploy・MCP・file handler・OAuth をまとめて扱う仕組みです。
 
-## パッケージとは
+## package とは
 
-パッケージは `.takos/app.yml` を持つ Git リポジトリです。manifest がデプロイの宣言であり、Takos はそれを読んで Workload, Resource, Binding, Endpoint, McpServer をプロビジョニングします。
+Takos でいう package は、現在は **single-document `kind: App` manifest** を持つ Git repository です。
 
-パッケージの例:
+- deploy の正本: `.takos/app.yml`
+- source provenance の正本: repo ID + ref
+- build artifact の正本: `.takos/workflows/*` が出す workflow artifact
 
-- **takos-computer** — ブラウザ自動化 + エージェント実行 (公式)
-- ユーザーが作成するカスタムツールパッケージ
-- サードパーティの MCP ツールサーバー
+旧 docs にあった multi-document `Package` / `Workload` / `Binding` manifest は current contract ではありません。
 
-## Seed repositories
+## seed repositories
 
-新しいワークスペースを作成するとき、フロントエンドは `GET /api/seed-repositories` から推奨パッケージの一覧を取得し、ポップアップで表示します。ユーザーが選択したリポジトリがワークスペースにクローンされ、デプロイされます。
+初回セットアップでは `GET /api/seed-repositories` から seed repo の一覧を取得し、workspace に導入する repo を選びます。seed repository は「最初に入れる候補」であり、store registry や explore と同じものではありません。
 
-```
-seed-repositories.ts
-  └── SEED_REPOSITORIES: [{ url, name, description, category, checked }]
-```
+## ecosystem で自動化されるもの
 
-`checked: true` のパッケージはデフォルトで選択されています。これは store (発見のための仕組み) とは独立した仕組みです。store はリポジトリを発見するためのもの、seed repositories は初回セットアップのためのものです。
+manifest と deploy を通じて、Takos は次を関連づけます。
 
-## MCP によるツール統合
+- app identity
+- service / route / hostname
+- resource binding
+- OAuth client
+- MCP server registration
+- file handler matcher
 
-Takos ではすべてのツールを MCP (Model Context Protocol) で統合します。パッケージがツールを提供する場合:
+つまり package は「コードだけ」ではなく、workspace に持ち込む integration contract 全体を表します。
 
-1. パッケージは MCP サーバーエンドポイント (`POST /mcp`) を公開する
-2. manifest で `McpServer` kind を宣言する
-3. デプロイ時に `mcp_servers` テーブルに自動登録される
-4. エージェント実行時に `loadMcpTools()` がツールを読み込む
+## MCP 統合
 
-builtin tool の仕組みは残りますが、新規ツールはすべて MCP で統合する方針です。
-
-## 認証モデル
-
-パッケージには 2 種類の認証トークンがあり、用途が異なります。
-
-### TAKOS_ACCESS_TOKEN — Worker から Takos API を呼ぶ
+Takos では repo がツールを公開する主要な方法として MCP を使います。
 
 ```yaml
-kind: Package
+spec:
+  routes:
+    - name: app
+      service: web
+      path: /
+  mcpServers:
+    - name: notes
+      route: /mcp
+      transport: streamable-http
+```
+
+deploy 後は control plane が MCP endpoint を登録し、agent 実行側は登録済み server をロードします。`mcpServers[].route` は app 側の route contract と結びつき、`endpoint` は外部 MCP server を直接登録するときに使います。
+
+## file handler 統合
+
+storage/file 系 UI から app を開く contract は `spec.fileHandlers` で宣言します。
+
+```yaml
+spec:
+  fileHandlers:
+    - name: markdown
+      mimeTypes: [text/markdown]
+      extensions: [.md]
+      openPath: /files/:id
+```
+
+これにより space storage と app UI が loose coupling のまま連携できます。
+
+## 認証の 3 レイヤ
+
+### 1. User auth
+
+CLI / browser / third-party app は session cookie, PAT, OAuth token で Takos API を呼びます。
+
+### 2. Takos-managed token
+
+```yaml
 spec:
   env:
     required: [TAKOS_ACCESS_TOKEN]
@@ -49,87 +78,28 @@ spec:
     scopes: [threads:read, runs:write]
 ```
 
-デプロイ時に `tak_pat_` トークンが自動生成され、Worker の環境変数に注入されます。Worker はこのトークンで Takos API を呼べます。**Takos コントロールプレーンが検証します。**
+deploy された service が Takos API を呼ぶための managed token です。用途は Worker から control plane を呼ぶことです。
 
-### secretRef + authSecretRef — MCP サーバーの認証
+### 3. MCP server auth
 
-```yaml
-# 1. シークレットを宣言 (デプロイ時に自動生成)
-kind: Resource
-metadata:
-  name: mcp-secret
-spec:
-  type: secretRef
-  generate: true
+MCP server 自身の auth は manifest の `mcpServers` 宣言先で処理します。Takos-managed token と同じものではありません。
 
-# 2. Worker の環境変数に注入
-kind: Binding
-spec:
-  from: mcp-secret
-  to: my-worker
-  mount:
-    as: MCP_AUTH_TOKEN
+## package deploy の流れ
 
-# 3. MCP サーバーの Bearer 認証に使用
-kind: McpServer
-spec:
-  authSecretRef: mcp-secret
+```text
+repo/ref
+  -> resolve .takos/app.yml
+  -> validate manifest
+  -> resolve workflow artifacts
+  -> create/update app + services + resources
+  -> register routes + MCP + file handlers + OAuth
+  -> create app deployment + rollout state
 ```
 
-デプロイ時にランダムトークンが生成され、同じ値が Worker env と MCP 登録の両方に注入されます。**MCP サーバー (Worker 自身) が検証します。**
+current CLI では `takos deploy --repo ... --ref ...` がこの流れの入口です。
 
-### 使い分け
+## takos-computer の位置づけ
 
-| | TAKOS_ACCESS_TOKEN | secretRef |
-| --- | --- | --- |
-| 用途 | Worker → Takos API | McpClient → MCP サーバー |
-| 検証者 | Takos | Worker 自身 |
-| 形式 | `tak_pat_...` | ランダム base64url |
-| スコープ制御 | `takos.scopes` | なし (全 or 無) |
+`takos-computer` は browser automation と executor runtime を提供する ecosystem package 群です。Takos 本体から見ると「browser-host / executor-host / runtime-host と、それらがつなぐ runtime contract」を提供する代表例です。
 
-## パッケージのデプロイフロー
-
-```
-リポジトリ → .takos/app.yml パース
-  → Resource プロビジョニング (D1, R2, secretRef 等)
-  → OAuth クライアント作成 (必要な場合)
-  → Workload デプロイ (container / worker)
-    → Resource Binding 注入
-    → secretRef → 環境変数注入
-  → Endpoint 登録
-  → McpServer 登録
-    → authSecretRef → Bearer token 保存
-  → Rollout (staged / immediate)
-```
-
-## takos-computer
-
-Takos 公式のリファレンスパッケージです。ブラウザ自動化とエージェント実行を提供します。
-
-**提供するツール (MCP 経由):**
-
-| tool | description |
-| --- | --- |
-| `browser_open` | ブラウザセッションを開く |
-| `browser_goto` | URL に遷移する |
-| `browser_action` | ページ操作 (click, type, scroll 等) |
-| `browser_screenshot` | スクリーンショットを取得する |
-| `browser_extract` | ページからデータを抽出する |
-| `browser_html` | ページ HTML を取得する |
-| `browser_close` | ブラウザセッションを閉じる |
-
-**アーキテクチャ:**
-
-```
-takos-computer/
-  apps/
-    browser/     → Playwright コンテナ
-    executor/    → LLM エージェント実行コンテナ
-  packages/
-    browser-service/  → MCP サーバー (POST /mcp)
-    executor-service/  → Control RPC クライアント
-    computer-hosts/   → CF Worker (thin proxy)
-  .takos/app.yml     → manifest
-```
-
-manifest の全文は [`.takos/app.yml` 仕様](/specs/app-manifest) のリファレンスセクションを参照してください。
+package の詳細な記述方法は [`.takos/app.yml`](/specs/app-manifest) を参照してください。

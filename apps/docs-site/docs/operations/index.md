@@ -1,40 +1,53 @@
 # 運用モデル
 
-## local と staging / production
+Takos の tracked config と operator 導線は、現在は次の 3 面で整理するのが安全です。
 
-Takos の運用では、少なくとも次の面を区別して考えます。
+## 1. local stack
 
-- local: 検証と再現
-- staging: 実 provider 上での検証
-- production: 本番運用
+- 正本 template: `.env.local.example`
+- 起動: `corepack pnpm local:up`
+- 検証: `corepack pnpm local:smoke`, `corepack pnpm local:proxyless-smoke`
 
-## local の意味
+local は単なる UI preview ではなく、control plane と runtime contract の再現環境です。
 
-local は単なる UI preview ではなく、Takos の control plane と tenant runtime contract を検証する面です。  
-特に proxyless smoke は、Cloudflare 固有 path が control plane に逆流していないかを見る重要な確認です。
+## 2. Cloudflare deploy
 
-local backend の既知差分と制限は [互換性と制限](/architecture/compatibility-and-limitations) にまとめています。
+Cloudflare 側の tracked template は control deployment template 群です。
 
-## Cloudflare の意味
+- `wrangler.toml`
+- `wrangler.dispatch.toml`
+- `wrangler.worker.toml`
+- `wrangler.runtime-host.toml`
+- `wrangler.executor.toml`
+- `wrangler.browser-host.toml`
+- `apps/control/.env.self-host.example` (Cloudflare worker vars/secrets の template)
+- `secret 管理コマンド (`scripts/admin/` 配下)` (secret 管理コマンド)
 
-Cloudflare は主要な provider / runtime backend の 1 つです。  
-worker bundle deploy, routing, logs, rollback を現実の backend で確認する場所になります。
+この面が current production/staging deploy の primary contract です。
 
-## rollback と canary
+## 3. self-host / local-platform
 
-Takos の deployment model は rollout state を持ちます。  
-運用では、`active`, `canary`, `rollback`, `archived` の routing 状態と、deployment event を見るのが基本です。
+self-host 系の正本は local-platform entrypoint と Helm chart です。
 
-## operator が見るべき signal
+- entrypoints: `pnpm -C apps/control dev:local:*`
+- env template: `control self-host env example`
+- chart: Helm chart
 
-- deployment status
-- deploy state
-- routing status
-- health endpoint
-- run follow / event stream
-- local proxyless 結果
+ここでは Postgres / Redis / S3-compatible storage / browser-executor-runtime services を operator が用意する前提です。
 
 ## tracked config の扱い
 
-repo に含まれる tracked config は template です。  
-実運用では resource ID, domain, secret, callback URL などを実値に置き換える必要があります。
+repo に含まれる tracked config はすべて **template** です。実運用では必ず次を置き換えてください。
+
+- domain / callback URL
+- Cloudflare account/zone/database IDs
+- bucket / queue / vector index 名
+- OAuth / Stripe / provider secret
+
+## operator が確認するもの
+
+- app deployment status
+- rollout state
+- custom domain / hostname state
+- notification / run stream
+- local smoke と proxyless smoke

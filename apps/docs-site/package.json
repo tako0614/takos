@@ -7,7 +7,8 @@
     "dev": "vitepress dev docs --host 0.0.0.0 --port 4173",
     "build": "vitepress build docs",
     "preview": "vitepress preview docs --host 0.0.0.0 --port 4173",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "deploy": "vitepress build docs && wrangler pages deploy docs/.vitepress/dist --project-name takos-docs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
