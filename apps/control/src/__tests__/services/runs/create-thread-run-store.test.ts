@@ -37,7 +37,7 @@ vi.mock('@/shared/utils/logger', () => ({
 
 import {
   getRunHierarchyNode,
-  getWorkspaceModel,
+  getSpaceModel,
   getRunResponse,
   createPendingRun,
   updateRunStatus,
@@ -192,7 +192,7 @@ describe('getRunHierarchyNode', () => {
   });
 });
 
-describe('getWorkspaceModel', () => {
+describe('getSpaceModel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isInvalidArrayBufferError.mockReturnValue(false);
@@ -201,7 +201,7 @@ describe('getWorkspaceModel', () => {
   it('returns aiModel when workspace found', async () => {
     mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: { aiModel: 'gpt-5.4-mini' } }));
 
-    const result = await getWorkspaceModel({} as D1Database, 'space-1');
+    const result = await getSpaceModel({} as D1Database, 'space-1');
 
     expect(result).toEqual({ aiModel: 'gpt-5.4-mini' });
   });
@@ -209,14 +209,14 @@ describe('getWorkspaceModel', () => {
   it('returns null when workspace not found', async () => {
     mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: undefined }));
 
-    const result = await getWorkspaceModel({} as D1Database, 'missing');
+    const result = await getSpaceModel({} as D1Database, 'missing');
     expect(result).toBeNull();
   });
 
   it('normalizes null aiModel', async () => {
     mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: { aiModel: undefined } }));
 
-    const result = await getWorkspaceModel({} as D1Database, 'space-1');
+    const result = await getSpaceModel({} as D1Database, 'space-1');
     expect(result).toEqual({ aiModel: null });
   });
 });

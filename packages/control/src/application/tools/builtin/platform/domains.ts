@@ -2,7 +2,7 @@
 import { generateId, now } from '../../../../shared/utils';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { deleteHostnameRouting, upsertHostnameRouting } from '../../../services/routing';
+import { deleteHostnameRouting, upsertHostnameRouting } from '../../../services/routing/service';
 import { createServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
 import { getServiceRouteRecord } from '../../../services/platform/workers';
 

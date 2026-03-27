@@ -231,8 +231,8 @@ export async function validateManifestForInstall(params: {
     const preflightRequiredEnvKeys = requiredEnvKeys.filter((key) => !MANAGED_COMMON_ENV_KEYS.has(key));
     if (preflightRequiredEnvKeys.length > 0) {
       const commonEnvService = new CommonEnvService(env);
-      const workspaceCommonEnv = await commonEnvService.listWorkspaceCommonEnv(spaceId);
-      const availableCommonEnvKeys = new Set(workspaceCommonEnv.map((entry) => entry.name));
+      const spaceCommonEnv = await commonEnvService.listSpaceCommonEnv(spaceId);
+      const availableCommonEnvKeys = new Set(spaceCommonEnv.map((entry) => entry.name));
       const missingRequiredEnvKeys = preflightRequiredEnvKeys.filter((key) => !availableCommonEnvKeys.has(key));
       if (missingRequiredEnvKeys.length > 0) {
         throw new Error(

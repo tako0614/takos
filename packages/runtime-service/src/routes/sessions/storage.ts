@@ -11,7 +11,7 @@ import {
   MAX_SESSIONS_PER_WORKSPACE,
   MAX_TOTAL_SESSIONS,
 } from '../../shared/config.js';
-import { isValidSessionId, validateWorkspaceId } from '../../runtime/validation.js';
+import { isValidSessionId, validateSpaceId } from '../../runtime/validation.js';
 import { OwnerBindingError } from '../../shared/errors.js';
 import { startHeartbeat } from '../../runtime/heartbeat.js';
 
@@ -113,12 +113,12 @@ export class SessionStore {
   }
 
   getSessionWithValidation(sessionId: string, spaceId: string, ownerSub?: string): Session {
-    const validatedWorkspaceId = validateWorkspaceId(spaceId);
+    const validatedSpaceId = validateSpaceId(spaceId);
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
-    if (session.spaceId !== validatedWorkspaceId) {
+    if (session.spaceId !== validatedSpaceId) {
       throw new Error('Session does not belong to the specified workspace');
     }
     enforceSessionOwnerBinding(session, ownerSub);
@@ -144,8 +144,8 @@ export class SessionStore {
       throw new Error('Invalid session ID format');
     }
 
-    const validatedWorkspaceId = validateWorkspaceId(spaceId);
-    const session = await this.createSession(sessionId, validatedWorkspaceId, ownerSub, proxyToken);
+    const validatedSpaceId = validateSpaceId(spaceId);
+    const session = await this.createSession(sessionId, validatedSpaceId, ownerSub, proxyToken);
     return session.workDir;
   }
 
@@ -156,7 +156,7 @@ export class SessionStore {
       if (!session) {
         return false;
       }
-      if (spaceId && session.spaceId !== validateWorkspaceId(spaceId)) {
+      if (spaceId && session.spaceId !== validateSpaceId(spaceId)) {
         throw new Error('Session does not belong to the specified workspace');
       }
       enforceSessionOwnerBinding(session, ownerSub);
@@ -254,7 +254,7 @@ export class SessionStore {
     ownerSub?: string,
     proxyToken?: string,
   ): Promise<Session> {
-    const validatedWorkspaceId = validateWorkspaceId(spaceId);
+    const validatedSpaceId = validateSpaceId(spaceId);
     const normalizedOwnerSub = normalizeOwnerSub(ownerSub);
 
     await this.mutex.acquire();
@@ -264,7 +264,7 @@ export class SessionStore {
 
       const existing = this.sessions.get(sessionId);
       if (existing) {
-        if (existing.spaceId !== validatedWorkspaceId) {
+        if (existing.spaceId !== validatedSpaceId) {
           throw new Error('Session does not belong to the specified workspace');
         }
         enforceSessionOwnerBinding(existing, normalizedOwnerSub);
@@ -279,20 +279,20 @@ export class SessionStore {
       if (this.sessions.size >= MAX_TOTAL_SESSIONS) {
         throw new Error('Maximum total sessions reached. Please try again later.');
       }
-      let workspaceCount = 0;
+      let spaceCount = 0;
       for (const s of this.sessions.values()) {
-        if (s.spaceId === validatedWorkspaceId) workspaceCount++;
+        if (s.spaceId === validatedSpaceId) spaceCount++;
       }
-      if (workspaceCount >= MAX_SESSIONS_PER_WORKSPACE) {
+      if (spaceCount >= MAX_SESSIONS_PER_WORKSPACE) {
         throw new Error('Maximum sessions per workspace reached');
       }
 
-      const workDir = path.join(os.tmpdir(), `takos-session-${validatedWorkspaceId}-${sessionId}`);
+      const workDir = path.join(os.tmpdir(), `takos-session-${validatedSpaceId}-${sessionId}`);
       await fs.mkdir(workDir, { recursive: true });
 
       const sessionInfo = {
         session_id: sessionId,
-        space_id: validatedWorkspaceId,
+        space_id: validatedSpaceId,
       };
       await fs.writeFile(
         path.join(workDir, '.takos-session'),
@@ -302,7 +302,7 @@ export class SessionStore {
 
       const session: Session = {
         id: sessionId,
-        spaceId: validatedWorkspaceId,
+        spaceId: validatedSpaceId,
         ownerSub: normalizedOwnerSub,
         proxyToken,
         workDir,

@@ -4,28 +4,28 @@ import { rpc, rpcJson } from '../lib/rpc';
 import { getErrorMessage } from '../lib/errors';
 import { useI18n } from '../providers/I18nProvider';
 import { useToast } from '../hooks/useToast';
-import type { User, UserSettings, Workspace } from '../types';
-import { normalizeWorkspaces } from '../lib/workspaces';
+import type { User, UserSettings, Space } from '../types';
+import { normalizeSpaces } from '../lib/spaces';
 import {
   authStateAtom,
   userAtom,
   userSettingsAtom,
-  workspacesAtom,
-  workspacesLoadedAtom,
+  spacesAtom,
+  spacesLoadedAtom,
   redirectToLogin,
   type AuthState,
-  type FetchWorkspacesOptions,
+  type FetchSpacesOptions,
 } from '../store/auth';
 
 interface AuthContextValue {
   authState: AuthState;
   user: User | null;
   userSettings: UserSettings | null;
-  workspaces: Workspace[];
-  workspacesLoaded: boolean;
+  spaces: Space[];
+  spacesLoaded: boolean;
   setUserSettings: (settings: UserSettings | null) => void;
   fetchUser: () => Promise<void>;
-  fetchWorkspaces: (currentUser?: User | null, options?: FetchWorkspacesOptions) => Promise<Workspace[]>;
+  fetchSpaces: (currentUser?: User | null, options?: FetchSpacesOptions) => Promise<Space[]>;
   fetchUserSettings: () => Promise<UserSettings | null>;
   handleLogin: () => void;
   handleLogout: () => Promise<void>;
@@ -37,22 +37,22 @@ export function useAuth(): AuthContextValue {
   const user = useAtomValue(userAtom);
   const userSettings = useAtomValue(userSettingsAtom);
   const setUserSettings = useSetAtom(userSettingsAtom);
-  const workspaces = useAtomValue(workspacesAtom);
-  const workspacesLoaded = useAtomValue(workspacesLoadedAtom);
+  const spaces = useAtomValue(spacesAtom);
+  const spacesLoaded = useAtomValue(spacesLoadedAtom);
 
   const setAuthState = useSetAtom(authStateAtom);
   const setUser = useSetAtom(userAtom);
-  const setWorkspaces = useSetAtom(workspacesAtom);
-  const setWorkspacesLoaded = useSetAtom(workspacesLoadedAtom);
+  const setSpaces = useSetAtom(spacesAtom);
+  const setSpacesLoaded = useSetAtom(spacesLoadedAtom);
   const setUserSettingsAtom = useSetAtom(userSettingsAtom);
 
   const { t } = useI18n();
   const { showToast } = useToast();
 
-  const fetchWorkspaces = useCallback(async (
+  const fetchSpaces = useCallback(async (
     currentUser?: User | null,
-    options?: FetchWorkspacesOptions,
-  ): Promise<Workspace[]> => {
+    options?: FetchSpacesOptions,
+  ): Promise<Space[]> => {
     const {
       notifyOnError = true,
       throwOnError = false,
@@ -60,12 +60,12 @@ export function useAuth(): AuthContextValue {
 
     try {
       const res = await rpc.spaces.$get();
-      const data = await rpcJson<{ spaces: Workspace[] }>(res);
-      let allWorkspaces = normalizeWorkspaces(data.spaces || []);
+      const data = await rpcJson<{ spaces: Space[] }>(res);
+      let allSpaces = normalizeSpaces(data.spaces || []);
 
-      const hasPersonal = allWorkspaces.some((w) => w.kind === 'user');
+      const hasPersonal = allSpaces.some((w) => w.kind === 'user');
       if (!hasPersonal && currentUser) {
-        const virtualPersonal: Workspace = {
+        const virtualPersonal: Space = {
           id: currentUser.username,
           name: currentUser.name || currentUser.username,
           slug: currentUser.username,
@@ -75,11 +75,11 @@ export function useAuth(): AuthContextValue {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        allWorkspaces = [virtualPersonal, ...allWorkspaces];
+        allSpaces = [virtualPersonal, ...allSpaces];
       }
 
-      setWorkspaces(allWorkspaces);
-      return allWorkspaces;
+      setSpaces(allSpaces);
+      return allSpaces;
     } catch (error) {
       if (notifyOnError) {
         showToast('error', getErrorMessage(error, t('failedToLoad') || 'Failed to load'));
@@ -89,9 +89,9 @@ export function useAuth(): AuthContextValue {
       }
       return [];
     } finally {
-      setWorkspacesLoaded(true);
+      setSpacesLoaded(true);
     }
-  }, [showToast, t, setWorkspaces, setWorkspacesLoaded]);
+  }, [showToast, t, setSpaces, setSpacesLoaded]);
 
   const fetchUserSettings = useCallback(async (): Promise<UserSettings | null> => {
     try {
@@ -105,7 +105,7 @@ export function useAuth(): AuthContextValue {
   }, [setUserSettingsAtom]);
 
   const fetchUser = useCallback(async () => {
-    setWorkspacesLoaded(false);
+    setSpacesLoaded(false);
     try {
       const res = await rpc.me.$get();
       if (res.ok) {
@@ -113,18 +113,18 @@ export function useAuth(): AuthContextValue {
         setUser(data);
         setAuthState('authenticated');
         await Promise.all([
-          fetchWorkspaces(data),
+          fetchSpaces(data),
           fetchUserSettings(),
         ]);
       } else {
-        setWorkspacesLoaded(false);
+        setSpacesLoaded(false);
         setAuthState('login');
       }
     } catch {
-      setWorkspacesLoaded(false);
+      setSpacesLoaded(false);
       setAuthState('login');
     }
-  }, [fetchWorkspaces, fetchUserSettings, setUser, setAuthState, setWorkspacesLoaded]);
+  }, [fetchSpaces, fetchUserSettings, setUser, setAuthState, setSpacesLoaded]);
 
   const handleLogin = useCallback(() => {
     redirectToLogin();
@@ -133,20 +133,20 @@ export function useAuth(): AuthContextValue {
   const handleLogout = useCallback(async () => {
     await fetch('/auth/logout', { method: 'POST' });
     setUser(null);
-    setWorkspaces([]);
-    setWorkspacesLoaded(false);
+    setSpaces([]);
+    setSpacesLoaded(false);
     setAuthState('login');
-  }, [setUser, setWorkspaces, setWorkspacesLoaded, setAuthState]);
+  }, [setUser, setSpaces, setSpacesLoaded, setAuthState]);
 
   return useMemo((): AuthContextValue => ({
     authState,
     user,
     userSettings,
-    workspaces,
-    workspacesLoaded,
+    spaces,
+    spacesLoaded,
     setUserSettings,
     fetchUser,
-    fetchWorkspaces,
+    fetchSpaces,
     fetchUserSettings,
     handleLogin,
     handleLogout,
@@ -155,11 +155,11 @@ export function useAuth(): AuthContextValue {
     authState,
     user,
     userSettings,
-    workspaces,
-    workspacesLoaded,
+    spaces,
+    spacesLoaded,
     setUserSettings,
     fetchUser,
-    fetchWorkspaces,
+    fetchSpaces,
     fetchUserSettings,
     handleLogin,
     handleLogout,

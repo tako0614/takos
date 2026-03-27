@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest, parseLimit } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, parseLimit } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { createDeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
-import type { DeploymentProviderName } from '../../../application/services/deployment/types.ts';
+import type { ArtifactKind, DeploymentProviderName } from '../../../application/services/deployment/types.ts';
 import { DEPLOYMENT_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
-import { notFound } from '../../../shared/utils/error-response';
+import { NotFoundError } from '@takos/common/errors';
 
 const MAX_BUNDLE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB (Cloudflare Workers paid plan limit)
 
@@ -28,6 +28,7 @@ type ApiDeploymentSummary = {
   status: 'pending' | 'in_progress' | 'success' | 'failed' | 'rolled_back';
   deploy_state: string;
   artifact_ref: string | null;
+  artifact_kind: ArtifactKind;
   routing_status: 'active' | 'canary' | 'rollback' | 'archived';
   routing_weight: number;
   bundle_hash: string | null;
@@ -39,10 +40,11 @@ type ApiDeploymentSummary = {
   created_at: string;
   completed_at: string | null;
   error_message: string | null;
+  resolved_endpoint?: { kind: string; base_url: string } | null;
 };
 
 const providerSchema = z.object({
-  name: z.enum(['cloudflare', 'oci']),
+  name: z.enum(['workers-dispatch', 'oci', 'ecs', 'cloud-run', 'k8s']),
 }).strict();
 
 const targetSchema = z.object({
@@ -58,10 +60,24 @@ const targetSchema = z.object({
     }).strict(),
   ]).optional(),
   artifact: z.object({
+    kind: z.enum(['worker-bundle', 'container-image']).optional(),
     image_ref: z.string().min(1).optional(),
     exposed_port: z.number().int().positive().optional(),
+    health_path: z.string().min(1).optional(),
   }).strict().optional(),
 }).strict();
+
+function extractResolvedEndpoint(providerStateJson: string): { kind: string; base_url: string } | null {
+  const state = safeJsonParseOrDefault<Record<string, unknown>>(providerStateJson, {});
+  const ep = state.resolved_endpoint;
+  if (ep && typeof ep === 'object' && !Array.isArray(ep)) {
+    const parsed = ep as Record<string, unknown>;
+    if (typeof parsed.base_url === 'string' && parsed.base_url.length > 0) {
+      return { kind: String(parsed.kind ?? 'http-url'), base_url: parsed.base_url };
+    }
+  }
+  return null;
+}
 
 const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
@@ -80,7 +96,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
   const serviceId = worker.id;
 
@@ -93,13 +109,28 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     target?: z.infer<typeof targetSchema>;
   };
 
-  if (!body.bundle || typeof body.bundle !== 'string' || body.bundle.trim().length === 0) {
-    return badRequest(c, 'bundle is required');
-  }
+  const artifactKind: ArtifactKind = body.target?.artifact?.kind ?? 'worker-bundle';
+  const isContainerDeploy = artifactKind === 'container-image';
 
-  const bundleSizeBytes = new TextEncoder().encode(body.bundle).byteLength;
-  if (bundleSizeBytes > MAX_BUNDLE_SIZE_BYTES) {
-    return badRequest(c, `Bundle size (${Math.round(bundleSizeBytes / 1024 / 1024)}MB) exceeds maximum allowed size of 25MB`);
+  if (isContainerDeploy) {
+    if (!body.target?.artifact?.image_ref) {
+      return badRequest(c, 'artifact.image_ref is required for container-image deploys');
+    }
+    if (body.provider?.name === 'workers-dispatch') {
+      return badRequest(c, 'workers-dispatch provider does not support container-image deploys');
+    }
+    if (body.strategy === 'canary') {
+      return badRequest(c, 'canary strategy is not supported for container-image deploys');
+    }
+  } else {
+    if (!body.bundle || typeof body.bundle !== 'string' || body.bundle.trim().length === 0) {
+      return badRequest(c, 'bundle is required');
+    }
+
+    const bundleSizeBytes = new TextEncoder().encode(body.bundle).byteLength;
+    if (bundleSizeBytes > MAX_BUNDLE_SIZE_BYTES) {
+      return badRequest(c, `Bundle size (${Math.round(bundleSizeBytes / 1024 / 1024)}MB) exceeds maximum allowed size of 25MB`);
+    }
   }
 
   const strategy = body.strategy ?? 'direct';
@@ -115,7 +146,8 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     spaceId: worker.space_id,
     userId: user.id,
     idempotencyKey,
-    bundleContent: body.bundle,
+    artifactKind,
+    bundleContent: isContainerDeploy ? undefined : body.bundle,
     deployMessage: body.deploy_message,
     strategy,
     canaryWeight,
@@ -153,6 +185,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
         version: deployment.version,
         status: deployment.status,
         deploy_state: deployment.deploy_state,
+        artifact_kind: deployment.artifact_kind,
         provider: { name: deployment.provider_name },
         target: parseDeploymentTargetConfig(deployment),
         routing_status: deployment.routing_status,
@@ -169,30 +202,37 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const deploymentService = createDeploymentService(c.env);
   const deployments = await deploymentService.getDeploymentHistory(workerId, limit);
 
-  const summaries: ApiDeploymentSummary[] = deployments.map((d) => ({
-    id: d.id,
-    version: d.version,
-    status: d.status,
-    deploy_state: d.deploy_state,
-    artifact_ref: d.artifact_ref,
-    routing_status: d.routing_status,
-    routing_weight: d.routing_weight,
-    bundle_hash: d.bundle_hash,
-    bundle_size: d.bundle_size,
-    provider: { name: d.provider_name },
-    target: parseDeploymentTargetConfig(d),
-    deployed_by: d.deployed_by,
-    deploy_message: d.deploy_message,
-    created_at: d.created_at,
-    completed_at: d.completed_at,
-    error_message: d.step_error,
-  }));
+  const summaries: ApiDeploymentSummary[] = deployments.map((d) => {
+    const summary: ApiDeploymentSummary = {
+      id: d.id,
+      version: d.version,
+      status: d.status,
+      deploy_state: d.deploy_state,
+      artifact_ref: d.artifact_ref,
+      artifact_kind: d.artifact_kind,
+      routing_status: d.routing_status,
+      routing_weight: d.routing_weight,
+      bundle_hash: d.bundle_hash,
+      bundle_size: d.bundle_size,
+      provider: { name: d.provider_name },
+      target: parseDeploymentTargetConfig(d),
+      deployed_by: d.deployed_by,
+      deploy_message: d.deploy_message,
+      created_at: d.created_at,
+      completed_at: d.completed_at,
+      error_message: d.step_error,
+    };
+    if (d.artifact_kind === 'container-image') {
+      summary.resolved_endpoint = extractResolvedEndpoint(d.provider_state_json);
+    }
+    return summary;
+  });
 
   return c.json({ deployments: summaries });
 })
@@ -207,7 +247,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const body = c.req.valid('json');
@@ -223,6 +263,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     deployment: {
       id: deployment.id,
       version: deployment.version,
+      artifact_kind: deployment.artifact_kind,
       provider: { name: deployment.provider_name },
       target: parseDeploymentTargetConfig(deployment),
       routing_status: deployment.routing_status,
@@ -238,13 +279,13 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const deploymentService = createDeploymentService(c.env);
   const deployment = await deploymentService.getDeploymentById(deploymentId);
   if (!deployment || deployment.service_id !== workerId) {
-    return notFound(c, 'Deployment');
+    throw new NotFoundError('Deployment');
   }
 
   const events = await deploymentService.getDeploymentEvents(deploymentId);
@@ -276,6 +317,10 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     return b;
   });
 
+  const resolvedEndpoint = deployment.artifact_kind === 'container-image'
+    ? extractResolvedEndpoint(deployment.provider_state_json)
+    : null;
+
   return c.json({
     deployment: {
       ...deployment,
@@ -284,6 +329,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       error_message: deployment.step_error,
       env_vars_masked: maskedEnvVars,
       bindings: sanitizedBindings,
+      ...(resolvedEndpoint ? { resolved_endpoint: resolvedEndpoint } : {}),
     },
     events: apiEvents,
   });

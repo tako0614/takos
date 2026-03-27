@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function readTranslationSource(lang: 'ja' | 'en'): string {
-  return readFileSync(resolve(__dirname, `../../web/src/i18n/${lang}.ts`), 'utf8');
+  const dir = resolve(__dirname, `../../web/src/i18n/${lang}`);
+  const partials = readdirSync(dir)
+    .filter((f) => f.endsWith('.ts'))
+    .map((f) => readFileSync(resolve(dir, f), 'utf8'));
+  return partials.join('\n');
 }
 
 function extractTranslation(source: string, key: string): string | null {

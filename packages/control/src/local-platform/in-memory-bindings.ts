@@ -190,7 +190,21 @@ async function toBuffer(
   return new Response(value).arrayBuffer();
 }
 
-function createR2Object(key: string, bytes: ArrayBuffer, customMetadata: Record<string, string>, httpMetadata: Record<string, string>): R2ObjectBody {
+function normalizeHttpMetadata(metadata?: Record<string, string> | Headers): Record<string, string> {
+  if (!metadata) return {};
+  if (metadata instanceof Headers) {
+    return Object.fromEntries(metadata.entries());
+  }
+  return { ...metadata };
+}
+
+function createR2Object(
+  key: string,
+  bytes: ArrayBuffer,
+  customMetadata: Record<string, string>,
+  httpMetadata: Record<string, string>,
+  storageClass = 'Standard',
+): R2ObjectBody {
   const blob = new Blob([bytes]);
   const etag = `"${key}-${bytes.byteLength}"`;
   const object = {
@@ -203,6 +217,7 @@ function createR2Object(key: string, bytes: ArrayBuffer, customMetadata: Record<
     checksums: { toJSON: () => ({}) },
     httpMetadata,
     customMetadata,
+    storageClass,
     range: undefined,
     body: blob.stream(),
     bodyUsed: false,
@@ -232,13 +247,77 @@ function createR2Object(key: string, bytes: ArrayBuffer, customMetadata: Record<
 }
 
 export function createInMemoryR2Bucket(): R2Bucket {
-  const objects = new Map<string, { bytes: ArrayBuffer; customMetadata: Record<string, string>; httpMetadata: Record<string, string> }>();
+  const objects = new Map<string, {
+    bytes: ArrayBuffer;
+    customMetadata: Record<string, string>;
+    httpMetadata: Record<string, string>;
+    storageClass: string;
+  }>();
+  const multipartUploads = new Map<string, {
+    key: string;
+    customMetadata: Record<string, string>;
+    httpMetadata: Record<string, string>;
+    storageClass: string;
+    parts: Map<number, { bytes: ArrayBuffer; etag: string }>;
+  }>();
+
+  async function toPartEtag(bytes: ArrayBuffer): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `"${hex}"`;
+  }
+
+  async function toUploadedBytes(parts: Array<{ partNumber: number; etag: string }>, upload: {
+    parts: Map<number, { bytes: ArrayBuffer; etag: string }>;
+  }): Promise<ArrayBuffer> {
+    const orderedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+    const buffers: Uint8Array[] = [];
+    const seen = new Set<number>();
+    let totalLength = 0;
+
+    for (const part of orderedParts) {
+      if (seen.has(part.partNumber)) {
+        throw new Error(`Multipart upload has duplicate part ${part.partNumber}`);
+      }
+      seen.add(part.partNumber);
+
+      const storedPart = upload.parts.get(part.partNumber);
+      if (!storedPart) {
+        throw new Error(`Multipart upload is missing part ${part.partNumber}`);
+      }
+      if (storedPart.etag !== part.etag) {
+        throw new Error(`Multipart upload part ${part.partNumber} etag mismatch`);
+      }
+      const bytes = new Uint8Array(storedPart.bytes);
+      buffers.push(bytes);
+      totalLength += bytes.byteLength;
+    }
+
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const buffer of buffers) {
+      merged.set(buffer, offset);
+      offset += buffer.byteLength;
+    }
+    return merged.buffer;
+  }
+
+  function requireMultipartUpload(uploadId: string, key: string) {
+    const upload = multipartUploads.get(uploadId);
+    if (!upload) {
+      throw new Error(`Multipart upload ${uploadId} is not active`);
+    }
+    if (upload.key !== key) {
+      throw new Error(`Multipart upload ${uploadId} belongs to a different key`);
+    }
+    return upload;
+  }
 
   const bucket = {
     async head(key: string) {
       const record = objects.get(key);
       if (!record) return null;
-      const object = createR2Object(key, record.bytes, record.customMetadata, record.httpMetadata);
+      const object = createR2Object(key, record.bytes, record.customMetadata, record.httpMetadata, record.storageClass);
       return {
         ...object,
         body: null,
@@ -257,14 +336,15 @@ export function createInMemoryR2Bucket(): R2Bucket {
           : bytes.byteLength;
         bytes = bytes.slice(offset, end);
       }
-      return createR2Object(key, bytes, record.customMetadata, record.httpMetadata);
+      return createR2Object(key, bytes, record.customMetadata, record.httpMetadata, record.storageClass);
     },
-    async put(key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null, options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> }) {
+    async put(key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null, options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string>; storageClass?: string }) {
       const bytes = await toBuffer(value);
       objects.set(key, {
         bytes,
-        customMetadata: options?.customMetadata ?? {},
-        httpMetadata: options?.httpMetadata ?? {},
+        customMetadata: { ...(options?.customMetadata ?? {}) },
+        httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
+        storageClass: options?.storageClass ?? 'Standard',
       });
       return (await bucket.head(key))!;
     },
@@ -291,11 +371,73 @@ export function createInMemoryR2Bucket(): R2Bucket {
         delimitedPrefixes: [],
       };
     },
-    async createMultipartUpload() {
-      throw new Error('Multipart upload is not implemented in the local adapter');
+    async createMultipartUpload(key: string, options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> | Headers; storageClass?: string; ssecKey?: ArrayBuffer | string }) {
+      const uploadId = crypto.randomUUID();
+      multipartUploads.set(uploadId, {
+        key,
+        customMetadata: { ...(options?.customMetadata ?? {}) },
+        httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
+        storageClass: options?.storageClass ?? 'Standard',
+        parts: new Map<number, { bytes: ArrayBuffer; etag: string }>(),
+      });
+
+      return {
+        key,
+        uploadId,
+        async uploadPart(partNumber: number, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob, _options?: { ssecKey?: ArrayBuffer | string }) {
+          const bytes = await toBuffer(value);
+          const etag = await toPartEtag(bytes);
+          const upload = requireMultipartUpload(uploadId, key);
+          upload.parts.set(partNumber, { bytes, etag });
+          return { partNumber, etag };
+        },
+        async abort() {
+          const upload = requireMultipartUpload(uploadId, key);
+          upload.parts.clear();
+          multipartUploads.delete(uploadId);
+        },
+        async complete(uploadedParts: Array<{ partNumber: number; etag: string }>) {
+          const upload = requireMultipartUpload(uploadId, key);
+          const bytes = await toUploadedBytes(uploadedParts, upload);
+          upload.parts.clear();
+          multipartUploads.delete(uploadId);
+          return bucket.put(key, bytes, {
+            customMetadata: upload.customMetadata,
+            httpMetadata: upload.httpMetadata,
+            storageClass: upload.storageClass,
+          });
+        },
+      };
     },
-    resumeMultipartUpload() {
-      throw new Error('Multipart upload is not implemented in the local adapter');
+    resumeMultipartUpload(key: string, uploadId: string) {
+      requireMultipartUpload(uploadId, key);
+      return {
+        key,
+        uploadId,
+        async uploadPart(partNumber: number, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob, _options?: { ssecKey?: ArrayBuffer | string }) {
+          const bytes = await toBuffer(value);
+          const etag = await toPartEtag(bytes);
+          const activeUpload = requireMultipartUpload(uploadId, key);
+          activeUpload.parts.set(partNumber, { bytes, etag });
+          return { partNumber, etag };
+        },
+        async abort() {
+          const activeUpload = requireMultipartUpload(uploadId, key);
+          activeUpload.parts.clear();
+          multipartUploads.delete(uploadId);
+        },
+        async complete(uploadedParts: Array<{ partNumber: number; etag: string }>) {
+          const activeUpload = requireMultipartUpload(uploadId, key);
+          const bytes = await toUploadedBytes(uploadedParts, activeUpload);
+          activeUpload.parts.clear();
+          multipartUploads.delete(uploadId);
+          return bucket.put(key, bytes, {
+            customMetadata: activeUpload.customMetadata,
+            httpMetadata: activeUpload.httpMetadata,
+            storageClass: activeUpload.storageClass,
+          });
+        },
+      };
     },
   };
 

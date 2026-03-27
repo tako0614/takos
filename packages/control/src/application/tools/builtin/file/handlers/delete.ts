@@ -1,7 +1,7 @@
 import type { ToolHandler } from '../../../types';
 import { callSessionApi } from '../session';
 import { logError, logWarn } from '../../../../../shared/utils/logger';
-import { setupFileOperation, handleSessionApiResponse } from '../helpers';
+import { setupFileOperation, handleSessionApiResponse } from '../file-operations';
 
 export const fileDeleteHandler: ToolHandler = async (args, context) => {
   const { path, sessionId } = await setupFileOperation(args, context);

@@ -63,7 +63,7 @@ import {
   skillContextHandler,
   skillCatalogHandler,
   skillDescribeHandler,
-} from '@/tools/builtin/workspace-skills';
+} from '@/tools/builtin/space-skills';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -3,7 +3,7 @@ import type { MemoryType } from '../../../shared/types';
 import { type LLMClient, createLLMClient } from '../agent';
 import { getDb, memories } from '../../../infra/db';
 import { eq, and, or, lt, isNull, desc, asc, count, sql, inArray } from 'drizzle-orm';
-import { chatAndParseJsonArray } from './helpers';
+import { chatAndParseJsonArray } from './llm-parser';
 import { now } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
 
@@ -31,7 +31,7 @@ const DECAY_CONFIG = {
   dailyDecayRate: 0.001,
   minimumImportance: 0.001,
   cleanupThresholdDays: 365,
-  maxMemoriesPerWorkspace: 10_000,
+  maxMemoriesPerSpace: 10_000,
 };
 
 function getNgrams(text: string, n: number = 3): Set<string> {
@@ -61,7 +61,7 @@ export class MemoryConsolidator {
   }
 
   /**
-   * Apply decay to all memories in a workspace.
+   * Apply decay to all memories in a space.
    * Uses atomic SQL (julianday) to prevent read-modify-write races.
    */
   async applyDecay(spaceId: string): Promise<{ updated: number; deleted: number }> {
@@ -326,7 +326,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
       .get();
 
     const total = countResult?.count ?? 0;
-    const excess = total - DECAY_CONFIG.maxMemoriesPerWorkspace;
+    const excess = total - DECAY_CONFIG.maxMemoriesPerSpace;
 
     if (excess <= 0) {
       return { deleted: 0 };

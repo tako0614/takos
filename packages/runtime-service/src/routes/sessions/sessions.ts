@@ -3,11 +3,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { runGitCommand, cloneAndCheckout } from '../../runtime/git.js';
 import { resolvePathWithin, resolveRepoGitPath, verifyPathWithinAfterAccess } from '../../runtime/paths.js';
-import { writeFileWithinWorkspace } from '../../runtime/secure-fs.js';
+import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
 import { isValidSessionId, validateGitRef, validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.js';
 import { sessionStore } from './storage.js';
-import { getSessionOwnerSub, parseRequiredSessionWorkspaceIds, parseRequiredWorkspaceId } from './session-utils.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId } from './session-utils.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { OwnerBindingError } from '../../shared/errors.js';
 import { badRequest, forbidden, notFound, internalError } from '@takos/common/middleware/hono';
 
@@ -22,7 +22,7 @@ app.post('/sessions', async (c) => {
       repoGitPath?: string;
       branch?: string;
     };
-    const ids = parseRequiredSessionWorkspaceIds(body);
+    const ids = parseRequiredSessionSpaceIds(body);
     const { files, repoGitPath, branch } = body;
 
     if (!ids) {
@@ -114,14 +114,14 @@ app.post('/sessions', async (c) => {
     } else if (files && files.length > 0) {
       for (const file of files) {
         const filePath = resolvePathWithin(workDir, file.path, 'file');
-        await writeFileWithinWorkspace(workDir, filePath, file.content, 'utf-8');
+        await writeFileWithinSpace(workDir, filePath, file.content, 'utf-8');
         await verifyPathWithinAfterAccess(workDir, filePath, 'file');
         fileCount++;
       }
     }
 
     const sessionInfoPath = resolvePathWithin(workDir, '.takos-session', 'file');
-    await writeFileWithinWorkspace(
+    await writeFileWithinSpace(
       workDir,
       sessionInfoPath,
       JSON.stringify({ session_id, space_id }, null, 2),
@@ -155,7 +155,7 @@ app.post('/sessions/:id/commit', async (c) => {
       message?: string;
       author?: { name: string; email: string };
     };
-    const space_id = parseRequiredWorkspaceId(body);
+    const space_id = parseRequiredSpaceId(body);
     const { message, author } = body;
 
     if (!space_id) {

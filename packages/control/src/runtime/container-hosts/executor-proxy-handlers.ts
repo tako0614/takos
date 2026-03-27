@@ -11,7 +11,7 @@ import { getDb } from '../../infra/db';
 import { runs } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
-import type { AgentExecutorEnv } from './executor-host';
+import type { AgentExecutorEnv } from './executor-utils';
 
 type Env = AgentExecutorEnv;
 

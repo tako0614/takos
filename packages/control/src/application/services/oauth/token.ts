@@ -458,7 +458,12 @@ export async function generateTokenResponse(
   let refreshToken: string | undefined;
 
   if (includeRefreshToken) {
-    const grantTypes = JSON.parse(client.grant_types) as string[];
+    let grantTypes: string[];
+    try {
+      grantTypes = JSON.parse(client.grant_types) as string[];
+    } catch {
+      grantTypes = [];
+    }
     if (grantTypes.includes('refresh_token')) {
       const refresh = generateRefreshToken();
       refreshToken = refresh.token;

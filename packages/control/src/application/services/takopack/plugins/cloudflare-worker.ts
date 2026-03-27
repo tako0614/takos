@@ -101,12 +101,51 @@ function buildWorkerFromWorkload(
   const d1FromPlugin = readStringArray(bindingConfig.d1, 'bindings.d1');
   const r2FromPlugin = readStringArray(bindingConfig.r2, 'bindings.r2');
   const kvFromPlugin = readStringArray(bindingConfig.kv, 'bindings.kv');
+  const queueFromPlugin = readStringArray(bindingConfig.queues, 'bindings.queues');
+  const analyticsFromPlugin = readStringArray(bindingConfig.analytics, 'bindings.analytics');
+  const workflowsFromPlugin = readStringArray(bindingConfig.workflows, 'bindings.workflows');
   const vectorizeFromPlugin = readStringArray(bindingConfig.vectorize, 'bindings.vectorize');
+  const durableObjectsFromPlugin = readStringArray(bindingConfig.durableObjects, 'bindings.durableObjects');
+  const triggers = asRecord(pluginConfig.triggers);
+  const schedulesRaw = triggers.schedules;
+  const queuesRaw = triggers.queues;
+  const schedules = Array.isArray(schedulesRaw)
+    ? schedulesRaw.map((entry, index) => {
+        const record = asRecord(entry);
+        const cron = String(record.cron || '').trim();
+        const exportName = String(record.export || '').trim();
+        if (!cron) {
+          throw new Error(`cloudflare.worker pluginConfig.triggers.schedules[${index}].cron is required`);
+        }
+        if (!exportName) {
+          throw new Error(`cloudflare.worker pluginConfig.triggers.schedules[${index}].export is required`);
+        }
+        return { cron, export: exportName };
+      })
+    : [];
+  const queueTriggers = Array.isArray(queuesRaw)
+    ? queuesRaw.map((entry, index) => {
+        const record = asRecord(entry);
+        const queue = String(record.queue || '').trim();
+        const exportName = String(record.export || '').trim();
+        if (!queue) {
+          throw new Error(`cloudflare.worker pluginConfig.triggers.queues[${index}].queue is required`);
+        }
+        if (!exportName) {
+          throw new Error(`cloudflare.worker pluginConfig.triggers.queues[${index}].export is required`);
+        }
+        return { queue, export: exportName };
+      })
+    : [];
 
   const d1 = Array.from(new Set([...d1FromPlugin, ...context.bindings.d1]));
   const r2 = Array.from(new Set([...r2FromPlugin, ...context.bindings.r2]));
   const kv = Array.from(new Set([...kvFromPlugin, ...context.bindings.kv]));
+  const queue = Array.from(new Set([...queueFromPlugin, ...context.bindings.queue]));
+  const analytics = Array.from(new Set([...analyticsFromPlugin, ...context.bindings.analyticsEngine]));
+  const workflows = Array.from(new Set([...workflowsFromPlugin, ...context.bindings.workflow]));
   const vectorize = Array.from(new Set([...vectorizeFromPlugin, ...context.bindings.vectorize]));
+  const durableObjects = Array.from(new Set([...durableObjectsFromPlugin, ...context.bindings.durableObject]));
 
   return {
     name: resolveWorkerName(workload),
@@ -117,9 +156,21 @@ function buildWorkerFromWorkload(
       d1,
       r2,
       kv,
+      ...(queue.length > 0 ? { queue } : {}),
+      ...(analytics.length > 0 ? { analytics } : {}),
+      ...(workflows.length > 0 ? { workflows } : {}),
       ...(vectorize.length > 0 ? { vectorize } : {}),
+      ...(durableObjects.length > 0 ? { durableObjects } : {}),
       ...(services.length > 0 ? { services } : {}),
     },
+    ...(schedules.length > 0 || queueTriggers.length > 0
+      ? {
+          triggers: {
+            ...(schedules.length > 0 ? { schedules } : {}),
+            ...(queueTriggers.length > 0 ? { queues: queueTriggers } : {}),
+          },
+        }
+      : {}),
     env,
   };
 }
@@ -143,9 +194,20 @@ function validateWorkload(
   readStringArray(bindingConfig.d1, 'bindings.d1');
   readStringArray(bindingConfig.r2, 'bindings.r2');
   readStringArray(bindingConfig.kv, 'bindings.kv');
+  readStringArray(bindingConfig.queues, 'bindings.queues');
+  readStringArray(bindingConfig.analytics, 'bindings.analytics');
+  readStringArray(bindingConfig.workflows, 'bindings.workflows');
   readStringArray(bindingConfig.vectorize, 'bindings.vectorize');
+  readStringArray(bindingConfig.durableObjects, 'bindings.durableObjects');
   readStringArray(bindingConfig.services, 'bindings.services');
   readStringMap(pluginConfig.env, 'env');
+  const triggers = asRecord(pluginConfig.triggers);
+  if (triggers.schedules != null && !Array.isArray(triggers.schedules)) {
+    throw new Error('cloudflare.worker pluginConfig.triggers.schedules must be an array');
+  }
+  if (triggers.queues != null && !Array.isArray(triggers.queues)) {
+    throw new Error('cloudflare.worker pluginConfig.triggers.queues must be an array');
+  }
 
   resolveWorkerName(workload);
 }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { now } from '../../shared/utils';
 import { validateUsername } from '../../shared/utils/reserved-usernames';
-import { badRequest, conflict, type BaseVariables } from './shared/helpers';
+import { badRequest, conflict, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { getDb } from '../../infra/db';
 import { accounts } from '../../infra/db/schema';

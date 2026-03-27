@@ -1,5 +1,5 @@
 import { generateId, now } from '../../../shared/utils';
-import type { Env, WorkspaceRole, RunQueueMessage } from '../../../shared/types';
+import type { Env, SpaceRole, RunQueueMessage } from '../../../shared/types';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { checkThreadAccess } from '../threads/threads';
 import { buildRunFailedPayload } from '../run-notifier';
@@ -43,7 +43,7 @@ export async function createThreadRun(env: Env, input: CreateThreadRunInput): Pr
     env.DB,
     input.threadId,
     input.userId,
-    ['owner', 'admin', 'editor'] satisfies WorkspaceRole[],
+    ['owner', 'admin', 'editor'] satisfies SpaceRole[],
   );
   if (!access) {
     return { ok: false, status: 404, error: 'Thread not found or insufficient permissions' };

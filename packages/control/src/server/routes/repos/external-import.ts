@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import {
   importExternalRepository,
   fetchRemoteUpdates,
@@ -36,6 +36,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     try {
       body = await c.req.json();
     } catch {
+      // Request body is not valid JSON
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
 
@@ -56,6 +57,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         return c.json({ error: 'Only https:// URLs are supported' }, 400);
       }
     } catch {
+      // URL constructor throws on malformed input
       return c.json({ error: 'Invalid URL format' }, 400);
     }
 

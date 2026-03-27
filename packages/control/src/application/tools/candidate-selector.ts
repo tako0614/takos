@@ -1,11 +1,11 @@
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 import type { CapabilityDescriptor } from './capability-types';
 import type { CapabilityRegistry } from './capability-registry';
 
 export const DISCOVERY_TOOL_NAMES = new Set(['capability_search', 'capability_families', 'capability_invoke']);
 
 export interface SelectionContext {
-  role?: WorkspaceRole;
+  role?: SpaceRole;
   capabilities: string[];
   userQuery: string;
   threadSummary?: string;

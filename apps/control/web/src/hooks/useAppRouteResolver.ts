@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { parseRoute } from './useRouter';
-import { findWorkspaceByIdentifier, getWorkspaceIdentifier } from '../lib/workspaces';
+import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces';
 import type { TranslationKey } from '../i18n';
-import type { RouteState, View, Workspace } from '../types';
+import type { RouteState, View, Space } from '../types';
 
 /**
  * Resolves /app/:appId routes by looking up the app and redirecting
@@ -11,22 +11,22 @@ import type { RouteState, View, Workspace } from '../types';
 export function useAppRouteResolver(options: {
   authState: string;
   route: RouteState;
-  hasInvalidWorkspaceRoute: boolean;
-  routeWorkspaceId: string | undefined;
-  selectedWorkspaceId: string | null;
-  preferredWorkspaceId: string | undefined;
-  workspaces: Workspace[];
+  hasInvalidSpaceRoute: boolean;
+  routeSpaceId: string | undefined;
+  selectedSpaceId: string | null;
+  preferredSpaceId: string | undefined;
+  spaces: Space[];
   replace: (state: RouteState) => void;
   t: (key: TranslationKey) => string;
 }) {
   const {
     authState,
     route,
-    hasInvalidWorkspaceRoute,
-    routeWorkspaceId,
-    selectedWorkspaceId,
-    preferredWorkspaceId,
-    workspaces,
+    hasInvalidSpaceRoute,
+    routeSpaceId,
+    selectedSpaceId,
+    preferredSpaceId,
+    spaces,
     replace,
     t,
   } = options;
@@ -34,7 +34,7 @@ export function useAppRouteResolver(options: {
   useEffect(() => {
     if (authState !== 'authenticated') return;
     if (route.view !== 'app' || !route.appId) return;
-    if (hasInvalidWorkspaceRoute) return;
+    if (hasInvalidSpaceRoute) return;
 
     let cancelled = false;
     const resolveAppRoute = async () => {
@@ -73,11 +73,11 @@ export function useAppRouteResolver(options: {
 
         if (appUrl.startsWith('/')) {
           const parsedRoute = parseRoute(appUrl);
-          const contextWorkspaceId =
-            routeWorkspaceId
-            ?? selectedWorkspaceId
-            ?? preferredWorkspaceId;
-          const workspaceScopedViews = new Set<View>([
+          const contextSpaceId =
+            routeSpaceId
+            ?? selectedSpaceId
+            ?? preferredSpaceId;
+          const spaceScopedViews = new Set<View>([
             'chat',
             'repos',
             'storage',
@@ -85,8 +85,8 @@ export function useAppRouteResolver(options: {
             'apps',
             'space-settings',
           ]);
-          if (!parsedRoute.spaceId && contextWorkspaceId && workspaceScopedViews.has(parsedRoute.view)) {
-            parsedRoute.spaceId = contextWorkspaceId;
+          if (!parsedRoute.spaceId && contextSpaceId && spaceScopedViews.has(parsedRoute.view)) {
+            parsedRoute.spaceId = contextSpaceId;
           }
           replace(parsedRoute);
           return;
@@ -94,22 +94,22 @@ export function useAppRouteResolver(options: {
 
         const spaceId = data.app?.space_id ?? undefined;
         if (spaceId) {
-          const workspace = findWorkspaceByIdentifier(workspaces, spaceId, t('personal'));
-          const targetWorkspaceId = workspace ? getWorkspaceIdentifier(workspace) : spaceId;
-          replace({ view: 'deploy', spaceId: targetWorkspaceId, deploySection: 'workers' });
+          const space = findSpaceByIdentifier(spaces, spaceId, t('personal'));
+          const targetSpaceId = space ? getSpaceIdentifier(space) : spaceId;
+          replace({ view: 'deploy', spaceId: targetSpaceId, deploySection: 'workers' });
           return;
         }
       } catch {
-        // Fall through to workspace apps when route cannot be resolved.
+        // Fall through to space apps when route cannot be resolved.
       }
 
       if (!cancelled) {
-        const fallbackWorkspaceId =
-          routeWorkspaceId
+        const fallbackSpaceId =
+          routeSpaceId
           ?? route.spaceId
-          ?? selectedWorkspaceId
-          ?? preferredWorkspaceId;
-        replace({ view: 'apps', spaceId: fallbackWorkspaceId ?? undefined });
+          ?? selectedSpaceId
+          ?? preferredSpaceId;
+        replace({ view: 'apps', spaceId: fallbackSpaceId ?? undefined });
       }
     };
 
@@ -117,5 +117,5 @@ export function useAppRouteResolver(options: {
     return () => {
       cancelled = true;
     };
-  }, [authState, hasInvalidWorkspaceRoute, preferredWorkspaceId, replace, route.appId, route.view, route.spaceId, routeWorkspaceId, selectedWorkspaceId, t, workspaces]);
+  }, [authState, hasInvalidSpaceRoute, preferredSpaceId, replace, route.appId, route.view, route.spaceId, routeSpaceId, selectedSpaceId, t, spaces]);
 }

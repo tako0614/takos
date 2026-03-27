@@ -16,7 +16,7 @@ import {
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
 import { now, extractBearerToken } from '../../shared/utils';
-import { badRequest, unauthorized, conflict } from './shared/helpers';
+import { badRequest, unauthorized, conflict } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 
 type Variables = {

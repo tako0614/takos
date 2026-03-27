@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlatform, createPlatformConfig, createPlatformServices } from '@/platform/adapters/shared';
-import { buildCloudflareWebPlatform } from '@/platform/adapters/cloudflare';
-import { buildLocalWebPlatform } from '@/platform/adapters/local';
+import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
+import { buildNodeWebPlatform } from '@/platform/adapters/node';
 
 const minimalBindings = {
   ADMIN_DOMAIN: 'admin.example.test',
@@ -11,7 +11,7 @@ const minimalBindings = {
 describe('platform adapters', () => {
   it('keeps the shared platform builder provider-neutral', () => {
     const platform = buildPlatform(
-      'local',
+      'node',
       minimalBindings,
       createPlatformConfig({
         adminDomain: minimalBindings.ADMIN_DOMAIN,
@@ -29,8 +29,8 @@ describe('platform adapters', () => {
     expect(platform.services.deploymentProviders).toBeUndefined();
   });
 
-  it('attaches Cloudflare deploy provider config in the Cloudflare adapter only', () => {
-    const platform = buildCloudflareWebPlatform({
+  it('attaches workers-dispatch deploy provider in the workers adapter', () => {
+    const platform = buildWorkersWebPlatform({
       ...minimalBindings,
       CF_ACCOUNT_ID: 'cf-account',
       CF_API_TOKEN: 'cf-token',
@@ -40,7 +40,7 @@ describe('platform adapters', () => {
     } as never);
 
     expect(platform.services.deploymentProviders?.list()).toEqual([{
-      name: 'cloudflare',
+      name: 'workers-dispatch',
       config: {
         accountId: 'cf-account',
         apiToken: 'cf-token',
@@ -48,12 +48,12 @@ describe('platform adapters', () => {
         dispatchNamespace: 'dispatch-ns',
       },
     }]);
-    expect(platform.services.deploymentProviders?.defaultName).toBe('cloudflare');
+    expect(platform.services.deploymentProviders?.defaultName).toBe('workers-dispatch');
     expect(platform.services.documents.renderPdf).toBeTypeOf('function');
   });
 
-  it('attaches OCI deploy provider config in the local adapter only', () => {
-    const platform = buildLocalWebPlatform({
+  it('attaches OCI deploy provider in the node adapter', () => {
+    const platform = buildNodeWebPlatform({
       ...minimalBindings,
       OCI_ORCHESTRATOR_URL: 'http://oci-orchestrator.internal/deploy',
       OCI_ORCHESTRATOR_TOKEN: 'oci-token',

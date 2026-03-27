@@ -1,4 +1,4 @@
-import { disposeLocalPlatformState } from '../../src/local-platform/adapters/local.ts';
+import { disposeNodePlatformState } from '../../src/node-platform/env-builder.ts';
 import { runLocalSmoke } from './run-smoke.ts';
 import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
@@ -59,7 +59,7 @@ export async function runLocalSmokeProxylessCommand(): Promise<void> {
     const payload = await runLocalSmokeProxyless();
     console.log(JSON.stringify(payload, null, 2));
   } finally {
-    await disposeLocalPlatformState();
+    await disposeNodePlatformState();
   }
 }
 

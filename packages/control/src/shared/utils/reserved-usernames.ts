@@ -93,17 +93,23 @@ export function isReservedUsername(username: string): boolean {
   return RESERVED_USERNAMES.has(username.toLowerCase());
 }
 
+/** Minimum allowed username length. */
+const MIN_USERNAME_LENGTH = 3;
+
+/** Maximum allowed username length. */
+const MAX_USERNAME_LENGTH = 30;
+
 export function validateUsername(username: string): string | null {
   if (!username || username.length === 0) {
     return 'Username is required';
   }
 
-  if (username.length < 3) {
-    return 'Username must be at least 3 characters';
+  if (username.length < MIN_USERNAME_LENGTH) {
+    return `Username must be at least ${MIN_USERNAME_LENGTH} characters`;
   }
 
-  if (username.length > 30) {
-    return 'Username must be at most 30 characters';
+  if (username.length > MAX_USERNAME_LENGTH) {
+    return `Username must be at most ${MAX_USERNAME_LENGTH} characters`;
   }
 
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) {

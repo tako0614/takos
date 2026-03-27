@@ -90,9 +90,11 @@ class LoggerImpl implements Logger {
     const line = JSON.stringify(entry);
     switch (level) {
       case 'debug':
+        // eslint-disable-next-line no-console -- logger implementation
         console.log(line);
         break;
       case 'info':
+        // eslint-disable-next-line no-console -- logger implementation
         console.log(line);
         break;
       case 'warn':

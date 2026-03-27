@@ -1,5 +1,5 @@
 import type { JwtHeartbeatPayload, SessionContext } from './shared';
-import { unauthorized } from '../../../shared/utils/error-response';
+import { AuthenticationError } from '@takos/common/errors';
 
 export async function authenticateServiceRequest(
   c: SessionContext,
@@ -21,8 +21,8 @@ export async function authenticateServiceRequest(
   return null;
 }
 
-export function serviceAuthError(c: SessionContext): Response {
-  return unauthorized(c, 'Unauthorized: Invalid or missing service token');
+export function serviceAuthError(_c: SessionContext): never {
+  throw new AuthenticationError('Unauthorized: Invalid or missing service token');
 }
 
 export function toJwtHeartbeatPayload(payload: Record<string, unknown>): JwtHeartbeatPayload {

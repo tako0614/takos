@@ -33,7 +33,7 @@ vi.mock('@/services/git-smart', () => ({
 import {
   checkRepoAccess,
   getRepositoryById,
-  listRepositoriesByWorkspace,
+  listRepositoriesBySpace,
   sanitizeRepositoryName,
   createRepository,
   toApiRepositoryFromDb,
@@ -208,7 +208,7 @@ describe('getRepositoryById', () => {
   });
 });
 
-describe('listRepositoriesByWorkspace', () => {
+describe('listRepositoriesBySpace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -218,7 +218,7 @@ describe('listRepositoriesByWorkspace', () => {
     drizzle._.all.mockResolvedValueOnce([]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await listRepositoriesByWorkspace({} as D1Database, 'ws-1');
+    const result = await listRepositoriesBySpace({} as D1Database, 'ws-1');
     expect(result).toEqual([]);
   });
 
@@ -227,7 +227,7 @@ describe('listRepositoriesByWorkspace', () => {
     drizzle._.all.mockResolvedValueOnce([makeRepoRow(), makeRepoRow({ id: 'repo-2', name: 'second' })]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await listRepositoriesByWorkspace({} as D1Database, 'ws-1');
+    const result = await listRepositoriesBySpace({} as D1Database, 'ws-1');
     expect(result).toHaveLength(2);
   });
 });

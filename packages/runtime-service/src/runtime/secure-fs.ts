@@ -8,12 +8,12 @@ import {
 } from './paths.js';
 import { SymlinkNotAllowedError, SymlinkWriteError } from '../shared/errors.js';
 
-class WorkspaceFileTooLargeError extends Error {
+class SpaceFileTooLargeError extends Error {
   code = 'FILE_TOO_LARGE' as const;
 
   constructor(public readonly filePath: string, public readonly maxBytes: number) {
     super(`File exceeds size limit (${maxBytes} bytes): ${filePath}`);
-    this.name = 'WorkspaceFileTooLargeError';
+    this.name = 'SpaceFileTooLargeError';
   }
 }
 
@@ -21,7 +21,7 @@ function isSymlinkOpenError(err: unknown): boolean {
   return (err as NodeJS.ErrnoException).code === 'ELOOP';
 }
 
-export async function writeFileWithinWorkspace(
+export async function writeFileWithinSpace(
   baseDir: string,
   fullPath: string,
   content: string | Buffer,
@@ -79,3 +79,6 @@ export async function writeFileWithinWorkspace(
     await handle.close();
   }
 }
+
+/** @deprecated Use {@link writeFileWithinSpace} instead. */
+export const writeFileWithinWorkspace = writeFileWithinSpace;

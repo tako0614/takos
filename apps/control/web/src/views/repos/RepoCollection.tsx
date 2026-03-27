@@ -3,7 +3,7 @@ import type { SourceRepo } from '../../types/repos';
 import { RepoBrowseCard } from './RepoBrowseCard';
 
 function ReposMainContent({
-  selectedWorkspaceId,
+  selectedSpaceId,
   myRepos,
   myReposLoading,
   myReposError,
@@ -11,7 +11,7 @@ function ReposMainContent({
   onStar,
   onOpenCreate,
 }: {
-  selectedWorkspaceId?: string;
+  selectedSpaceId?: string;
   myRepos: SourceRepo[];
   myReposLoading: boolean;
   myReposError: string | null;
@@ -19,11 +19,11 @@ function ReposMainContent({
   onStar: (repo: SourceRepo) => void;
   onOpenCreate: () => void;
 }) {
-  if (!selectedWorkspaceId) {
+  if (!selectedSpaceId) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
         <Icons.Folder className="w-12 h-12 mb-3" />
-        <p>Select a workspace</p>
+        <p>Select a space</p>
       </div>
     );
   }
@@ -67,7 +67,7 @@ function ReposMainContent({
 }
 
 interface RepoCollectionProps {
-  selectedWorkspaceId?: string;
+  selectedSpaceId?: string;
   myRepos: SourceRepo[];
   myReposLoading: boolean;
   myReposError: string | null;
@@ -77,7 +77,7 @@ interface RepoCollectionProps {
 }
 
 export function RepoCollection({
-  selectedWorkspaceId,
+  selectedSpaceId,
   myRepos,
   myReposLoading,
   myReposError,
@@ -88,7 +88,7 @@ export function RepoCollection({
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <ReposMainContent
-        selectedWorkspaceId={selectedWorkspaceId}
+        selectedSpaceId={selectedSpaceId}
         myRepos={myRepos}
         myReposLoading={myReposLoading}
         myReposError={myReposError}

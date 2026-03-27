@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { safeJsonParseOrDefault } from '../../../../shared/utils';
-import { badRequest, parseLimit, parseOffset } from '../../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../../shared/helpers';
+import { badRequest, parseLimit, parseOffset } from '../../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
 import { zValidator } from '../../zod-validator';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import {
@@ -16,7 +16,7 @@ import {
   rerunWorkflowRun,
 } from '../../../../application/services/workflow-runs/commands';
 import { connectWorkflowRunStream } from '../../../../application/services/workflow-runs/stream';
-import { notFound, errorResponse } from '../../../../shared/utils/error-response';
+import { NotFoundError, AppError } from '@takos/common/errors';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -43,7 +43,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     return c.json(await listWorkflowRuns(c.env.DB, {
@@ -71,7 +71,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const refName = body.ref || repoAccess.repo.default_branch || 'main';
@@ -96,12 +96,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     const runId = c.req.param('runId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const run = await getWorkflowRunDetail(c.env.DB, repoId, runId);
     if (!run) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
     return c.json(run);
   })
@@ -112,7 +112,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
     return connectWorkflowRunStream(c.env, {
       repoId,
@@ -127,11 +127,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     const runId = c.req.param('runId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
     const result = await cancelWorkflowRun(c.env, { repoId, runId });
     if (!result.ok) {
-      return errorResponse(c, result.status, result.error);
+      throw new AppError(result.error, undefined, result.status);
     }
     return c.json({ cancelled: result.cancelled });
   })
@@ -141,7 +141,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const runId = c.req.param('runId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
     const result = await rerunWorkflowRun(c.env, {
       repoId,
@@ -163,12 +163,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     const runId = c.req.param('runId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const jobs = await getWorkflowRunJobs(c.env.DB, repoId, runId);
     if (!jobs) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
     return c.json(jobs);
   });

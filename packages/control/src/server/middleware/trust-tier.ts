@@ -8,7 +8,7 @@
  */
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Env, User } from '../../shared/types';
-import { unauthorized, forbidden } from '../../shared/utils/error-response';
+import { AuthenticationError, AuthorizationError } from '@takos/common/errors';
 
 type TrustTierVariables = { user?: User };
 type TrustTierContext = Context<{ Bindings: Env; Variables: TrustTierVariables }>;
@@ -30,10 +30,10 @@ export function requireTrustTier(minTier: 'normal' | 'trusted'): MiddlewareHandl
   return async (c, next) => {
     const user = c.get('user');
     if (!user) {
-      return unauthorized(c);
+      throw new AuthenticationError();
     }
     if (!meetsMinTier(user.trust_tier, minTier)) {
-      return forbidden(c, 'Account too new for this operation');
+      throw new AuthorizationError('Account too new for this operation');
     }
     await next();
   };

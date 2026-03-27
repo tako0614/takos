@@ -1,5 +1,5 @@
 import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, WorkspaceFile } from '../../../shared/types';
+import type { Env, SpaceFile } from '../../../shared/types';
 import { getDb, files as filesTable } from '../../../infra/db';
 import { eq, and, ne, isNull, inArray, desc } from 'drizzle-orm';
 import { flattenTree, getBlob } from '../git-smart';
@@ -104,7 +104,7 @@ export class EmbeddingsService {
 
   async indexFile(
     spaceId: string,
-    file: WorkspaceFile,
+    file: SpaceFile,
     content: string
   ): Promise<number> {
     const chunks = this.splitIntoChunks(content);
@@ -276,16 +276,16 @@ export class EmbeddingsService {
       .limit(100)
       .all();
 
-    const filesList: WorkspaceFile[] = filesResult.map(f => ({
+    const filesList: SpaceFile[] = filesResult.map(f => ({
       id: f.id,
       space_id: f.accountId,
       path: f.path,
-      kind: f.kind as WorkspaceFile['kind'],
-      visibility: f.visibility as WorkspaceFile['visibility'],
+      kind: f.kind as SpaceFile['kind'],
+      visibility: f.visibility as SpaceFile['visibility'],
       size: f.size,
       sha256: f.sha256,
       mime_type: f.mimeType,
-      origin: f.origin as WorkspaceFile['origin'],
+      origin: f.origin as SpaceFile['origin'],
       indexed_at: f.indexedAt ?? null,
       created_at: f.createdAt ?? new Date(0).toISOString(),
       updated_at: f.updatedAt ?? new Date(0).toISOString(),

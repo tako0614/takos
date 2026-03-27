@@ -6,7 +6,7 @@ import type { Env } from '../../../shared/types';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
 import { WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
-import { deleteHostnameRouting } from '../routing';
+import { deleteHostnameRouting } from '../routing/service';
 import type { ResourceProvisionResult, WorkerDeploymentResult } from './types';
 
 export class CompensationTracker {
@@ -63,6 +63,10 @@ export async function cleanupProvisionedResources(
     ...resourcesResult.d1.map(r => ({ type: 'd1' as const, cfId: r.id, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
     ...resourcesResult.r2.map(r => ({ type: 'r2' as const, cfId: undefined, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
     ...resourcesResult.kv.map(r => ({ type: 'kv' as const, cfId: r.id, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
+    ...resourcesResult.queue.map(r => ({ type: 'queue' as const, cfId: r.id, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
+    ...resourcesResult.analyticsEngine.map(r => ({ type: 'analytics_engine' as const, cfId: undefined, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
+    ...resourcesResult.workflow.map(r => ({ type: 'workflow' as const, cfId: undefined, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
+    ...resourcesResult.vectorize.map(r => ({ type: 'vectorize' as const, cfId: r.id, cfName: r.name, resourceId: r.resourceId, wasAdopted: r.wasAdopted })),
   ];
 
   for (const resource of allResources) {

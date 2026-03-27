@@ -51,7 +51,21 @@ export class TakopackWorkerService {
       const workerName = `worker-${workerId}`;
       const slug = buildWorkerSlug(params.packageName, workerConfig.name, workerId);
       const hostname = this.buildWorkerHostname(slug, params.hostnameHint, isSingleWorker);
-      const workerBindingConfig = workerConfig.bindings || { d1: [], r2: [], kv: [], vectorize: [] };
+      const workerBindingConfig = workerConfig.bindings || {
+        d1: [],
+        r2: [],
+        kv: [],
+        queue: [],
+        analytics: [],
+        workflows: [],
+        vectorize: [],
+      };
+      if ((workerConfig.triggers?.schedules?.length || 0) > 0 || (workerConfig.triggers?.queues?.length || 0) > 0) {
+        throw new Error(
+          `Scheduled and queue trigger delivery require Takos-managed orchestration and are not supported yet ` +
+          `(${workerConfig.name}).`
+        );
+      }
       const workerScriptBuffer = getRequiredPackageFile(
         params.files,
         workerConfig.bundle,
@@ -195,7 +209,16 @@ export class TakopackWorkerService {
 
   private async resolveManifestWorkerResourceBindings(
     spaceId: string,
-    bindings: { d1: string[]; r2: string[]; kv: string[]; vectorize?: string[] },
+    bindings: {
+      d1: string[];
+      r2: string[];
+      kv: string[];
+      queue?: string[];
+      analytics?: string[];
+      workflows?: string[];
+      vectorize?: string[];
+      durableObjects?: string[];
+    },
     provisionedResources?: ResourceProvisionResult
   ): Promise<ResolvedWorkerResourceBinding[]> {
     const resolved: ResolvedWorkerResourceBinding[] = [];
@@ -227,12 +250,68 @@ export class TakopackWorkerService {
         },
       },
       {
+        type: 'queue' as const,
+        names: bindings.queue || [],
+        toWfpBinding: (name: string, resource: { cfName?: string; config?: Record<string, unknown> }) => {
+          if (!resource.cfName) throw new Error(`Queue resource is missing Cloudflare queue name: ${name}`);
+          const rawDelay = resource.config?.deliveryDelaySeconds;
+          const deliveryDelay = typeof rawDelay === 'number'
+            ? rawDelay
+            : typeof rawDelay === 'string'
+              ? Number(rawDelay)
+              : undefined;
+          return {
+            type: 'queue' as const,
+            name,
+            queue_name: resource.cfName,
+            ...(typeof deliveryDelay === 'number' && Number.isFinite(deliveryDelay)
+              ? { delivery_delay: Math.floor(deliveryDelay) }
+              : {}),
+          };
+        },
+      },
+      {
+        type: 'analytics_engine' as const,
+        names: bindings.analytics || [],
+        toWfpBinding: (name: string, resource: { cfName?: string }) => {
+          if (!resource.cfName) throw new Error(`Analytics Engine resource is missing dataset name: ${name}`);
+          return { type: 'analytics_engine' as const, name, dataset: resource.cfName };
+        },
+        resolveType: 'analytics_engine' as const,
+      },
+      {
+        type: 'workflow' as const,
+        names: bindings.workflows || [],
+        toWfpBinding: (name: string) => {
+          throw new Error(
+            `Workflow resources can be provisioned, but workflow bindings are not materialized into tenant worker runtime bindings yet (${name}). ` +
+            `Declare the workflow resource in the manifest, then invoke it through Takos-managed workflow APIs.`,
+          );
+        },
+      },
+      {
         type: 'vectorize' as const,
         names: bindings.vectorize || [],
         toWfpBinding: (name: string, resource: { cfName?: string }) => {
           if (!resource.cfName) throw new Error(`Vectorize resource is missing Cloudflare index name: ${name}`);
           return { type: 'vectorize' as const, name, index_name: resource.cfName };
         },
+      },
+      {
+        type: 'durable_object' as const,
+        names: bindings.durableObjects || [],
+        toWfpBinding: (name: string, resource: { cfName?: string; config?: Record<string, unknown> }) => {
+          const className = resource.config?.className as string | undefined || resource.cfName;
+          if (!className) throw new Error(`Durable Object resource is missing class name: ${name}`);
+          const scriptName = resource.config?.scriptName as string | undefined;
+          return {
+            type: 'durable_object_namespace' as const,
+            name,
+            class_name: className,
+            ...(scriptName ? { script_name: scriptName } : {}),
+          };
+        },
+        resolveType: 'durable_object' as const,
       },
     ] as const;
 
@@ -245,15 +324,22 @@ export class TakopackWorkerService {
         }
         usedBindingNames.add(bindingName);
 
+        // Workflow bindings are validated via toWfpBinding before resource resolution
+        // to avoid unnecessary DB queries for unsupported binding types.
+        if (config.type === 'workflow') {
+          (config.toWfpBinding as (name: string) => never)(bindingName);
+          continue;
+        }
+
         const resource = await this.resolveResourceReferenceForWorkerBinding(
           spaceId,
-          config.type,
+          ('resolveType' in config ? config.resolveType : config.type),
           bindingName,
           provisionedResources
         );
 
         resolved.push({
-          bindingType: config.type,
+          bindingType: config.type as ResolvedWorkerResourceBinding['bindingType'],
           bindingName,
           resourceId: resource.resourceId,
           wfpBinding: config.toWfpBinding(bindingName, resource),
@@ -266,21 +352,31 @@ export class TakopackWorkerService {
 
   private async resolveResourceReferenceForWorkerBinding(
     spaceId: string,
-    type: 'd1' | 'r2' | 'kv' | 'vectorize',
+    type: 'd1' | 'r2' | 'kv' | 'queue' | 'analyticsEngine' | 'analytics_engine' | 'workflow' | 'vectorize' | 'durable_object' | 'durableObject',
     reference: string,
     provisionedResources?: ResourceProvisionResult
-  ): Promise<{ resourceId: string; cfId?: string; cfName?: string }> {
+  ): Promise<{ resourceId: string; cfId?: string; cfName?: string; config?: Record<string, unknown> }> {
     const ref = reference.trim();
 
-    const provisioned = provisionedResources?.[type] || [];
+    const provisionedKey = type === 'analytics_engine' ? 'analyticsEngine' : type === 'durable_object' ? 'durableObject' : type;
+    const provisioned = provisionedResources?.[provisionedKey] || [];
     for (const resource of provisioned) {
       const candidates = [resource.binding, resource.name, resource.resourceId];
       if ('id' in resource) candidates.push((resource as { id: string }).id);
       if (candidates.includes(ref)) {
+        const dbForProvisioned = getDb(this.env.DB);
+        const resourceRow = await dbForProvisioned.select({
+          id: resources.id,
+          cfId: resources.cfId,
+          cfName: resources.cfName,
+          config: resources.config,
+        }).from(resources).where(eq(resources.id, resource.resourceId)).get();
+
         return {
           resourceId: resource.resourceId,
-          cfId: 'id' in resource ? (resource as { id: string }).id : undefined,
-          cfName: resource.name,
+          cfId: resourceRow?.cfId || ('id' in resource ? (resource as { id: string }).id : undefined),
+          cfName: resourceRow?.cfName || resource.name,
+          config: resourceRow?.config ? (() => { try { return JSON.parse(resourceRow.config!) as Record<string, unknown>; } catch { return undefined; } })() : undefined,
         };
       }
     }
@@ -300,13 +396,16 @@ export class TakopackWorkerService {
           eq(resources.cfName, ref),
         );
 
+    const storageType = type === 'analyticsEngine' ? 'analytics_engine' : type;
+
     const resource = await db.select({
       id: resources.id,
       cfId: resources.cfId,
       cfName: resources.cfName,
+      config: resources.config,
     }).from(resources).where(
       and(
-        eq(resources.type, type),
+        eq(resources.type, storageType),
         eq(resources.status, 'active'),
         refConditions,
         or(eq(resources.accountId, spaceId), isNull(resources.accountId)),
@@ -321,6 +420,7 @@ export class TakopackWorkerService {
       resourceId: resource.id,
       cfId: resource.cfId || undefined,
       cfName: resource.cfName || undefined,
+      config: resource.config ? (() => { try { return JSON.parse(resource.config!) as Record<string, unknown>; } catch { return undefined; } })() : undefined,
     };
   }
 

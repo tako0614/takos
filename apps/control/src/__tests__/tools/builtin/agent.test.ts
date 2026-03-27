@@ -20,7 +20,7 @@ vi.mock('@/services/threads/threads', () => ({
 }));
 
 vi.mock('@/services/identity/locale', () => ({
-  getWorkspaceLocale: vi.fn(),
+  getSpaceLocale: vi.fn(),
 }));
 
 vi.mock('@/db', () => {
@@ -77,7 +77,7 @@ import { spawnAgentHandler, waitAgentHandler } from '@/tools/builtin/agent';
 import { createThreadRun } from '@/services/execution/run-creation';
 import { resolveRunModel } from '@/services/runs/create-thread-run-validation';
 import { createThread, updateThreadStatus } from '@/services/threads/threads';
-import { getWorkspaceLocale } from '@/services/identity/locale';
+import { getSpaceLocale } from '@/services/identity/locale';
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -102,7 +102,7 @@ describe('agent tools', () => {
 
   it('creates a delegation packet before spawning a delegated run', async () => {
     vi.mocked(resolveRunModel).mockResolvedValue('gpt-5.4-mini');
-    vi.mocked(getWorkspaceLocale).mockResolvedValue('ja');
+    vi.mocked(getSpaceLocale).mockResolvedValue('ja');
     vi.mocked(createThread).mockResolvedValue({
       id: 'child-thread-1',
       space_id: 'ws-1',
@@ -199,7 +199,7 @@ describe('agent tools', () => {
 
   it('archives the child thread when run creation fails after thread creation', async () => {
     vi.mocked(resolveRunModel).mockResolvedValue('gpt-5.4-mini');
-    vi.mocked(getWorkspaceLocale).mockResolvedValue('en');
+    vi.mocked(getSpaceLocale).mockResolvedValue('en');
     vi.mocked(createThread).mockResolvedValue({
       id: 'child-thread-1',
       space_id: 'ws-1',

@@ -1,4 +1,22 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
+import type { DbEnv } from '../../../shared/types';
+import type { DurableNamespaceBinding, KvStoreBinding, ObjectStoreBinding } from '../../../shared/types/bindings.ts';
+import type { WfpDeploymentProviderEnv, DeploymentProviderRegistryLike } from './provider';
+
+export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
+  ENCRYPTION_KEY?: string;
+  ADMIN_DOMAIN: string;
+  WORKER_BUNDLES?: ObjectStoreBinding;
+  OCI_ORCHESTRATOR_URL?: string;
+  OCI_ORCHESTRATOR_TOKEN?: string;
+  HOSTNAME_ROUTING: KvStoreBinding;
+  ROUTING_DO?: DurableNamespaceBinding;
+  ROUTING_DO_PHASE?: string;
+  SERVICE_INTERNAL_JWT_ISSUER?: string;
+  DEPLOYMENT_PROVIDER_REGISTRY?: DeploymentProviderRegistryLike;
+};
+
+export type ArtifactKind = 'worker-bundle' | 'container-image';
 
 export type DeployState =
   | 'pending'
@@ -15,7 +33,7 @@ export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' 
 
 export type RoutingStatus = 'active' | 'canary' | 'rollback' | 'archived';
 
-export type DeploymentProviderName = 'cloudflare' | 'oci' | 'ecs' | 'cloud-run' | 'kubernetes';
+export type DeploymentProviderName = 'workers-dispatch' | 'oci' | 'ecs' | 'cloud-run' | 'k8s';
 
 export type DeploymentProviderRef = {
   name: DeploymentProviderName;
@@ -32,8 +50,10 @@ export type DeploymentTargetEndpoint =
     };
 
 export type DeploymentTargetArtifact = {
+  kind?: ArtifactKind;
   image_ref?: string;
   exposed_port?: number;
+  health_path?: string;
 };
 
 export type DeploymentTarget = {
@@ -49,6 +69,7 @@ export interface Deployment {
   space_id: string;
   version: number;
   artifact_ref: string | null;
+  artifact_kind: ArtifactKind;
   bundle_r2_key: string | null;
   bundle_hash: string | null;
   bundle_size: number | null;
@@ -97,7 +118,8 @@ export interface CreateDeploymentInput {
   spaceId: string;
   userId?: string | null;
   idempotencyKey?: string | null;
-  bundleContent: string;
+  artifactKind?: ArtifactKind;
+  bundleContent?: string;
   wasmContent?: ArrayBuffer | null;
   deployMessage?: string;
   strategy?: 'direct' | 'canary';

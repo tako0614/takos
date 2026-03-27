@@ -301,7 +301,7 @@ describe('executeStepLoop', () => {
       }),
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     const result = await executeStepLoop(ctx, state);
 
@@ -325,7 +325,7 @@ describe('executeStepLoop', () => {
     });
     const state = createInitialState();
     state.runtimeStarted = true;
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     // Mock runtimeDelete (callRuntimeRequest for DELETE)
     mocks.callRuntimeRequest.mockResolvedValue({ ok: true, status: 200 });
@@ -382,7 +382,7 @@ describe('executeStepLoop', () => {
       }),
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     await executeStepLoop(ctx, state);
 
@@ -435,7 +435,7 @@ describe('executeStepLoop', () => {
       }),
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     await executeStepLoop(ctx, state);
 
@@ -479,7 +479,7 @@ describe('executeStepLoop', () => {
       effectiveJobEnv: {},
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     await executeStepLoop(ctx, state);
 
@@ -518,7 +518,7 @@ describe('executeStepLoop', () => {
       }),
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     await executeStepLoop(ctx, state);
 
@@ -568,7 +568,7 @@ describe('executeStepLoop', () => {
       }),
     });
     const state = createInitialState();
-    state.runtimeWorkspaceId = 'ws-1';
+    state.runtimeSpaceId = 'ws-1';
 
     await executeStepLoop(ctx, state);
 

@@ -27,19 +27,18 @@
     "zod": "^3.25.32"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./agent": "./src/agent.ts",
-    "./agent/public-runner": "./src/agent-public-runner.ts",
-    "./application/services/cloudflare/api-client": "./src/application/services/cloudflare/api-client.ts",
-    "./application/services/wfp/client": "./src/application/services/wfp/client.ts",
-    "./web": "./src/web.ts",
-    "./dispatch": "./src/dispatch.ts",
-    "./worker": "./src/worker.ts",
-    "./platform": "./src/platform.ts",
+    ".": "../src/index.ts",
+    "./agent": "../src/application/services/agent/index.ts",
+    "./agent/public-runner": "../src/application/services/agent/public-runner.ts",
+    "./application/services/cloudflare/api-client": "../src/application/services/cloudflare/api-client.ts",
+    "./application/services/wfp/client": "../src/application/services/wfp/client.ts",
+    "./web": "../src/web.ts",
+    "./dispatch": "../src/dispatch.ts",
+    "./worker": "../src/runtime/worker/index.ts",
+    "./platform": "../src/platform/index.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
     "package.json"
   ]
 }

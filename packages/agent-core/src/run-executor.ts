@@ -29,7 +29,7 @@ export function shouldResetRunToQueuedOnContainerError(
 /**
  * Function signature for the agent runner's `executeRun`.
  * Used for dependency injection — callers pass the concrete implementation
- * (resolved from @takos/control-agent at build time) into agent-core's executor.
+ * (resolved from @takos/control-core/agent/public-runner) into agent-core's executor.
  */
 export type ExecuteRunFn = (
   env: Record<string, unknown>,

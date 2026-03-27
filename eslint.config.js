@@ -18,9 +18,9 @@ export default tseslint.config(
   },
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-empty-function': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-eval': 'error',
     },

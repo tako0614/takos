@@ -180,7 +180,10 @@ export async function fingerprintMatches(params: {
 // --- Policy constants & helpers (merged from policy.ts) ---
 
 export const MANAGED_COMMON_ENV_KEYS = new Set(['APP_BASE_URL', 'TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN']);
-export const RESERVED_WORKSPACE_COMMON_ENV_KEYS = new Set(['TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN']);
+export const RESERVED_SPACE_COMMON_ENV_KEYS = new Set(['TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN']);
+
+/** @deprecated Use {@link RESERVED_SPACE_COMMON_ENV_KEYS} instead. */
+export const RESERVED_WORKSPACE_COMMON_ENV_KEYS = RESERVED_SPACE_COMMON_ENV_KEYS;
 
 export function normalizeCommonEnvName(name: string): string | null {
   try {
@@ -195,7 +198,10 @@ export function isManagedCommonEnvKey(name: string): boolean {
   return Boolean(normalized && MANAGED_COMMON_ENV_KEYS.has(normalized));
 }
 
-export function isReservedWorkspaceCommonEnvKey(name: string): boolean {
+export function isReservedSpaceCommonEnvKey(name: string): boolean {
   const normalized = normalizeCommonEnvName(name);
-  return Boolean(normalized && RESERVED_WORKSPACE_COMMON_ENV_KEYS.has(normalized));
+  return Boolean(normalized && RESERVED_SPACE_COMMON_ENV_KEYS.has(normalized));
 }
+
+/** @deprecated Use {@link isReservedSpaceCommonEnvKey} instead. */
+export const isReservedWorkspaceCommonEnvKey = isReservedSpaceCommonEnvKey;

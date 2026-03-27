@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env, User } from '../../shared/types';
-import type { BaseVariables } from './shared/helpers';
+import type { BaseVariables } from './shared/route-auth';
 import { InMemoryRateLimiter } from '../../shared/utils';
-import { parseJsonBody } from './shared/helpers';
+import { parseJsonBody } from './shared/route-auth';
 import {
   handleIndexFile,
   handleIndexStatus,
@@ -11,7 +11,7 @@ import {
   handleVectorizeIndex,
 } from './index/handlers';
 import { handleGraphNeighbors } from './index/graph';
-import { badRequest } from '../../shared/utils/error-response';
+import { BadRequestError } from '@takos/common/errors';
 
 const index = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 
@@ -33,7 +33,7 @@ index.post('/spaces/:spaceId/index/vectorize', expensiveIndexRateLimiter.middlew
     force_reindex?: boolean;
   }>(c, {});
   if (body === null) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
   return handleVectorizeIndex(c, body);
 });

@@ -1,9 +1,9 @@
 import { getDb } from '../../../infra/db';
 import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { checkWorkspaceAccess, now, toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess, now, toIsoString } from '../../../shared/utils';
 import { ERR, HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
-import { badRequest, forbidden, notFound } from '../../../shared/utils/error-response';
+import { BadRequestError, AuthorizationError, NotFoundError } from '@takos/common/errors';
 import type {
   JwtHeartbeatPayload,
   SessionContext,
@@ -16,16 +16,16 @@ export async function heartbeatSession(
   jwtPayload?: JwtHeartbeatPayload,
 ): Promise<Response> {
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return badRequest(c, 'Missing sessionId');
+  if (!sessionId) throw new BadRequestError('Missing sessionId');
   const db = getDb(c.env.DB);
 
   if (jwtPayload?.session_id && jwtPayload.session_id !== sessionId) {
-    return forbidden(c, 'Forbidden: session_id mismatch');
+    throw new AuthorizationError('Forbidden: session_id mismatch');
   }
 
   const headerSessionId = c.req.header('X-Takos-Session-Id');
   if (headerSessionId && headerSessionId !== sessionId) {
-    return forbidden(c, 'Forbidden: session_id header mismatch');
+    throw new AuthorizationError('Forbidden: session_id header mismatch');
   }
 
   const session = await db.select({
@@ -36,11 +36,11 @@ export async function heartbeatSession(
   }).from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (!session) {
-    return notFound(c, 'Session');
+    throw new NotFoundError('Session');
   }
 
   if (jwtPayload?.space_id && jwtPayload.space_id !== session.accountId) {
-    return forbidden(c, 'Forbidden: space_id mismatch');
+    throw new AuthorizationError('Forbidden: space_id mismatch');
   }
 
   const sessionAge = Date.now() - new Date(session.createdAt).getTime();
@@ -48,11 +48,11 @@ export async function heartbeatSession(
     await db.update(sessions).set({ status: 'dead', updatedAt: now() }).where(
       and(eq(sessions.id, sessionId), eq(sessions.status, 'running'))
     );
-    return badRequest(c, 'Session expired: exceeded maximum age');
+    throw new BadRequestError('Session expired: exceeded maximum age');
   }
 
   if (session.status !== 'running') {
-    return badRequest(c, 'Session is not running');
+    throw new BadRequestError('Session is not running');
   }
 
   const timestamp = now();
@@ -64,7 +64,7 @@ export async function heartbeatSession(
 export async function getSessionHealth(c: SessionContext): Promise<Response> {
   const user = c.get('user');
   const sessionId = c.req.param('sessionId');
-  if (!sessionId) return badRequest(c, 'Missing sessionId');
+  if (!sessionId) throw new BadRequestError('Missing sessionId');
   const db = getDb(c.env.DB);
   const session = await db.select({
     id: sessions.id,
@@ -75,12 +75,12 @@ export async function getSessionHealth(c: SessionContext): Promise<Response> {
   }).from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (!session) {
-    return notFound(c, 'Session');
+    throw new NotFoundError('Session');
   }
 
-  const access = await checkWorkspaceAccess(c.env.DB, session.accountId, user.id);
+  const access = await checkSpaceAccess(c.env.DB, session.accountId, user.id);
   if (!access) {
-    return forbidden(c, 'Permission denied');
+    throw new AuthorizationError('Permission denied');
   }
 
   const nowMs = Date.now();

@@ -2,7 +2,7 @@ import type { ToolHandler } from '../../../types';
 import { callSessionApi } from '../session';
 import { validateContent } from '../limits';
 import { logError, logWarn } from '../../../../../shared/utils/logger';
-import { setupFileOperation, handleSessionApiResponse } from '../helpers';
+import { setupFileOperation, handleSessionApiResponse } from '../file-operations';
 
 export const fileWriteHandler: ToolHandler = async (args, context) => {
   const { path, sessionId } = await setupFileOperation(args, context);

@@ -2,26 +2,26 @@ import { getDb } from '../../../infra/db';
 import { edges, nodes, files } from '../../../infra/db/schema';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { WorkspaceFile } from '../../../shared/types';
-import { checkWorkspaceAccess, generateId, now } from '../../../shared/utils';
+import type { SpaceFile } from '../../../shared/types';
+import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import type { IndexContext } from './shared';
 import { resolvePath } from './shared';
-import { badRequest, notFound, internalError } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError } from '@takos/common/errors';
 
 export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
-  if (!spaceId) return badRequest(c, 'Missing spaceId');
+  if (!spaceId) throw new BadRequestError('Missing spaceId');
   const nodeId = c.req.query('node_id');
   const limitParam = c.req.query('limit');
   const limit = limitParam ? Math.min(Math.max(1, parseInt(limitParam) || 100), 500) : 100;
 
-  const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id);
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
   if (!nodeId) {
-    return badRequest(c, 'node_id is required');
+    throw new BadRequestError('node_id is required');
   }
 
   const db = getDb(c.env.DB);
@@ -55,7 +55,7 @@ export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
 export async function extractAndCreateEdges(
   db: D1Database,
   spaceId: string,
-  file: WorkspaceFile,
+  file: SpaceFile,
   content: string,
   sourceNodeId: string
 ): Promise<void> {

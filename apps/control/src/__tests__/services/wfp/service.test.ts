@@ -99,6 +99,53 @@ describe('WFPService', () => {
         index_name: 'semantic-index',
       });
     });
+
+    it('serializes queue and analytics bindings into worker metadata', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await svc.createWorker({
+        workerName: 'resource-worker',
+        workerScript: 'export default { fetch() { return new Response("ok"); } }',
+        bindings: [
+          { type: 'queue', name: 'JOB_QUEUE', queue_name: 'jobs' },
+          { type: 'analytics_engine', name: 'EVENTS', dataset: 'events' },
+        ],
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const metadataBlob = (init.body as FormData).get('metadata') as Blob;
+      const metadata = JSON.parse(await metadataBlob.text());
+      expect(metadata.bindings).toEqual(expect.arrayContaining([
+        { type: 'queue', name: 'JOB_QUEUE', queue_name: 'jobs' },
+        { type: 'analytics_engine', name: 'EVENTS', dataset: 'events' },
+      ]));
+    });
+
+    it('serializes workflow bindings into worker metadata', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await svc.createWorker({
+        workerName: 'workflow-worker',
+        workerScript: 'export default { fetch() { return new Response("ok"); } }',
+        bindings: [
+          { type: 'workflow', name: 'PUBLISH_FLOW', workflow_name: 'publish-flow', class_name: 'PublishWorkflow' },
+        ],
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const metadataBlob = (init.body as FormData).get('metadata') as Blob;
+      const metadata = JSON.parse(await metadataBlob.text());
+      expect(metadata.bindings).toContainEqual({
+        type: 'workflow',
+        name: 'PUBLISH_FLOW',
+        workflow_name: 'publish-flow',
+        class_name: 'PublishWorkflow',
+      });
+    });
   });
 
   describe('deleteWorker', () => {
@@ -111,6 +158,20 @@ describe('WFPService', () => {
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/scripts/worker-to-delete');
+      expect(init.method).toBe('DELETE');
+    });
+  });
+
+  describe('deleteQueue', () => {
+    it('sends DELETE request for the queue', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse(null));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await svc.deleteQueue('queue-id-123');
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain('/queues/queue-id-123');
       expect(init.method).toBe('DELETE');
     });
   });
@@ -197,6 +258,28 @@ describe('WFPService', () => {
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/r2/buckets');
       expect(init.method).toBe('POST');
+    });
+  });
+
+  describe('createQueue', () => {
+    it('returns the queue metadata from API response', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        mockSuccessResponse({ queue_id: 'queue-id-123', queue_name: 'my-queue' }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      const queue = await svc.createQueue('my-queue');
+      expect(queue.id).toBe('queue-id-123');
+      expect(queue.name).toBe('my-queue');
+    });
+
+    it('throws when no queue id returned', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await expect(svc.createQueue('my-queue')).rejects.toThrow(/no ID returned from API/i);
     });
   });
 

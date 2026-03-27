@@ -1,0 +1,92 @@
+export const chat = {
+    // Chat
+    chat: 'チャット',
+    threads: 'スレッド',
+    openMenu: 'メニューを開く',
+    menu: 'メニュー',
+    newChat: '新しいチャット',
+    send: '送信',
+    startConversation: 'メッセージを送信して会話を開始',
+    messageInputPlaceholder: 'メッセージを入力...',
+    searchThreadsAndMessages: 'スレッドとメッセージを検索...',
+    typeToSearch: '検索語を入力\u2026',
+    searchFailed: '検索に失敗しました',
+    untitled: '無題',
+    searchTypeAll: 'すべて',
+    searchTypeKeyword: 'キーワード',
+    searchTypeSemantic: 'セマンティック',
+    inputHint: 'Shift + Enter で改行',
+
+    // Welcome
+    welcomeTitle: 'こんにちは！何かお手伝いしましょうか？',
+    inputPlaceholder: 'タスクの依頼や質問をどうぞ',
+    suggestionCode: 'コードを書いて',
+    suggestionSearch: 'ファイルを検索',
+    suggestionEdit: 'コードを編集',
+    suggestionAI: 'AIに質問',
+
+    // Chat Page
+    selectWorkspaceToChat: 'スペースを選択してチャットを開始',
+
+    // Streaming UI
+    thinking: '処理中',
+    unknown: '不明',
+    showDetails: '詳細を表示',
+    hideDetails: '詳細を隠す',
+    toolsExecuted: '{count} 件のツール実行',
+    withErrors: '(エラーあり)',
+    toolArguments: '引数',
+    toolResult: '結果',
+    toolError: 'エラー',
+    timelineRunStarted: '実行を開始しました',
+    timelineStatusUpdated: 'ステータス更新: {status}',
+    timelineThinking: '思考中',
+    timelineToolCall: 'ツール呼び出し: {tool}',
+    timelineToolCompleted: 'ツール完了: {tool}',
+    timelineToolFailed: 'ツール失敗: {tool}',
+    timelineProgress: '進捗更新',
+    timelineResponseUpdated: '応答を更新',
+    timelineRunCompleted: '実行完了',
+    timelineRunCancelled: '実行を中止しました',
+    timelineRunFailed: '実行失敗',
+    timelineRunError: '実行エラー',
+    runStatus_pending: '待機中',
+    runStatus_queued: 'キュー中',
+    runStatus_running: '実行中',
+    runStatus_completed: '完了',
+    runStatus_failed: '失敗',
+    runStatus_cancelled: '中止',
+    cancelRun: '中止',
+    cancellingRun: '中止中...',
+
+    // Session Diff
+    fileChanges: 'ファイル変更',
+    mergeFailed: 'マージに失敗しました',
+
+    // Session diff / merge
+    alreadyMerged: 'マージ済み',
+    merging: 'マージ中...',
+    merge: 'マージ',
+
+    // Chat View
+    messageNotLoaded: '現在のビューにメッセージが読み込まれていません',
+    failedToSaveTier: 'ティアの保存に失敗しました',
+    failedToLoadShares: '共有リンクの読み込みに失敗しました',
+    failedToCreateShare: '共有の作成に失敗しました',
+    failedToRevoke: '無効化に失敗しました',
+    exportFailed: 'エクスポートに失敗しました',
+    failedToCopy: 'コピーに失敗しました',
+    shareMode: 'モード',
+    sharePublic: '公開',
+    sharePasswordLabel: 'パスワード',
+    shareExpiresDays: '有効期限（日）',
+    shareLinks: 'リンク',
+    shareNoExpiry: '無期限',
+    shareExpiresAt: '{date}に期限切れ',
+    shareLastAccessed: '最終アクセス {date}',
+
+    // Chat image
+    pastedImage: '貼り付けた画像',
+    imagePreview: '画像プレビュー',
+    imageLoadFailed: '画像の読み込みに失敗しました',
+} as const;

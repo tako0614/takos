@@ -140,9 +140,6 @@ importers:
       '@takos/common':
         specifier: workspace:*
         version: link:../../packages/common
-      '@takos/control-core':
-        specifier: workspace:*
-        version: link:../../packages/control/core
       '@takos/control-hosts':
         specifier: workspace:*
         version: link:../../packages/control/hosts
@@ -394,33 +391,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.30)(lightningcss@1.30.2)
 
-  packages/control/agent:
-    dependencies:
-      '@langchain/core':
-        specifier: ^1.1.8
-        version: 1.1.15(@opentelemetry/api@1.9.0)(openai@6.16.0(ws@8.19.0)(zod@3.25.76))
-      '@langchain/langgraph':
-        specifier: ^1.0.7
-        version: 1.1.0(@langchain/core@1.1.15(@opentelemetry/api@1.9.0)(openai@6.16.0(ws@8.19.0)(zod@3.25.76)))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
-      '@langchain/langgraph-checkpoint':
-        specifier: ^1.0.0
-        version: 1.0.0(@langchain/core@1.1.15(@opentelemetry/api@1.9.0)(openai@6.16.0(ws@8.19.0)(zod@3.25.76)))
-      '@langchain/openai':
-        specifier: ^1.2.0
-        version: 1.2.2(@langchain/core@1.1.15(@opentelemetry/api@1.9.0)(openai@6.16.0(ws@8.19.0)(zod@3.25.76)))(ws@8.19.0)
-      '@takos/actions-engine':
-        specifier: workspace:*
-        version: link:../../actions-engine
-      '@takos/control-core':
-        specifier: workspace:*
-        version: link:../core
-      drizzle-orm:
-        specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260118.0)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0)(@opentelemetry/api@1.9.0)(@prisma/client@7.3.0(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))
-      zod:
-        specifier: ^3.25.32
-        version: 3.25.76
-
   packages/control/core:
     dependencies:
       '@aws-sdk/client-dynamodb':
@@ -553,9 +523,9 @@ importers:
       '@takos/common':
         specifier: workspace:*
         version: link:../common
-      '@takos/control-agent':
+      '@takos/control-core':
         specifier: workspace:*
-        version: link:../control/agent
+        version: link:../control/core
       hono:
         specifier: '>=4.12.4'
         version: 4.12.8

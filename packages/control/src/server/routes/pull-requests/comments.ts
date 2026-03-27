@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
 import { pullRequests, prComments } from '../../../infra/db/schema';
-import { createNotification } from '../../../application/services/notifications';
+import { createNotification } from '../../../application/services/notifications/service';
 
 import type { PullRequestCommentDto } from './dto';
 import { buildUserLiteMap, resolveActorLite } from './dto';
 import { logWarn } from '../../../shared/utils/logger';
-import { notFound } from '../../../shared/utils/error-response';
+import { NotFoundError } from '@takos/common/errors';
 
 function toCommentDto(
   comment: {
@@ -61,7 +61,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -71,7 +71,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!pullRequest) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
 
     const content = (body.body ?? body.content ?? '').trim();
@@ -128,7 +128,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -138,7 +138,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!pullRequest) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
 
     const comments = await db.select()

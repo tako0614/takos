@@ -12,7 +12,7 @@ import { runCommand } from './command.js';
 import { resolvePathWithin, verifyPathWithinAfterAccess } from './paths.js';
 import { validateCommandLine } from './validation.js';
 import { execTempDirManager } from '../utils/temp-dir.js';
-import { getErrorMessage } from '../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,12 +86,15 @@ export function getProcess(id: string): RuntimeProcess | undefined {
   return runtimeProcesses.get(id);
 }
 
-export function isWorkspaceConcurrencyExceeded(spaceId: string): boolean {
+export function isSpaceConcurrencyExceeded(spaceId: string): boolean {
   const runningCount = Array.from(runtimeProcesses.values())
     .filter(p => p.space_id === spaceId && p.status === 'running')
     .length;
   return runningCount >= MAX_CONCURRENT_EXEC_PER_WORKSPACE;
 }
+
+/** @deprecated Use {@link isSpaceConcurrencyExceeded} instead. */
+export const isWorkspaceConcurrencyExceeded = isSpaceConcurrencyExceeded;
 
 /**
  * Evict old completed processes when at capacity.

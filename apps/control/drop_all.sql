@@ -93,12 +93,12 @@ DROP TABLE IF EXISTS billing_plans;
 DROP TABLE IF EXISTS service_mcp_endpoints;
 DROP TABLE IF EXISTS service_runtime_limits;
 DROP TABLE IF EXISTS service_runtime_flags;
-DROP TABLE IF EXISTS worker_common_env_links;
+DROP TABLE IF EXISTS service_common_env_links;
 DROP TABLE IF EXISTS service_env_vars;
 DROP TABLE IF EXISTS managed_takos_tokens;
 DROP TABLE IF EXISTS common_env_reconcile_jobs;
 DROP TABLE IF EXISTS common_env_audit_logs;
-DROP TABLE IF EXISTS worker_bindings;
+DROP TABLE IF EXISTS service_bindings;
 DROP TABLE IF EXISTS resource_access_tokens;
 DROP TABLE IF EXISTS resource_access;
 DROP TABLE IF EXISTS mcp_servers;
@@ -113,15 +113,8 @@ DROP TABLE IF EXISTS service_runtime_settings;
 DROP TABLE IF EXISTS deployment_events;
 DROP TABLE IF EXISTS custom_domains;
 DROP TABLE IF EXISTS deployments;
-DROP TABLE IF EXISTS workers;
+DROP TABLE IF EXISTS services;
 DROP TABLE IF EXISTS bundle_deployments;
--- Legacy compatibility tables left during cutover
-DROP TABLE IF EXISTS worker_mcp_endpoints;
-DROP TABLE IF EXISTS worker_runtime_limits;
-DROP TABLE IF EXISTS worker_runtime_flags;
-DROP TABLE IF EXISTS worker_env_vars;
-DROP TABLE IF EXISTS infra_workers;
-DROP TABLE IF EXISTS worker_runtime_settings;
 
 -- Files / repositories / account hierarchy
 DROP TABLE IF EXISTS files;

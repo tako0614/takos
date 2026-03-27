@@ -4,5 +4,6 @@
 
 ## 内容
 
-- [用語集](/reference/glossary)
+- [API リファレンス](/reference/api)
 - [CLI command reference](/reference/commands)
+- [用語集](/reference/glossary)

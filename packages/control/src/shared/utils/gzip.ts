@@ -22,11 +22,14 @@ export async function gzipCompressString(data: string): Promise<ArrayBuffer> {
   return result.buffer;
 }
 
+/** Default maximum decompressed size (50 MiB) to prevent zip-bomb attacks. */
+const DEFAULT_MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024;
+
 export async function gzipDecompressToString(
   data: ArrayBuffer,
   options: { maxDecompressedBytes?: number } = {}
 ): Promise<string> {
-  const maxDecompressedBytes = options.maxDecompressedBytes ?? 50 * 1024 * 1024; // 50 MiB
+  const maxDecompressedBytes = options.maxDecompressedBytes ?? DEFAULT_MAX_DECOMPRESSED_BYTES;
 
   const stream = new Blob([data]).stream();
   const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));

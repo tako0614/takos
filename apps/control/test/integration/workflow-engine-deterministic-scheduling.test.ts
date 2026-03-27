@@ -28,7 +28,7 @@ vi.mock('@/application/services/git-smart', () => ({
   getBlobAtPath: mocks.getBlobAtPath,
 }));
 
-import { WorkflowEngine } from '@/application/services/execution/workflow-engine';
+import { scheduleDependentJobs } from '@/application/services/execution/workflow-job-scheduler';
 
 /**
  * Build a Drizzle-chainable mock for WorkflowEngine.
@@ -138,17 +138,13 @@ describe('workflow-engine dependent scheduling uses immutable run SHA', () => {
       diagnostics: [],
     });
 
-    const engine = new WorkflowEngine({
-      db: {} as D1Database,
-      bucket: {} as R2Bucket,
-      queue: queue as unknown as Queue<{ type: 'job' }>,
-    });
-
-    const scheduleDependentJobs = (engine as unknown as {
-      scheduleDependentJobs: (runId: string, completedJobKey: string) => Promise<void>;
-    }).scheduleDependentJobs.bind(engine);
-
-    await scheduleDependentJobs('run-1', 'build');
+    await scheduleDependentJobs(
+      {} as D1Database,
+      {} as R2Bucket,
+      queue as unknown as Queue<{ type: 'job' }>,
+      'run-1',
+      'build',
+    );
 
     expect(mocks.resolveRef).not.toHaveBeenCalled();
     expect(mocks.getCommit).toHaveBeenCalledWith(expect.anything(), 'sha-pinned');

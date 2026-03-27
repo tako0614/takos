@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Resource } from '../../../shared/types';
-import { badRequest, parseLimit, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, parseLimit, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
-import { internalError, notFound, forbidden } from '../../../shared/utils/error-response';
+import { AuthorizationError, NotFoundError, InternalError } from '@takos/common/errors';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -61,14 +61,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!resourceData) {
-    return notFound(c, 'R2 resource');
+    throw new NotFoundError('R2 resource');
   }
 
   const resource = toResource(resourceData);
 
   const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   if (!resource.cf_name) {
@@ -82,7 +82,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     const result = await wfp.listR2Objects(resource.cf_name, {
       prefix,
@@ -97,7 +97,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     });
   } catch (err) {
     logError('Failed to list R2 objects', err, { module: 'routes/resources/r2' });
-    return internalError(c, 'Failed to list objects');
+    throw new InternalError('Failed to list objects');
   }
 })
 
@@ -111,14 +111,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!resourceData) {
-    return notFound(c, 'R2 resource');
+    throw new NotFoundError('R2 resource');
   }
 
   const resource = toResource(resourceData);
 
   const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   if (!resource.cf_name) {
@@ -128,14 +128,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     const stats = await wfp.getR2BucketStats(resource.cf_name);
 
     return c.json({ stats });
   } catch (err) {
     logError('Failed to get R2 stats', err, { module: 'routes/resources/r2' });
-    return internalError(c, 'Failed to get stats');
+    throw new InternalError('Failed to get stats');
   }
 })
 
@@ -150,14 +150,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!resourceData) {
-    return notFound(c, 'R2 resource');
+    throw new NotFoundError('R2 resource');
   }
 
   const resource = toResource(resourceData);
 
   const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
   if (!hasAccess) {
-    return forbidden(c);
+    throw new AuthorizationError();
   }
 
   if (!resource.cf_name) {
@@ -167,13 +167,13 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     await wfp.deleteR2Object(resource.cf_name, key);
     return c.json({ success: true });
   } catch (err) {
     logError('Failed to delete R2 object', err, { module: 'routes/resources/r2' });
-    return internalError(c, 'Failed to delete object');
+    throw new InternalError('Failed to delete object');
   }
 });
 

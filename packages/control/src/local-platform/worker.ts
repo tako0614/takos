@@ -2,7 +2,7 @@ import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { WorkerEnv } from '../runtime/worker/env.ts';
 import { createWorkerRuntime } from '../runtime/worker/index.ts';
-import { createTakosWebEnv } from './adapters/local.ts';
+import { createNodeWebEnv } from '../node-platform/env-builder.ts';
 import {
   buildLocalMessageBatch,
   isLocalQueue,
@@ -12,13 +12,13 @@ import {
   type LocalQueueRecord,
 } from './queue-runtime.ts';
 import { logError, logInfo } from '../shared/utils/logger.ts';
-import { buildLocalWorkerPlatform } from '../platform/adapters/local.ts';
+import { buildNodeWorkerPlatform } from '../platform/adapters/node.ts';
 import type { PlatformScheduledEvent } from '../shared/types/bindings.ts';
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_SCHEDULED_INTERVAL_MS = 60_000;
 const DEFAULT_HEARTBEAT_TTL_MS = 120_000;
-const workerHandler = createWorkerRuntime(buildLocalWorkerPlatform);
+const workerHandler = createWorkerRuntime(buildNodeWorkerPlatform);
 
 function resolveDuration(envVarName: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[envVarName] ?? '', 10);
@@ -140,7 +140,7 @@ export async function runLocalWorkerIteration(
 }
 
 export async function createLocalWorkerEnv(): Promise<WorkerEnv> {
-  const baseEnv = await createTakosWebEnv();
+  const baseEnv = await createNodeWebEnv();
   return {
     ...baseEnv,
     EXECUTOR_HOST: createForwardingBinding(process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL ?? 'http://127.0.0.1:8790/'),

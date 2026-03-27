@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreateWorkspaceModal } from '../../views/shared/workspaces/CreateWorkspaceModal';
+import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal';
 import { ChatSearchModal } from '../../views/chat/ChatSearchModal';
 import { AgentModal } from '../../views/AgentModal';
 import { useModals } from '../../contexts/ModalContext';
@@ -7,13 +7,13 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface AppModalsProps {
-  onCreateWorkspace: (name: string, description: string) => Promise<void>;
+  onCreateSpace: (name: string, description: string) => Promise<void>;
 }
 
-export function AppModals({ onCreateWorkspace }: AppModalsProps) {
+export function AppModals({ onCreateSpace }: AppModalsProps) {
   const {
-    showCreateWorkspace,
-    setShowCreateWorkspace,
+    showCreateSpace,
+    setShowCreateSpace,
     showAgentModal,
     setShowAgentModal,
     showSearch,
@@ -22,29 +22,29 @@ export function AppModals({ onCreateWorkspace }: AppModalsProps) {
 
   const {
     navigate,
-    selectedWorkspaceId,
-    preferredWorkspaceId,
+    selectedSpaceId,
+    preferredSpaceId,
   } = useNavigation();
 
-  const { workspaces } = useAuth();
+  const { spaces } = useAuth();
 
   return (
     <>
-      {showCreateWorkspace && (
-        <CreateWorkspaceModal
-          onClose={() => setShowCreateWorkspace(false)}
-          onCreate={onCreateWorkspace}
+      {showCreateSpace && (
+        <CreateSpaceModal
+          onClose={() => setShowCreateSpace(false)}
+          onCreate={onCreateSpace}
         />
       )}
 
-      {showSearch && (selectedWorkspaceId ?? preferredWorkspaceId) && (
+      {showSearch && (selectedSpaceId ?? preferredSpaceId) && (
         <ChatSearchModal
-          spaceId={(selectedWorkspaceId ?? preferredWorkspaceId)!}
+          spaceId={(selectedSpaceId ?? preferredSpaceId)!}
           onSelectResult={(threadId) => {
             setShowSearch(false);
             navigate({
               view: 'chat',
-              spaceId: selectedWorkspaceId ?? preferredWorkspaceId ?? undefined,
+              spaceId: selectedSpaceId ?? preferredSpaceId ?? undefined,
               threadId,
               runId: undefined,
               messageId: undefined,
@@ -54,10 +54,10 @@ export function AppModals({ onCreateWorkspace }: AppModalsProps) {
         />
       )}
 
-      {showAgentModal && selectedWorkspaceId && (
+      {showAgentModal && selectedSpaceId && (
         <AgentModal
-          spaceId={selectedWorkspaceId}
-          workspaces={workspaces}
+          spaceId={selectedSpaceId}
+          spaces={spaces}
           onClose={() => setShowAgentModal(false)}
         />
       )}

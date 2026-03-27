@@ -156,7 +156,7 @@ export async function handleJobFailure(
  * Extracted from the `finally` block in `handleWorkflowJob` (workflow-job-handler.ts):
  * ```ts
  * if (runtimeConfigured && state.runtimeStarted) {
- *   if (!state.runtimeCancelled && state.runtimeWorkspaceId) {
+ *   if (!state.runtimeCancelled && state.runtimeSpaceId) {
  *     await runtimeJson(env, `/actions/jobs/${jobId}/complete`, ...);
  *   }
  * }
@@ -170,10 +170,10 @@ export async function cleanupRuntime(
   state: JobExecutionState,
 ): Promise<void> {
   if (!ctx.runtimeConfigured || !state.runtimeStarted) return;
-  if (state.runtimeCancelled || !state.runtimeWorkspaceId) return;
+  if (state.runtimeCancelled || !state.runtimeSpaceId) return;
 
   try {
-    await runtimeJson(ctx.env, `/actions/jobs/${ctx.message.jobId}/complete`, state.runtimeWorkspaceId, {
+    await runtimeJson(ctx.env, `/actions/jobs/${ctx.message.jobId}/complete`, state.runtimeSpaceId, {
       conclusion: state.completionConclusion ?? state.jobConclusion,
       uploadLogs: false,
     });

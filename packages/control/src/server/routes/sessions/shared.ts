@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { Env } from '../../../shared/types';
 import type { Session } from '../../../application/services/sync';
-import type { BaseVariables } from '../shared/helpers';
+import type { BaseVariables } from '../shared/route-auth';
 
 export type SessionContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 

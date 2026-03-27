@@ -1,6 +1,6 @@
 import type { ToolContext, ToolResult, ToolCall, ContainerStartFailure, ToolDefinition } from './types';
 import type { Env } from '../../shared/types';
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../shared/types/bindings.ts';
 import { ToolResolver, createToolResolver, type ToolResolverOptions } from './resolver';
 import { CapabilityRegistry } from './capability-registry';
@@ -687,7 +687,7 @@ export async function createToolExecutor(
   toolExecutionTimeoutMs?: number,
   runAbortSignal?: AbortSignal,
   accessPolicy?: {
-    minimumRole?: WorkspaceRole;
+    minimumRole?: SpaceRole;
   },
 ): Promise<ToolExecutor> {
   const { ctx, allowed } = await resolveAllowedCapabilities({

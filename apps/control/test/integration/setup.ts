@@ -7,7 +7,7 @@
  * - Environment configuration for testing
  */
 import { vi, beforeAll, afterAll, afterEach } from 'vitest';
-import { buildCloudflareWebPlatform } from '@/platform/adapters/cloudflare';
+import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
 
 // ============================================================================
 // Mock Cloudflare Workers Types
@@ -410,7 +410,7 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
 
   if (!('PLATFORM' in env)) {
     Object.assign(env, {
-      PLATFORM: buildCloudflareWebPlatform(env as never),
+      PLATFORM: buildWorkersWebPlatform(env as never),
     });
   }
 

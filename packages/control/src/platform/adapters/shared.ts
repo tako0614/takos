@@ -2,7 +2,7 @@ import {
   selectDeploymentTargetFromRoutingTarget,
   selectRouteRefFromHttpEndpointSet,
   selectRouteRefFromRoutingTarget,
-} from '../../application/services/routing/index.ts';
+} from '../../application/services/routing/service.ts';
 import type { RoutingStore, RoutingTarget } from '../../application/services/routing/types.ts';
 import type {
   ControlPlatform,

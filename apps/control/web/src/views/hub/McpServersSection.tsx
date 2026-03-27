@@ -5,12 +5,12 @@ import { useToast } from '../../hooks/useToast';
 import { useMcpServers } from '../../hooks/useMcpServers';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
-import type { McpServerRecord, Workspace } from '../../types';
+import type { McpServerRecord, Space } from '../../types';
 
 interface McpServersSectionProps {
-  workspaces: Workspace[];
-  selectedWorkspaceId: string | null;
-  setSelectedWorkspaceId: (id: string) => void;
+  spaces: Space[];
+  selectedSpaceId: string | null;
+  setSelectedSpaceId: (id: string) => void;
 }
 
 type ServerStatus = 'connected' | 'disabled' | 'token_expired' | 'no_token';
@@ -32,23 +32,23 @@ const statusColors: Record<ServerStatus, string> = {
 };
 
 export function McpServersSection({
-  workspaces,
-  selectedWorkspaceId,
-  setSelectedWorkspaceId,
+  spaces,
+  selectedSpaceId,
+  setSelectedSpaceId,
 }: McpServersSectionProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const spaceId = selectedWorkspaceId || '';
+  const spaceId = selectedSpaceId || '';
   const { servers, loading, createExternalServer, toggleServer, deleteServer, fetchServerTools } = useMcpServers({ spaceId });
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  if (!selectedWorkspaceId) {
+  if (!selectedSpaceId) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
           <Icons.Server className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
         </div>
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectWorkspace')}</p>
+        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectSpace')}</p>
       </div>
     );
   }
@@ -62,13 +62,13 @@ export function McpServersSection({
         </div>
         <div className="flex items-center gap-2">
           <select
-            value={selectedWorkspaceId}
-            onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+            value={selectedSpaceId}
+            onChange={(e) => setSelectedSpaceId(e.target.value)}
             className="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"
           >
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
+            {spaces.map((space) => (
+              <option key={space.id} value={space.id}>
+                {space.name}
               </option>
             ))}
           </select>

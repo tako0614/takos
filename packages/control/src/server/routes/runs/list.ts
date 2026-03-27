@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { checkThreadAccess } from '../../../application/services/threads/threads';
-import { badRequest, parseLimit } from '../shared/helpers';
+import { parseLimit } from '../shared/route-auth';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../shared/helpers';
+import type { BaseVariables } from '../shared/route-auth';
+import { NotFoundError, BadRequestError } from '@takos/common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 import { zValidator } from '../zod-validator';
@@ -12,7 +13,6 @@ import { runs } from '../../../infra/db/schema';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
 import { asPrismaRunRow, prismaRunToApi } from '../../../application/services/runs/shared';
 import { toIsoString } from '../../../shared/utils';
-import { notFound } from '../../../shared/utils/error-response';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -59,14 +59,14 @@ export function registerRunListRoutes(app: RunRouteApp) {
 
       const access = await checkThreadAccess(c.env.DB, threadId, user.id);
       if (!access) {
-        return notFound(c, 'Thread');
+        throw new NotFoundError('Thread');
       }
 
       let parsedCursor: { createdAt: string; runId: string | null } | null = null;
       if (cursor) {
         parsedCursor = parseRunListCursor(cursor);
         if (!parsedCursor) {
-          return badRequest(c, 'Invalid cursor');
+          throw new BadRequestError('Invalid cursor');
         }
       }
 

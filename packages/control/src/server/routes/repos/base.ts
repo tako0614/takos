@@ -10,8 +10,8 @@ import {
   internalError,
   notFound,
   requireWorkspaceAccess,
-} from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+} from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
@@ -19,7 +19,7 @@ import { collectReachableObjectShas } from '../../../application/services/git-sm
 import {
   checkRepoAccess,
   createRepository,
-  listRepositoriesByWorkspace,
+  listRepositoriesBySpace,
   RepositoryCreationError,
 } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -38,7 +38,7 @@ export function toGitBucket(bucket: RepoBucketBinding): GitBucket {
   return bucket as unknown as GitBucket;
 }
 
-export { sanitizeRepoName } from '../../../shared/utils/slug';
+export { sanitizeRepoName } from '../../../shared/utils';
 
 export function readableCommitErrorResponse(
   c: Context,
@@ -245,7 +245,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     'Workspace not found or insufficient permissions'
   );
   if (access instanceof Response) return access;
-  const spaceId = access.workspace.id;
+  const spaceId = access.space.id;
 
   const db = getDb(c.env.DB);
   let createdRepository;
@@ -301,11 +301,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const access = await requireWorkspaceAccess(c, spaceIdentifier, user.id);
   if (access instanceof Response) return access;
-  const spaceId = access.workspace.id;
+  const spaceId = access.space.id;
 
   const ownerUsername = await resolveOwnerUsername(db, spaceId);
 
-  const reposData = await listRepositoriesByWorkspace(c.env.DB, spaceId);
+  const reposData = await listRepositoriesBySpace(c.env.DB, spaceId);
 
   const reposList = reposData.map((repo) => ({
     id: repo.id,

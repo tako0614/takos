@@ -16,9 +16,14 @@ import { getSession, getSessionIdFromCookie } from '../../../application/service
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import type { PublicRouteEnv } from '../shared/helpers';
+import type { PublicRouteEnv } from '../shared/route-auth';
 import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser, type FormBody } from './helpers';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
+import {
+  isDeviceUserCodeLimited,
+  recordDeviceUserCodeAttempt,
+  clearDeviceUserCodeAttempts,
+} from '../../../shared/utils/device-auth-rate-limit';
 import { deviceCodeEntryPage, deviceConsentPage, deviceResultPage, errorPage } from '../auth/html';
 import { serveSpaFallback } from '../../../shared/utils/spa-fallback';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
@@ -30,39 +35,6 @@ oauthDevice.use('/device/code', deviceCodeRateLimiter.middleware());
 
 const deviceVerifyRateLimiter = RateLimiters.oauthDeviceVerify();
 oauthDevice.use('/device', deviceVerifyRateLimiter.middleware());
-
-const DEVICE_USER_CODE_MAX_ATTEMPTS = 10;
-const DEVICE_USER_CODE_WINDOW_MS = 10 * 60 * 1000;
-const deviceUserCodeAttempts = new Map<string, { attempts: number; firstAttemptAt: number }>();
-
-function cleanupExpiredDeviceCodeAttempts(now = Date.now()): void {
-  for (const [code, state] of Array.from(deviceUserCodeAttempts.entries())) {
-    if (now - state.firstAttemptAt >= DEVICE_USER_CODE_WINDOW_MS) {
-      deviceUserCodeAttempts.delete(code);
-    }
-  }
-}
-
-function isDeviceUserCodeLimited(userCode: string, now = Date.now()): boolean {
-  cleanupExpiredDeviceCodeAttempts(now);
-  const state = deviceUserCodeAttempts.get(userCode);
-  if (!state) return false;
-  return state.attempts >= DEVICE_USER_CODE_MAX_ATTEMPTS;
-}
-
-function recordDeviceUserCodeAttempt(userCode: string, now = Date.now()): void {
-  cleanupExpiredDeviceCodeAttempts(now);
-  const state = deviceUserCodeAttempts.get(userCode);
-  if (!state) {
-    deviceUserCodeAttempts.set(userCode, { attempts: 1, firstAttemptAt: now });
-    return;
-  }
-  state.attempts += 1;
-}
-
-function clearDeviceUserCodeAttempts(userCode: string): void {
-  deviceUserCodeAttempts.delete(userCode);
-}
 
 async function loadSessionUser(c: Context<PublicRouteEnv>) {
   const sessionId = getSessionIdFromCookie(c.req.header('Cookie') ?? null);

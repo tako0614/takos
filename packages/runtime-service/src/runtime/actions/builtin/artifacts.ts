@@ -6,7 +6,7 @@ import { pushLog } from '../../logging.js';
 import { resolvePathWithin } from '../../paths.js';
 import { s3Client, isR2Configured } from '../../../storage/r2.js';
 import { R2_BUCKET } from '../../../shared/config.js';
-import { getErrorMessage } from '../../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { LINE_UNSAFE_CHARS_PATTERN } from './cache-operations.js';
 
 function toStringArray(value: string | string[]): string[] {

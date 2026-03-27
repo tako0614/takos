@@ -8,13 +8,13 @@ import type { MessageBatch, ScheduledEvent } from '../../shared/types/bindings.t
 import type { WorkerEnv as Env } from './env';
 import type { IndexJobQueueMessage } from '../../shared/types';
 import { logError } from '../../shared/utils/logger';
-import { buildCloudflareWorkerPlatform } from '../../platform/adapters/cloudflare.ts';
+import { buildWorkersWorkerPlatform } from '../../platform/adapters/workers.ts';
 import type { ControlPlatform } from '../../platform/types.ts';
 
 // Lazy imports to keep cold-start fast — only load what's needed per invocation.
 
 export function createWorkerRuntime(
-  buildPlatform: (env: Env) => ControlPlatform<Env> = buildCloudflareWorkerPlatform,
+  buildPlatform: (env: Env) => ControlPlatform<Env> = buildWorkersWorkerPlatform,
 ) {
   return {
   // ---------------------------------------------------------------------------

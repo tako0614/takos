@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, parseLimit } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { parseJsonBody, parseLimit } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { getContentTypeFromPath } from '../../../shared/utils/content-type';
@@ -13,17 +13,17 @@ import {
   importFilesToDefaultBranch,
   type FileEntry,
 } from './git-write-operations';
-import { badRequest, notFound, forbidden, conflict, internalError, payloadTooLarge } from '../../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, AuthorizationError, ConflictError, InternalError, PayloadTooLargeError, isAppError } from '@takos/common/errors';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
 type RepoContext = Context<AuthenticatedRouteEnv>;
 
 const WRITE_ROLES = ['owner', 'admin', 'editor'] as const;
 
-function requireBucket(c: RepoContext): RepoBucketBinding | Response {
+function requireBucket(c: RepoContext): RepoBucketBinding {
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
-    return internalError(c, 'Git storage not configured');
+    throw new InternalError('Git storage not configured');
   }
   return bucket;
 }
@@ -57,16 +57,14 @@ function warnDegradedCommit(
   }
 }
 
-function treeFlattenLimitResponse(c: RepoContext, err: unknown, operation: string): Response | null {
+function throwIfTreeFlattenLimit(err: unknown, operation: string): void {
   const limitError = getTreeFlattenLimitError(err);
-  if (!limitError) {
-    return null;
+  if (limitError) {
+    throw new PayloadTooLargeError(`Repository tree is too large to ${operation}`, {
+      code: limitError.code,
+      detail: limitError.detail,
+    });
   }
-
-  return payloadTooLarge(c, `Repository tree is too large to ${operation}`, {
-    code: limitError.code,
-    detail: limitError.detail,
-  });
 }
 
 const repoGit = new Hono<AuthenticatedRouteEnv>()
@@ -80,7 +78,7 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   try {
@@ -133,8 +131,9 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
       default_branch: defaultBranch?.name || repoAccess.repo.default_branch,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to list branches', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to list branches');
+    throw new InternalError('Failed to list branches');
   }
   })
   .post('/repos/:repoId/branches', async (c) => {
@@ -146,16 +145,16 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
   }>(c);
 
   if (!body) {
-    return badRequest(c, 'Invalid JSON body');
+    throw new BadRequestError('Invalid JSON body');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [...WRITE_ROLES]);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (typeof body.name !== 'string' || typeof body.source !== 'string') {
-    return badRequest(c, 'name and source are required');
+    throw new BadRequestError('name and source are required');
   }
 
   const branchName = body.name.startsWith('refs/heads/')
@@ -164,24 +163,24 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
   const sourceRef = body.source.trim();
 
   if (!branchName || !sourceRef) {
-    return badRequest(c, 'name and source are required');
+    throw new BadRequestError('name and source are required');
   }
   if (!gitStore.isValidRefName(branchName)) {
-    return badRequest(c, 'Invalid branch name');
+    throw new BadRequestError('Invalid branch name');
   }
   if (!gitStore.isValidRefName(sourceRef)) {
-    return badRequest(c, 'Invalid source ref');
+    throw new BadRequestError('Invalid source ref');
   }
 
   try {
     const sourceSha = await gitStore.resolveRef(c.env.DB, repoId, sourceRef);
     if (!sourceSha) {
-      return notFound(c, 'Source ref');
+      throw new NotFoundError('Source ref');
     }
 
     const result = await gitStore.createBranch(c.env.DB, repoId, branchName, sourceSha, false);
     if (!result.success) {
-      return conflict(c, result.error || 'Failed to create branch', {
+      throw new ConflictError(result.error || 'Failed to create branch', {
         current: result.current,
       });
     }
@@ -194,8 +193,9 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
       },
     }, 201);
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to create branch', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to create branch');
+    throw new InternalError('Failed to create branch');
   }
   })
   .delete('/repos/:repoId/branches/:branchName', async (c) => {
@@ -205,25 +205,26 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (repoAccess.role !== 'owner' && repoAccess.role !== 'admin') {
-    return forbidden(c, 'Admin access required');
+    throw new AuthorizationError('Admin access required');
   }
   if (!gitStore.isValidRefName(branchName)) {
-    return badRequest(c, 'Invalid branch name');
+    throw new BadRequestError('Invalid branch name');
   }
 
   try {
     const result = await gitStore.deleteBranch(c.env.DB, repoId, branchName);
     if (!result.success) {
-      return badRequest(c, result.error || 'Failed to delete branch');
+      throw new BadRequestError(result.error || 'Failed to delete branch');
     }
     return c.json({ success: true });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to delete branch', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to delete branch');
+    throw new InternalError('Failed to delete branch');
   }
   })
   .post('/repos/:repoId/branches/:branchName/default', async (c) => {
@@ -233,25 +234,26 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (repoAccess.role !== 'owner' && repoAccess.role !== 'admin') {
-    return forbidden(c, 'Admin access required');
+    throw new AuthorizationError('Admin access required');
   }
   if (!gitStore.isValidRefName(branchName)) {
-    return badRequest(c, 'Invalid branch name');
+    throw new BadRequestError('Invalid branch name');
   }
 
   try {
     const result = await gitStore.setDefaultBranch(c.env.DB, repoId, branchName);
     if (!result.success) {
-      return badRequest(c, result.error || 'Failed to set default branch');
+      throw new BadRequestError(result.error || 'Failed to set default branch');
     }
     return c.json({ success: true });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to set default branch', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to set default branch');
+    throw new InternalError('Failed to set default branch');
   }
   })
   .get('/repos/:repoId/commits', zValidator('query', z.object({
@@ -268,13 +270,11 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   try {
-    const bucketOrError = requireBucket(c);
-    if (bucketOrError instanceof Response) return bucketOrError;
-    const bucket = toGitBucket(bucketOrError);
+    const bucket = toGitBucket(requireBucket(c));
 
     const ref = branch || repoAccess.repo.default_branch || 'main';
     const resolvedCommit = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, ref);
@@ -326,30 +326,29 @@ const repoGit = new Hono<AuthenticatedRouteEnv>()
       commits,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to get commits', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get commit history');
+    throw new InternalError('Failed to get commit history');
   }
   });
 
 async function handleRepoTreeRequest(c: RepoContext) {
   const user = c.get('user');
   const repoId = c.req.param('repoId');
-  if (!repoId) return badRequest(c, 'Missing repoId');
+  if (!repoId) throw new BadRequestError('Missing repoId');
   const ref = c.req.param('ref');
-  if (!ref) return badRequest(c, 'Missing ref');
+  if (!ref) throw new BadRequestError('Missing ref');
   const wildcardPath = c.req.param('*') || '';
   const queryPath = c.req.query('path') || '';
   const path = (wildcardPath || queryPath).replace(/^\/+/, '');
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   try {
-    const bucketOrError = requireBucket(c);
-    if (bucketOrError instanceof Response) return bucketOrError;
-    const bucket = toGitBucket(bucketOrError);
+    const bucket = toGitBucket(requireBucket(c));
 
     const resolvedCommit = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, ref);
     if (!resolvedCommit.ok) {
@@ -361,7 +360,7 @@ async function handleRepoTreeRequest(c: RepoContext) {
 
     const entries = await gitStore.listDirectory(bucket, commit.tree, path);
     if (!entries) {
-      return notFound(c, 'Path');
+      throw new NotFoundError('Path');
     }
 
     return c.json({
@@ -377,8 +376,9 @@ async function handleRepoTreeRequest(c: RepoContext) {
       })),
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to get tree', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get file tree');
+    throw new InternalError('Failed to get file tree');
   }
 }
 
@@ -389,26 +389,24 @@ repoGit
 async function handleRepoBlobRequest(c: RepoContext) {
   const user = c.get('user');
   const repoId = c.req.param('repoId');
-  if (!repoId) return badRequest(c, 'Missing repoId');
+  if (!repoId) throw new BadRequestError('Missing repoId');
   const ref = c.req.param('ref');
-  if (!ref) return badRequest(c, 'Missing ref');
+  if (!ref) throw new BadRequestError('Missing ref');
   const wildcardPath = c.req.param('*') || '';
   const queryPath = c.req.query('path') || '';
   const path = (wildcardPath || queryPath).replace(/^\/+/, '');
 
   if (!path) {
-    return badRequest(c, 'File path is required');
+    throw new BadRequestError('File path is required');
   }
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   try {
-    const bucketOrError = requireBucket(c);
-    if (bucketOrError instanceof Response) return bucketOrError;
-    const bucket = toGitBucket(bucketOrError);
+    const bucket = toGitBucket(requireBucket(c));
 
     const resolvedCommit = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, ref);
     if (!resolvedCommit.ok) {
@@ -420,11 +418,11 @@ async function handleRepoBlobRequest(c: RepoContext) {
 
     const entry = await gitStore.getEntryAtPath(bucket, commit.tree, path);
     if (!entry || entry.type !== 'blob') {
-      return notFound(c, 'File');
+      throw new NotFoundError('File');
     }
     const blob = await gitStore.getBlob(bucket, entry.sha);
     if (!blob) {
-      return notFound(c, 'File');
+      throw new NotFoundError('File');
     }
 
     const isBinary = blob.some(byte => byte === 0);
@@ -444,8 +442,9 @@ async function handleRepoBlobRequest(c: RepoContext) {
       mime_type: mimeType,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to get blob', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get file content');
+    throw new InternalError('Failed to get file content');
   }
 }
 
@@ -459,20 +458,18 @@ repoGit
 
   const match = baseHead.match(/^(.+?)(\.{2,3})(.+)$/);
   if (!match) {
-    return badRequest(c, 'Invalid diff format. Use base...head or base..head');
+    throw new BadRequestError('Invalid diff format. Use base...head or base..head');
   }
 
   const [, base, , head] = match;
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   try {
-    const bucketOrError = requireBucket(c);
-    if (bucketOrError instanceof Response) return bucketOrError;
-    const bucket = toGitBucket(bucketOrError);
+    const bucket = toGitBucket(requireBucket(c));
 
     const baseResolved = await gitStore.resolveReadableCommitFromRef(c.env.DB, bucket, repoId, base);
     if (!baseResolved.ok) {
@@ -532,12 +529,10 @@ repoGit
       stats,
     });
   } catch (err) {
-    const limitResponse = treeFlattenLimitResponse(c, err, 'compute diff');
-    if (limitResponse) {
-      return limitResponse;
-    }
+    throwIfTreeFlattenLimit(err, 'compute diff');
+    if (isAppError(err)) throw err;
     logError('Failed to get diff', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get diff');
+    throw new InternalError('Failed to get diff');
   }
   })
   .post('/repos/:repoId/import', async (c) => {
@@ -546,22 +541,21 @@ repoGit
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [...WRITE_ROLES]);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
-  const bucketOrError = requireBucket(c);
-  if (bucketOrError instanceof Response) return bucketOrError;
-  const bucket = toGitBucket(bucketOrError);
+  const bucketBinding = requireBucket(c);
 
   let body: { files: FileEntry[]; message?: string; append?: boolean };
   try {
     body = await c.req.json();
   } catch {
-    return badRequest(c, 'Invalid JSON body');
+    // Request body is not valid JSON
+    throw new BadRequestError('Invalid JSON body');
   }
 
   if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
-    return badRequest(c, 'files array is required');
+    throw new BadRequestError('files array is required');
   }
 
   const commitMessage = body.message || 'Update from CLI';
@@ -570,7 +564,7 @@ repoGit
   try {
     const result = await importFilesToDefaultBranch({
       db: c.env.DB,
-      bucket: bucketOrError,
+      bucket: bucketBinding,
       repoId,
       files: body.files,
       user,
@@ -588,17 +582,15 @@ repoGit
     });
   } catch (err) {
     if (err instanceof Error && err.message === 'Repository not initialized') {
-      return badRequest(c, 'Repository not initialized');
+      throw new BadRequestError('Repository not initialized');
     }
     if (err instanceof Error && err.message === 'Current commit not found') {
-      return internalError(c, 'Current commit not found');
+      throw new InternalError('Current commit not found');
     }
-    const limitResponse = treeFlattenLimitResponse(c, err, 'import files');
-    if (limitResponse) {
-      return limitResponse;
-    }
+    throwIfTreeFlattenLimit(err, 'import files');
+    if (isAppError(err)) throw err;
     logError('failed to import files', err, { module: 'repos/git' });
-    return internalError(c, 'Failed to import files');
+    throw new InternalError('Failed to import files');
   }
   })
   .get('/repos/:repoId/export', async (c) => {
@@ -607,12 +599,10 @@ repoGit
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
-  const bucketOrError = requireBucket(c);
-  if (bucketOrError instanceof Response) return bucketOrError;
-  const bucket = toGitBucket(bucketOrError);
+  const bucket = toGitBucket(requireBucket(c));
 
   try {
     const branch = await gitStore.getDefaultBranch(c.env.DB, repoId);
@@ -640,12 +630,10 @@ repoGit
 
     return c.json({ success: true, files });
   } catch (err) {
-    const limitResponse = treeFlattenLimitResponse(c, err, 'export files');
-    if (limitResponse) {
-      return limitResponse;
-    }
+    throwIfTreeFlattenLimit(err, 'export files');
+    if (isAppError(err)) throw err;
     logError('Failed to export files', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to export files');
+    throw new InternalError('Failed to export files');
   }
   })
   .get('/repos/:repoId/status', async (c) => {
@@ -654,12 +642,10 @@ repoGit
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
-  const bucketOrError = requireBucket(c);
-  if (bucketOrError instanceof Response) return bucketOrError;
-  const bucket = toGitBucket(bucketOrError);
+  const bucket = toGitBucket(requireBucket(c));
 
   try {
     const branch = await gitStore.getDefaultBranch(c.env.DB, repoId);
@@ -684,12 +670,10 @@ repoGit
       last_updated: lastUpdated || null,
     });
   } catch (err) {
-    const limitResponse = treeFlattenLimitResponse(c, err, 'calculate repository status');
-    if (limitResponse) {
-      return limitResponse;
-    }
+    throwIfTreeFlattenLimit(err, 'calculate repository status');
+    if (isAppError(err)) throw err;
     logError('Failed to get status', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get status');
+    throw new InternalError('Failed to get status');
   }
   })
   .get('/repos/:repoId/log', async (c) => {
@@ -698,12 +682,10 @@ repoGit
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
-  const bucketOrError = requireBucket(c);
-  if (bucketOrError instanceof Response) return bucketOrError;
-  const bucket = toGitBucket(bucketOrError);
+  const bucket = toGitBucket(requireBucket(c));
 
   try {
     const ref = repoAccess.repo.default_branch || 'main';
@@ -737,8 +719,9 @@ repoGit
       commits,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to get log', err, { module: 'routes/repos/git' });
-    return internalError(c, 'Failed to get commit log');
+    throw new InternalError('Failed to get commit log');
   }
   })
   .post('/repos/:repoId/commit', async (c) => {
@@ -747,32 +730,31 @@ repoGit
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [...WRITE_ROLES]);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
-  const bucketOrError = requireBucket(c);
-  if (bucketOrError instanceof Response) return bucketOrError;
-  const bucket = toGitBucket(bucketOrError);
+  const bucketBinding = requireBucket(c);
 
   let body: { files: FileEntry[]; message: string };
   try {
     body = await c.req.json();
   } catch {
-    return badRequest(c, 'Invalid JSON body');
+    // Request body is not valid JSON
+    throw new BadRequestError('Invalid JSON body');
   }
 
   if (!body.message) {
-    return badRequest(c, 'Commit message is required');
+    throw new BadRequestError('Commit message is required');
   }
 
   if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
-    return badRequest(c, 'files array is required');
+    throw new BadRequestError('files array is required');
   }
 
   try {
     const result = await commitFilesToDefaultBranch({
       db: c.env.DB,
-      bucket: bucketOrError,
+      bucket: bucketBinding,
       repoId,
       files: body.files,
       user,
@@ -788,10 +770,11 @@ repoGit
     });
   } catch (err) {
     if (err instanceof Error && err.message === 'Repository not initialized') {
-      return badRequest(c, 'Repository not initialized');
+      throw new BadRequestError('Repository not initialized');
     }
+    if (isAppError(err)) throw err;
     logError('failed to create commit', err, { module: 'repos/git' });
-    return internalError(c, 'Failed to create commit');
+    throw new InternalError('Failed to create commit');
   }
   });
 

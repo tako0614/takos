@@ -11,6 +11,18 @@ tenant の canonical artifact は `worker-bundle` です。
 
 `container-image` は OCI 系 backend 用の artifact であり、tenant の canonical worker path そのものではありません。
 
+## container runtime
+
+deploy API では `container-image` artifact を `oci` provider で deploy できます。
+
+- container は Docker image として pull・起動される long-running HTTP service です
+- routing は dispatch が `http-endpoint-set` の `http-url` target として container endpoint に到達します
+- local backend では oci-orchestrator が Docker Engine API 経由で container のライフサイクル (pull/create/start/health check/stop/remove) を管理します
+- health check は `health_path` (default: `/health`) に対して polling で行われ、成功するまで deploy は完了しません
+- container deploy では canary strategy は使えません。rollback は旧 image の re-deploy です
+
+container runtime は v1 では HTTP routable な service に限定されます。service bindings / resource mounts / MCP / file handlers は次段に送られます。
+
 ## dispatch の役割
 
 tenant request は直接 bundle に届くのではなく、dispatch を経由します。

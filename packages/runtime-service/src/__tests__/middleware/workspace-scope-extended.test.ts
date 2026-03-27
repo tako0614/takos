@@ -6,7 +6,7 @@ import {
   hasWorkspaceScopeMismatch,
   hasAnyWorkspaceScopeMismatch,
   WORKSPACE_SCOPE_MISMATCH_ERROR,
-} from '../../middleware/workspace-scope.js';
+} from '../../middleware/space-scope.js';
 
 function createContext(overrides: {
   path?: string;

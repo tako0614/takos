@@ -1,7 +1,7 @@
 import * as gitStore from '../../../application/services/git-smart';
 import { decodeBlobContent } from '../../../shared/utils/diff';
 import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { toGitBucket, type GitBucket } from './git-store';
 
 export type FileStatus = 'added' | 'modified' | 'deleted';

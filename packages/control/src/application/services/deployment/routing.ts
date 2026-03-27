@@ -1,7 +1,7 @@
 import type { DbEnv } from '../../../shared/types';
 import { deployments, getDb, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, ne, inArray } from 'drizzle-orm';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
 import type { RoutingBindings, RoutingTarget } from '../routing/types';
 import { parseDeploymentTargetConfig } from './provider';
 import {
@@ -46,7 +46,7 @@ function resolveDeploymentRouteRef(input: {
   const target = input.deploymentTarget
     ?? (input.targetJson
       ? parseDeploymentTargetConfig({
-          provider_name: 'cloudflare',
+          provider_name: 'workers-dispatch',
           target_json: input.targetJson,
         })
       : undefined);

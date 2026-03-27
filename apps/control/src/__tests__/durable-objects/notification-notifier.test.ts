@@ -249,6 +249,16 @@ describe('NotificationNotifierDO', () => {
       expect(body.events).toEqual([]);
       expect(body.lastEventId).toBe(0);
     });
+
+    it('rejects invalid after cursors', async () => {
+      const { doInstance } = createDO();
+      const res = await doInstance.fetch(getRequest('/events?after=abc'));
+
+      expect(res.status).toBe(400);
+      await expect(jsonBody(res)).resolves.toEqual({
+        error: 'Invalid after cursor',
+      });
+    });
   });
 
   describe('/state', () => {
@@ -322,6 +332,23 @@ describe('NotificationNotifierDO', () => {
       });
       const res = await doInstance.fetch(req);
       expect(res.status).toBe(503);
+    });
+
+    it('rejects invalid last_event_id values before upgrading', async () => {
+      const { doInstance } = createDO();
+      const req = new Request('https://do.internal/ws?last_event_id=abc', {
+        headers: {
+          Upgrade: 'websocket',
+          'X-WS-Auth-Validated': 'true',
+          'X-WS-User-Id': 'user-1',
+        },
+      });
+      const res = await doInstance.fetch(req);
+
+      expect(res.status).toBe(400);
+      await expect(jsonBody(res)).resolves.toEqual({
+        error: 'Invalid last_event_id',
+      });
     });
   });
 

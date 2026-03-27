@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { useI18n, type TranslationKey } from '../providers/I18nProvider';
 import { rpc, rpcJson } from '../lib/rpc';
-import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog';
 import type {
   Message,
   Run,
@@ -18,7 +17,9 @@ import type {
 import { useMessagePolling } from './useMessagePolling';
 import { useWebSocketConnection, type SessionDiffState } from './useWebSocketConnection';
 import { useFileAttachment } from './useFileAttachment';
-import { buildChatMessageMetadata, type ChatAttachmentMetadata } from '../views/chat/messageMetadata';
+import { useChatModelSelection } from './useChatModelSelection';
+import { useChatAttachments } from './useChatAttachments';
+import { useChatMessages } from './useChatMessages';
 
 export type { SessionDiffState } from './useWebSocketConnection';
 
@@ -32,7 +33,7 @@ export interface UseChatSessionOptions {
 }
 
 export interface UseChatSessionResult {
-  availableModels: ModelSelectOption[];
+  availableModels: import('../lib/modelCatalog').ModelSelectOption[];
   selectedModel: string;
   setSelectedModel: (model: string) => void;
   messages: Message[];
@@ -61,21 +62,6 @@ export interface UseChatSessionResult {
   messagesEndRef: RefObject<HTMLDivElement>;
 }
 
-type ModelOption = string | { id: string; name?: string; description?: string };
-
-function sanitizeAttachmentFileName(name: string): string {
-  const trimmed = name.trim();
-  const fallback = 'attachment';
-  // eslint-disable-next-line no-control-regex
-  const sanitized = (trimmed || fallback).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-');
-  return sanitized || fallback;
-}
-
-function buildChatAttachmentPath(threadId: string, fileName: string): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `/chat-attachments/${threadId}/${timestamp}-${sanitizeAttachmentFileName(fileName)}`;
-}
-
 export function useChatSession({
   threadId,
   spaceId,
@@ -86,8 +72,6 @@ export function useChatSession({
 }: UseChatSessionOptions): UseChatSessionResult {
   const { t, lang } = useI18n();
   const [input, setInput] = useState(initialMessage ?? '');
-  const [selectedModel, setSelectedModel] = useState<string>(initialModel ?? DEFAULT_MODEL_ID);
-  const [availableModels, setAvailableModels] = useState<ModelSelectOption[]>([...FALLBACK_MODELS]);
 
   // Scroll tracking refs (owned by orchestrator because the auto-scroll
   // effect depends on state from both the polling and WebSocket hooks)
@@ -112,262 +96,43 @@ export function useChatSession({
 
   const files = useFileAttachment({ t, setError: polling.setError });
 
-  const ensureAttachmentFolder = useCallback(async (path: string): Promise<void> => {
-    const segments = path.split('/').filter(Boolean);
-    let parentPath = '/';
+  const modelSelection = useChatModelSelection({
+    spaceId,
+    initialModel,
+  });
 
-    for (const segment of segments) {
-      const res = await rpc.spaces[':spaceId'].storage.folders.$post({
-        param: { spaceId },
-        json: { name: segment, parent_path: parentPath },
-      });
+  const attachments = useChatAttachments({
+    spaceId,
+    threadId,
+  });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error?: string }>(res).catch(() => ({}));
-        const error = data.error || 'Failed to create attachment folder';
-        if (!error.includes('already exists')) {
-          throw new Error(error);
-        }
-      }
-
-      parentPath = parentPath === '/' ? `/${segment}` : `${parentPath}/${segment}`;
-    }
-  }, [spaceId]);
-
-  const uploadChatAttachments = useCallback(async (selectedFiles: File[]): Promise<ChatAttachmentMetadata[]> => {
-    if (selectedFiles.length === 0) return [];
-
-    const attachmentRoot = '/chat-attachments';
-    const threadFolder = `${attachmentRoot}/${threadId}`;
-    await ensureAttachmentFolder(attachmentRoot);
-    await ensureAttachmentFolder(threadFolder);
-
-    const uploaded: ChatAttachmentMetadata[] = [];
-
-    for (const file of selectedFiles) {
-      const uploadRes = await rpc.spaces[':spaceId'].storage['upload-url'].$post({
-        param: { spaceId },
-        json: {
-          name: `${new Date().toISOString().replace(/[:.]/g, '-')}-${sanitizeAttachmentFileName(file.name)}`,
-          parent_path: threadFolder,
-          size: file.size,
-          mime_type: file.type || undefined,
-        },
-      });
-
-      if (!uploadRes.ok) {
-        const data = await rpcJson<{ error?: string }>(uploadRes).catch(() => ({}));
-        throw new Error(data.error || `Failed to prepare upload for ${file.name}`);
-      }
-
-      const uploadData = await rpcJson<{
-        file_id: string;
-        upload_url: string;
-      }>(uploadRes);
-
-      const blobRes = await fetch(uploadData.upload_url, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-      });
-
-      if (!blobRes.ok) {
-        throw new Error(`Failed to upload ${file.name}`);
-      }
-
-      const confirmRes = await rpc.spaces[':spaceId'].storage['confirm-upload'].$post({
-        param: { spaceId },
-        json: { file_id: uploadData.file_id },
-      });
-
-      if (!confirmRes.ok) {
-        const data = await rpcJson<{ error?: string }>(confirmRes).catch(() => ({}));
-        throw new Error(data.error || `Failed to finalize upload for ${file.name}`);
-      }
-
-      const confirmData = await rpcJson<{
-        file: {
-          id: string;
-          path: string;
-          name: string;
-          mime_type: string | null;
-          size: number;
-        };
-      }>(confirmRes);
-
-      uploaded.push({
-        file_id: confirmData.file.id,
-        path: confirmData.file.path,
-        name: confirmData.file.name,
-        mime_type: confirmData.file.mime_type,
-        size: confirmData.file.size,
-      });
-    }
-
-    return uploaded;
-  }, [ensureAttachmentFolder, spaceId, threadId]);
-
-  // --- Model fetching ---
-  const fetchWorkspaceModels = useCallback(async () => {
-    if (!spaceId) return;
-    try {
-      const res = await rpc.spaces[':spaceId'].model.$get({
-        param: { spaceId },
-      });
-      const data = await rpcJson<{
-        ai_model?: string;
-        ai_provider?: string;
-        model?: string;
-        provider?: string;
-        available_models: {
-          openai: ModelOption[];
-          anthropic: ModelOption[];
-          google: ModelOption[];
-        };
-      }>(res);
-
-      const provider = data.ai_provider || data.provider || 'openai';
-      let raw: ModelOption[] | undefined;
-      if (provider === 'anthropic') {
-        raw = data.available_models?.anthropic;
-      } else if (provider === 'google') {
-        raw = data.available_models?.google;
-      } else {
-        raw = data.available_models?.openai;
-      }
-
-      const models = (raw || [])
-        .map((entry) => {
-          if (typeof entry === 'string') {
-            return { id: entry, label: entry };
-          }
-          return {
-            id: entry.id,
-            label: entry.name || entry.id,
-            description: entry.description,
-          };
-        })
-        .filter((entry) => entry.id);
-
-      const resolvedModels = models.length > 0 ? models : [...FALLBACK_MODELS];
-      setAvailableModels(resolvedModels);
-
-      const resolvedIds = resolvedModels.map((model) => model.id);
-      if (initialModel && resolvedIds.includes(initialModel)) {
-        setSelectedModel(initialModel);
-      } else {
-        const desiredModel = data.ai_model || data.model;
-        if (desiredModel && resolvedIds.includes(desiredModel)) {
-          setSelectedModel(desiredModel);
-        } else {
-          setSelectedModel((prev) => (resolvedIds.includes(prev) ? prev : resolvedModels[0].id));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch workspace models:', err);
-      setAvailableModels([...FALLBACK_MODELS]);
-    }
-  }, [spaceId, initialModel]);
-
-  // --- Send message ---
-  const sendMessage = useCallback(async () => {
-    const trimmedInput = input.trim();
-    if ((!trimmedInput && files.attachedFiles.length === 0) || ws.isLoading) return;
-
-    const isFirstMessageInThread = polling.messagesCountRef.current === 0;
-    const draftInput = input;
-    const draftFiles = files.attachedFiles;
-    const optimisticAttachments: ChatAttachmentMetadata[] = draftFiles.map((file) => ({
-      name: file.name,
-      path: buildChatAttachmentPath(threadId, file.name),
-      mime_type: file.type || null,
-      size: file.size,
-    }));
-    ws.rootRunIdRef.current = null;
-    ws.closeWebSocket();
-    polling.abortPendingFetch();
-    ws.currentRunIdRef.current = null;
-    ws.lastEventIdRef.current = 0;
-    ws.resetStreamingState();
-    ws.resetTimeline();
-    setInput('');
-    files.setAttachedFiles([]);
-    ws.setIsLoading(true);
-
-    const tempUserMessage: Message = {
-      id: `temp-${Date.now()}`,
-      thread_id: threadId,
-      role: 'user',
-      content: trimmedInput,
-      metadata: buildChatMessageMetadata({ attachments: optimisticAttachments }),
-      created_at: new Date().toISOString(),
-    };
-    polling.setMessages((prev) => [...prev, tempUserMessage]);
-
-    let userMessagePersisted = false;
-    try {
-      const uploadedAttachments = await uploadChatAttachments(draftFiles);
-      const msgRes = await rpc.threads[':id'].messages.$post({
-        param: { id: threadId },
-        json: {
-          role: 'user',
-          content: trimmedInput,
-          metadata: uploadedAttachments.length > 0
-            ? { attachments: uploadedAttachments }
-            : undefined,
-        },
-      });
-      if (msgRes.ok) {
-        userMessagePersisted = true;
-      }
-      const msgData = await rpcJson<{ message: Message }>(msgRes);
-
-      polling.setMessages((prev) => prev.map((m) => (m.id === tempUserMessage.id ? msgData.message : m)));
-
-      if (isFirstMessageInThread) {
-        try {
-          const titleSource = trimmedInput || uploadedAttachments[0]?.name || '';
-          const title = titleSource.slice(0, 50) + (titleSource.length > 50 ? '...' : '');
-          const titleRes = await rpc.threads[':id'].$patch({
-            param: { id: threadId },
-            json: { title },
-          });
-          await rpcJson(titleRes);
-          onUpdateTitle(title);
-        } catch (titleErr) {
-          console.warn('Failed to update thread title:', titleErr);
-        }
-      }
-
-      const runRes = await rpc.threads[':threadId'].runs.$post({
-        param: { threadId },
-        json: {
-          agent_type: 'default',
-          model: selectedModel,
-          input: { locale: lang },
-        },
-      });
-      const runData = await rpcJson<{ run: Run }>(runRes);
-      ws.setCurrentRun(runData.run);
-
-      ws.startWebSocket(runData.run.id);
-    } catch (err) {
-      ws.setIsLoading(false);
-      ws.setCurrentRun(null);
-      ws.resetStreamingState();
-      if (!userMessagePersisted) {
-        polling.setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
-        setInput(draftInput);
-        files.setAttachedFiles(draftFiles);
-      } else {
-        polling.setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
-        await ws.syncThreadAfterSendFailure();
-      }
-      polling.setError(err instanceof Error ? err.message : t('networkError'));
-    }
-  }, [input, ws, polling, files, threadId, selectedModel, onUpdateTitle, t, lang, uploadChatAttachments]);
+  const messaging = useChatMessages({
+    threadId,
+    lang,
+    t,
+    input,
+    setInput,
+    selectedModel: modelSelection.selectedModel,
+    onUpdateTitle,
+    attachedFiles: files.attachedFiles,
+    setAttachedFiles: files.setAttachedFiles,
+    isLoading: ws.isLoading,
+    rootRunIdRef: ws.rootRunIdRef,
+    closeWebSocket: ws.closeWebSocket,
+    currentRunIdRef: ws.currentRunIdRef,
+    lastEventIdRef: ws.lastEventIdRef,
+    resetStreamingState: ws.resetStreamingState,
+    resetTimeline: ws.resetTimeline,
+    setIsLoading: ws.setIsLoading,
+    setCurrentRun: ws.setCurrentRun,
+    startWebSocket: ws.startWebSocket,
+    syncThreadAfterSendFailure: ws.syncThreadAfterSendFailure,
+    messagesCountRef: polling.messagesCountRef,
+    abortPendingFetch: polling.abortPendingFetch,
+    setMessages: polling.setMessages,
+    setError: polling.setError,
+    uploadChatAttachments: attachments.uploadChatAttachments,
+  });
 
   // --- Initialization effect ---
   useEffect(() => {
@@ -447,11 +212,6 @@ export function useChatSession({
     };
   }, [threadId, focusSequence, ws.resetStreamingState, ws.resetTimeline]);
 
-  // --- Fetch workspace models ---
-  useEffect(() => {
-    fetchWorkspaceModels();
-  }, [fetchWorkspaceModels]);
-
   // --- Scroll pinning: track whether user is near the bottom ---
   useEffect(() => {
     const anchor = messagesEndRef.current;
@@ -498,9 +258,9 @@ export function useChatSession({
   }, [polling.messages.length, ws.streaming.currentMessage, ws.streaming.thinking, ws.streaming.toolCalls.length]);
 
   return {
-    availableModels,
-    selectedModel,
-    setSelectedModel,
+    availableModels: modelSelection.availableModels,
+    selectedModel: modelSelection.selectedModel,
+    setSelectedModel: modelSelection.setSelectedModel,
     messages: polling.messages,
     input,
     setInput,
@@ -523,7 +283,7 @@ export function useChatSession({
     addFiles: files.addFiles,
     handleFileSelect: files.handleFileSelect,
     removeAttachedFile: files.removeAttachedFile,
-    sendMessage,
+    sendMessage: messaging.sendMessage,
     messagesEndRef,
   };
 }

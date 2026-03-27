@@ -1,12 +1,11 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Repository } from '../../../shared/types';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, now, toIsoString, sanitizeRepoName } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { toApiRepositoryFromDb } from './repos';
 import { getDb, repositories, repoReleases } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
-import { sanitizeRepoName } from '../../../shared/utils/slug';
 import { logError } from '../../../shared/utils/logger';
 
 export interface ForkOptions {

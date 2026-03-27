@@ -153,6 +153,7 @@ export function sanitizeReturnTo(value: string | null | undefined): string {
   try {
     normalized = decodeURIComponent(value);
   } catch {
+    // Malformed percent-encoding -- redirect to root for safety
     return '/';
   }
 
@@ -202,6 +203,7 @@ export function validateCliCallbackUrl(callbackUrl: string): { valid: boolean; e
     const sanitizedUrl = `http://${url.hostname}:${port}${url.pathname}`;
     return { valid: true, sanitizedUrl };
   } catch {
+    // URL constructor throws on malformed callback URLs
     return { valid: false, error: 'Invalid callback URL format' };
   }
 }

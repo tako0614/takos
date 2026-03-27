@@ -1,3 +1,45 @@
+/**
+ * @module error-response (LEGACY)
+ *
+ * ============================================================================
+ * DEPRECATION NOTICE
+ * ============================================================================
+ *
+ * The helper functions in this file produce the LEGACY flat error format:
+ *
+ *   { error: string, code?: string, details?: unknown }
+ *
+ * New code should use the STANDARD nested format from @takos/common/errors:
+ *
+ *   { error: { code: ErrorCode, message: string, details?: unknown } }
+ *
+ * MIGRATION GUIDE
+ * ---------------
+ * 1. For route handlers that return Hono responses, replace:
+ *      import { badRequest } from '../../shared/utils/error-response';
+ *      return badRequest(c, 'Invalid input');
+ *    with:
+ *      import { BadRequestError } from '@takos/common/errors';
+ *      throw new BadRequestError('Invalid input');
+ *    and let the global error handler produce the standard response.
+ *
+ * 2. For service-layer code that already throws AppError subclasses
+ *    (BadRequestError, NotFoundError, etc.), no change is needed --
+ *    those classes come from @takos/common/errors and are re-exported here.
+ *
+ * 3. The ErrorResponse interface (flat format) should NOT be used in new
+ *    APIs. Use the nested ErrorResponse from @takos/common/errors instead.
+ *
+ * 4. The `handleDbError` helper can be replaced by throwing AppError
+ *    subclasses directly (ConflictError, BadRequestError, ValidationError)
+ *    in database access layers.
+ *
+ * 5. The `oauth2Error` helper follows RFC 6749 and is NOT deprecated.
+ *
+ * This migration should happen incrementally, file by file.
+ * ============================================================================
+ */
+
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../types';
@@ -25,8 +67,9 @@ export {
 
 /**
  * Standard error response format for API responses
- * This is the legacy format used in takos-control
- * New APIs should use the nested format from @takos/common
+ * This is the legacy flat format used in takos-control.
+ * New APIs should use the nested {@link import('@takos/common/errors').ErrorResponse} format from @takos/common/errors.
+ * @deprecated Use `ErrorResponse` from `@takos/common/errors` instead, which uses the nested `{ error: { code, message, details? } }` format.
  */
 export interface ErrorResponse {
   error: string;
@@ -40,6 +83,8 @@ export interface ErrorResponse {
  * the full typed context with Variables. Using Context<any> avoids
  * contravariance issues with Variables while keeping type safety for
  * the response body.
+ * @deprecated Only used by the legacy error helper functions in this file.
+ * When those callers are migrated to throw `AppError` subclasses, this type will be removed.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyAppContext = Context<any>;
@@ -51,6 +96,8 @@ export type AnyAppContext = Context<any>;
  * @param message - Human-readable error message
  * @param code - Machine-readable error code (string to allow extended error codes)
  * @param details - Optional additional details
+ * @deprecated Use `AppError` subclasses from `@takos/common/errors` and throw them instead.
+ * The global error handler will produce the standard nested response format.
  */
 export function errorResponse(
   c: AnyAppContext,
@@ -67,6 +114,7 @@ export function errorResponse(
 
 /**
  * 400 Bad Request
+ * @deprecated Use `throw new BadRequestError(message, details)` from `@takos/common/errors` instead.
  */
 export function badRequest(
   c: AnyAppContext,
@@ -78,6 +126,7 @@ export function badRequest(
 
 /**
  * 401 Unauthorized
+ * @deprecated Use `throw new AuthenticationError(message)` from `@takos/common/errors` instead.
  */
 export function unauthorized(
   c: AnyAppContext,
@@ -88,6 +137,7 @@ export function unauthorized(
 
 /**
  * 403 Forbidden
+ * @deprecated Use `throw new AuthorizationError(message)` from `@takos/common/errors` instead.
  */
 export function forbidden(
   c: AnyAppContext,
@@ -98,6 +148,7 @@ export function forbidden(
 
 /**
  * 404 Not Found
+ * @deprecated Use `throw new NotFoundError(resource)` from `@takos/common/errors` instead.
  */
 export function notFound(
   c: AnyAppContext,
@@ -108,6 +159,7 @@ export function notFound(
 
 /**
  * 409 Conflict
+ * @deprecated Use `throw new ConflictError(message, details)` from `@takos/common/errors` instead.
  */
 export function conflict(
   c: AnyAppContext,
@@ -119,6 +171,7 @@ export function conflict(
 
 /**
  * 422 Validation Error
+ * @deprecated Use `throw new ValidationError(message, fieldErrors)` from `@takos/common/errors` instead.
  */
 export function validationError(
   c: AnyAppContext,
@@ -130,6 +183,7 @@ export function validationError(
 
 /**
  * 500 Internal Server Error
+ * @deprecated Use `throw new InternalError(message, details)` from `@takos/common/errors` instead.
  */
 export function internalError(
   c: AnyAppContext,
@@ -141,6 +195,7 @@ export function internalError(
 
 /**
  * 503 Service Unavailable
+ * @deprecated Use `throw new ServiceUnavailableError(message, details)` from `@takos/common/errors` instead.
  */
 export function serviceUnavailable(
   c: AnyAppContext,
@@ -151,6 +206,7 @@ export function serviceUnavailable(
 
 /**
  * 402 Payment Required
+ * @deprecated Define a `PaymentRequiredError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function paymentRequired(
   c: AnyAppContext,
@@ -162,6 +218,7 @@ export function paymentRequired(
 
 /**
  * 410 Gone
+ * @deprecated Define a `GoneError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function gone(
   c: AnyAppContext,
@@ -172,6 +229,7 @@ export function gone(
 
 /**
  * 413 Payload Too Large
+ * @deprecated Define a `PayloadTooLargeError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function payloadTooLarge(
   c: AnyAppContext,
@@ -183,6 +241,7 @@ export function payloadTooLarge(
 
 /**
  * 429 Rate Limited
+ * @deprecated Use `throw new RateLimitError(message, retryAfter)` from `@takos/common/errors` instead.
  */
 export function rateLimited(
   c: AnyAppContext,
@@ -197,6 +256,7 @@ export function rateLimited(
 
 /**
  * 501 Not Implemented
+ * @deprecated Define a `NotImplementedError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function notImplemented(
   c: AnyAppContext,
@@ -207,6 +267,7 @@ export function notImplemented(
 
 /**
  * 502 Bad Gateway
+ * @deprecated Define a `BadGatewayError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function badGateway(
   c: AnyAppContext,
@@ -217,6 +278,7 @@ export function badGateway(
 
 /**
  * 504 Gateway Timeout
+ * @deprecated Define a `GatewayTimeoutError` extending `AppError` in `@takos/common/errors` and throw it instead.
  */
 export function gatewayTimeout(
   c: AnyAppContext,
@@ -227,6 +289,8 @@ export function gatewayTimeout(
 
 /**
  * Handle database constraint errors
+ * @deprecated Throw `ConflictError`, `BadRequestError`, or `ValidationError` from `@takos/common/errors`
+ * directly in database access layers instead of catching and converting at the route level.
  */
 export function handleDbError(
   c: AnyAppContext,

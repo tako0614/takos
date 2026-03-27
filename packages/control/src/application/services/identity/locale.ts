@@ -5,7 +5,7 @@ import { accountMetadata, getDb } from '../../../infra/db';
 import { isSkillLocale } from '../agent/official-skills';
 import type { SkillLocale } from '../agent/skill-contracts';
 
-export async function getWorkspaceLocale(
+export async function getSpaceLocale(
   dbBinding: D1Database,
   spaceId: string,
 ): Promise<SkillLocale | null> {

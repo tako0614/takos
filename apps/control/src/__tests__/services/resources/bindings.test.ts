@@ -114,6 +114,42 @@ describe('buildBindingFromResource', () => {
     });
   });
 
+  it('builds Queue binding', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'queue',
+      status: 'active',
+      cf_id: 'queue-id-123',
+      cf_name: 'my-queue',
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_QUEUE');
+
+    expect(result).toEqual({
+      type: 'queue',
+      name: 'MY_QUEUE',
+      queue_name: 'my-queue',
+    });
+  });
+
+  it('builds Analytics Engine binding', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'analyticsEngine',
+      status: 'active',
+      cf_id: null,
+      cf_name: 'events-dataset',
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'ANALYTICS');
+
+    expect(result).toEqual({
+      type: 'analytics_engine',
+      name: 'ANALYTICS',
+      dataset: 'events-dataset',
+    });
+  });
+
   it('returns null for unknown resource type', async () => {
     mocks.getResourceById.mockResolvedValue({
       id: 'res-1',

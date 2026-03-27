@@ -6,7 +6,11 @@ async function main(): Promise<void> {
     ? await import(pkg)
     : await import(new URL('../../../packages/runtime-service/dist/index.js', import.meta.url).href);
 
-  (mod as any).startRuntimeService();
+  interface RuntimeModule {
+    startRuntimeService: () => void;
+  }
+
+  (mod as RuntimeModule).startRuntimeService();
 }
 
 void main();

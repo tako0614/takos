@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, AgentTask, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/helpers';
+import { badRequest, notFound, internalError, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
-import { checkWorkspaceAccess, generateId, now, toIsoString } from '../../shared/utils';
+import { checkSpaceAccess, generateId, now, toIsoString } from '../../shared/utils';
 import { createThread } from '../../application/services/threads/threads';
 import { analyzeTask } from '../../application/services/agent/workflow';
 import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../application/services/agent';
@@ -198,7 +198,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const limit = parseLimit(c.req.query('limit'), 50, 200);
     const offset = parseOffset(c.req.query('offset'), 0);
 
-    const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id);
+    const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
     if (!access) {
       return notFound(c, 'Workspace');
     }
@@ -242,7 +242,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const spaceId = c.req.param('spaceId');
     const body = c.req.valid('json');
 
-    const access = await checkWorkspaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return notFound(c, 'Workspace');
     }
@@ -300,7 +300,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Task');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, task.space_id, user.id);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
     if (!access) {
       return notFound(c, 'Task');
     }
@@ -333,7 +333,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Task');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return notFound(c, 'Task');
     }
@@ -441,7 +441,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Task');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin']);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin']);
     if (!access) {
       return notFound(c, 'Task');
     }
@@ -461,13 +461,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return notFound(c, 'Task');
     }
 
-    const access = await checkWorkspaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return notFound(c, 'Task');
     }
 
     const model = normalizeModelId(task.model)
-      || normalizeModelId(access.workspace.ai_model)
+      || normalizeModelId(access.space.ai_model)
       || DEFAULT_MODEL_ID;
     const provider = getProviderFromModel(model);
 

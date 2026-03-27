@@ -209,7 +209,7 @@ export const WORKER_BINDINGS_SET: ToolDefinition = {
           type: 'object',
           description: 'Resource binding',
           properties: {
-            type: { type: 'string', description: 'Binding type: d1, r2_bucket, kv_namespace, vectorize, service', enum: ['d1', 'r2_bucket', 'kv_namespace', 'vectorize', 'service'] },
+            type: { type: 'string', description: 'Binding type: d1, r2_bucket, kv_namespace, vectorize, queue, analytics_engine, service', enum: ['d1', 'r2_bucket', 'kv_namespace', 'vectorize', 'queue', 'analytics_engine', 'service'] },
             name: { type: 'string', description: 'Binding name in code (e.g., DB, STORAGE)' },
             id: { type: 'string', description: 'Resource handle (resource id, cf_id, cf_name, or resource name)' },
           },
@@ -339,7 +339,14 @@ export const workerBindingsGetHandler: ToolHandler = async (args, context) => {
     .map((binding) => ({
       type: binding.type,
       name: binding.name,
-      resource_name: binding.service || binding.database_id || binding.bucket_name || binding.namespace_id || null,
+      resource_name: binding.service
+        || binding.database_id
+        || binding.bucket_name
+        || binding.namespace_id
+        || binding.queue_name
+        || binding.dataset
+        || binding.workflow_name
+        || null,
     }));
   return describeBindings(resourceBindings, workerIdentifier);
 };
@@ -361,8 +368,21 @@ export const workerBindingsSetHandler: ToolHandler = async (args, context) => {
       case 'd1':
       case 'r2':
       case 'kv':
+      case 'vectorize':
         bindingType = resource.type;
         break;
+      case 'queue':
+        bindingType = 'queue';
+        break;
+      case 'analytics_engine':
+      case 'analyticsEngine':
+        bindingType = 'analytics_engine';
+        break;
+      case 'workflow':
+        throw new Error(
+          'Workflow resources are provisionable, but workflow bindings are not assignable through service_bindings_set yet. ' +
+          'Declare the workflow resource in the manifest and invoke it through Takos-managed workflow APIs.',
+        );
       case 'worker':
         bindingType = 'service';
         break;

@@ -3,11 +3,11 @@ import type { ExploreSort, SearchOrder, SearchSort, SourceRepo, SourceTab } from
 import { rpc, rpcJson } from '../lib/rpc';
 
 interface UseReposDataOptions {
-  selectedWorkspaceId?: string;
+  selectedSpaceId?: string;
   initialTab: SourceTab;
 }
 
-export function useReposData({ selectedWorkspaceId, initialTab }: UseReposDataOptions) {
+export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOptions) {
   const [activeTab, setActiveTab] = useState<SourceTab>(initialTab);
   const PAGE_SIZE = 20;
   const myReposRequestSeqRef = useRef(0);
@@ -44,10 +44,10 @@ export function useReposData({ selectedWorkspaceId, initialTab }: UseReposDataOp
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
-    if (selectedWorkspaceId && activeTab === 'repos') {
+    if (selectedSpaceId && activeTab === 'repos') {
       void fetchMyRepos();
     }
-  }, [selectedWorkspaceId, activeTab]);
+  }, [selectedSpaceId, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'explore') {
@@ -76,13 +76,13 @@ export function useReposData({ selectedWorkspaceId, initialTab }: UseReposDataOp
   }, [searchQuery, searchSort, searchOrder]);
 
   const fetchMyRepos = async () => {
-    if (!selectedWorkspaceId) return;
+    if (!selectedSpaceId) return;
     const requestId = ++myReposRequestSeqRef.current;
     try {
       setMyReposLoading(true);
       setMyReposError(null);
       const res = await rpc.spaces[':spaceId'].repos.$get({
-        param: { spaceId: selectedWorkspaceId },
+        param: { spaceId: selectedSpaceId },
       });
       const data = await rpcJson<{ repositories?: SourceRepo[] }>(res);
       if (requestId !== myReposRequestSeqRef.current) return;
@@ -198,10 +198,10 @@ export function useReposData({ selectedWorkspaceId, initialTab }: UseReposDataOp
     description: string,
     visibility: 'public' | 'private',
   ) => {
-    if (!selectedWorkspaceId) return;
+    if (!selectedSpaceId) return;
     try {
       const res = await rpc.spaces[':spaceId'].repos.$post({
-        param: { spaceId: selectedWorkspaceId },
+        param: { spaceId: selectedSpaceId },
         json: { name, description, visibility },
       });
       await rpcJson(res);

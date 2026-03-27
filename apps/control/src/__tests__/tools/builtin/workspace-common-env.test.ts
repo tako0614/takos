@@ -29,7 +29,7 @@ import {
   WORKSPACE_ENV_SET,
   WORKSPACE_ENV_DELETE,
   WORKSPACE_COMMON_ENV_TOOLS,
-} from '@/tools/builtin/workspace-common-env';
+} from '@/tools/builtin/space-common-env';
 
 // ---------------------------------------------------------------------------
 // Helpers

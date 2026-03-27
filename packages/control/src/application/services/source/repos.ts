@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, Repository, RepositoryVisibility, WorkspaceRole } from '../../../shared/types';
-import { checkWorkspaceAccess } from '../../../shared/utils';
+import type { Env, Repository, RepositoryVisibility, SpaceRole } from '../../../shared/types';
+import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb, accounts, repositories } from '../../../infra/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
@@ -11,7 +11,7 @@ import { logError } from '../../../shared/utils/logger';
 export interface RepoAccess {
   repo: Repository;
   spaceId: string;
-  role: WorkspaceRole;
+  role: SpaceRole;
 }
 
 export interface CheckRepoAccessOptions {
@@ -75,7 +75,7 @@ export async function checkRepoAccess(
   env: Env,
   repoId: string,
   userId: string | null | undefined,
-  requiredRoles?: WorkspaceRole[],
+  requiredRoles?: SpaceRole[],
   options: CheckRepoAccessOptions = {},
 ): Promise<RepoAccess | null> {
   if (!isValidOpaqueId(repoId)) return null;
@@ -91,9 +91,9 @@ export async function checkRepoAccess(
   if (!repo) return null;
 
   if (normalizedUserId) {
-    const access = await checkWorkspaceAccess(env.DB, repo.space_id, normalizedUserId, requiredRoles);
+    const access = await checkSpaceAccess(env.DB, repo.space_id, normalizedUserId, requiredRoles);
     if (access) {
-      return { repo, spaceId: repo.space_id, role: access.member.role };
+      return { repo, spaceId: repo.space_id, role: access.membership.role };
     }
   }
 
@@ -112,7 +112,7 @@ export async function getRepositoryById(db: D1Database, repoId: string): Promise
   return row ? toApiRepositoryFromDb(row) : null;
 }
 
-export async function listRepositoriesByWorkspace(db: D1Database, spaceId: string): Promise<Repository[]> {
+export async function listRepositoriesBySpace(db: D1Database, spaceId: string): Promise<Repository[]> {
   const drizzle = getDb(db);
   const rows = await drizzle.select().from(repositories)
     .where(eq(repositories.accountId, spaceId))

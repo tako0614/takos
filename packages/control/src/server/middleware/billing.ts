@@ -5,7 +5,7 @@ import {
   type MeterType,
   type BillingCheckResult,
 } from '../../application/services/billing/billing';
-import { serviceUnavailable, paymentRequired } from '../../shared/utils/error-response';
+import { ServiceUnavailableError, PaymentRequiredError } from '@takos/common/errors';
 import { logError } from '../../shared/utils/logger';
 
 export type BillingVariables = {
@@ -44,12 +44,12 @@ export function billingGate(
       result = await checkBillingQuota(c.env.DB, user.id, meterType, units);
     } catch (err) {
       logError('Failed to check billing quota', err, { module: 'billinggate' });
-      return serviceUnavailable(c, 'Billing unavailable');
+      throw new ServiceUnavailableError('Billing unavailable');
     }
     c.set('billingCheck', result);
 
     if (!result.allowed && !options?.shadow) {
-      return paymentRequired(c, 'Billing quota exceeded', {
+      throw new PaymentRequiredError('Billing quota exceeded', {
         reason: result.reason,
         plan: result.planName,
         balance_cents: result.balanceCents,

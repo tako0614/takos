@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, ThreadStatus, MessageRole } from '../../shared/types';
-import { badRequest, notFound, internalError, parseLimit, parseOffset, requireWorkspaceAccess, type BaseVariables } from './shared/helpers';
+import { badRequest, notFound, internalError, parseLimit, parseOffset, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {
@@ -37,7 +37,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const access = await requireWorkspaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
 
-  const threadsList = await listThreads(c.env.DB, access.workspace.id, { status });
+  const threadsList = await listThreads(c.env.DB, access.space.id, { status });
   return c.json({ threads: threadsList });
 })
 
@@ -59,7 +59,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   const access = await requireWorkspaceAccess(c, spaceId, user.id);
   if (access instanceof Response) return access;
-  const resolvedWorkspaceId = access.workspace.id;
+  const resolvedSpaceId = access.space.id;
 
   if (!q) {
     return badRequest(c, 'q is required');
@@ -67,7 +67,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   return c.json(await searchSpaceThreads({
     env: c.env,
-    spaceId: resolvedWorkspaceId,
+    spaceId: resolvedSpaceId,
     query: q,
     type,
     limit,
@@ -91,7 +91,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   );
   if (access instanceof Response) return access;
 
-  const thread = await createThread(c.env.DB, access.workspace.id, body);
+  const thread = await createThread(c.env.DB, access.space.id, body);
 
   return c.json({ thread }, 201);
 })

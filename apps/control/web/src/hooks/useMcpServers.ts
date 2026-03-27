@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from './useToast';
 import { useI18n } from '../providers/I18nProvider';
-import { getErrorMessage } from '../lib/errors';
+import { getErrorMessage } from '@takos/common/errors';
 import { useConfirmDialog } from '../providers/ConfirmDialogProvider';
 import type { McpServerRecord } from '../types';
 

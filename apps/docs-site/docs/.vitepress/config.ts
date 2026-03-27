@@ -15,8 +15,8 @@ export default defineConfig({
       { text: "概要", link: "/overview/" },
       { text: "概念", link: "/concepts/" },
       { text: "仕様", link: "/specs/" },
+      { text: "ガイド", link: "/guides/local-development" },
       { text: "アーキテクチャ", link: "/architecture/" },
-      { text: "運用", link: "/operations/" },
       { text: "参照", link: "/reference/" },
     ],
     sidebar: [
@@ -35,6 +35,7 @@ export default defineConfig({
           { text: "Repo / Service / Worker", link: "/concepts/repos-services-workers" },
           { text: "Resource / Binding", link: "/concepts/resources-and-bindings" },
           { text: "Thread / Run / Artifact", link: "/concepts/threads-and-runs" },
+          { text: "Package / Ecosystem", link: "/concepts/packages-and-ecosystem" },
         ],
       },
       {
@@ -45,21 +46,36 @@ export default defineConfig({
           { text: "Deployment model", link: "/specs/deployment-model" },
           { text: "Deploy System v1", link: "/specs/deploy-system" },
           { text: "CLI / Auth model", link: "/specs/cli-and-auth" },
+          { text: "OAuth", link: "/specs/oauth" },
+          { text: "ActivityPub Store", link: "/specs/activitypub-store" },
         ],
       },
       {
-        text: "運用と参照",
+        text: "ガイド",
         items: [
-          { text: "アーキテクチャ", link: "/architecture/" },
+          { text: "ローカル開発", link: "/guides/local-development" },
+        ],
+      },
+      {
+        text: "アーキテクチャ",
+        items: [
+          { text: "概要", link: "/architecture/" },
           { text: "Control plane", link: "/architecture/control-plane" },
           { text: "Tenant runtime", link: "/architecture/tenant-runtime" },
           { text: "互換性と制限", link: "/architecture/compatibility-and-limitations" },
           { text: "Release system", link: "/architecture/release-system" },
           { text: "Resource governance", link: "/architecture/resource-governance" },
+          { text: "Billing", link: "/architecture/billing" },
+        ],
+      },
+      {
+        text: "運用と参照",
+        items: [
           { text: "運用モデル", link: "/operations/" },
           { text: "参照", link: "/reference/" },
-          { text: "用語集", link: "/reference/glossary" },
+          { text: "API リファレンス", link: "/reference/api" },
           { text: "CLI command reference", link: "/reference/commands" },
+          { text: "用語集", link: "/reference/glossary" },
         ],
       },
     ],

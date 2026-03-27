@@ -15,7 +15,7 @@ const VALID_SCOPE_SET = new Set(ALL_SCOPES);
 
 export type TakosTokenSubjectMode = 'owner_principal' | 'space_agent';
 
-type WorkspaceIdentityRow = {
+type SpaceIdentityRow = {
   id: string;
   kind: 'user' | 'team' | 'system';
   name: string;
@@ -87,7 +87,7 @@ export function resolveTakosApiUrl(env: Pick<Env, 'ADMIN_DOMAIN'>): string | nul
   return `https://${adminDomain}`;
 }
 
-async function loadWorkspaceIdentity(db: D1Database, spaceId: string): Promise<WorkspaceIdentityRow | null> {
+async function loadSpaceIdentity(db: D1Database, spaceId: string): Promise<SpaceIdentityRow | null> {
   const drizzle = getDb(db);
   const row = await drizzle.select().from(accounts)
     .where(eq(accounts.id, spaceId))
@@ -111,24 +111,24 @@ async function loadWorkspaceIdentity(db: D1Database, spaceId: string): Promise<W
 export async function resolveTakosTokenSubject(params: {
   env: Pick<Env, 'DB'>;
   spaceId: string;
-}): Promise<{ subjectUserId: string; subjectMode: TakosTokenSubjectMode; workspace: WorkspaceIdentityRow }> {
-  const workspace = await loadWorkspaceIdentity(params.env.DB, params.spaceId);
-  if (!workspace) {
+}): Promise<{ subjectUserId: string; subjectMode: TakosTokenSubjectMode; space: SpaceIdentityRow }> {
+  const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
+  if (!space) {
     throw new Error(`Space not found: ${params.spaceId}`);
   }
-  if (workspace.kind === 'user') {
+  if (space.kind === 'user') {
     return {
-      subjectUserId: workspace.owner_user_id,
+      subjectUserId: space.owner_user_id,
       subjectMode: 'owner_principal',
-      workspace,
+      space,
     };
   }
-  // For team workspaces, the account id itself acts as the principal
+  // For team spaces, the account id itself acts as the principal
   // (automation_principal_id concept has been removed)
   return {
-    subjectUserId: workspace.owner_user_id,
+    subjectUserId: space.owner_user_id,
     subjectMode: 'space_agent',
-    workspace,
+    space,
   };
 }
 
@@ -138,7 +138,12 @@ async function encryptManagedToken(env: Pick<Env, 'ENCRYPTION_KEY'>, serviceId: 
 }
 
 async function decryptManagedToken(env: Pick<Env, 'ENCRYPTION_KEY'>, row: ManagedTakosTokenRow): Promise<string> {
-  const encrypted = JSON.parse(row.token_encrypted) as EncryptedData;
+  let encrypted: EncryptedData;
+  try {
+    encrypted = JSON.parse(row.token_encrypted) as EncryptedData;
+  } catch (err) {
+    throw new Error(`Failed to parse encrypted token for service ${row.service_id}, env ${row.env_name}: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return decrypt(encrypted, getCommonEnvSecret(env), buildManagedTokenSalt(row.service_id, row.env_name));
 }
 
@@ -332,8 +337,8 @@ export async function listTakosBuiltinStatuses(params: {
   if (!serviceId) {
     throw new Error('listTakosBuiltinStatuses requires a serviceId');
   }
-  const workspace = await loadWorkspaceIdentity(params.env.DB, params.spaceId);
-  if (!workspace) {
+  const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
+  if (!space) {
     throw new Error(`Space not found: ${params.spaceId}`);
   }
   const managedToken = await listManagedRow(
@@ -360,7 +365,7 @@ export async function listTakosBuiltinStatuses(params: {
       available: true,
       configured: Boolean(managedToken),
       scopes: managedToken ? parseScopesJson(managedToken.scopes_json) : [],
-      subject_mode: workspace.kind === 'user' ? 'owner_principal' : 'space_agent',
+      subject_mode: space.kind === 'user' ? 'owner_principal' : 'space_agent',
       sync_state: tokenLinkState
         ? (tokenLinkState.syncState === 'missing_common' ? 'missing_builtin' : tokenLinkState.syncState)
         : (managedToken ? 'managed' : 'pending'),

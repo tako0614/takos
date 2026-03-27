@@ -4,7 +4,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { pushLog } from '../logging.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 
 function gracefulKill(child: ChildProcess): NodeJS.Timeout {
   child.kill('SIGTERM');

@@ -1,6 +1,6 @@
 // Canonical entrypoint for the takos-dispatch worker.
 // Owns tenant-domain fetch wiring; shared routing logic lives outside this path.
-import { selectHttpEndpointFromHttpEndpointSet } from './application/services/routing/index.ts';
+import { selectHttpEndpointFromHttpEndpointSet } from './application/services/routing/service.ts';
 import type { RoutingStore } from './application/services/routing/types';
 import type {
   DurableNamespaceBinding,
@@ -9,7 +9,7 @@ import type {
 } from './shared/types/bindings.ts';
 import { validateDispatchEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError } from './shared/utils/logger';
-import { buildCloudflareDispatchPlatform } from './platform/adapters/cloudflare.ts';
+import { buildWorkersDispatchPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/types.ts';
 
 type ServiceBinding = {
@@ -52,7 +52,7 @@ export interface DispatchEnv {
 const envGuard = createEnvGuard(validateDispatchEnv);
 
 export function createDispatchWorker(
-  buildPlatform: (env: DispatchEnv) => ControlPlatform<DispatchEnv> = buildCloudflareDispatchPlatform,
+  buildPlatform: (env: DispatchEnv) => ControlPlatform<DispatchEnv> = buildWorkersDispatchPlatform,
 ) {
   return {
   async fetch(request: Request, env: DispatchEnv, ctx: PlatformExecutionContext): Promise<Response> {

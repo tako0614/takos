@@ -32,7 +32,7 @@ import {
   appDeploymentDeployFromRepoHandler,
   appDeploymentRemoveHandler,
   appDeploymentRollbackHandler,
-} from '@/tools/builtin/workspace-app-deployments';
+} from '@/tools/builtin/space-app-deployments';
 
 // ---------------------------------------------------------------------------
 // Helpers

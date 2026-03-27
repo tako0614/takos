@@ -1,7 +1,7 @@
 import type { DbEnv } from '../../../shared/types';
 import type { RoutingBindings } from '../routing/types';
 import type { ObjectStoreBinding } from '../../../shared/types/bindings.ts';
-import { deleteHostnameRouting } from '../routing';
+import { deleteHostnameRouting } from '../routing/service';
 import { restoreRoutingSnapshot, type RoutingSnapshot } from './routing';
 import { logDeploymentEvent } from './store';
 import type { Deployment } from './types';

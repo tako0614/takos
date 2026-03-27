@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { now, toIsoString } from '../../../shared/utils';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { generateExploreInvalidationUrls } from './base';
 import { getDb } from '../../../infra/db';
 import { repoStars, repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { parseLimit, parseOffset } from '../shared/helpers';
-import { badRequest, unauthorized, notFound } from '../../../shared/utils/error-response';
+import { parseLimit, parseOffset } from '../shared/route-auth';
+import { BadRequestError, AuthenticationError, NotFoundError } from '@takos/common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/star', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {
@@ -18,7 +18,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const timestamp = now();
@@ -32,7 +32,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (existingStar) {
-    return badRequest(c, 'Already starred');
+    throw new BadRequestError('Already starred');
   }
 
   // Use onConflictDoNothing to handle race conditions safely
@@ -60,7 +60,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   const existingStar = await db.select()
@@ -72,7 +72,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     .get();
 
   if (!existingStar) {
-    return badRequest(c, 'Not starred');
+    throw new BadRequestError('Not starred');
   }
 
   const repo = await db.select({ stars: repositories.stars })
@@ -99,7 +99,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/starred', async (c) => {
   const user = c.get('user');
   if (!user) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
   const limit = parseLimit(c.req.query('limit'), 20, 100);
   const offset = parseOffset(c.req.query('offset'));
@@ -181,7 +181,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
   if (!repoAccess) {
-    return notFound(c, 'Repository');
+    throw new NotFoundError('Repository');
   }
 
   if (!user?.id) {

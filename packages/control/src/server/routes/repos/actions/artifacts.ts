@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../shared/helpers';
-import { notFound, internalError, gone } from '../../../../shared/utils/error-response';
+import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import { NotFoundError, InternalError, GoneError } from '@takos/common/errors';
 import {
   deleteWorkflowArtifactById,
   getWorkflowArtifactById,
@@ -15,12 +15,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     const runId = c.req.param('runId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const artifacts = await listWorkflowArtifactsForRun(c.env, repoId, runId);
     if (!artifacts) {
-      return notFound(c, 'Run');
+      throw new NotFoundError('Run');
     }
 
     return c.json({
@@ -40,26 +40,26 @@ export default new Hono<AuthenticatedRouteEnv>()
     const artifactId = c.req.param('artifactId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const artifact = await getWorkflowArtifactById(c.env, repoId, artifactId);
 
     if (!artifact) {
-      return notFound(c, 'Artifact');
+      throw new NotFoundError('Artifact');
     }
 
     if (artifact.expiresAt && new Date(artifact.expiresAt) < new Date()) {
-      return gone(c, 'Artifact has expired');
+      throw new GoneError('Artifact has expired');
     }
 
     if (!c.env.GIT_OBJECTS) {
-      return internalError(c, 'Storage not configured');
+      throw new InternalError('Storage not configured');
     }
 
     const object = await c.env.GIT_OBJECTS.get(artifact.r2Key);
     if (!object) {
-      return notFound(c, 'Artifact file');
+      throw new NotFoundError('Artifact file');
     }
 
     const headers = new Headers();
@@ -78,12 +78,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     const artifactId = c.req.param('artifactId');
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const artifact = await deleteWorkflowArtifactById(c.env, c.env.GIT_OBJECTS || null, repoId, artifactId);
     if (!artifact) {
-      return notFound(c, 'Artifact');
+      throw new NotFoundError('Artifact');
     }
 
     return c.json({ deleted: true });

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n, type TranslationKey } from '../providers/I18nProvider';
 import { Icons } from '../lib/Icons';
-import type { Workspace } from '../types';
+import type { Space } from '../types';
 import { SkillsTab } from './agent/SkillsTab';
 import { MemoryTab } from './agent/MemoryTab';
 import { ModelTab } from './agent/ModelTab';
@@ -12,7 +12,7 @@ type AgentTab = 'skills' | 'memory' | 'model' | 'work' | 'tools';
 
 export interface AgentModalProps {
   spaceId: string;
-  workspaces: Workspace[];
+  spaces: Space[];
   onClose: () => void;
 }
 
@@ -26,7 +26,7 @@ const TAB_CONFIG: { id: AgentTab; icon: ReactNode; labelKey: TranslationKey; des
 
 export function AgentModal({
   spaceId,
-  workspaces,
+  spaces,
   onClose,
 }: AgentModalProps) {
   const { t } = useI18n();
@@ -101,9 +101,9 @@ export function AgentModal({
           {activeTab === 'work' && <WorkTab spaceId={spaceId} />}
           {activeTab === 'tools' && (
             <McpServersSection
-              workspaces={workspaces}
-              selectedWorkspaceId={selectedToolsWsId}
-              setSelectedWorkspaceId={setSelectedToolsWsId}
+              spaces={spaces}
+              selectedSpaceId={selectedToolsWsId}
+              setSelectedSpaceId={setSelectedToolsWsId}
             />
           )}
         </div>

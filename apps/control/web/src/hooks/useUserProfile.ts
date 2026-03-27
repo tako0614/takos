@@ -1,30 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ActivityEvent, FollowRequest, FollowUser, ProfileRepo, ProfileTab, StarredRepo, UserProfile } from '../types/profile';
+import type { FollowUser, ProfileRepo, ProfileTab, UserProfile } from '../types/profile';
 import { rpc, rpcJson } from '../lib/rpc';
+import { useUserRepos } from './useUserRepos';
+import { useUserStars } from './useUserStars';
+import { useUserFollowers } from './useUserFollowers';
+import { useUserFollowing } from './useUserFollowing';
+import { useUserActivity } from './useUserActivity';
+import { useUserFollowRequests } from './useUserFollowRequests';
 
-// API Response types
+// API Response types kept here for profile-level actions
 interface UserProfileResponse {
   user: UserProfile;
-}
-
-interface ReposResponse {
-  repos: ProfileRepo[];
-  has_more: boolean;
-}
-
-interface StarsResponse {
-  repos: StarredRepo[];
-  has_more: boolean;
-}
-
-interface FollowersResponse {
-  followers: FollowUser[];
-  has_more: boolean;
-}
-
-interface FollowingResponse {
-  following: FollowUser[];
-  has_more: boolean;
 }
 
 interface ToggleFollowResponse {
@@ -38,67 +24,40 @@ interface ToggleUserFollowResponse {
   requested?: boolean;
 }
 
-interface ActivityResponse {
-  events: ActivityEvent[];
-  has_more: boolean;
-}
-
-interface FollowRequestsResponse {
-  requests: FollowRequest[];
-  has_more: boolean;
-  total?: number;
-}
-
-interface FollowRequestAcceptResponse {
-  success: boolean;
-  followers_count?: number;
-}
-
 interface BlockMuteResponse {
   success: boolean;
   blocked?: boolean;
   muted?: boolean;
 }
 
-const ITEMS_PER_PAGE = 20;
-
 export function useUserProfile(username: string) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [repos, setRepos] = useState<ProfileRepo[]>([]);
-  const [starredRepos, setStarredRepos] = useState<StarredRepo[]>([]);
-  const [followers, setFollowers] = useState<FollowUser[]>([]);
-  const [following, setFollowing] = useState<FollowUser[]>([]);
   const [activeTab, setActiveTab] = useState<ProfileTab>('repositories');
   const [loading, setLoading] = useState(true);
-  const [tabLoading, setTabLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
   const [starringRepo, setStarringRepo] = useState<string | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
   const [muteLoading, setMuteLoading] = useState(false);
 
-  const [reposOffset, setReposOffset] = useState(0);
-  const [reposHasMore, setReposHasMore] = useState(true);
-  const [starsOffset, setStarsOffset] = useState(0);
-  const [starsHasMore, setStarsHasMore] = useState(true);
-  const [followersOffset, setFollowersOffset] = useState(0);
-  const [followersHasMore, setFollowersHasMore] = useState(true);
-  const [followingOffset, setFollowingOffset] = useState(0);
-  const [followingHasMore, setFollowingHasMore] = useState(true);
+  // Compose sub-hooks
+  const reposHook = useUserRepos(username);
+  const starsHook = useUserStars(username);
+  const followersHook = useUserFollowers(username);
+  const followingHook = useUserFollowing(username);
+  const activityHook = useUserActivity(username);
+  const followRequestsHook = useUserFollowRequests(username, (count) => {
+    setProfile((prev) => (prev ? { ...prev, followers_count: count } : null));
+  });
 
-  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
-  const [activityHasMore, setActivityHasMore] = useState(true);
-  const [activityError, setActivityError] = useState<string | null>(null);
-
-  const [followRequests, setFollowRequests] = useState<FollowRequest[]>([]);
-  const [requestsOffset, setRequestsOffset] = useState(0);
-  const [requestsHasMore, setRequestsHasMore] = useState(true);
-  const [requestActionLoadingId, setRequestActionLoadingId] = useState<string | null>(null);
-
-  const [followersSort, setFollowersSort] = useState<'created' | 'username'>('created');
-  const [followersOrder, setFollowersOrder] = useState<'desc' | 'asc'>('desc');
-  const [followingSort, setFollowingSort] = useState<'created' | 'username'>('created');
-  const [followingOrder, setFollowingOrder] = useState<'desc' | 'asc'>('desc');
+  // Derive tabLoading from the active sub-hook
+  const tabLoading =
+    reposHook.loading ||
+    starsHook.loading ||
+    followersHook.loading ||
+    followingHook.loading ||
+    activityHook.loading ||
+    followRequestsHook.loading;
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -122,231 +81,8 @@ export function useUserProfile(username: string) {
     }
   }, [username]);
 
-  const fetchRepos = useCallback(
-    async (reset = false) => {
-      if (!reset && !reposHasMore) return;
-
-      setTabLoading(true);
-      try {
-        const offset = reset ? 0 : reposOffset;
-        const res = await rpc.users[':username'].repos.$get({
-          param: { username },
-          query: { limit: String(ITEMS_PER_PAGE), offset: String(offset) },
-        });
-        const data = await rpcJson<ReposResponse>(res);
-        if (reset) {
-          setRepos(data.repos);
-          setReposOffset(ITEMS_PER_PAGE);
-        } else {
-          setRepos((prev) => [...prev, ...data.repos]);
-          setReposOffset((prev) => prev + ITEMS_PER_PAGE);
-        }
-        setReposHasMore(data.has_more);
-      } catch {
-        // Repos fetch failed, silently ignore
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [username, reposOffset, reposHasMore]
-  );
-
-  const fetchStars = useCallback(
-    async (reset = false) => {
-      if (!reset && !starsHasMore) return;
-
-      setTabLoading(true);
-      try {
-        const offset = reset ? 0 : starsOffset;
-        const res = await rpc.users[':username'].stars.$get({
-          param: { username },
-          query: { limit: String(ITEMS_PER_PAGE), offset: String(offset) },
-        });
-        const data = await rpcJson<StarsResponse>(res);
-        if (reset) {
-          setStarredRepos(data.repos);
-          setStarsOffset(ITEMS_PER_PAGE);
-        } else {
-          setStarredRepos((prev) => [...prev, ...data.repos]);
-          setStarsOffset((prev) => prev + ITEMS_PER_PAGE);
-        }
-        setStarsHasMore(data.has_more);
-      } catch {
-        // Stars fetch failed, silently ignore
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [username, starsOffset, starsHasMore]
-  );
-
-  const fetchFollowers = useCallback(
-    async (reset = false) => {
-      if (!reset && !followersHasMore) return;
-
-      setTabLoading(true);
-      try {
-        const offset = reset ? 0 : followersOffset;
-        const res = await rpc.users[':username'].followers.$get({
-          param: { username },
-          query: {
-            limit: String(ITEMS_PER_PAGE),
-            offset: String(offset),
-            sort: followersSort,
-            order: followersOrder,
-          },
-        });
-        const data = await rpcJson<FollowersResponse>(res);
-        if (reset) {
-          setFollowers(data.followers);
-          setFollowersOffset(ITEMS_PER_PAGE);
-        } else {
-          setFollowers((prev) => [...prev, ...data.followers]);
-          setFollowersOffset((prev) => prev + ITEMS_PER_PAGE);
-        }
-        setFollowersHasMore(data.has_more);
-      } catch {
-        // Followers fetch failed, silently ignore
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [username, followersOffset, followersHasMore, followersOrder, followersSort]
-  );
-
-  const fetchFollowing = useCallback(
-    async (reset = false) => {
-      if (!reset && !followingHasMore) return;
-
-      setTabLoading(true);
-      try {
-        const offset = reset ? 0 : followingOffset;
-        const res = await rpc.users[':username'].following.$get({
-          param: { username },
-          query: {
-            limit: String(ITEMS_PER_PAGE),
-            offset: String(offset),
-            sort: followingSort,
-            order: followingOrder,
-          },
-        });
-        const data = await rpcJson<FollowingResponse>(res);
-        if (reset) {
-          setFollowing(data.following);
-          setFollowingOffset(ITEMS_PER_PAGE);
-        } else {
-          setFollowing((prev) => [...prev, ...data.following]);
-          setFollowingOffset((prev) => prev + ITEMS_PER_PAGE);
-        }
-        setFollowingHasMore(data.has_more);
-      } catch {
-        // Following fetch failed, silently ignore
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [username, followingOffset, followingHasMore, followingOrder, followingSort]
-  );
-
-  const fetchActivity = useCallback(
-    async (reset = false) => {
-      if (!reset && !activityHasMore) return;
-
-      setTabLoading(true);
-      setActivityError(null);
-      try {
-        const before = reset
-          ? null
-          : (activityEvents.length > 0 ? activityEvents[activityEvents.length - 1].created_at : null);
-        const res = await rpc.users[':username'].activity.$get({
-          param: { username },
-          query: {
-            limit: String(ITEMS_PER_PAGE),
-            ...(before ? { before } : {}),
-          },
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({})) as { error?: string };
-          setActivityError(data.error || 'Failed to load activity');
-          setActivityHasMore(false);
-          return;
-        }
-
-        const data = await rpcJson<ActivityResponse>(res);
-        if (reset) {
-          setActivityEvents(data.events || []);
-        } else {
-          setActivityEvents((prev) => [...prev, ...(data.events || [])]);
-        }
-        setActivityHasMore(!!data.has_more);
-      } catch (err) {
-        setActivityError(err instanceof Error ? err.message : 'Failed to load activity');
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [activityEvents, activityHasMore, username]
-  );
-
-  const fetchFollowRequests = useCallback(
-    async (reset = false) => {
-      if (!reset && !requestsHasMore) return;
-
-      setTabLoading(true);
-      try {
-        const offset = reset ? 0 : requestsOffset;
-        const res = await rpc.users[':username']['follow-requests'].$get({
-          param: { username },
-          query: { limit: String(ITEMS_PER_PAGE), offset: String(offset) },
-        });
-
-        if (!res.ok) {
-          // Private endpoint; caller may not be the profile owner.
-          setRequestsHasMore(false);
-          return;
-        }
-
-        const data = await rpcJson<FollowRequestsResponse>(res);
-        if (reset) {
-          setFollowRequests(data.requests || []);
-          setRequestsOffset(ITEMS_PER_PAGE);
-        } else {
-          setFollowRequests((prev) => [...prev, ...(data.requests || [])]);
-          setRequestsOffset((prev) => prev + ITEMS_PER_PAGE);
-        }
-        setRequestsHasMore(!!data.has_more);
-      } catch {
-        // ignore
-      } finally {
-        setTabLoading(false);
-      }
-    },
-    [requestsHasMore, requestsOffset, username]
-  );
-
+  // Reset active tab when username changes
   useEffect(() => {
-    setRepos([]);
-    setStarredRepos([]);
-    setFollowers([]);
-    setFollowing([]);
-    setActivityEvents([]);
-    setFollowRequests([]);
-
-    setReposOffset(0);
-    setReposHasMore(true);
-    setStarsOffset(0);
-    setStarsHasMore(true);
-    setFollowersOffset(0);
-    setFollowersHasMore(true);
-    setFollowingOffset(0);
-    setFollowingHasMore(true);
-    setActivityHasMore(true);
-    setActivityError(null);
-    setRequestsOffset(0);
-    setRequestsHasMore(true);
-    setRequestActionLoadingId(null);
-
     setActiveTab('repositories');
   }, [username]);
 
@@ -354,54 +90,44 @@ export function useUserProfile(username: string) {
     fetchProfile();
   }, [fetchProfile]);
 
-  useEffect(() => {
-    setFollowers([]);
-    setFollowersOffset(0);
-    setFollowersHasMore(true);
-  }, [followersOrder, followersSort]);
-
-  useEffect(() => {
-    setFollowing([]);
-    setFollowingOffset(0);
-    setFollowingHasMore(true);
-  }, [followingOrder, followingSort]);
-
+  // Fetch tab data on tab switch
   useEffect(() => {
     switch (activeTab) {
       case 'repositories':
-        if (repos.length === 0) fetchRepos(true);
+        if (reposHook.repos.length === 0) reposHook.fetch(true);
         break;
       case 'stars':
-        if (starredRepos.length === 0) fetchStars(true);
+        if (starsHook.starredRepos.length === 0) starsHook.fetch(true);
         break;
       case 'activity':
-        if (activityEvents.length === 0 && !activityError) fetchActivity(true);
+        if (activityHook.events.length === 0 && !activityHook.error) activityHook.fetch(true);
         break;
       case 'followers':
-        if (followers.length === 0) fetchFollowers(true);
+        if (followersHook.followers.length === 0) followersHook.fetch(true);
         break;
       case 'following':
-        if (following.length === 0) fetchFollowing(true);
+        if (followingHook.following.length === 0) followingHook.fetch(true);
         break;
       case 'requests':
-        if (followRequests.length === 0) fetchFollowRequests(true);
+        if (followRequestsHook.requests.length === 0) followRequestsHook.fetch(true);
         break;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTab,
-    repos.length,
-    starredRepos.length,
-    activityEvents.length,
-    activityError,
-    followers.length,
-    following.length,
-    followRequests.length,
-    fetchRepos,
-    fetchStars,
-    fetchActivity,
-    fetchFollowers,
-    fetchFollowing,
-    fetchFollowRequests,
+    reposHook.repos.length,
+    starsHook.starredRepos.length,
+    activityHook.events.length,
+    activityHook.error,
+    followersHook.followers.length,
+    followingHook.following.length,
+    followRequestsHook.requests.length,
+    reposHook.fetch,
+    starsHook.fetch,
+    activityHook.fetch,
+    followersHook.fetch,
+    followingHook.fetch,
+    followRequestsHook.fetch,
   ]);
 
   const toggleFollow = async () => {
@@ -429,8 +155,8 @@ export function useUserProfile(username: string) {
             : null
         );
       }
-    } catch {
-      // Follow toggle failed, silently ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle follow');
     } finally {
       setFollowLoading(false);
     }
@@ -454,11 +180,11 @@ export function useUserProfile(username: string) {
             ? { ...r, is_starred: !r.is_starred, stars: r.stars + (r.is_starred ? -1 : 1) }
             : r;
 
-        setRepos((prev) => prev.map(updateRepo));
-        setStarredRepos((prev) => prev.map((r) => ({ ...updateRepo(r), starred_at: r.starred_at })));
+        reposHook.updateRepo(updateRepo);
+        starsHook.updateRepo((r) => ({ ...updateRepo(r), starred_at: r.starred_at }));
       }
-    } catch {
-      // Star toggle failed, silently ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle star');
     } finally {
       setStarringRepo(null);
     }
@@ -475,14 +201,14 @@ export function useUserProfile(username: string) {
 
       if (res.ok) {
         const data = await rpcJson<ToggleUserFollowResponse>(res);
-        const updateUser = (u: FollowUser) =>
+        const updater = (u: FollowUser) =>
           u.username === user.username ? { ...u, is_following: data.following } : u;
 
-        setFollowers((prev) => prev.map(updateUser));
-        setFollowing((prev) => prev.map(updateUser));
+        followersHook.updateUser(updater);
+        followingHook.updateUser(updater);
       }
-    } catch {
-      // User follow toggle failed, silently ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle user follow');
     }
   };
 
@@ -509,8 +235,8 @@ export function useUserProfile(username: string) {
             : null
         );
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle block');
     } finally {
       setBlockLoading(false);
     }
@@ -530,105 +256,55 @@ export function useUserProfile(username: string) {
         const muted = !!data.muted;
         setProfile((prev) => (prev ? { ...prev, is_muted: muted } : null));
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle mute');
     } finally {
       setMuteLoading(false);
     }
   };
 
-  const acceptFollowRequest = async (requestId: string) => {
-    if (requestActionLoadingId) return;
-    setRequestActionLoadingId(requestId);
-    try {
-      const res = await rpc.users[':username']['follow-requests'][':id'].accept.$post({
-        param: { username, id: requestId },
-      });
-      if (res.ok) {
-        const data = await rpcJson<FollowRequestAcceptResponse>(res);
-        setFollowRequests((prev) => prev.filter((r) => r.id !== requestId));
-        const followersCount = data.followers_count;
-        if (typeof followersCount === 'number') {
-          setProfile((prev) => (prev ? { ...prev, followers_count: followersCount } : null));
-        }
-      }
-    } catch {
-      // ignore
-    } finally {
-      setRequestActionLoadingId(null);
-    }
-  };
-
-  const rejectFollowRequest = async (requestId: string) => {
-    if (requestActionLoadingId) return;
-    setRequestActionLoadingId(requestId);
-    try {
-      const res = await rpc.users[':username']['follow-requests'][':id'].reject.$post({
-        param: { username, id: requestId },
-      });
-      if (res.ok) {
-        await rpcJson(res);
-        setFollowRequests((prev) => prev.filter((r) => r.id !== requestId));
-      }
-    } catch {
-      // ignore
-    } finally {
-      setRequestActionLoadingId(null);
-    }
-  };
-
-  const setFollowersSortKey = (sort: 'created' | 'username') => {
-    setFollowersSort(sort);
-    setFollowersOrder(sort === 'username' ? 'asc' : 'desc');
-  };
-
-  const setFollowingSortKey = (sort: 'created' | 'username') => {
-    setFollowingSort(sort);
-    setFollowingOrder(sort === 'username' ? 'asc' : 'desc');
-  };
-
   const loadMore = () => {
     switch (activeTab) {
       case 'repositories':
-        fetchRepos(false);
+        reposHook.fetch(false);
         break;
       case 'stars':
-        fetchStars(false);
+        starsHook.fetch(false);
         break;
       case 'activity':
-        fetchActivity(false);
+        activityHook.fetch(false);
         break;
       case 'followers':
-        fetchFollowers(false);
+        followersHook.fetch(false);
         break;
       case 'following':
-        fetchFollowing(false);
+        followingHook.fetch(false);
         break;
       case 'requests':
-        fetchFollowRequests(false);
+        followRequestsHook.fetch(false);
         break;
     }
   };
 
   const hasMore = {
-    repositories: reposHasMore,
-    stars: starsHasMore,
-    activity: activityHasMore && !activityError,
-    followers: followersHasMore,
-    following: followingHasMore,
-    requests: requestsHasMore,
+    repositories: reposHook.hasMore,
+    stars: starsHook.hasMore,
+    activity: activityHook.hasMore && !activityHook.error,
+    followers: followersHook.hasMore,
+    following: followingHook.hasMore,
+    requests: followRequestsHook.hasMore,
   }[activeTab];
 
   return {
     profile,
-    repos,
-    starredRepos,
-    activityEvents,
-    activityError,
-    followers,
-    following,
-    followRequests,
-    requestActionLoadingId,
+    repos: reposHook.repos,
+    starredRepos: starsHook.starredRepos,
+    activityEvents: activityHook.events,
+    activityError: activityHook.error,
+    followers: followersHook.followers,
+    following: followingHook.following,
+    followRequests: followRequestsHook.requests,
+    requestActionLoadingId: followRequestsHook.actionLoadingId,
     activeTab,
     setActiveTab,
     loading,
@@ -643,14 +319,14 @@ export function useUserProfile(username: string) {
     toggleMute,
     toggleRepoStar,
     toggleUserFollow,
-    acceptFollowRequest,
-    rejectFollowRequest,
-    followersSort,
-    followersOrder,
-    followingSort,
-    followingOrder,
-    setFollowersSortKey,
-    setFollowingSortKey,
+    acceptFollowRequest: followRequestsHook.accept,
+    rejectFollowRequest: followRequestsHook.reject,
+    followersSort: followersHook.sort,
+    followersOrder: followersHook.order,
+    followingSort: followingHook.sort,
+    followingOrder: followingHook.order,
+    setFollowersSortKey: followersHook.setSortKey,
+    setFollowingSortKey: followingHook.setSortKey,
     loadMore,
     hasMore,
   };

@@ -75,16 +75,18 @@ describe('local public runtime contract', () => {
   });
 
   it('keeps Miniflare wiring behind the canonical tenant worker runtime factory', async () => {
-    const localAdapter = await read('local-platform/adapters/local.ts', sourcePackageRoot);
+    // The env builder (node-platform/env-builder.ts) is the canonical location
+    // for binding creation.
+    const envBuilder = await read('node-platform/env-builder.ts', sourcePackageRoot);
     const tenantRuntime = await read('local-platform/tenant-worker-runtime.ts', sourcePackageRoot);
     const servicesSchema = await read('infra/db/schema-services.ts', sourcePackageRoot);
 
-    expect(localAdapter).toContain("from '../tenant-worker-runtime.ts'");
-    expect(localAdapter).toContain('createLocalTenantWorkerRuntimeRegistry');
-    expect(localAdapter).not.toContain("path.join(shared.dataDir, 'miniflare'");
-    expect(localAdapter).not.toContain('miniflare-registry');
-    expect(localAdapter).not.toContain('createDebugMiniflareFetcherRegistry');
-    expect(localAdapter).not.toContain('createLocalDebugTenantWorkerRuntimeRegistry');
+    expect(envBuilder).toContain("from '../local-platform/tenant-worker-runtime.ts'");
+    expect(envBuilder).toContain('createLocalTenantWorkerRuntimeRegistry');
+    expect(envBuilder).not.toContain("path.join(shared.dataDir, 'miniflare'");
+    expect(envBuilder).not.toContain('miniflare-registry');
+    expect(envBuilder).not.toContain('createDebugMiniflareFetcherRegistry');
+    expect(envBuilder).not.toContain('createLocalDebugTenantWorkerRuntimeRegistry');
     expect(tenantRuntime).not.toContain('TAKOS_LOCAL_DEBUG_TENANT_RUNTIME');
     expect(tenantRuntime).toContain("path.join(dataDir, 'tenant-runtime'");
     expect(tenantRuntime).toContain("import('./miniflare-registry.ts')");

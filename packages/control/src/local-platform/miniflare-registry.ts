@@ -9,6 +9,15 @@ import { services } from '../infra/db/schema-services';
 import { CF_COMPATIBILITY_DATE } from '../shared/constants.ts';
 import { decrypt, decryptEnvVars, type EncryptedData } from '../shared/utils/crypto.ts';
 import { createForwardingFetcher, type ServiceTargetMap } from './url-registry.ts';
+import type {
+  TenantWorkerFetcher,
+  TenantWorkerQueueMessage,
+  TenantWorkerQueueResult,
+  TenantWorkerRuntimeRegistry,
+  TenantWorkerScheduledOptions,
+  TenantWorkerScheduledResult,
+  TenantWorkflowInvocation,
+} from './tenant-worker-runtime.ts';
 
 type FetcherLike = Fetcher;
 
@@ -33,6 +42,10 @@ type DeploymentRuntimeRecord = {
   envVarsSnapshotEncrypted: string | null;
 };
 
+function deploymentMatchesWorkerRef(deployment: DeploymentRuntimeRecord, workerRef: string): boolean {
+  return deployment.routeRef === workerRef || deployment.artifactRef === workerRef;
+}
+
 type WorkerRuntimeConfigSnapshot = {
   compatibility_date?: string;
   compatibility_flags?: string[];
@@ -49,7 +62,7 @@ type MiniflareModule = {
 };
 
 type ResolvedTenantWorker = {
-  fetcher: Fetcher;
+  fetcher: TenantWorkerFetcher;
   runtime: MiniflareInstance;
 };
 
@@ -63,7 +76,7 @@ const LOCAL_ROUTING_STATUSES = ['active', 'canary', 'rollback'] as const;
 
 function resolveRoot(explicit: string | null | undefined, suffix: string): string {
   return explicit && explicit.trim()
-    ? path.resolve(explicit, suffix)
+    ? path.resolve(explicit)
     : path.resolve(os.tmpdir(), 'takos-miniflare', suffix);
 }
 
@@ -162,7 +175,7 @@ async function resolveDeploymentRuntime(
       .get();
 
     if (byDeploymentId?.artifactRef && byDeploymentId.bundleR2Key) {
-      return {
+      const resolvedDeployment = {
         id: byDeploymentId.id,
         serviceId: byDeploymentId.serviceId,
         routeRef: byDeploymentId.routeRef ?? workerRef,
@@ -173,6 +186,14 @@ async function resolveDeploymentRuntime(
         bindingsSnapshotEncrypted: byDeploymentId.bindingsSnapshotEncrypted,
         envVarsSnapshotEncrypted: byDeploymentId.envVarsSnapshotEncrypted,
       };
+
+      if (!deploymentMatchesWorkerRef(resolvedDeployment, workerRef)) {
+        throw new Error(
+          `Deployment ${options.deploymentId} does not belong to local tenant worker ${workerRef}`,
+        );
+      }
+
+      return resolvedDeployment;
     }
 
     return null;
@@ -349,7 +370,23 @@ function normalizeFetcherInput(
 }
 
 export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorkerRegistryOptions): Promise<{
-  get(name: string, registryOptions?: { deploymentId?: string }): Fetcher;
+  get(name: string, registryOptions?: { deploymentId?: string }): TenantWorkerFetcher;
+  dispatchScheduled(
+    name: string,
+    scheduledOptions?: TenantWorkerScheduledOptions,
+    registryOptions?: { deploymentId?: string },
+  ): Promise<TenantWorkerScheduledResult>;
+  dispatchQueue(
+    name: string,
+    queueName: string,
+    messages: TenantWorkerQueueMessage[],
+    registryOptions?: { deploymentId?: string },
+  ): Promise<TenantWorkerQueueResult>;
+  invokeWorkflow(
+    name: string,
+    invocation: TenantWorkflowInvocation,
+    registryOptions?: { deploymentId?: string },
+  ): Promise<never>;
   dispose(): Promise<void>;
 }> {
   const miniflareModule = await import('miniflare');
@@ -363,8 +400,8 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
     return createMissingBindingFetcher('service', name) as unknown as FetcherLike;
   };
 
-  const registry = {
-    get(name: string, registryOptions?: { deploymentId?: string }): Fetcher {
+  const registry: TenantWorkerRuntimeRegistry = {
+    get(name: string, registryOptions?: { deploymentId?: string }): TenantWorkerFetcher {
       const lazyFetcher = {
         async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
           const resolved = await getOrCreateWorker(name, registryOptions);
@@ -374,11 +411,57 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
             normalizedInit as never,
           ) as unknown as Promise<Response>;
         },
+        async scheduled(scheduledOptions?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult> {
+          return registry.dispatchScheduled(name, scheduledOptions, registryOptions);
+        },
+        async queue(
+          queueName: string,
+          messages: TenantWorkerQueueMessage[],
+        ): Promise<TenantWorkerQueueResult> {
+          return registry.dispatchQueue(name, queueName, messages, registryOptions);
+        },
         connect(): never {
-          throw new Error('connect() is not supported by the local debug tenant runtime registry');
+          throw new Error('connect() is not supported by the local tenant runtime registry');
         },
       };
-      return lazyFetcher as unknown as Fetcher;
+      return lazyFetcher as unknown as TenantWorkerFetcher;
+    },
+    async dispatchScheduled(
+      name: string,
+      scheduledOptions?: TenantWorkerScheduledOptions,
+      registryOptions?: { deploymentId?: string },
+    ): Promise<TenantWorkerScheduledResult> {
+      const resolved = await getOrCreateWorker(name, registryOptions);
+      if (typeof resolved.fetcher.scheduled !== 'function') {
+        throw new Error(`Local tenant runtime does not expose scheduled() for ${name}`);
+      }
+      return resolved.fetcher.scheduled(scheduledOptions);
+    },
+    async dispatchQueue(
+      name: string,
+      queueName: string,
+      messages: TenantWorkerQueueMessage[],
+      registryOptions?: { deploymentId?: string },
+    ): Promise<TenantWorkerQueueResult> {
+      const resolved = await getOrCreateWorker(name, registryOptions);
+      if (typeof resolved.fetcher.queue !== 'function') {
+        throw new Error(`Local tenant runtime does not expose queue() for ${name}`);
+      }
+      return resolved.fetcher.queue(queueName, messages);
+    },
+    async invokeWorkflow(
+      name: string,
+      invocation: TenantWorkflowInvocation,
+      registryOptions?: { deploymentId?: string },
+    ): Promise<never> {
+      void name;
+      void invocation;
+      void registryOptions;
+      throw new Error(
+        'Local tenant workflow runtime is not implemented yet. ' +
+        'Takos currently supports tenant fetch/queue/scheduled handlers in local mode, ' +
+        'but workflow export invocation still requires a dedicated Takos-managed runner.',
+      );
     },
     async dispose(): Promise<void> {
       const resolved = await Promise.allSettled(deploymentRuntimeCache.values());
@@ -416,15 +499,21 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
 
       const runtimeConfig = parseRuntimeConfig(deployment.runtimeConfigSnapshotJson);
       const preparedBundle = await loadBundleContent(options.workerBundles, deployment, bundleCacheRoot);
+      const workerPersistRoot = options.persistRoot
+        ? path.join(resolveRoot(options.persistRoot, 'state'), sanitizeWorkerRef(deployment.artifactRef))
+        : false;
 
       const plainBindings: Record<string, string> = { ...envVars };
       const d1Databases: Record<string, string> = {};
       const kvNamespaces: Record<string, string> = {};
       const r2Buckets: Record<string, string> = {};
+      const queueProducers: Record<string, string | { queueName: string; deliveryDelay?: number }> = {};
+      const durableObjects: Record<string, string | { className: string; scriptName?: string; useSQLite?: boolean }> = {};
       const serviceBindings: Record<string, string | ((request: Request) => Promise<Response>)> = {};
 
       for (const binding of bindingsSnapshot) {
-        switch (binding.type) {
+        const bindingType = (binding as WorkerBinding & { type: string }).type;
+        switch (bindingType) {
           case 'plain_text':
           case 'secret_text':
             plainBindings[binding.name] = binding.text ?? '';
@@ -443,6 +532,33 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
               `Local tenant runtime does not support vectorize bindings yet (${binding.name}). ` +
               'Deploy on Cloudflare to use Vectorize-backed tenant workers.'
             );
+          case 'queue':
+            queueProducers[binding.name] = typeof binding.delivery_delay === 'number'
+              ? {
+                  queueName: binding.queue_name || binding.name,
+                  deliveryDelay: binding.delivery_delay,
+                }
+              : (binding.queue_name || binding.name);
+            break;
+          case 'analytics_engine':
+            throw new Error(
+              `Local tenant runtime does not support analytics engine bindings yet (${binding.name}). ` +
+              'Deploy on Cloudflare to use Analytics Engine-backed tenant workers.'
+            );
+          case 'workflow':
+            throw new Error(
+              `Local tenant runtime does not support workflow bindings yet (${binding.name}). ` +
+              'Workflow export invocation still requires a dedicated Takos-managed runner.'
+            );
+          case 'durable_object_namespace':
+            if (binding.class_name) {
+              durableObjects[binding.name] = {
+                className: binding.class_name,
+                ...(binding.script_name ? { scriptName: binding.script_name } : {}),
+                ...(workerPersistRoot ? { useSQLite: true } : {}),
+              };
+            }
+            break;
           case 'service': {
             const serviceName = binding.service || binding.name;
             serviceBindings[binding.name] = async (request: Request) => {
@@ -469,17 +585,19 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
         d1Databases,
         kvNamespaces,
         r2Buckets,
+        queueProducers,
+        durableObjects,
         serviceBindings,
         cachePersist: false,
-        durableObjectsPersist: false,
-        kvPersist: false,
-        r2Persist: false,
-        d1Persist: false,
+        durableObjectsPersist: workerPersistRoot ? path.join(workerPersistRoot, 'durable-objects') : false,
+        kvPersist: workerPersistRoot ? path.join(workerPersistRoot, 'kv') : false,
+        r2Persist: workerPersistRoot ? path.join(workerPersistRoot, 'r2') : false,
+        d1Persist: workerPersistRoot ? path.join(workerPersistRoot, 'd1') : false,
       });
       await mf.ready;
       const fetcher = await mf.getWorker();
 
-      return { fetcher: fetcher as unknown as Fetcher, runtime: mf };
+      return { fetcher: fetcher as unknown as TenantWorkerFetcher, runtime: mf };
     })();
 
     deploymentRuntimeCache.set(cacheKey, created);

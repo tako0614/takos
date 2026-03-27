@@ -4,7 +4,7 @@ import { eq, and, ne } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import type { RolloutState, TakopackRolloutObject } from '../takopack/types';
 import { getErrorRate } from './rollout-health';
-import { upsertHostnameRouting } from '../routing';
+import { upsertHostnameRouting } from '../routing/service';
 
 const DEFAULT_STAGES = [
   { weight: 1, pauseMinutes: 5 },
@@ -178,7 +178,12 @@ export class RolloutService {
     const db = getDb(this.env.DB);
     const bundle = await db.select({ rolloutState: bundleDeployments.rolloutState })
       .from(bundleDeployments).where(eq(bundleDeployments.id, bundleDeploymentId)).get();
-    return bundle?.rolloutState ? JSON.parse(bundle.rolloutState) : null;
+    if (!bundle?.rolloutState) return null;
+    try {
+      return JSON.parse(bundle.rolloutState) as RolloutState;
+    } catch {
+      return null;
+    }
   }
 
   // --- Private ---
@@ -260,7 +265,11 @@ export class RolloutService {
     const bundle = await db.select({ rolloutState: bundleDeployments.rolloutState })
       .from(bundleDeployments).where(eq(bundleDeployments.id, bundleDeploymentId)).get();
     if (!bundle?.rolloutState) throw new Error('No active rollout found');
-    return JSON.parse(bundle.rolloutState);
+    try {
+      return JSON.parse(bundle.rolloutState) as RolloutState;
+    } catch (err) {
+      throw new Error(`Failed to parse rollout state: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async saveState(bundleDeploymentId: string, state: RolloutState): Promise<void> {

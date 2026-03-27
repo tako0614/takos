@@ -87,6 +87,7 @@ function resolveHomeLink(homeUrl?: string, homeLabel?: string): { href: string; 
       label: homeLabel?.trim() || parsed.host || fallback.label,
     };
   } catch {
+    // Malformed URL -- fall back to raw string values
     return {
       href: homeUrl,
       label: homeLabel?.trim() || homeUrl,

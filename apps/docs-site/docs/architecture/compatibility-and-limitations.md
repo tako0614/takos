@@ -9,6 +9,7 @@ Takos が parity の対象にしているのは次です。
 
 - tenant artifact は `worker-bundle`
 - tenant routing target は `service-ref` と `http-url`
+- manifest で宣言される `queue`, `analyticsEngine`, `workflow`, `scheduled` trigger の contract
 - deployment は `active`, `canary`, `rollback`, `archived` を持つ
 - weighted routing は `routeRef` だけでなく deployment identity も保持する
 - deployment ごとの snapshot
@@ -18,6 +19,33 @@ Takos が parity の対象にしているのは次です。
 - dispatch を経由して tenant runtime に到達する request contract
 
 つまり、Takos は local でも Cloudflare でも「同じ worker-bundle contract を実行する」ことを目指します。
+
+### container-image deploy の制約
+
+deploy API では `container-image` artifact kind を受け付けますが、次の制約があります。
+
+- `cloudflare` provider は container-image deploy を拒否します
+- `canary` strategy は container-image deploy では使えません
+- 同一 service で artifact kind の混在はできません (初回 deploy で確定)
+- worker bindings は container runtime には注入されません
+- `.takos/app.yml` は現時点では worker-bundle のみを扱います
+- service bindings / resource mounts / MCP / file handlers は container-image では利用できません (v1 制約)
+
+### manifest-level feature support
+
+Takos の manifest contract は次の非 AI tenant features を受け付けます。
+
+| feature | manifest | bundle docs | runtime parity |
+| --- | --- | --- | --- |
+| `queue` | yes | yes | backend 依存 |
+| `scheduled` | yes | yes | backend 依存 |
+| `workflow` | yes | yes | resource 管理は可。binding/invocation は Takos-managed runner 前提 |
+| `analyticsEngine` | yes | yes | write path は contract-first |
+| `vectorize` | yes | yes | local では未 materialize |
+| `durableObject` | yes | yes | local tenant runtime でも materialize |
+
+ここでの `runtime parity` は「Cloudflare でも local でも同じように使えるか」を意味します。  
+manifest で受け付けることと、provider-native 実装まで完全に揃うことは別です。
 
 ## local と Cloudflare の役割
 
@@ -49,6 +77,26 @@ local の control plane は Node-backed です。
 local の tenant runtime は Workers-compatible ですが、Cloudflare backend と byte-for-byte 同一ではありません。  
 local は `worker-bundle` を local adapter 上で materialize して実行します。
 
+### non-AI features の扱い
+
+Takos は `queue`, `scheduled`, `workflow`, `analyticsEngine` を manifest contract として公開します。  
+ただし現時点では feature ごとに成熟度が違います。
+
+- `queue`
+  - manifest と bundle docs は対応済み
+  - delivery/orchestration の provider parity は backend 依存
+- `scheduled`
+  - manifest と bundle docs は対応済み
+  - cron delivery の provider parity は backend 依存
+- `workflow`
+  - manifest と bundle docs は対応済み
+  - Cloudflare native Workflows binding を直接公開するのではなく、Takos-managed runner contract として扱う
+- `analyticsEngine`
+  - manifest と bundle docs は対応済み
+  - write path は contract-first で、backend query semantics は揃え切っていない
+
+`vectorize` は manifest で受け付けますが、local tenant runtime ではまだ materialize しません。`durableObject` は local tenant runtime でも namespace binding として materialize します。
+
 ### infra host は URL forward を使う
 
 local の URL forward は tenant worker の canonical path ではなく、主に infra host 用です。
@@ -64,13 +112,33 @@ local の URL forward は tenant worker の canonical path ではなく、主に
 
 ### local tenant runtime の Vectorize 制限
 
-tenant worker の public binding contract では `vectorize` を扱えます。  
+tenant worker の public binding contract では `vectorize` と `durableObject` を扱えます。
 ただし current local tenant runtime は Miniflare-backed adapter なので、`vectorize` binding の materialization にはまだ対応していません。
 
 現在の挙動は次です。
 
-- Cloudflare tenant worker: `vectorize` binding を利用できる
+- Cloudflare tenant worker: `vectorize` / `durableObject` binding を利用できる
+- local tenant worker: `durableObject` binding は利用できる
 - local tenant worker: `vectorize` binding 付き worker は fail-fast で止まる
+
+### queue / scheduled / workflow / analytics の current parity
+
+Takos は tenant contract として次を公開します。
+
+- `queue` resource と queue binding
+- `analyticsEngine` resource と analytics binding
+- `workflow` resource
+- `scheduled` trigger
+- `queue consumer` trigger
+
+ただし current parity は feature ごとに違います。
+
+- `queue binding`: local tenant runtime でも materialize するが、delivery/orchestration parity は backend 依存
+- `analytics binding`: contract と provider/binding path を優先して整備する
+- `scheduled trigger`: manifest contract は公開するが、delivery/orchestration の差分は backend に依存する
+- `workflow resource`: manifest contract と resource provisioning は公開するが、durable orchestration は Takos-managed runner 前提であり provider-native binding そのものではない
+
+つまり v1 では「manifest/binding contract」と「runtime orchestration parity」の完成度は同じではありません。
 
 ## local でできないこと、差分が出うること
 
@@ -78,6 +146,7 @@ tenant worker の public binding contract では `vectorize` を扱えます。
 - backend ごとの performance 特性
 - Cloudflare 上の実 resource behavior を完全に再現すること
 - local tenant worker で `vectorize` binding を実行すること
+- provider-native queue consumer / scheduler / workflow semantics を byte-for-byte 再現すること
 - production traffic 上での最終的な実証
 
 local は production backend の代替ではなく、product contract を大きく崩さずに検証するための backend です。

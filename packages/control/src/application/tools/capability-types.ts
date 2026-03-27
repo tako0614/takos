@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 
 export type CapabilityKind = 'tool' | 'skill';
 
@@ -36,7 +36,7 @@ export interface CapabilityDescriptor {
   family?: string;
   risk_level: RiskLevel;
   side_effects: boolean;
-  required_roles?: WorkspaceRole[];
+  required_roles?: SpaceRole[];
   required_capabilities?: string[];
   source: 'builtin' | 'mcp' | 'official_skill' | 'custom_skill';
   discoverable: boolean;

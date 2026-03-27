@@ -1,9 +1,9 @@
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 
 export type ToolClass = 'workspace_mapped' | 'agent_native' | 'composite';
 export type SensitiveReadPolicy = 'none' | 'masked' | 'write_only';
 
-export type WorkspaceOperationId =
+export type SpaceOperationId =
   | 'workspace_storage.list'
   | 'workspace_storage.read'
   | 'workspace_storage.write'
@@ -52,9 +52,15 @@ export type WorkspaceOperationId =
   | 'mcp_server.update'
   | 'mcp_server.delete';
 
-export interface WorkspaceOperationPolicy {
-  id: WorkspaceOperationId;
+/** @deprecated Use {@link SpaceOperationId} instead. */
+export type WorkspaceOperationId = SpaceOperationId;
+
+export interface SpaceOperationPolicy {
+  id: SpaceOperationId;
   user_surface: string;
-  allowed_roles: WorkspaceRole[];
+  allowed_roles: SpaceRole[];
   sensitive_read_policy: SensitiveReadPolicy;
 }
+
+/** @deprecated Use {@link SpaceOperationPolicy} instead. */
+export type WorkspaceOperationPolicy = SpaceOperationPolicy;

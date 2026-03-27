@@ -123,6 +123,46 @@ describe('provisionCloudflareResource', () => {
     });
   });
 
+  it('provisions a queue resource through the Cloudflare provider', async () => {
+    mocks.createResource.mockResolvedValue({
+      cfId: 'queue-id-123',
+      cfName: 'my-queue',
+    });
+    mocks.insertResource.mockResolvedValue(undefined);
+
+    const result = await provisionCloudflareResource(mockEnv, {
+      ownerId: 'user-1',
+      name: 'Queue',
+      type: 'queue' as any,
+      cfName: 'my-queue',
+    });
+
+    expect(result.cfId).toBe('queue-id-123');
+    expect(mocks.createResource).toHaveBeenCalledWith('queue', 'my-queue', {});
+  });
+
+  it('treats analyticsEngine as a logical resource without provider provisioning', async () => {
+    mocks.createResource.mockResolvedValue({
+      cfId: null,
+      cfName: 'event-dataset',
+    });
+    mocks.insertResource.mockResolvedValue(undefined);
+
+    const result = await provisionCloudflareResource(mockEnv, {
+      ownerId: 'user-1',
+      name: 'Analytics',
+      type: 'analyticsEngine' as any,
+      cfName: 'event-dataset',
+    });
+
+    expect(result).toEqual({
+      id: 'generated-id',
+      cfId: null,
+      cfName: 'event-dataset',
+    });
+    expect(mocks.createResource).toHaveBeenCalledWith('analyticsEngine', 'event-dataset', {});
+  });
+
   it('records failure when recordFailure is true and provider throws', async () => {
     const error = new Error('Cloudflare API error');
     mocks.createResource.mockRejectedValue(error);

@@ -1,6 +1,7 @@
 import { type WorkerBinding, WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { PlatformDeployProviderConfig } from '../../../platform/types.ts';
 import type {
+  ArtifactKind,
   Deployment,
   DeploymentProviderName,
   DeploymentProviderRef,
@@ -9,10 +10,15 @@ import type {
   DeploymentTargetEndpoint,
 } from './types';
 
+export type DeploymentProviderDeployResult = {
+  resolvedEndpoint?: { kind: 'http-url'; base_url: string };
+  logsRef?: string;
+};
+
 export type DeploymentProviderDeployInput = {
   deployment: Deployment;
   artifactRef: string;
-  bundleContent: string;
+  bundleContent?: string;
   wasmContent: ArrayBuffer | null;
   bindings: WorkerBinding[];
   compatibilityDate: string;
@@ -22,7 +28,7 @@ export type DeploymentProviderDeployInput = {
 
 export type DeploymentProvider = {
   name: DeploymentProviderName;
-  deploy(input: DeploymentProviderDeployInput): Promise<void>;
+  deploy(input: DeploymentProviderDeployInput): Promise<DeploymentProviderDeployResult | void>;
   assertRollbackTarget(artifactRef: string): Promise<void>;
   cleanupDeploymentArtifact?(artifactRef: string): Promise<void>;
 };
@@ -39,14 +45,14 @@ type OciDeploymentOrchestratorConfig = {
   fetchImpl?: typeof fetch;
 };
 
-export type CloudflareDeploymentProviderEnv = {
+export type WfpDeploymentProviderEnv = {
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   WFP_DISPATCH_NAMESPACE?: string;
 };
 
 type DeploymentProviderFactoryConfig = OciDeploymentOrchestratorConfig & {
-  cloudflareEnv?: CloudflareDeploymentProviderEnv;
+  cloudflareEnv?: WfpDeploymentProviderEnv;
   providerRegistry?: DeploymentProviderRegistryLike;
 };
 
@@ -85,17 +91,22 @@ function normalizeTargetArtifact(raw: Record<string, unknown>): DeploymentTarget
   if (artifact && typeof artifact === 'object') {
     const parsed = artifact as Record<string, unknown>;
     const normalized: DeploymentTargetArtifact = {};
+    if (parsed.kind === 'worker-bundle' || parsed.kind === 'container-image') {
+      normalized.kind = parsed.kind as ArtifactKind;
+    }
     if (typeof parsed.image_ref === 'string' && parsed.image_ref.length > 0) {
       normalized.image_ref = parsed.image_ref;
     }
     if (typeof parsed.exposed_port === 'number' && Number.isFinite(parsed.exposed_port)) {
       normalized.exposed_port = parsed.exposed_port;
     }
+    if (typeof parsed.health_path === 'string' && parsed.health_path.length > 0) {
+      normalized.health_path = parsed.health_path;
+    }
     return Object.keys(normalized).length > 0 ? normalized : undefined;
   }
 
-  const normalized: DeploymentTargetArtifact = {};
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
+  return undefined;
 }
 
 function normalizeDeploymentTarget(raw: Record<string, unknown>): DeploymentTarget {
@@ -129,22 +140,36 @@ export function serializeDeploymentTarget(options?: {
   targetJson: string;
   providerStateJson: string;
 } {
-  const normalized = normalizeDeploymentTarget((options?.target ?? {}) as Record<string, unknown>);
+  const target = options?.target;
+  // Build a plain object that preserves all artifact fields (kind, health_path, etc.)
+  const raw: Record<string, unknown> = {};
+  if (target?.route_ref) raw.route_ref = target.route_ref;
+  if (target?.endpoint) raw.endpoint = target.endpoint;
+  if (target?.artifact) {
+    const artifactRaw: Record<string, unknown> = {};
+    if (target.artifact.kind) artifactRaw.kind = target.artifact.kind;
+    if (target.artifact.image_ref) artifactRaw.image_ref = target.artifact.image_ref;
+    if (target.artifact.exposed_port != null) artifactRaw.exposed_port = target.artifact.exposed_port;
+    if (target.artifact.health_path) artifactRaw.health_path = target.artifact.health_path;
+    if (Object.keys(artifactRaw).length > 0) raw.artifact = artifactRaw;
+  }
+
+  const normalized = normalizeDeploymentTarget(raw);
   return {
-    providerName: options?.provider?.name ?? 'cloudflare',
+    providerName: options?.provider?.name ?? 'workers-dispatch',
     targetJson: JSON.stringify(normalized),
     providerStateJson: '{}',
   };
 }
 
-export function createCloudflareDeploymentProvider(wfp: WFPService): DeploymentProvider {
+export function createWorkersDispatchDeploymentProvider(wfp: WFPService): DeploymentProvider {
   return {
-    name: 'cloudflare',
+    name: 'workers-dispatch',
     async deploy(input) {
       if (input.wasmContent) {
         await wfp.createWorkerWithWasm(
           input.artifactRef,
-          input.bundleContent,
+          input.bundleContent || '',
           input.wasmContent,
           {
             bindings: input.bindings as Array<{
@@ -165,7 +190,7 @@ export function createCloudflareDeploymentProvider(wfp: WFPService): DeploymentP
 
       await wfp.createWorker({
         workerName: input.artifactRef,
-        workerScript: input.bundleContent,
+        workerScript: input.bundleContent || '',
         bindings: input.bindings,
         compatibility_date: input.compatibilityDate,
         compatibility_flags: input.compatibilityFlags,
@@ -211,10 +236,11 @@ export function createOciDeploymentProvider(
         : null;
       const orchestratorUrl = config?.orchestratorUrl?.trim();
       const imageRef = target.artifact?.image_ref?.trim();
+      const healthPath = target.artifact?.health_path?.trim() || '/health';
 
       if (!imageRef) {
         if (externalBaseUrl) {
-          return;
+          return { resolvedEndpoint: { kind: 'http-url' as const, base_url: externalBaseUrl } };
         }
         return;
       }
@@ -223,7 +249,9 @@ export function createOciDeploymentProvider(
         throw new Error('OCI deployment target requires OCI_ORCHESTRATOR_URL');
       }
 
-      const response = await fetchImpl(orchestratorUrl, {
+      const deployUrl = orchestratorUrl.endsWith('/') ? `${orchestratorUrl}deploy` : `${orchestratorUrl}/deploy`;
+
+      const response = await fetchImpl(deployUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,6 +270,7 @@ export function createOciDeploymentProvider(
             artifact: {
               image_ref: imageRef,
               exposed_port: exposedPort ?? undefined,
+              health_path: healthPath,
             },
           },
           runtime: {
@@ -256,6 +285,21 @@ export function createOciDeploymentProvider(
         const body = await response.text().catch(() => '');
         throw new Error(`OCI deployment orchestrator failed with ${response.status}: ${body.slice(0, 300)}`);
       }
+
+      const responseBody = await response.json().catch(() => null) as {
+        resolved_endpoint?: { kind: string; base_url: string };
+        logs_ref?: string;
+      } | null;
+
+      if (responseBody?.resolved_endpoint?.base_url) {
+        return {
+          resolvedEndpoint: {
+            kind: 'http-url' as const,
+            base_url: responseBody.resolved_endpoint.base_url,
+          },
+          logsRef: responseBody.logs_ref,
+        };
+      }
     },
     async assertRollbackTarget(_artifactRef) {
       // OCI rollback validity is external to Takos; routing can still point at the artifact ref.
@@ -269,7 +313,10 @@ export function createDeploymentProvider(
 ): DeploymentProvider {
   const registryEntry = config.providerRegistry?.get(deployment.provider_name);
 
-  if (deployment.provider_name === 'oci') {
+  if (deployment.provider_name === 'oci'
+    || deployment.provider_name === 'ecs'
+    || deployment.provider_name === 'cloud-run'
+    || deployment.provider_name === 'k8s') {
     return createOciDeploymentProvider(deployment, {
       orchestratorUrl: registryEntry?.name === 'oci'
         ? registryEntry.config.orchestratorUrl
@@ -281,22 +328,22 @@ export function createDeploymentProvider(
     });
   }
 
-  const cloudflareEnv = config.cloudflareEnv;
-  const accountId = registryEntry?.name === 'cloudflare'
+  const wfpEnv = config.cloudflareEnv;
+  const accountId = registryEntry?.name === 'workers-dispatch'
     ? registryEntry.config.accountId
-    : cloudflareEnv?.CF_ACCOUNT_ID;
-  const apiToken = registryEntry?.name === 'cloudflare'
+    : wfpEnv?.CF_ACCOUNT_ID;
+  const apiToken = registryEntry?.name === 'workers-dispatch'
     ? registryEntry.config.apiToken
-    : cloudflareEnv?.CF_API_TOKEN;
-  const dispatchNamespace = registryEntry?.name === 'cloudflare'
+    : wfpEnv?.CF_API_TOKEN;
+  const dispatchNamespace = registryEntry?.name === 'workers-dispatch'
     ? registryEntry.config.dispatchNamespace
-    : cloudflareEnv?.WFP_DISPATCH_NAMESPACE;
+    : wfpEnv?.WFP_DISPATCH_NAMESPACE;
 
   if (!accountId || !apiToken || !dispatchNamespace) {
-    throw new Error('Cloudflare deployment target requires WFP environment');
+    throw new Error('workers-dispatch deployment requires WFP environment');
   }
 
-  return createCloudflareDeploymentProvider(new WFPService({
+  return createWorkersDispatchDeploymentProvider(new WFPService({
     CF_ACCOUNT_ID: accountId,
     CF_API_TOKEN: apiToken,
     WFP_DISPATCH_NAMESPACE: dispatchNamespace,

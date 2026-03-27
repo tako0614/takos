@@ -1,6 +1,6 @@
 export * from './common';
 export * from './user';
-export * from './workspace';
+export * from './space';
 export * from './worker';
 export * from './thread';
 export * from './billing';

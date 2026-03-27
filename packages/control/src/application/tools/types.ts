@@ -1,9 +1,9 @@
 import type { D1Database, R2Bucket } from '../../shared/types/bindings.ts';
 import type { Env } from '../../shared/types';
-import type { WorkspaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types';
 import type {
   ToolClass,
-  WorkspaceOperationId,
+  SpaceOperationId,
   SensitiveReadPolicy,
 } from './tool-policy-types';
 import type { CapabilityNamespace, RiskLevel } from './capability-types';
@@ -15,7 +15,7 @@ export interface ToolContext {
   threadId: string;
   runId: string;
   userId: string;
-  role?: WorkspaceRole;
+  role?: SpaceRole;
   // Capability set granted to this run (SSOT policy is in services/platform/capabilities.ts)
   capabilities: string[];
   // Environment bindings
@@ -44,10 +44,10 @@ export interface ToolDefinition {
   description: string;
   category: ToolCategory;
   tool_class?: ToolClass;
-  operation_id?: WorkspaceOperationId;
-  composed_operations?: WorkspaceOperationId[];
+  operation_id?: SpaceOperationId;
+  composed_operations?: SpaceOperationId[];
   sensitive_read_policy?: SensitiveReadPolicy;
-  required_roles?: WorkspaceRole[];
+  required_roles?: SpaceRole[];
   required_capabilities?: string[];
   canonical_name?: string;
   deprecated_aliases?: string[];

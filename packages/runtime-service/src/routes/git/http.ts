@@ -11,7 +11,7 @@ import { REPOS_BASE_DIR } from '../../shared/config.js';
 import { isPathWithinBase } from '../../runtime/paths.js';
 import { validateGitName } from '../../runtime/validation.js';
 import { runGitHttpBackend } from '../../runtime/git-http-backend.js';
-import { enforceWorkspaceScopeMiddleware } from '../../middleware/workspace-scope.js';
+import { enforceSpaceScopeMiddleware } from '../../middleware/space-scope.js';
 
 // --- LFS policy helpers ---
 
@@ -172,7 +172,7 @@ export function parseContentLength(headerValue: string | undefined): number | nu
 // ---------------------------------------------------------------------------
 
 export interface ValidatedRepoParams {
-  workspaceId: string;
+  spaceId: string;
   repoName: string;
 }
 
@@ -189,15 +189,15 @@ export function validateRepoParams(c: Context): ValidatedRepoParams | { error: R
   const pathParts = c.req.path.split('/').filter(Boolean);
   const repoSegment = c.req.param('repoName') ?? pathParts[2] ?? '';
   const repoName = repoSegment.replace(/\.git$/i, '');
-  const safeWorkspaceId = validateGitName(spaceId);
+  const safeSpaceId = validateGitName(spaceId);
   const safeRepoName = validateGitName(repoName);
 
-  if (!safeWorkspaceId || !safeRepoName) {
-    return { error: badRequest(c, 'Invalid workspace or repository name') };
+  if (!safeSpaceId || !safeRepoName) {
+    return { error: badRequest(c, 'Invalid space or repository name') };
   }
 
   return {
-    workspaceId: safeWorkspaceId,
+    spaceId: safeSpaceId,
     repoName: safeRepoName,
   };
 }
@@ -208,11 +208,11 @@ export async function resolveRepoGitDir(
   const params = validateRepoParams(c);
   if ('error' in params) return params;
 
-  const repoGitDir = path.resolve(REPOS_BASE_DIR, params.workspaceId, `${params.repoName}.git`);
+  const repoGitDir = path.resolve(REPOS_BASE_DIR, params.spaceId, `${params.repoName}.git`);
   const resolvedBase = path.resolve(REPOS_BASE_DIR);
 
   if (!isPathWithinBase(resolvedBase, repoGitDir)) {
-    return { error: badRequest(c, 'Invalid workspace or repository name') };
+    return { error: badRequest(c, 'Invalid space or repository name') };
   }
 
   try {
@@ -275,7 +275,7 @@ export async function validateLfsObjectRequest(
 
 const app = new Hono();
 
-const enforceWorkspaceScope = enforceWorkspaceScopeMiddleware((c) => [
+const enforceSpaceScope = enforceSpaceScopeMiddleware((c) => [
   c.req.param('spaceId'),
 ]);
 
@@ -299,7 +299,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
- * Validate workspace/repo params and return safe git path suffix, or return error Response.
+ * Validate space/repo params and return safe git path suffix, or return error Response.
  */
 function validateGitParams(
   c: import('hono').Context,
@@ -308,8 +308,8 @@ function validateGitParams(
   const params = validateRepoParams(c);
   if ('error' in params) return params;
 
-  const { workspaceId, repoName } = params;
-  return `/${workspaceId}/${repoName}.git/${suffix}`;
+  const { spaceId, repoName } = params;
+  return `/${spaceId}/${repoName}.git/${suffix}`;
 }
 
 function sendGitResult(
@@ -327,7 +327,7 @@ function sendGitResult(
   });
 }
 
-app.use('/git/:spaceId/:repoName.git/*', enforceWorkspaceScope);
+app.use('/git/:spaceId/:repoName.git/*', enforceSpaceScope);
 
 app.post('/git/:spaceId/:repoName.git/info/lfs/objects/batch', async (c) => {
   try {
@@ -356,7 +356,7 @@ app.post('/git/:spaceId/:repoName.git/info/lfs/objects/batch', async (c) => {
       }
 
       const exists = await fileExists(objectPath);
-      const href = getLfsObjectHref(c, resolved.workspaceId, resolved.repoName, oid);
+      const href = getLfsObjectHref(c, resolved.spaceId, resolved.repoName, oid);
       return buildLfsBatchObjectResponse({
         operation,
         oid,

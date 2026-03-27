@@ -149,16 +149,16 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
   if (showCreate) {
     if (createdClient) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="flex flex-col gap-4">
           <Card style={{ backgroundColor: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)' }}>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-warning)', margin: 0 }}>
+            <p className="text-sm text-[var(--color-warning)] m-0">
               {t('oauthClientSecretWarning')}
             </p>
           </Card>
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthClientId')}</label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <code style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace', fontSize: '0.875rem', overflowX: 'auto' }}>
+            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientId')}</label>
+            <div className="flex gap-2">
+              <code className="flex-1 px-3 py-2 rounded-lg bg-[var(--color-surface-secondary)] font-mono text-sm overflow-x-auto">
                 {createdClient.client_id}
               </code>
               <Button variant="secondary" size="sm" onClick={() => handleCopy(createdClient.client_id, 'id')}>
@@ -168,9 +168,9 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
           </div>
           {createdClient.client_secret && (
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthClientSecret')}</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <code style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace', fontSize: '0.875rem', overflowX: 'auto' }}>
+              <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientSecret')}</label>
+              <div className="flex gap-2">
+                <code className="flex-1 px-3 py-2 rounded-lg bg-[var(--color-surface-secondary)] font-mono text-sm overflow-x-auto">
                   {createdClient.client_secret}
                 </code>
                 <Button variant="secondary" size="sm" onClick={() => handleCopy(createdClient.client_secret!, 'secret')}>
@@ -185,55 +185,55 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
     }
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="flex flex-col gap-4">
         {error && (
           <Card style={{ backgroundColor: 'var(--color-error-bg)', border: '1px solid var(--color-error)' }}>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-error)', margin: 0 }}>{error}</p>
+            <p className="text-sm text-[var(--color-error)] m-0">{error}</p>
           </Card>
         )}
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthClientName')}</label>
+          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientName')}</label>
           <Input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder={t('oauthClientNamePlaceholder')} />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthRedirectUri')}</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthRedirectUri')}</label>
+          <div className="flex flex-col gap-2">
             {newRedirectUris.map((uri, i) => (
-              <div key={i} style={{ display: 'flex', gap: '0.5rem' }}>
-                <Input type="text" value={uri} onChange={e => { const u = [...newRedirectUris]; u[i] = e.target.value; setNewRedirectUris(u); }} placeholder={t('oauthRedirectUriPlaceholder')} style={{ flex: 1 }} />
+              <div key={i} className="flex gap-2">
+                <Input type="text" value={uri} onChange={e => { const u = [...newRedirectUris]; u[i] = e.target.value; setNewRedirectUris(u); }} placeholder={t('oauthRedirectUriPlaceholder')} className="flex-1" />
                 {newRedirectUris.length > 1 && (
                   <Button variant="ghost" size="sm" onClick={() => setNewRedirectUris(newRedirectUris.filter((_, j) => j !== i))}>{t('removeRedirectUri')}</Button>
                 )}
               </div>
             ))}
-            <button style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.875rem', color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left' }} onClick={() => setNewRedirectUris([...newRedirectUris, ''])}>
+            <button className="bg-transparent border-none p-0 text-sm text-[var(--color-text-primary)] cursor-pointer text-left" onClick={() => setNewRedirectUris([...newRedirectUris, ''])}>
               + {t('addRedirectUri')}
             </button>
           </div>
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthClientType')}</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientType')}</label>
+          <div className="grid grid-cols-2 gap-2">
             {(['confidential', 'public'] as const).map(type => (
-              <button key={type} style={{ padding: '0.75rem', borderRadius: 'var(--radius-md)', border: `1px solid ${newClientType === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newClientType === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)', textAlign: 'left', cursor: 'pointer', transition: 'var(--transition-colors)' }} onClick={() => setNewClientType(type)}>
-                <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{t(type === 'confidential' ? 'oauthClientTypeConfidential' : 'oauthClientTypePublic')}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>{t(type === 'confidential' ? 'oauthClientTypeConfidentialDesc' : 'oauthClientTypePublicDesc')}</div>
+              <button key={type} className="p-3 rounded-lg text-left cursor-pointer transition-colors" style={{ border: `1px solid ${newClientType === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newClientType === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }} onClick={() => setNewClientType(type)}>
+                <div className="font-medium text-[var(--color-text-primary)]">{t(type === 'confidential' ? 'oauthClientTypeConfidential' : 'oauthClientTypePublic')}</div>
+                <div className="text-xs text-[var(--color-text-tertiary)] mt-1">{t(type === 'confidential' ? 'oauthClientTypeConfidentialDesc' : 'oauthClientTypePublicDesc')}</div>
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{t('oauthScopes')}</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthScopes')}</label>
+          <div className="grid grid-cols-2 gap-2">
             {ALL_SCOPES.map(scope => (
-              <label key={scope} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: `1px solid ${newScopes.includes(scope) ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newScopes.includes(scope) ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)', cursor: 'pointer', transition: 'var(--transition-colors)' }}>
-                <input type="checkbox" checked={newScopes.includes(scope)} onChange={() => setNewScopes(prev => prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope])} style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} aria-label={scope} />
-                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>{scope}</span>
+              <label key={scope} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors" style={{ border: `1px solid ${newScopes.includes(scope) ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newScopes.includes(scope) ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }}>
+                <input type="checkbox" checked={newScopes.includes(scope)} onChange={() => setNewScopes(prev => prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope])} className="sr-only" aria-label={scope} />
+                <span className="text-sm text-[var(--color-text-primary)]">{scope}</span>
               </label>
             ))}
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '1rem' }}>
+        <div className="flex justify-end gap-3 pt-4">
           <Button variant="secondary" onClick={resetCreateForm}>{t('cancel')}</Button>
           <Button variant="primary" onClick={handleCreateClient} isLoading={creating}>{t('create')}</Button>
         </div>
@@ -243,35 +243,35 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>{t('developerAppsDesc')}</p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-[var(--color-text-secondary)] m-0">{t('developerAppsDesc')}</p>
         <Button variant="primary" leftIcon={<Icons.Plus />} onClick={() => setShowCreate(true)}>{t('createOAuthClient')}</Button>
       </div>
       {clients.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--color-text-tertiary)' }}>
-          <Icons.Code style={{ width: '3rem', height: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
-          <p style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{t('noDeveloperApps')}</p>
-          <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>{t('noDeveloperAppsDesc')}</p>
+        <div className="text-center py-12 text-[var(--color-text-tertiary)]">
+          <Icons.Code className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p className="font-medium text-[var(--color-text-primary)] m-0">{t('noDeveloperApps')}</p>
+          <p className="text-sm mt-1">{t('noDeveloperAppsDesc')}</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div className="flex flex-col gap-3">
           {clients.map(client => (
             <Card key={client.id}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{client.name}</h4>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-[var(--color-text-primary)] m-0">{client.name}</h4>
                     <Badge variant={client.status === 'active' ? 'success' : 'error'}>{client.status}</Badge>
                     <Badge variant="default">{client.client_type}</Badge>
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>{t('oauthClientId')}:</span>{' '}
-                    <code style={{ padding: '0.125rem 0.25rem', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace' }}>{client.client_id}</code>
+                  <p className="text-xs text-[var(--color-text-tertiary)] mt-1">
+                    <span className="text-[var(--color-text-secondary)]">{t('oauthClientId')}:</span>{' '}
+                    <code className="px-1 py-0.5 rounded-md bg-[var(--color-surface-secondary)] font-mono">{client.client_id}</code>
                   </p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                    <span style={{ color: 'var(--color-text-secondary)' }}>{t('oauthRedirectUri')}:</span> {client.redirect_uris.join(', ')}
+                  <p className="text-xs text-[var(--color-text-tertiary)] mt-1">
+                    <span className="text-[var(--color-text-secondary)]">{t('oauthRedirectUri')}:</span> {client.redirect_uris.join(', ')}
                   </p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
+                  <p className="text-xs text-[var(--color-text-tertiary)] mt-1">
                     {t('createdAt')}: {formatShortDate(client.created_at)}
                   </p>
                 </div>

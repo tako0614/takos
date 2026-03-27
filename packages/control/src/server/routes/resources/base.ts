@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ResourceType } from '../../../shared/types';
 import { generateId, now } from '../../../shared/utils';
-import { badRequest, requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, requireWorkspaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   checkResourceAccess,
@@ -24,7 +24,7 @@ import { accountMemberships, resourceAccess, resources, accounts } from '../../.
 import { eq, and, ne } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
 import { logError } from '../../../shared/utils/logger';
-import { forbidden, notFound, internalError } from '../../../shared/utils/error-response';
+import { NotFoundError, AuthorizationError, InternalError } from '@takos/common/errors';
 import { getPlatformSqlBinding } from '../../../platform/accessors.ts';
 import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
 
@@ -46,7 +46,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const spaceId = c.req.query('space_id');
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   if (spaceId) {
@@ -60,7 +60,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     );
     if (access instanceof Response) return access;
 
-    const resourceList = await listResourcesForWorkspace(dbBinding, user.id, access.workspace.id);
+    const resourceList = await listResourcesForWorkspace(dbBinding, user.id, access.space.id);
 
     return c.json({ resources: resourceList });
   }
@@ -75,12 +75,12 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
   const principalId = await resolveActorPrincipalId(dbBinding, user.id);
   if (!principalId) {
-    return internalError(c, 'User principal not found');
+    throw new InternalError('User principal not found');
   }
 
   const isMember = await db.select({ id: accountMemberships.id }).from(accountMemberships).where(
@@ -88,7 +88,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   ).get();
 
   if (!isMember) {
-    return notFound(c, 'Workspace');
+    throw new NotFoundError('Workspace');
   }
 
   // Get resource access entries for this space
@@ -136,7 +136,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceType = c.req.param('type') as ResourceType;
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   if (!['d1', 'r2', 'worker', 'kv', 'vectorize', 'assets'].includes(resourceType)) {
@@ -153,18 +153,18 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const resource = await getResourceById(dbBinding, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const hasAccess = resource.owner_id === user.id || await checkResourceAccess(dbBinding, resourceId, user.id);
   if (!hasAccess) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const access = await listResourceAccess(dbBinding, resourceId);
@@ -190,7 +190,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const body = c.req.valid('json') as { name: string; type: ResourceType; config?: Record<string, unknown>; space_id?: string };
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   if (!body.name?.trim()) {
@@ -213,7 +213,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
       403
     );
     if (access instanceof Response) return access;
-    spaceId = access.workspace.id;
+    spaceId = access.space.id;
   } else {
     // Default to user's own account
     spaceId = user.id;
@@ -269,17 +269,17 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const resourceId = c.req.param('id');
   const body = c.req.valid('json');
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const resource = await getResourceById(dbBinding, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can update this resource');
+    throw new AuthorizationError('Only the owner can update this resource');
   }
 
   if (body.name?.trim()) {
@@ -304,17 +304,17 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const resource = await getResourceById(dbBinding, resourceId);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   if (resource.owner_id !== user.id) {
-    return forbidden(c, 'Only the owner can delete this resource');
+    throw new AuthorizationError('Only the owner can delete this resource');
   }
 
   const bindingsCount = await countResourceBindings(dbBinding, resourceId);
@@ -344,13 +344,13 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceName = decodeURIComponent(c.req.param('name'));
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const resource = await getResourceByName(dbBinding, user.id, resourceName);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const { _internal_id, ...apiResource } = resource;
@@ -371,13 +371,13 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceName = decodeURIComponent(c.req.param('name'));
   if (!dbBinding) {
-    return internalError(c, 'Database binding unavailable');
+    throw new InternalError('Database binding unavailable');
   }
 
   const resource = await getResourceByName(dbBinding, user.id, resourceName);
 
   if (!resource) {
-    return notFound(c, 'Resource');
+    throw new NotFoundError('Resource');
   }
 
   const { _internal_id: resourceId } = resource;

@@ -1,3 +1,30 @@
+/** Number of PBKDF2 iterations for key derivation. */
+const PBKDF2_ITERATIONS = 100_000;
+
+/** Byte length of the AES-GCM initialization vector. */
+const AES_GCM_IV_BYTE_LENGTH = 12;
+
+/** AES key length in bits. */
+const AES_KEY_LENGTH_BITS = 256;
+
+/** Expected length of a hex-encoded 32-byte secret (without 0x prefix). */
+const HEX_ENCODED_SECRET_LENGTH = 64;
+
+/** Length of the '0x' hex prefix. */
+const HEX_PREFIX_LENGTH = 2;
+
+/** Threshold below which masked values are fully replaced with '****'. */
+const MASK_SHORT_VALUE_THRESHOLD = 8;
+
+/** Number of visible characters at the start of a masked value. */
+const MASK_VISIBLE_PREFIX_LENGTH = 2;
+
+/** Number of visible characters at the end of a masked value. */
+const MASK_VISIBLE_SUFFIX_LENGTH = 2;
+
+/** Number of asterisks used in the masked middle section. */
+const MASK_ASTERISK_COUNT = 4;
+
 export interface EncryptedData {
   ciphertext: string;
   iv: string;
@@ -7,8 +34,8 @@ export interface EncryptedData {
 
 async function deriveKey(masterSecret: string, salt: string): Promise<CryptoKey> {
   const secretBytesRaw = masterSecret.startsWith('0x')
-    ? hexToBytes(masterSecret.slice(2))
-    : masterSecret.length === 64
+    ? hexToBytes(masterSecret.slice(HEX_PREFIX_LENGTH))
+    : masterSecret.length === HEX_ENCODED_SECRET_LENGTH
       ? hexToBytes(masterSecret)
       : new TextEncoder().encode(masterSecret);
 
@@ -28,11 +55,11 @@ async function deriveKey(masterSecret: string, salt: string): Promise<CryptoKey>
     {
       name: 'PBKDF2',
       salt: saltBytes,
-      iterations: 100000,
+      iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
     baseKey,
-    { name: 'AES-GCM', length: 256 },
+    { name: 'AES-GCM', length: AES_KEY_LENGTH_BITS },
     false,
     ['encrypt', 'decrypt']
   );
@@ -44,7 +71,7 @@ export async function encrypt(
   salt: string
 ): Promise<EncryptedData> {
   const key = await deriveKey(masterSecret, salt);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTE_LENGTH));
   const plaintextBytes = new TextEncoder().encode(plaintext);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -135,10 +162,10 @@ export async function decryptEnvVars(
 }
 
 function maskValue(value: string): string {
-  if (value.length <= 8) {
+  if (value.length <= MASK_SHORT_VALUE_THRESHOLD) {
     return '****';
   }
-  return `${value.slice(0, 2)}${'*'.repeat(4)}${value.slice(-2)}`;
+  return `${value.slice(0, MASK_VISIBLE_PREFIX_LENGTH)}${'*'.repeat(MASK_ASTERISK_COUNT)}${value.slice(-MASK_VISIBLE_SUFFIX_LENGTH)}`;
 }
 
 export function maskEnvVars(envVars: Record<string, string>): Record<string, string> {

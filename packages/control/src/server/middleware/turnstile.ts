@@ -7,7 +7,7 @@
  */
 import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../../shared/types';
-import { forbidden } from '../../shared/utils/error-response';
+import { AuthorizationError } from '@takos/common/errors';
 import { logWarn } from '../../shared/utils/logger';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -24,7 +24,7 @@ export function requireTurnstile(): MiddlewareHandler<{ Bindings: Env }> {
     // Token can be in header or query param
     const token = c.req.header('X-Turnstile-Token') || c.req.query('turnstile_token');
     if (!token) {
-      return forbidden(c, 'Turnstile token required');
+      throw new AuthorizationError('Turnstile token required');
     }
 
     const ip = c.req.header('CF-Connecting-IP') || '';
@@ -42,7 +42,7 @@ export function requireTurnstile(): MiddlewareHandler<{ Bindings: Env }> {
     const result = await response.json() as { success: boolean; 'error-codes'?: string[] };
     if (!result.success) {
       logWarn('Verification failed', { module: 'turnstile', detail: result['error-codes'] });
-      return forbidden(c, 'Turnstile verification failed');
+      throw new AuthorizationError('Turnstile verification failed');
     }
 
     await next();

@@ -4,7 +4,7 @@ import {
   selectHttpEndpointFromHttpEndpointSet,
   selectRouteRefFromHttpEndpointSet,
   selectRouteRefFromRoutingTarget,
-} from '@/services/routing/index';
+} from '@/services/routing/service';
 import type { StoredHttpEndpoint } from '@/services/routing/types';
 
 describe('selectRouteRefFromRoutingTarget', () => {

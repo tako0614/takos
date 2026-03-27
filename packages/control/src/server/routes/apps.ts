@@ -9,7 +9,7 @@ import {
   getRequestedSpaceIdentifier,
   parseJsonBody,
   requireWorkspaceAccess,
-} from './shared/helpers';
+} from './shared/route-auth';
 import { getDb } from '../../infra/db';
 import { apps as appsTable, accounts } from '../../infra/db/schema';
 import { services } from '../../infra/db/schema-services';
@@ -31,19 +31,19 @@ const BUILTIN_APPS: Array<{
   name: string;
   description: string;
   icon: string;
-  getPath: (workspaceIdentifier?: string) => string;
+  getPath: (spaceIdentifier?: string) => string;
 }> = [
   {
     name: 'chat',
     description: 'AI chat workspace',
     icon: '💬',
-    getPath: (workspaceIdentifier) => workspaceIdentifier ? `/chat/${workspaceIdentifier}` : '/chat',
+    getPath: (spaceIdentifier) => spaceIdentifier ? `/chat/${spaceIdentifier}` : '/chat',
   },
   {
     name: 'repos',
     description: 'Source repository browser',
     icon: '📁',
-    getPath: (workspaceIdentifier) => workspaceIdentifier ? `/repos/${workspaceIdentifier}` : '/repos',
+    getPath: (spaceIdentifier) => spaceIdentifier ? `/repos/${spaceIdentifier}` : '/repos',
   },
   {
     name: 'store',
@@ -55,7 +55,7 @@ const BUILTIN_APPS: Array<{
     name: 'deploy',
     description: 'Workers and resources',
     icon: '🛠️',
-    getPath: (workspaceIdentifier) => workspaceIdentifier ? `/deploy/w/${workspaceIdentifier}` : '/deploy',
+    getPath: (spaceIdentifier) => spaceIdentifier ? `/deploy/w/${spaceIdentifier}` : '/deploy',
   },
 ];
 
@@ -66,16 +66,16 @@ function resolveCustomAppUrl(hostname: string | null | undefined, status: string
   return null;
 }
 
-function getWorkspaceIdentifier(workspace: { slug: string | null; type?: string } | null | undefined): string | null {
-  if (!workspace) return null;
-  if (workspace.type === 'user') return 'me';
-  return workspace.slug;
+function getSpaceIdentifierFromAccount(account: { slug: string | null; type?: string } | null | undefined): string | null {
+  if (!account) return null;
+  if (account.type === 'user') return 'me';
+  return account.slug;
 }
 
-async function resolveAppsWorkspaceScope(
+async function resolveAppsSpaceScope(
   c: { req: { header: (name: string) => string | undefined } },
   requireAccess: () => ReturnType<typeof requireWorkspaceAccess>,
-): Promise<{ identifier: string; workspaceId: string } | Response | null> {
+): Promise<{ identifier: string; spaceId: string } | Response | null> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c as Parameters<typeof getRequestedSpaceIdentifier>[0]);
   if (!spaceIdentifier) {
     return null;
@@ -88,7 +88,7 @@ async function resolveAppsWorkspaceScope(
 
   return {
     identifier: spaceIdentifier,
-    workspaceId: access.workspace.id,
+    spaceId: access.space.id,
   };
 }
 
@@ -106,12 +106,12 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
       return unauthorized(c);
     }
     const db = getDb(c.env.DB);
-    const workspaceScope = await resolveAppsWorkspaceScope(
+    const spaceScope = await resolveAppsSpaceScope(
       c,
       () => requireWorkspaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
-    if (workspaceScope instanceof Response) {
-      return workspaceScope;
+    if (spaceScope instanceof Response) {
+      return spaceScope;
     }
     const principalId = resolvePrincipalId(user);
 
@@ -119,7 +119,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     const { leftJoin } = { leftJoin: true }; // marker for readability
 
     // Get custom apps from database - find apps where user is a member of the workspace
-    const targetAccountId = workspaceScope ? workspaceScope.workspaceId : principalId;
+    const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const appRows = await db.select({
       id: appsTable.id,
       name: appsTable.name,
@@ -165,8 +165,8 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
         description: b.description,
         icon: b.icon,
         app_type: 'builtin' as AppType,
-        url: b.getPath(workspaceScope?.identifier),
-        space_id: workspaceScope?.identifier || null,
+        url: b.getPath(spaceScope?.identifier),
+        space_id: spaceScope?.identifier || null,
         space_name: null,
         service_hostname: null,
         service_status: null,
@@ -178,7 +178,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
         icon: a.icon || '📱',
         app_type: (a.appType || 'custom') as AppType,
         url: resolveCustomAppUrl(a.service?.hostname, a.service?.status),
-        space_id: getWorkspaceIdentifier(a.account ? { slug: a.account.slug, type: a.account.type ?? undefined } : null),
+        space_id: getSpaceIdentifierFromAccount(a.account ? { slug: a.account.slug, type: a.account.type ?? undefined } : null),
         space_name: a.account?.name || null,
         service_hostname: a.service?.hostname || null,
         service_status: a.service?.status || null,
@@ -196,12 +196,12 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     }
     const appId = c.req.param('id');
     const db = getDb(c.env.DB);
-    const workspaceScope = await resolveAppsWorkspaceScope(
+    const spaceScope = await resolveAppsSpaceScope(
       c,
       () => requireWorkspaceAccess(c, getRequestedSpaceIdentifier(c) || '', user.id),
     );
-    if (workspaceScope instanceof Response) {
-      return workspaceScope;
+    if (spaceScope instanceof Response) {
+      return spaceScope;
     }
     const principalId = resolvePrincipalId(user);
 
@@ -219,13 +219,13 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
           description: builtin.description,
           icon: builtin.icon,
           app_type: 'builtin',
-          url: builtin.getPath(workspaceScope?.identifier),
+          url: builtin.getPath(spaceScope?.identifier),
         }
       });
     }
 
     // Get custom app - user must be a member of the workspace
-    const targetAccountId = workspaceScope ? workspaceScope.workspaceId : principalId;
+    const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const appRow = await db.select({
       id: appsTable.id,
       name: appsTable.name,
@@ -258,7 +258,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
         icon: appRow.icon || '📱',
         app_type: appRow.appType || 'custom',
         url: resolveCustomAppUrl(appRow.serviceHostname, appRow.serviceStatus),
-        space_id: getWorkspaceIdentifier(appRow.accountSlug ? { slug: appRow.accountSlug, type: appRow.accountType ?? undefined } : null),
+        space_id: getSpaceIdentifierFromAccount(appRow.accountSlug ? { slug: appRow.accountSlug, type: appRow.accountType ?? undefined } : null),
         space_name: appRow.accountName || null,
         service_hostname: appRow.serviceHostname || null,
         service_status: appRow.serviceStatus || null,

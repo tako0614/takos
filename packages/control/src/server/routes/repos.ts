@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from './shared/helpers';
+import type { AuthenticatedRouteEnv } from './shared/route-auth';
 import repoBase from './repos/base';
 import repoGit from './repos/git';
 import repoGitAdvanced from './repos/git-advanced';

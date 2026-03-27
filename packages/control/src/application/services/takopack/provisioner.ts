@@ -31,6 +31,11 @@ export async function markProvisionedResourcesAsTakopackManaged(
     ...provisionedResources.d1,
     ...provisionedResources.r2,
     ...provisionedResources.kv,
+    ...provisionedResources.queue,
+    ...provisionedResources.analyticsEngine,
+    ...provisionedResources.workflow,
+    ...provisionedResources.vectorize,
+    ...provisionedResources.durableObject,
   ]
     .map((resource) => resource.resourceId)
     .filter((resourceId): resourceId is string => Boolean(resourceId));

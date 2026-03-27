@@ -2,19 +2,19 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ReviewStatus, ReviewerType } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
-import { badRequest, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
 import { pullRequests, prReviews } from '../../../infra/db/schema';
 import { AiReviewError, runAiReview } from '../../../application/services/pull-requests/ai-review';
-import { createNotification } from '../../../application/services/notifications';
+import { createNotification } from '../../../application/services/notifications/service';
 
 import type { PullRequestCommentDto, PullRequestReviewDto } from './dto';
 import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { notFound, internalError, errorResponse } from '../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 function toReviewStatus(value: string): ReviewStatus {
   if (value === 'approved' || value === 'changes_requested' || value === 'commented') {
@@ -120,7 +120,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -130,7 +130,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!pullRequest) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
 
     const validStatuses: ReviewStatus[] = ['approved', 'changes_requested', 'commented'];
@@ -186,7 +186,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -196,7 +196,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!pullRequest) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
 
     const reviews = await db.select()
@@ -221,7 +221,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -231,7 +231,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!pullRequest) {
-      return notFound(c, 'Pull request');
+      throw new NotFoundError('Pull request');
     }
 
     try {
@@ -250,9 +250,9 @@ export default new Hono<AuthenticatedRouteEnv>()
       }, 201);
     } catch (err) {
       if (err instanceof AiReviewError) {
-        return errorResponse(c, err.status, err.message, undefined, err.details);
+        throw err;
       }
       logError('AI review failed', err, { module: 'reviews' });
-      return internalError(c, 'AI review failed');
+      throw new InternalError('AI review failed');
     }
   });

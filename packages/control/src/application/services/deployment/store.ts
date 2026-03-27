@@ -2,7 +2,7 @@ import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
-import type { Deployment, DeploymentEvent } from './types';
+import type { ArtifactKind, Deployment, DeploymentEvent } from './types';
 
 type DeploymentInsert = typeof deployments.$inferInsert;
 type DeploymentUpdate = Partial<typeof deployments.$inferInsert>;
@@ -16,6 +16,7 @@ export function toApiDeployment(d: PrismaDeployment): Deployment {
     space_id: d.accountId,
     version: d.version,
     artifact_ref: d.artifactRef,
+    artifact_kind: (d.artifactKind || 'worker-bundle') as ArtifactKind,
     bundle_r2_key: d.bundleR2Key,
     bundle_hash: d.bundleHash,
     bundle_size: d.bundleSize,
@@ -161,6 +162,7 @@ export type ServiceDeploymentBasics = {
   activeDeploymentId: string | null;
   fallbackDeploymentId: string | null;
   activeDeploymentVersion: number | null;
+  workloadKind: string | null;
 };
 
 export async function getServiceDeploymentBasics(db: SqlDatabaseBinding, serviceId: string): Promise<ServiceDeploymentBasics> {
@@ -171,6 +173,7 @@ export async function getServiceDeploymentBasics(db: SqlDatabaseBinding, service
     activeDeploymentId: services.activeDeploymentId,
     fallbackDeploymentId: services.fallbackDeploymentId,
     activeDeploymentVersion: services.currentVersion,
+    workloadKind: services.workloadKind,
   })
     .from(services)
     .where(eq(services.id, serviceId))
@@ -185,6 +188,7 @@ export async function getServiceDeploymentBasics(db: SqlDatabaseBinding, service
         activeDeploymentId: null,
         fallbackDeploymentId: null,
         activeDeploymentVersion: null,
+        workloadKind: null,
       };
 }
 

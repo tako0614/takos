@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, type DragEvent } from 'react';
 import { useI18n } from '../../providers/I18nProvider';
-import { useWorkspaceStorage } from '../../hooks/useWorkspaceStorage';
+import { useSpaceStorage } from '../../hooks/useSpaceStorage';
 import { Icons } from '../../lib/Icons';
-import type { StorageFile, Workspace } from '../../types';
+import type { StorageFile, Space } from '../../types';
 import type { FileHandler, ContextMenuState } from './storageUtils';
 import { useStorageBulkOperations } from '../../hooks/useStorageBulkOperations';
 import { useFileUpload } from '../../hooks/useFileUpload';
@@ -20,14 +20,14 @@ import { StorageFileViewer } from './StorageFileViewer';
 
 interface StoragePageProps {
   spaceId: string;
-  workspaces: Workspace[];
+  spaces: Space[];
   initialPath?: string;
   onPathChange?: (path: string) => void;
 }
 
 export function StoragePage({
   spaceId,
-  workspaces,
+  spaces,
   initialPath = '/',
   onPathChange,
 }: StoragePageProps) {
@@ -48,7 +48,7 @@ export function StoragePage({
     bulkRenameItems,
     getDownloadUrl,
     downloadFolderZip,
-  } = useWorkspaceStorage(spaceId);
+  } = useSpaceStorage(spaceId);
 
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);

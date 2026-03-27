@@ -120,6 +120,7 @@ import {
   SERVICE_RUNTIME_SET,
   workerEnvGetHandler,
   workerEnvSetHandler,
+  workerBindingsSetHandler,
   workerRuntimeSetHandler,
   DOMAIN_LIST,
   DOMAIN_ADD,
@@ -222,6 +223,16 @@ describe('service settings definitions', () => {
   it('service_runtime_set requires service_name', () => {
     expect(SERVICE_RUNTIME_SET.parameters.required).toEqual(['service_name']);
   });
+
+  it('service_bindings_set supports queue and analytics_engine bindings', () => {
+    const bindingsItems = SERVICE_BINDINGS_SET.parameters.properties.bindings.items;
+    expect(bindingsItems).toBeDefined();
+    if (!bindingsItems || !('properties' in bindingsItems) || !bindingsItems.properties?.type) {
+      throw new Error('bindings item schema must define type');
+    }
+    const enumValues = bindingsItems.properties.type.enum;
+    expect(enumValues).toEqual(expect.arrayContaining(['queue', 'analytics_engine']));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -297,6 +308,59 @@ describe('workerEnvSetHandler', () => {
 
     expect(result).toContain('Saved 1 environment variable');
     expect(mockDesiredState.replaceLocalEnvVars).toHaveBeenCalled();
+  });
+});
+
+describe('workerBindingsSetHandler', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('normalizes queue and analytics bindings to service binding types', async () => {
+    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+      id: 'w-1',
+      accountId: 'ws-test',
+    } as any);
+    mockSelectGet
+      .mockResolvedValueOnce({ id: 'res-q', type: 'queue' })
+      .mockResolvedValueOnce({ id: 'res-a', type: 'analytics_engine' });
+
+    await workerBindingsSetHandler(
+      {
+        service_name: 'my-worker',
+        bindings: [
+          { type: 'queue', name: 'JOB_QUEUE', id: 'queue-handle' },
+          { type: 'analytics_engine', name: 'EVENTS', id: 'analytics-handle' },
+        ],
+      },
+      makeContext(),
+    );
+
+    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+      workerId: 'w-1',
+      bindings: [
+        { name: 'JOB_QUEUE', type: 'queue', resourceId: 'res-q' },
+        { name: 'EVENTS', type: 'analytics_engine', resourceId: 'res-a' },
+      ],
+    });
+  });
+
+  it('fails fast for workflow bindings until Takos-managed workflow delivery is wired', async () => {
+    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+      id: 'w-1',
+      accountId: 'ws-test',
+    } as any);
+    mockSelectGet.mockResolvedValueOnce({ id: 'res-wf', type: 'workflow' });
+
+    await expect(
+      workerBindingsSetHandler(
+        {
+          service_name: 'my-worker',
+          bindings: [
+            { type: 'workflow', name: 'PUBLISH_FLOW', id: 'workflow-handle' },
+          ],
+        },
+        makeContext(),
+      ),
+    ).rejects.toThrow('workflow bindings are not assignable through service_bindings_set yet');
   });
 });
 

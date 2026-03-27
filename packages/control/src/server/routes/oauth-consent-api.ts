@@ -28,8 +28,13 @@ import {
   normalizeUserCode,
 } from '../../application/services/oauth/device';
 import { getClientById } from '../../application/services/oauth/client';
-import { badRequest, unauthorized, forbidden, internalError } from '../../shared/utils/error-response';
-import type { PublicRouteEnv } from './shared/helpers';
+import { AuthorizationError, AuthenticationError } from '@takos/common/errors';
+import {
+  isDeviceUserCodeLimited,
+  recordDeviceUserCodeAttempt,
+  clearDeviceUserCodeAttempts,
+} from '../../shared/utils/device-auth-rate-limit';
+import type { PublicRouteEnv } from './shared/route-auth';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
 type ConsentApiEnv = { Bindings: PublicRouteEnv['Bindings']; Variables: { user?: User } };
@@ -181,12 +186,12 @@ oauthConsentApi.post('/authorize/decision', async (c) => {
   // CSRF validation
   const csrfCookie = c.req.header('Cookie')?.match(/__Host-csrf=([^;]+)/)?.[1];
   if (!body.csrf_token || !csrfCookie || body.csrf_token !== csrfCookie) {
-    return forbidden(c, 'CSRF token mismatch');
+    throw new AuthorizationError('CSRF token mismatch');
   }
 
   const user = await loadSessionUser(c);
   if (!user) {
-    return unauthorized(c, 'Not authenticated');
+    throw new AuthenticationError('Not authenticated');
   }
 
   const authRequest: Partial<AuthorizationRequest> = {
@@ -252,40 +257,6 @@ oauthConsentApi.post('/authorize/decision', async (c) => {
 // ---------------------------------------------------------------------------
 // GET /api/oauth/device/context
 // ---------------------------------------------------------------------------
-
-// In-memory rate limiting (mirrors the existing device.ts implementation)
-const DEVICE_USER_CODE_MAX_ATTEMPTS = 10;
-const DEVICE_USER_CODE_WINDOW_MS = 10 * 60 * 1000;
-const deviceUserCodeAttempts = new Map<string, { attempts: number; firstAttemptAt: number }>();
-
-function cleanupExpiredDeviceCodeAttempts(now = Date.now()) {
-  for (const [code, state] of Array.from(deviceUserCodeAttempts.entries())) {
-    if (now - state.firstAttemptAt >= DEVICE_USER_CODE_WINDOW_MS) {
-      deviceUserCodeAttempts.delete(code);
-    }
-  }
-}
-
-function isDeviceUserCodeLimited(userCode: string, now = Date.now()): boolean {
-  cleanupExpiredDeviceCodeAttempts(now);
-  const state = deviceUserCodeAttempts.get(userCode);
-  if (!state) return false;
-  return state.attempts >= DEVICE_USER_CODE_MAX_ATTEMPTS;
-}
-
-function recordDeviceUserCodeAttempt(userCode: string, now = Date.now()) {
-  cleanupExpiredDeviceCodeAttempts(now);
-  const state = deviceUserCodeAttempts.get(userCode);
-  if (!state) {
-    deviceUserCodeAttempts.set(userCode, { attempts: 1, firstAttemptAt: now });
-    return;
-  }
-  state.attempts += 1;
-}
-
-function clearDeviceUserCodeAttempts(userCode: string) {
-  deviceUserCodeAttempts.delete(userCode);
-}
 
 oauthConsentApi.get('/device/context', async (c) => {
   const rawUserCode = c.req.query('user_code');
@@ -417,12 +388,12 @@ oauthConsentApi.post('/device/decision', async (c) => {
   // CSRF validation
   const csrfCookie = c.req.header('Cookie')?.match(/__Host-csrf=([^;]+)/)?.[1];
   if (!body.csrf_token || !csrfCookie || body.csrf_token !== csrfCookie) {
-    return forbidden(c, 'CSRF token mismatch');
+    throw new AuthorizationError('CSRF token mismatch');
   }
 
   const user = await loadSessionUser(c);
   if (!user) {
-    return unauthorized(c, 'Not authenticated');
+    throw new AuthenticationError('Not authenticated');
   }
 
   const normalizedUserCode = normalizeUserCode(body.user_code || '');

@@ -29,7 +29,7 @@ function indexedToCommit(row: CommitIndexRow): GitCommit {
   return {
     sha: row.sha,
     tree: row.treeSha,
-    parents: row.parentShas ? JSON.parse(row.parentShas) : [],
+    parents: row.parentShas ? (() => { try { return JSON.parse(row.parentShas!) as string[]; } catch { return []; } })() : [],
     message: row.message,
     author: {
       name: row.authorName,

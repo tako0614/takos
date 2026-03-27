@@ -8,11 +8,11 @@ import { AuthenticatedRoutes } from './views/AuthenticatedRoutes';
 import { AppModals } from './components/layout/AppModals';
 import { rpc, rpcJson } from './lib/rpc';
 import { getErrorMessage } from './lib/errors';
-import { getWorkspaceIdentifier } from './lib/workspaces';
+import { getSpaceIdentifier } from './lib/spaces';
 import { useI18n } from './providers/I18nProvider';
 import { useRouter } from './hooks/useRouter';
 import { useAppRouteResolver } from './hooks/useAppRouteResolver';
-import type { Workspace } from './types';
+import type { Space } from './types';
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ModalProvider, useModals } from './contexts/ModalContext';
@@ -32,46 +32,46 @@ function AppContent() {
   const {
     authState,
     user,
-    workspaces,
-    workspacesLoaded,
+    spaces,
+    spacesLoaded,
     fetchUser,
-    fetchWorkspaces,
+    fetchSpaces,
     handleLogin,
     handleLogout: authLogout,
     redirectToLogin,
   } = useAuth();
 
-  const { setShowCreateWorkspace } = useModals();
+  const { setShowCreateSpace } = useModals();
 
   const {
     route,
     navigate,
     replace,
     navigateToChat,
-    preferredWorkspaceId,
-    routeWorkspaceId,
-    selectedWorkspaceId,
+    preferredSpaceId,
+    routeSpaceId,
+    selectedSpaceId,
   } = useNavigation();
 
-  const hasInvalidWorkspaceRoute = Boolean(route.spaceId) && !routeWorkspaceId && workspacesLoaded;
+  const hasInvalidSpaceRoute = Boolean(route.spaceId) && !routeSpaceId && spacesLoaded;
 
   // Resolve /app/:appId routes
   useAppRouteResolver({
     authState,
     route,
-    hasInvalidWorkspaceRoute,
-    routeWorkspaceId,
-    selectedWorkspaceId,
-    preferredWorkspaceId,
-    workspaces,
+    hasInvalidSpaceRoute,
+    routeSpaceId,
+    selectedSpaceId,
+    preferredSpaceId,
+    spaces,
     replace,
     t,
   });
 
-  const handleCreateWorkspace = useCallback(async (name: string, description: string) => {
+  const handleCreateSpace = useCallback(async (name: string, description: string) => {
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
-    let workspace: Workspace;
+    let space: Space;
 
     try {
       const res = await rpc.spaces.$post({
@@ -80,27 +80,27 @@ function AppContent() {
           description: trimmedDescription || undefined,
         },
       });
-      const data = await rpcJson<{ space: Workspace }>(res);
-      workspace = data.space;
+      const data = await rpcJson<{ space: Space }>(res);
+      space = data.space;
     } catch (error) {
       throw new Error(getErrorMessage(error, t('failedToCreate') || 'Failed to create'));
     }
 
     try {
-      await fetchWorkspaces(user, { notifyOnError: false, throwOnError: true });
+      await fetchSpaces(user, { notifyOnError: false, throwOnError: true });
     } catch (error) {
       throw new Error(getErrorMessage(error, t('failedToLoad') || 'Failed to load'));
     }
 
-    setShowCreateWorkspace(false);
-    const identifier = getWorkspaceIdentifier(workspace);
+    setShowCreateSpace(false);
+    const identifier = getSpaceIdentifier(space);
     navigateToChat(identifier);
-  }, [fetchWorkspaces, navigateToChat, setShowCreateWorkspace, t, user]);
+  }, [fetchSpaces, navigateToChat, setShowCreateSpace, t, user]);
 
   // Public / unauthenticated views
   const renderPublicStoreView = () => (
     <SourcePage
-      workspaces={[]}
+      spaces={[]}
       onNavigateToRepo={(username, repoName) => navigate({ view: 'repo', username, repoName })}
       isAuthenticated={false}
       onRequireLogin={handleLogin}
@@ -173,19 +173,19 @@ function AppContent() {
   return (
     <>
       {content}
-      <AppModals onCreateWorkspace={handleCreateWorkspace} />
+      <AppModals onCreateSpace={handleCreateSpace} />
     </>
   );
 }
 
 function AppWithProviders() {
-  const { workspaces, workspacesLoaded } = useAuth();
+  const { spaces, spacesLoaded } = useAuth();
   const { route, navigate, replace } = useRouter();
 
   return (
     <NavigationProvider
-      workspaces={workspaces}
-      workspacesLoaded={workspacesLoaded}
+      spaces={spaces}
+      spacesLoaded={spacesLoaded}
       route={route}
       navigate={navigate}
       replace={replace}

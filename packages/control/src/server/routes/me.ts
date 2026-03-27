@@ -9,7 +9,7 @@ import { getUserConsentsWithClients, revokeConsent } from '../../application/ser
 import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
-import { badRequest, forbidden, notFound, conflict, internalError, parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/helpers';
+import { badRequest, forbidden, notFound, conflict, internalError, parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
 import { logWarn } from '../../shared/utils/logger';
 import {
   ensureUserSettings,

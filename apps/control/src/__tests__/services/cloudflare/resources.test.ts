@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 
-import { CloudflareResourceService } from '@/services/cloudflare/resources';
+import { CloudflareResourceService } from '@/platform/providers/cloudflare/resources.ts';
 
 describe('CloudflareResourceService', () => {
   afterEach(() => {
@@ -91,6 +91,50 @@ describe('CloudflareResourceService', () => {
       // The body may be wrapped, just check that the API was called
       expect(fetchMock).toHaveBeenCalled();
     });
+
+    it('creates a queue and returns the queue id', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        mockSuccessResponse({ queue_id: 'queue-id-123', queue_name: 'my-queue' }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      const result = await svc.createResource('queue', 'my-queue', {
+        queue: { deliveryDelaySeconds: 10 },
+      });
+
+      expect(result.cfId).toBe('queue-id-123');
+      expect(result.cfName).toBe('my-queue');
+      expect(fetchMock.mock.calls[0][0]).toContain('/queues');
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+        queue_name: 'my-queue',
+        settings: {
+          delivery_delay: 10,
+        },
+      });
+    });
+
+    it('treats analytics_engine as a logical resource with no provider create call', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      const result = await svc.createResource('analytics_engine', 'event-dataset');
+
+      expect(result).toEqual({ cfId: null, cfName: 'event-dataset' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('treats workflow as a logical resource with no provider create call', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      const result = await svc.createResource('workflow', 'onboarding-flow');
+
+      expect(result).toEqual({ cfId: null, cfName: 'onboarding-flow' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteResource', () => {
@@ -116,6 +160,17 @@ describe('CloudflareResourceService', () => {
       expect(url).toContain('/r2/buckets/my-bucket');
     });
 
+    it('deletes a queue by cfId', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse(null));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      await svc.deleteResource({ type: 'queue', cfId: 'queue-id-123' });
+
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain('/queues/queue-id-123');
+    });
+
     it('deletes a KV namespace by cfId', async () => {
       const fetchMock = vi.fn().mockResolvedValue(mockSuccessResponse(null));
       vi.stubGlobal('fetch', fetchMock);
@@ -136,6 +191,24 @@ describe('CloudflareResourceService', () => {
 
       const url = fetchMock.mock.calls[0][0] as string;
       expect(url).toContain('/vectorize/v2/indexes/my-index');
+    });
+
+    it('is a no-op for analytics_engine resources', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      await svc.deleteResource({ type: 'analytics_engine', cfName: 'event-dataset' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op for workflow resources', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new CloudflareResourceService(env);
+      await svc.deleteResource({ type: 'workflow', cfName: 'onboarding-flow' });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('deletes a worker by cfName', async () => {

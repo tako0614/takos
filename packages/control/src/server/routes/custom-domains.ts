@@ -3,10 +3,10 @@ import { z } from 'zod';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../../shared/types';
-import type { BaseVariables } from './shared/helpers';
+import type { BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { logError } from '../../shared/utils/logger';
-import { badRequest, internalError, errorResponse } from '../../shared/utils/error-response';
+import { AppError, BadRequestError, InternalError, ErrorCodes } from '@takos/common/errors';
 import {
   addCustomDomain,
   CustomDomainError,
@@ -24,24 +24,24 @@ function toStatusCode(status: number): ContentfulStatusCode {
   return status as ContentfulStatusCode;
 }
 
-function handleCustomDomainError(c: AppContext, err: unknown, fallbackMessage: string) {
+function handleCustomDomainError(err: unknown, fallbackMessage: string): never {
   if (err instanceof CustomDomainError) {
-    return errorResponse(c, err.status, err.message, undefined, err.details);
+    throw new AppError(err.message, ErrorCodes.INTERNAL_ERROR, err.status, err.details);
   }
   logError('[custom-domains]', err, { module: 'custom-domains' });
-  return internalError(c, fallbackMessage);
+  throw new InternalError(fallbackMessage);
 }
 
 async function listCustomDomainsHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
 
   try {
     const data = await listCustomDomains(c.env, serviceId, user.id);
     return c.json(data);
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to list custom domains');
+    handleCustomDomainError(err, 'Failed to list custom domains');
   }
 }
 
@@ -49,14 +49,14 @@ async function verifyCustomDomainHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
   const domainId = c.req.param('domainId');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
-  if (!domainId) return badRequest(c, 'Missing domainId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
+  if (!domainId) throw new BadRequestError('Missing domainId');
 
   try {
     const result = await verifyCustomDomain(c.env, serviceId, user.id, domainId);
     return c.json(result.body, toStatusCode(result.status));
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to verify custom domain');
+    handleCustomDomainError(err, 'Failed to verify custom domain');
   }
 }
 
@@ -64,14 +64,14 @@ async function getCustomDomainDetailsHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
   const domainId = c.req.param('domainId');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
-  if (!domainId) return badRequest(c, 'Missing domainId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
+  if (!domainId) throw new BadRequestError('Missing domainId');
 
   try {
     const data = await getCustomDomainDetails(c.env, serviceId, user.id, domainId);
     return c.json(data);
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to get custom domain details');
+    handleCustomDomainError(err, 'Failed to get custom domain details');
   }
 }
 
@@ -79,14 +79,14 @@ async function deleteCustomDomainHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
   const domainId = c.req.param('domainId');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
-  if (!domainId) return badRequest(c, 'Missing domainId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
+  if (!domainId) throw new BadRequestError('Missing domainId');
 
   try {
     const data = await deleteCustomDomain(c.env, serviceId, user.id, domainId);
     return c.json(data);
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to delete custom domain');
+    handleCustomDomainError(err, 'Failed to delete custom domain');
   }
 }
 
@@ -94,14 +94,14 @@ async function refreshSslStatusHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
   const domainId = c.req.param('domainId');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
-  if (!domainId) return badRequest(c, 'Missing domainId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
+  if (!domainId) throw new BadRequestError('Missing domainId');
 
   try {
     const data = await refreshSslStatus(c.env, serviceId, user.id, domainId);
     return c.json(data);
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to refresh SSL status');
+    handleCustomDomainError(err, 'Failed to refresh SSL status');
   }
 }
 
@@ -113,13 +113,13 @@ const addCustomDomainSchema = z.object({
 async function addCustomDomainHandler(c: AppContext) {
   const user = c.get('user');
   const serviceId = c.req.param('id');
-  if (!serviceId) return badRequest(c, 'Missing serviceId');
+  if (!serviceId) throw new BadRequestError('Missing serviceId');
   const body = c.req.valid('json' as never) as z.infer<typeof addCustomDomainSchema>;
   try {
     const result = await addCustomDomain(c.env, serviceId, user.id, body);
     return c.json(result.body, toStatusCode(result.status));
   } catch (err) {
-    return handleCustomDomainError(c, err, 'Failed to create custom domain');
+    handleCustomDomainError(err, 'Failed to create custom domain');
   }
 }
 

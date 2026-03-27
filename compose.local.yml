@@ -71,11 +71,16 @@ services:
       PORT: ${TAKOS_OCI_ORCHESTRATOR_PORT}
       OCI_ORCHESTRATOR_DATA_DIR: ${OCI_ORCHESTRATOR_DATA_DIR:-/var/lib/takos/control/oci-orchestrator}
       TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+      TAKOS_DOCKER_NETWORK: takos-containers
     command: ["pnpm", "local:oci-orchestrator"]
     ports:
       - "${TAKOS_OCI_ORCHESTRATOR_PORT}:${TAKOS_OCI_ORCHESTRATOR_PORT}"
     volumes:
       - takos-control-data:/var/lib/takos/control
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - default
+      - takos-containers
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -303,6 +308,11 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+
+networks:
+  default:
+  takos-containers:
+    name: takos-containers
 
 volumes:
   takos-postgres:

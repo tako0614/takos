@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
-import type { AuthenticatedRouteEnv } from '@/routes/helpers';
+import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
@@ -40,8 +40,8 @@ vi.mock('@/services/common-env', async () => {
   };
 });
 
-vi.mock('@/routes/common-env-helpers', async () => {
-  const actual = await vi.importActual<typeof import('@/routes/common-env-helpers')>('@/routes/common-env-helpers');
+vi.mock('@/routes/common-env/helpers', async () => {
+  const actual = await vi.importActual<typeof import('@/routes/common-env/helpers')>('@/routes/common-env/helpers');
   return {
     ...actual,
     buildCommonEnvActor: mocks.buildCommonEnvActor,

@@ -1,4 +1,4 @@
-import { disposeLocalPlatformState } from './adapters/local.ts';
+import { disposeNodePlatformState } from '../node-platform/env-builder.ts';
 import { runLocalSmoke } from './run-smoke.ts';
 
 type ProxyUsageResponse = {
@@ -52,7 +52,7 @@ async function main() {
       proxyUsageDelta: delta,
     }, null, 2));
   } finally {
-    await disposeLocalPlatformState();
+    await disposeNodePlatformState();
   }
 }
 

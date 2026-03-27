@@ -199,7 +199,12 @@ export async function verifyWebhookSignature(opts: {
     throw new Error('Invalid webhook signature');
   }
 
-  const event = JSON.parse(opts.payload) as StripeWebhookEvent;
+  let event: StripeWebhookEvent;
+  try {
+    event = JSON.parse(opts.payload) as StripeWebhookEvent;
+  } catch (err) {
+    throw new Error(`Failed to parse webhook payload: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return { event };
 }
 

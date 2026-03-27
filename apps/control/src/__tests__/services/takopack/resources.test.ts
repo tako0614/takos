@@ -17,19 +17,19 @@ const mocks = vi.hoisted(() => ({
   generateId: vi.fn().mockReturnValue('abc123'),
 }));
 
-vi.mock('@/db', () => ({
+vi.mock('../../../../../../packages/control/src/infra/db/index.ts', () => ({
   getDb: mocks.getDb,
 }));
 
-vi.mock('@/shared/utils', () => ({
+vi.mock('../../../../../../packages/control/src/shared/utils/index.ts', () => ({
   generateId: mocks.generateId,
 }));
 
-vi.mock('@/shared/utils/logger', () => ({
+vi.mock('../../../../../../packages/control/src/shared/utils/logger.ts', () => ({
   logError: vi.fn(),
 }));
 
-vi.mock('@/platform/providers/cloudflare/resources.ts', () => ({
+vi.mock('../../../../../../packages/control/src/platform/providers/cloudflare/resources.ts', () => ({
   CloudflareResourceService: class {
     executeD1Query = mocks.executeD1Query;
     queryD1 = mocks.queryD1;
@@ -37,11 +37,11 @@ vi.mock('@/platform/providers/cloudflare/resources.ts', () => ({
   },
 }));
 
-vi.mock('@/services/resources', () => ({
+vi.mock('../../../../../../packages/control/src/application/services/resources/index.ts', () => ({
   provisionCloudflareResource: mocks.provisionCloudflareResource,
 }));
 
-vi.mock('@/services/takopack/manifest', () => ({
+vi.mock('../../../../../../packages/control/src/application/services/takopack/manifest.ts', () => ({
   getPackageFile: mocks.getPackageFile,
   normalizePackagePath: mocks.normalizePackagePath,
   normalizePackageDirectory: mocks.normalizePackageDirectory,
@@ -50,13 +50,14 @@ vi.mock('@/services/takopack/manifest', () => ({
   getRequiredPackageFile: vi.fn(),
 }));
 
-import { TakopackResourceService } from '@/services/takopack/resources';
+import { TakopackResourceService } from '../../../../../../packages/control/src/application/services/takopack/resources.ts';
 
 function createService() {
   return new TakopackResourceService({
     DB: {},
     CF_ACCOUNT_ID: 'test-account',
     CF_API_TOKEN: 'test-token',
+    WFP_DISPATCH_NAMESPACE: 'test-namespace',
   } as any);
 }
 
@@ -167,6 +168,144 @@ describe('TakopackResourceService', () => {
     });
   });
 
+  it('provisions Queue resources and persists queue config', async () => {
+    mocks.provisionCloudflareResource.mockResolvedValue({
+      id: 'res-queue-1',
+      cfId: 'cf-queue-1',
+    });
+
+    const service = createService();
+    const result = await service.provisionOrAdoptResources(
+      'ws-1',
+      'user-1',
+      'test-pack',
+      'bundle-key',
+      'bundle-deployment-1',
+      {
+        queue: [{
+          binding: 'JOBS',
+          maxRetries: 5,
+          deadLetterQueue: 'JOBS_DLQ',
+          deliveryDelaySeconds: 30,
+        }],
+      },
+      new Map(),
+    );
+
+    expect(result.queue).toHaveLength(1);
+    expect(result.queue[0]).toEqual({
+      binding: 'JOBS',
+      id: 'cf-queue-1',
+      name: expect.stringContaining('test-pack'),
+      resourceId: 'res-queue-1',
+      wasAdopted: false,
+    });
+    expect(mocks.provisionCloudflareResource).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'queue',
+        config: {
+          maxRetries: 5,
+          deadLetterQueue: 'JOBS_DLQ',
+          deliveryDelaySeconds: 30,
+        },
+      }),
+    );
+  });
+
+  it('provisions Analytics Engine resources and uses explicit dataset names when provided', async () => {
+    mocks.provisionCloudflareResource.mockResolvedValue({
+      id: 'res-analytics-1',
+      cfId: null,
+    });
+
+    const service = createService();
+    const result = await service.provisionOrAdoptResources(
+      'ws-1',
+      'user-1',
+      'test-pack',
+      'bundle-key',
+      'bundle-deployment-1',
+      {
+        analyticsEngine: [{ binding: 'EVENTS', dataset: 'tenant-events' }],
+      },
+      new Map(),
+    );
+
+    expect(result.analyticsEngine).toHaveLength(1);
+    expect(result.analyticsEngine[0]).toEqual({
+      binding: 'EVENTS',
+      name: 'tenant-events',
+      resourceId: 'res-analytics-1',
+      wasAdopted: false,
+    });
+    expect(mocks.provisionCloudflareResource).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'analytics_engine',
+        cfName: 'tenant-events',
+        config: {
+          dataset: 'tenant-events',
+        },
+      }),
+    );
+  });
+
+  it('provisions queue resources', async () => {
+    mocks.provisionCloudflareResource.mockResolvedValue({
+      id: 'res-queue-1',
+      cfId: 'queue-id-1',
+      cfName: 'my-queue',
+    });
+
+    const service = createService();
+    const result = await service.provisionOrAdoptResources(
+      'ws-1',
+      'user-1',
+      'test-pack',
+      'bundle-key',
+      'bundle-deployment-1',
+      { queue: [{ binding: 'JOBS' }] },
+      new Map(),
+    );
+
+    expect(result.queue).toHaveLength(1);
+    expect(result.queue[0]).toEqual({
+      binding: 'JOBS',
+      id: 'queue-id-1',
+      name: expect.stringContaining('test-pack'),
+      resourceId: 'res-queue-1',
+      wasAdopted: false,
+    });
+  });
+
+  it('provisions analytics engine resources', async () => {
+    mocks.provisionCloudflareResource.mockResolvedValue({
+      id: 'res-analytics-1',
+      cfId: null,
+      cfName: 'tenant-events',
+    });
+
+    const service = createService();
+    const result = await service.provisionOrAdoptResources(
+      'ws-1',
+      'user-1',
+      'test-pack',
+      'bundle-key',
+      'bundle-deployment-1',
+      { analyticsEngine: [{ binding: 'EVENTS', dataset: 'tenant-events' }] },
+      new Map(),
+    );
+
+    expect(result.analyticsEngine).toHaveLength(1);
+    expect(result.analyticsEngine[0]).toEqual({
+      binding: 'EVENTS',
+      name: 'tenant-events',
+      resourceId: 'res-analytics-1',
+      wasAdopted: false,
+    });
+  });
+
   it('provisions all resource types together', async () => {
     let callCount = 0;
     mocks.provisionCloudflareResource.mockImplementation(async () => {
@@ -185,6 +324,8 @@ describe('TakopackResourceService', () => {
         d1: [{ binding: 'DB' }],
         r2: [{ binding: 'STORAGE' }],
         kv: [{ binding: 'CACHE' }],
+        queue: [{ binding: 'JOBS' }],
+        analyticsEngine: [{ binding: 'EVENTS', dataset: 'tenant-events' }],
       },
       new Map(),
     );
@@ -192,14 +333,69 @@ describe('TakopackResourceService', () => {
     expect(result.d1).toHaveLength(1);
     expect(result.r2).toHaveLength(1);
     expect(result.kv).toHaveLength(1);
-    expect(mocks.provisionCloudflareResource).toHaveBeenCalledTimes(3);
+    expect(result.queue).toHaveLength(1);
+    expect(result.analyticsEngine).toHaveLength(1);
+    expect(mocks.provisionCloudflareResource).toHaveBeenCalledTimes(5);
   });
 
   it('returns empty results when no resources are specified', async () => {
     const service = createService();
     const result = await service.provisionOrAdoptResources('ws-1', 'user-1', 'test-pack', 'bundle-key', 'bundle-deployment-1', {}, new Map());
 
-    expect(result).toEqual({ d1: [], r2: [], kv: [] });
+    expect(result).toEqual({
+      d1: [],
+      r2: [],
+      kv: [],
+      queue: [],
+      analyticsEngine: [],
+      workflow: [],
+      vectorize: [],
+      durableObject: [],
+    });
+  });
+
+  it('provisions workflow resources while keeping worker bindings out of scope', async () => {
+    mocks.provisionCloudflareResource.mockResolvedValue({
+      id: 'res-workflow-1',
+      cfId: null,
+      cfName: 'demo-runner',
+    });
+
+    const service = createService();
+    const result = await service.provisionOrAdoptResources(
+      'ws-1',
+      'user-1',
+      'test-pack',
+      'bundle-key',
+      'bundle-deployment-1',
+      { workflow: [{ binding: 'RUNNER', service: 'api', export: 'run', timeoutMs: 15_000, maxRetries: 3 }] },
+      new Map(),
+    );
+
+    expect(result.workflow).toEqual([{
+      binding: 'RUNNER',
+      name: expect.stringContaining('test-pack'),
+      resourceId: 'res-workflow-1',
+      wasAdopted: false,
+    }]);
+    expect(mocks.provisionCloudflareResource).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'workflow',
+        config: {
+          service: 'api',
+          export: 'run',
+          timeoutMs: 15_000,
+          maxRetries: 3,
+        },
+        workflow: {
+          service: 'api',
+          export: 'run',
+          timeoutMs: 15_000,
+          maxRetries: 3,
+        },
+      }),
+    );
   });
 
   it('applies D1 migrations when specified', async () => {

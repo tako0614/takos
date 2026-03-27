@@ -1,5 +1,5 @@
 import type { ToolDefinition, RegisteredTool } from '../types';
-import type { Env, WorkspaceRole } from '../../../shared/types';
+import type { Env, SpaceRole } from '../../../shared/types';
 import { getDb, mcpServers } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { McpClient } from '../mcp-client';
@@ -28,7 +28,7 @@ interface McpServerLoadRecord {
   oauthTokenExpiresAt: string | Date | null;
 }
 
-const DYNAMIC_MCP_ALLOWED_ROLES: ReadonlySet<WorkspaceRole> = new Set<WorkspaceRole>([
+const DYNAMIC_MCP_ALLOWED_ROLES: ReadonlySet<SpaceRole> = new Set<SpaceRole>([
   'owner',
   'admin',
   'editor',
@@ -36,7 +36,7 @@ const DYNAMIC_MCP_ALLOWED_ROLES: ReadonlySet<WorkspaceRole> = new Set<WorkspaceR
 
 function assertDynamicMcpExecutionAllowed(
   server: McpServerLoadRecord,
-  context: { role?: WorkspaceRole; capabilities?: string[] },
+  context: { role?: SpaceRole; capabilities?: string[] },
 ): void {
   const role = context.role;
   if (role && !DYNAMIC_MCP_ALLOWED_ROLES.has(role)) {
@@ -74,7 +74,7 @@ export async function loadMcpTools(
   spaceId: string,
   env: Env,
   existingNames: Set<string>,
-  exposureContext?: { role?: WorkspaceRole; capabilities?: string[] },
+  exposureContext?: { role?: SpaceRole; capabilities?: string[] },
 ): Promise<McpLoadResult> {
   const tools = new Map<string, RegisteredTool>();
   const clients = new Map<string, McpClient>();
@@ -209,6 +209,18 @@ async function createLoadClient(
   if (server.sourceType === 'external') {
     await refreshTokenIfNeeded(db, env, drizzle, server);
     const accessToken = await decryptAccessToken(db, env, server);
+    const client = new McpClient(server.url, accessToken, server.name);
+    await client.connect();
+    return client;
+  }
+
+  // Bearer token auth — decrypt the stored token and pass as access token.
+  // Re-read from DB to pick up tokens rotated by re-deploy.
+  if (server.authMode === 'bearer_token') {
+    const freshRow = await drizzle.select({ oauthAccessToken: mcpServers.oauthAccessToken })
+      .from(mcpServers).where(eq(mcpServers.id, server.id)).get();
+    const tokenSource = freshRow?.oauthAccessToken ? { ...server, oauthAccessToken: freshRow.oauthAccessToken } : server;
+    const accessToken = await decryptAccessToken(db, env, tokenSource);
     const client = new McpClient(server.url, accessToken, server.name);
     await client.connect();
     return client;

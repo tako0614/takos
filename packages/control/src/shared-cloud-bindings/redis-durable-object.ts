@@ -36,10 +36,6 @@ export async function disposeRedisDurableObjectClient(): Promise<void> {
     .catch(() => undefined);
 }
 
-function storageKey(prefix: string, instanceId: string, field: string): string {
-  return `${REDIS_KEY_PREFIX}:${prefix}:${instanceId}:${field}`;
-}
-
 function storageHashKey(prefix: string, instanceId: string): string {
   return `${REDIS_KEY_PREFIX}:${prefix}:${instanceId}:storage`;
 }

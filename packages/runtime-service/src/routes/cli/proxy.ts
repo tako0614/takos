@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { PROXY_BASE_URL } from '../../shared/config.js';
 import { isValidSessionId } from '../../runtime/validation.js';
 import { sessionStore } from '../sessions/storage.js';
@@ -91,9 +92,9 @@ app.all('/cli-proxy/*', async (c) => {
     const text = await response.text();
     try {
       const data = JSON.parse(text);
-      return c.json(data, response.status as any);
+      return c.json(data, response.status as ContentfulStatusCode);
     } catch {
-      return c.text(text, response.status as any);
+      return c.text(text, response.status as ContentfulStatusCode);
     }
   } catch (err) {
     c.get('log')?.error('CLI proxy error', { error: err });

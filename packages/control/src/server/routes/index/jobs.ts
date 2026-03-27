@@ -1,5 +1,5 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { WorkspaceFile } from '../../../shared/types';
+import type { SpaceFile } from '../../../shared/types';
 import { getDb } from '../../../infra/db';
 import { indexJobs, files, chunks, nodes, edges } from '../../../infra/db/schema';
 import { eq, and, ne, inArray, asc } from 'drizzle-orm';
@@ -38,7 +38,7 @@ export async function runIndexJob(
 
     let processed = 0;
     for (const file of fileRows) {
-      await indexFileContent(db, storage, job.accountId, file as unknown as WorkspaceFile, embeddingsService);
+      await indexFileContent(db, storage, job.accountId, file as unknown as SpaceFile, embeddingsService);
       processed++;
       await drizzle.update(indexJobs).set({ processedFiles: processed }).where(eq(indexJobs.id, jobId));
     }
@@ -78,7 +78,7 @@ export async function indexFile(
       throw new Error('File not found');
     }
 
-    await indexFileContent(db, storage, spaceId, file as unknown as WorkspaceFile, embeddingsService);
+    await indexFileContent(db, storage, spaceId, file as unknown as SpaceFile, embeddingsService);
     await drizzle.update(indexJobs).set({
       status: 'completed',
       processedFiles: 1,
@@ -98,7 +98,7 @@ async function indexFileContent(
   db: D1Database,
   storage: R2Bucket | undefined,
   spaceId: string,
-  file: WorkspaceFile,
+  file: SpaceFile,
   embeddingsService?: EmbeddingsService | null
 ): Promise<void> {
   if (!storage) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getWorkspaceIdFromBody } from '../../middleware/workspace-scope.js';
+import { getWorkspaceIdFromBody } from '../../middleware/space-scope.js';
 
 function createContext(body: unknown): { get: (key: string) => unknown } {
   return {

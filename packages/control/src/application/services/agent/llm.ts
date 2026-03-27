@@ -7,7 +7,7 @@ import {
   type ModelProvider,
   type LLMProvider,
   type LLMResponse,
-} from './providers';
+} from './providers/llm-providers';
 
 export type { ModelConfig, ModelProvider, LLMProvider, LLMResponse };
 export { getProviderFromModel };

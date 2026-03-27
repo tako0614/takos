@@ -1,7 +1,7 @@
 import type { ToolHandler } from '../../../types';
 import { callSessionApi } from '../session';
 import { isBinaryFile } from '../limits';
-import { setupFileOperation, handleSessionApiResponse } from '../helpers';
+import { setupFileOperation, handleSessionApiResponse } from '../file-operations';
 
 export const fileReadHandler: ToolHandler = async (args, context) => {
   const { path } = await setupFileOperation(args, context);

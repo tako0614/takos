@@ -76,17 +76,20 @@ export async function getRunStatus(d1: D1Database, runId: string): Promise<strin
   return run?.status ?? null;
 }
 
-export async function getWorkspaceIdFromRepoId(d1: D1Database, repoId: string): Promise<string> {
+export async function getSpaceIdFromRepoId(d1: D1Database, repoId: string): Promise<string> {
   const db = getDb(d1);
   const repository = await db.select({ accountId: repositories.accountId })
     .from(repositories).where(eq(repositories.id, repoId)).get();
 
   if (!repository?.accountId) {
-    throw new Error(`Workspace not found for repository ${repoId}`);
+    throw new Error(`Space not found for repository ${repoId}`);
   }
 
   return repository.accountId;
 }
+
+/** @deprecated Use {@link getSpaceIdFromRepoId} instead. */
+export const getWorkspaceIdFromRepoId = getSpaceIdFromRepoId;
 
 export async function markJobSkipped(
   d1: D1Database,

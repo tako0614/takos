@@ -30,6 +30,7 @@ function createBaseDeployment(): Deployment {
     space_id: 'space-1',
     version: 1,
     artifact_ref: 'worker-w-1-v1',
+    artifact_kind: 'worker-bundle',
     bundle_r2_key: 'deployments/w-1/1/bundle.js',
     bundle_hash: null,
     bundle_size: null,
@@ -47,7 +48,7 @@ function createBaseDeployment(): Deployment {
     routing_weight: 100,
     deployed_by: 'user-1',
     deploy_message: null,
-    provider_name: 'cloudflare',
+    provider_name: 'workers-dispatch',
     target_json: '{}',
     provider_state_json: '{}',
     idempotency_key: null,
@@ -84,7 +85,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: 'test.example.com',
       deploymentArtifactRef: 'worker-w-1-v1',
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },
@@ -113,7 +114,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: 'test.example.com',
       deploymentArtifactRef: null,
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },
@@ -136,7 +137,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: null,
       deploymentArtifactRef: 'worker-w-1-v1',
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
         cleanupDeploymentArtifact: cleanupMock,
@@ -162,7 +163,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: null,
       deploymentArtifactRef: null,
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },
@@ -189,7 +190,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: null,
       deploymentArtifactRef: null,
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },
@@ -208,7 +209,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: null,
       deploymentArtifactRef: null,
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },
@@ -231,7 +232,7 @@ describe('rollbackDeploymentSteps', () => {
       workerHostname: null,
       deploymentArtifactRef: null,
       provider: {
-        name: 'cloudflare',
+        name: 'workers-dispatch',
         deploy: vi.fn(),
         assertRollbackTarget: vi.fn(),
       },

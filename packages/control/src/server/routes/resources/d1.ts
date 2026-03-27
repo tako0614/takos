@@ -1,11 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
-import { badRequest, parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest, parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
-import { internalError, notFound, forbidden } from '../../../shared/utils/error-response';
+import { NotFoundError, AuthorizationError, InternalError, isAppError } from '@takos/common/errors';
 import { toIsoString } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
@@ -26,16 +26,6 @@ type D1ResourceData = {
   createdAt: string | Date;
   updatedAt: string | Date;
 };
-
-type D1AccessCheckResult =
-  | { ok: true; resource: Resource }
-  | { ok: false; response: Response };
-
-function isD1AccessDenied(
-  result: D1AccessCheckResult
-): result is { ok: false; response: Response } {
-  return result.ok === false;
-}
 
 const READ_ONLY_PREFIXES = new Set(['SELECT', 'PRAGMA', 'EXPLAIN', 'WITH']);
 const MUTATING_SQL_KEYWORD_PATTERN =
@@ -105,14 +95,14 @@ async function loadD1ResourceWithAccess(
   resourceId: string,
   userId: string,
   requiredPermissions?: ResourcePermission[]
-): Promise<D1AccessCheckResult> {
+): Promise<Resource> {
   const db = getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'd1'))
   ).get();
 
   if (!resourceData) {
-    return { ok: false, response: notFound(c, 'D1 resource') };
+    throw new NotFoundError('D1 resource');
   }
 
   const resource = toSnakeCaseResource(resourceData);
@@ -120,10 +110,10 @@ async function loadD1ResourceWithAccess(
     await checkResourceAccess(c.env.DB, resourceId, userId, requiredPermissions);
 
   if (!hasAccess) {
-    return { ok: false, response: forbidden(c) };
+    throw new AuthorizationError();
   }
 
-  return { ok: true, resource };
+  return resource;
 }
 
 const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
@@ -131,11 +121,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/d1/tables', async (c) => {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const access = await loadD1ResourceWithAccess(c, resourceId, user.id);
-  if (isD1AccessDenied(access)) {
-    return access.response;
-  }
-  const { resource } = access;
+  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
   if (!resource.cf_id) {
     return badRequest(c, 'D1 database not provisioned');
@@ -144,7 +130,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   try {
   const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     const tables = await wfp.listD1Tables(resource.cf_id);
 
@@ -161,6 +147,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
             row_count: count,
           };
         } catch {
+          // Table introspection failed (e.g. dropped mid-listing); return empty metadata
           return { name: t.name, columns: [], row_count: 0 };
         }
       })
@@ -168,8 +155,9 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
 
     return c.json({ tables: tablesWithInfo });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to list D1 tables', err, { module: 'routes/resources/d1' });
-    return internalError(c, 'Failed to list tables');
+    throw new InternalError('Failed to list tables');
   }
 })
 
@@ -177,11 +165,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const tableName = c.req.param('tableName');
-  const access = await loadD1ResourceWithAccess(c, resourceId, user.id);
-  if (isD1AccessDenied(access)) {
-    return access.response;
-  }
-  const { resource } = access;
+  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
   if (!resource.cf_id) {
     return badRequest(c, 'D1 database not provisioned');
@@ -193,7 +177,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
 
     const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
@@ -209,7 +193,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
 
     // Validate WFP response structure
     if (!Array.isArray(rowsResult) || !rowsResult[0]?.results) {
-      return internalError(c, 'Invalid response from D1');
+      throw new InternalError('Invalid response from D1');
     }
     const rows = rowsResult[0].results;
 
@@ -222,8 +206,9 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
       offset,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to get table data', err, { module: 'routes/resources/d1' });
-    return internalError(c, 'Failed to get table data');
+    throw new InternalError('Failed to get table data');
   }
 })
 
@@ -243,11 +228,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const sqlTrimmed = body.sql.trim();
   const isReadOnly = isReadOnlySql(sqlTrimmed);
   const requiredPermissions: ResourcePermission[] | undefined = isReadOnly ? undefined : ['write', 'admin'];
-  const access = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
-  if (isD1AccessDenied(access)) {
-    return access.response;
-  }
-  const { resource } = access;
+  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
 
   if (!resource.cf_id) {
     return badRequest(c, 'D1 database not provisioned');
@@ -256,14 +237,15 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     const result = await wfp.runD1SQL(resource.cf_id, body.sql);
 
     return c.json({ result });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to execute SQL', err, { module: 'routes/resources/d1' });
-    return internalError(c, 'SQL execution failed');
+    throw new InternalError('SQL execution failed');
   }
 })
 
@@ -271,11 +253,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const body = await parseJsonBody<{ tables?: string[] }>(c);
-  const access = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
-  if (isD1AccessDenied(access)) {
-    return access.response;
-  }
-  const { resource } = access;
+  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 
   if (!resource.cf_id) {
     return badRequest(c, 'D1 database not provisioned');
@@ -284,7 +262,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
-      return internalError(c, 'Cloudflare WFP not configured');
+      throw new InternalError('Cloudflare WFP not configured');
     }
     const tableRows = body?.tables && body.tables.length > 0
       ? body.tables
@@ -307,8 +285,9 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
       tables,
     });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError('Failed to export D1', err, { module: 'routes/resources/d1' });
-    return internalError(c, 'Export failed');
+    throw new InternalError('Export failed');
   }
 });
 

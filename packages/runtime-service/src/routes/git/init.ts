@@ -11,7 +11,7 @@ function generateTempSuffix(): string {
 }
 import { runGitCommand } from '../../runtime/git.js';
 import { validateNameParam } from '../../runtime/validation.js';
-import { hasWorkspaceScopeMismatch, WORKSPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/workspace-scope.js';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 
 async function execGit(args: string[], cwd: string): Promise<void> {
   const { exitCode, output } = await runGitCommand(args, cwd);
@@ -30,11 +30,11 @@ app.post('/git/init', async (c) => {
       git_path?: string;
     };
 
-    const workspaceError = validateNameParam(space_id, 'space_id');
-    if (workspaceError) { return badRequest(c, workspaceError); }
+    const spaceError = validateNameParam(space_id, 'space_id');
+    if (spaceError) { return badRequest(c, spaceError); }
 
-    if (hasWorkspaceScopeMismatch(c, space_id)) {
-      return forbidden(c, WORKSPACE_SCOPE_MISMATCH_ERROR);
+    if (hasSpaceScopeMismatch(c, space_id)) {
+      return forbidden(c, SPACE_SCOPE_MISMATCH_ERROR);
     }
 
     const repoError = validateNameParam(repo_name, 'repo_name');

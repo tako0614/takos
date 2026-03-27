@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { badRequest, internalError, errorResponse, parseLimit, type BaseVariables } from './shared/helpers';
+import { AppError, BadRequestError, InternalError, parseLimit, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { buildSanitizedDOHeaders } from '../../runtime/durable-objects/shared';
 import {
@@ -13,7 +13,7 @@ import {
   markNotificationRead,
   setNotificationsMutedUntil,
   updateNotificationPreferences,
-} from '../../application/services/notifications';
+} from '../../application/services/notifications/service';
 import {
   isNotificationChannel,
   isNotificationType,
@@ -33,12 +33,12 @@ const notificationsWsHandler: (c: NotificationContext) => Promise<Response> = as
   const user = c.get('user');
 
   if (!c.env.NOTIFICATION_NOTIFIER) {
-    return internalError(c, 'Notifications WebSocket not configured');
+    throw new InternalError('Notifications WebSocket not configured');
   }
 
   const upgradeHeader = c.req.header('Upgrade');
   if (!upgradeHeader || upgradeHeader !== 'websocket') {
-    return errorResponse(c, 426, 'Expected WebSocket upgrade');
+    throw new AppError('Expected WebSocket upgrade', undefined, 426);
   }
 
   const namespace = c.env.NOTIFICATION_NOTIFIER as unknown as NotificationNotifierNamespace;
@@ -118,8 +118,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const updates: Array<{ type: NotificationType; channel: NotificationChannel; enabled: boolean }> = [];
     for (const row of body.updates) {
-      if (!isNotificationType(row.type)) return badRequest(c, `Invalid type: ${String(row.type)}`);
-      if (!isNotificationChannel(row.channel)) return badRequest(c, `Invalid channel: ${String(row.channel)}`);
+      if (!isNotificationType(row.type)) throw new BadRequestError(`Invalid type: ${String(row.type)}`);
+      if (!isNotificationChannel(row.channel)) throw new BadRequestError(`Invalid channel: ${String(row.channel)}`);
       updates.push({ type: row.type, channel: row.channel, enabled: row.enabled });
     }
 

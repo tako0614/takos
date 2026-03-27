@@ -18,15 +18,18 @@ export const ErrorCodes = {
   // 4xx Client Errors
   BAD_REQUEST: 'BAD_REQUEST',
   UNAUTHORIZED: 'UNAUTHORIZED',
+  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
+  GONE: 'GONE',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   RATE_LIMITED: 'RATE_LIMITED',
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
   // 5xx Server Errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   BAD_GATEWAY: 'BAD_GATEWAY',
   GATEWAY_TIMEOUT: 'GATEWAY_TIMEOUT',
@@ -114,6 +117,15 @@ export class AuthenticationError extends AppError {
 }
 
 /**
+ * 402 Payment Required - Payment is required to access the resource
+ */
+export class PaymentRequiredError extends AppError {
+  constructor(message = 'Payment required', details?: unknown) {
+    super(message, ErrorCodes.PAYMENT_REQUIRED, 402, details);
+  }
+}
+
+/**
  * 403 Forbidden - Authenticated but not authorized
  */
 export class AuthorizationError extends AppError {
@@ -137,6 +149,24 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message = 'Resource conflict', details?: unknown) {
     super(message, ErrorCodes.CONFLICT, 409, details);
+  }
+}
+
+/**
+ * 410 Gone - Resource no longer available
+ */
+export class GoneError extends AppError {
+  constructor(message = 'Resource is no longer available', details?: unknown) {
+    super(message, ErrorCodes.GONE, 410, details);
+  }
+}
+
+/**
+ * 413 Payload Too Large - Request payload exceeds limit
+ */
+export class PayloadTooLargeError extends AppError {
+  constructor(message = 'Payload too large', details?: unknown) {
+    super(message, ErrorCodes.PAYLOAD_TOO_LARGE, 413, details);
   }
 }
 
@@ -179,6 +209,24 @@ export class RateLimitError extends AppError {
 export class InternalError extends AppError {
   constructor(message = 'Internal server error', details?: unknown) {
     super(message, ErrorCodes.INTERNAL_ERROR, 500, details);
+  }
+}
+
+/**
+ * 501 Not Implemented - Functionality not implemented
+ */
+export class NotImplementedError extends AppError {
+  constructor(message = 'Not implemented', details?: unknown) {
+    super(message, ErrorCodes.NOT_IMPLEMENTED, 501, details);
+  }
+}
+
+/**
+ * 502 Bad Gateway - Invalid response from upstream service
+ */
+export class BadGatewayError extends AppError {
+  constructor(message = 'Bad gateway', details?: unknown) {
+    super(message, ErrorCodes.BAD_GATEWAY, 502, details);
   }
 }
 
@@ -233,6 +281,34 @@ export function normalizeError(error: unknown, logger?: Logger): AppError {
   return new InternalError('An unexpected error occurred');
 }
 
+
+/**
+ * Extract a human-readable message from an unknown thrown value.
+ *
+ * When called with a single argument the behaviour matches the former
+ * `runtime-service/utils/error-message` helper (`String(err)` for
+ * non-Error values).  When a `fallback` string is supplied the
+ * behaviour matches the former `control/web/lib/errors` helper
+ * (returns the fallback when no meaningful message can be extracted).
+ */
+export function getErrorMessage(error: unknown, fallback?: string): string {
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const candidate = (error as { message?: unknown }).message;
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return fallback !== undefined ? fallback : String(error);
+}
 
 /**
  * Log error with full details for server-side debugging

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { badRequest, notFound, type BaseVariables } from './shared/helpers';
+import { badRequest, notFound, type BaseVariables } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { checkThreadAccess } from '../../application/services/threads/threads';
 import {

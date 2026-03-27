@@ -11,8 +11,8 @@ const testServiceJwtKeys = generateKeyPairSync('rsa', {
 process.env.JWT_PUBLIC_KEY ||= testServiceJwtKeys.publicKey;
 
 // Route tests focus on route behavior. Allow missing service-token scope to pass.
-vi.mock('../middleware/workspace-scope.js', async () => {
-  const actual = await vi.importActual<any>('../middleware/workspace-scope.js');
+vi.mock('../middleware/space-scope.js', async () => {
+  const actual = await vi.importActual<any>('../middleware/space-scope.js');
   const original = actual.enforceWorkspaceScopeMiddleware as (getIds: any) => any;
 
   return {

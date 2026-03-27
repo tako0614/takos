@@ -4,10 +4,9 @@
  */
 
 import type { D1Database } from '../../../shared/types/bindings';
-import { generateId, now } from '../../../shared/utils';
+import { generateId, now, sanitizeRepoName } from '../../../shared/utils';
 import { getDb, repositories } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { sanitizeRepoName } from '../../../shared/utils/slug';
 import {
   apFetch,
   searchRemoteRepositories,

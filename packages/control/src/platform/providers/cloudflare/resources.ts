@@ -3,8 +3,8 @@ import {
   CloudflareResourceService,
   type CloudflareDeletableResourceType,
   type CloudflareManagedResourceType,
-} from '../../../application/services/cloudflare/resources';
-import type { WfpEnv } from '../../../application/services/wfp';
+} from '../../../application/services/cloudflare/resources.ts';
+import type { WfpEnv } from '../../../application/services/wfp/index.ts';
 
 export type {
   CloudflareManagedResourceType,

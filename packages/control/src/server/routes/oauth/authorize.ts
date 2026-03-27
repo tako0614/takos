@@ -5,7 +5,7 @@ import { parseScopes, getScopeSummary } from '../../../application/services/oaut
 import { validateAuthorizationRequest, generateAuthorizationCode, buildErrorRedirect, buildSuccessRedirect } from '../../../application/services/oauth/authorization';
 import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent';
 import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session';
-import type { PublicRouteEnv } from '../shared/helpers';
+import type { PublicRouteEnv } from '../shared/route-auth';
 import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser } from './helpers';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 import { getDb } from '../../../infra/db';

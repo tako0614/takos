@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { badRequest } from '../shared/helpers';
-import type { AuthenticatedRouteEnv } from '../shared/helpers';
+import { badRequest } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { getServiceForUserWithRole, slugifyServiceName } from '../../../application/services/platform/workers';
 import { getDb } from '../../../infra/db';
 import { eq, and, or, ne } from 'drizzle-orm';
 import { services } from '../../../infra/db/schema-services';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing/service';
 import type { RoutingTarget } from '../../../application/services/routing/types';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
-import { notFound, conflict, internalError } from '../../../shared/utils/error-response';
+import { NotFoundError, ConflictError, InternalError } from '@takos/common/errors';
 
 const workersSlug = new Hono<AuthenticatedRouteEnv>()
 
@@ -41,7 +41,7 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
   const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
-    return notFound(c, 'Service');
+    throw new NotFoundError('Service');
   }
 
   const db = getDb(c.env.DB);
@@ -61,7 +61,7 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
     .get() ?? null;
 
   if (existing) {
-    return conflict(c, 'Slug or hostname already taken');
+    throw new ConflictError('Slug or hostname already taken');
   }
 
   // Store old hostname for potential rollback
@@ -142,7 +142,7 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
       }
     }
     logError('Failed to update slug', err, { module: 'routes/services/slug' });
-    return internalError(c, 'Failed to update slug');
+    throw new InternalError('Failed to update slug');
   }
 });
 

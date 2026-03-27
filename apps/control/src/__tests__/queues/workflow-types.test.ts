@@ -27,7 +27,7 @@ describe('createInitialState', () => {
     expect(state.jobConclusion).toBe('success');
     expect(state.runtimeStarted).toBe(false);
     expect(state.runtimeCancelled).toBe(false);
-    expect(state.runtimeWorkspaceId).toBeNull();
+    expect(state.runtimeSpaceId).toBeNull();
     expect(state.completionConclusion).toBeNull();
     expect(state.logs).toEqual([]);
     expect(state.stepResults).toEqual([]);
@@ -51,7 +51,7 @@ describe('createInitialState', () => {
     state.jobConclusion = 'failure';
     state.runtimeStarted = true;
     state.runtimeCancelled = true;
-    state.runtimeWorkspaceId = 'ws-123';
+    state.runtimeSpaceId = 'ws-123';
     state.completionConclusion = 'success';
     state.logs.push('log entry');
     state.stepResults.push({
@@ -66,7 +66,7 @@ describe('createInitialState', () => {
     expect(state.jobConclusion).toBe('failure');
     expect(state.runtimeStarted).toBe(true);
     expect(state.runtimeCancelled).toBe(true);
-    expect(state.runtimeWorkspaceId).toBe('ws-123');
+    expect(state.runtimeSpaceId).toBe('ws-123');
     expect(state.completionConclusion).toBe('success');
     expect(state.logs).toHaveLength(1);
     expect(state.stepResults).toHaveLength(1);

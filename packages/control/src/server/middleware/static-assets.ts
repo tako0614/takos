@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../../shared/types';
 import { getPlatformServices } from '../../platform/accessors.ts';
 
-export const staticAssetsMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: any }> = async (c, next) => {
+export const staticAssetsMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: Record<string, unknown> }> = async (c, next) => {
   const path = new URL(c.req.url).pathname;
 
   if (path.startsWith('/api/') || path.startsWith('/auth/') || path.startsWith('/oauth/')) {

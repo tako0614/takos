@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../../shared/types';
 import { isValidOpaqueId } from '../../shared/utils/db-guards';
-import { badRequest } from '../../shared/utils/error-response';
+import { BadRequestError } from '@takos/common/errors';
 import { logWarn } from '../../shared/utils/logger';
 
 // Route params that must be opaque IDs
@@ -52,7 +52,7 @@ export const validateApiOpaqueRouteParams: MiddlewareHandler<{
     if (isValidRouteParam(key, value)) continue;
 
     logWarn(`Rejected malformed route parameter "${key}" on ${c.req.method} ${c.req.path}`, { module: 'middleware/param-validation' });
-    return badRequest(c, `Invalid route parameter: ${key}`);
+    throw new BadRequestError(`Invalid route parameter: ${key}`);
   }
 
   await next();

@@ -1,12 +1,35 @@
 import type { Env } from '../../../shared/types';
 import { WFPService, type WfpEnv } from '../wfp';
 
-export type CloudflareManagedResourceType = 'd1' | 'r2' | 'kv' | 'vectorize';
+export type CloudflareManagedResourceType =
+  | 'd1'
+  | 'r2'
+  | 'kv'
+  | 'queue'
+  | 'analyticsEngine'
+  | 'analytics_engine'
+  | 'workflow'
+  | 'vectorize';
 export type CloudflareDeletableResourceType = CloudflareManagedResourceType | 'worker';
 
 type VectorizeCreateOptions = {
   dimensions: number;
   metric: 'cosine' | 'euclidean' | 'dot-product';
+};
+
+type QueueCreateOptions = {
+  deliveryDelaySeconds?: number;
+};
+
+type AnalyticsEngineCreateOptions = {
+  dataset?: string;
+};
+
+type WorkflowCreateOptions = {
+  service?: string;
+  export?: string;
+  timeoutMs?: number;
+  maxRetries?: number;
 };
 
 export class CloudflareResourceService {
@@ -19,7 +42,12 @@ export class CloudflareResourceService {
   async createResource(
     type: CloudflareManagedResourceType,
     name: string,
-    options?: { vectorize?: VectorizeCreateOptions }
+    options?: {
+      vectorize?: VectorizeCreateOptions;
+      queue?: QueueCreateOptions;
+      analyticsEngine?: AnalyticsEngineCreateOptions;
+      workflow?: WorkflowCreateOptions;
+    }
   ): Promise<{ cfId: string | null; cfName: string }> {
     switch (type) {
       case 'd1': {
@@ -33,12 +61,33 @@ export class CloudflareResourceService {
         const cfId = await this.wfp.createKVNamespace(name);
         return { cfId, cfName: name };
       }
+      case 'queue': {
+        const queue = await this.wfp.createQueue(name, {
+          deliveryDelaySeconds: options?.queue?.deliveryDelaySeconds,
+        });
+        return { cfId: queue.id, cfName: queue.name };
+      }
+      case 'analyticsEngine':
+      case 'analytics_engine':
+        return {
+          cfId: null,
+          cfName: options?.analyticsEngine?.dataset?.trim() || name,
+        };
+      case 'workflow':
+        return {
+          cfId: null,
+          cfName: name,
+        };
       case 'vectorize': {
         const cfId = await this.wfp.createVectorizeIndex(name, options?.vectorize || {
           dimensions: 1536,
           metric: 'cosine',
         });
         return { cfId, cfName: name };
+      }
+      default: {
+        const unsupportedType: never = type;
+        throw new Error(`Unsupported Cloudflare managed resource type: ${unsupportedType}`);
       }
     }
   }
@@ -58,6 +107,17 @@ export class CloudflareResourceService {
         return;
       case 'kv':
         if (params.cfId) await this.wfp.deleteKVNamespace(params.cfId);
+        return;
+      case 'queue':
+        if (params.cfId) {
+          await this.wfp.deleteQueue(params.cfId);
+          return;
+        }
+        if (params.cfName) await this.wfp.deleteQueueByName(params.cfName);
+        return;
+      case 'analyticsEngine':
+      case 'analytics_engine':
+      case 'workflow':
         return;
       case 'vectorize':
         if (params.cfName) await this.wfp.deleteVectorizeIndex(params.cfName);

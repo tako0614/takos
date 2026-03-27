@@ -24,7 +24,7 @@ export function RepoDetailPage({
   onRequireLogin,
 }: RepoDetailPageProps) {
   const [repo, setRepo] = useState<Repository | null>(null);
-  const [resolvedWorkspaceId, setResolvedWorkspaceId] = useState<string | null>(spaceId || null);
+  const [resolvedSpaceId, setResolvedSpaceId] = useState<string | null>(spaceId || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +64,7 @@ export function RepoDetailPage({
             username: string;
             avatar_url?: string | null;
           };
-          workspace?: {
+          space?: {
             id: string;
             name?: string;
           };
@@ -72,11 +72,11 @@ export function RepoDetailPage({
 
         setRepo({
           ...data.repository,
-          space_id: data.repository.space_id || data.workspace?.id || '',
+          space_id: data.repository.space_id || data.space?.id || '',
           owner_username: data.owner?.username,
           owner_name: data.owner?.name,
         });
-        setResolvedWorkspaceId(data.workspace?.id || null);
+        setResolvedSpaceId(data.space?.id || null);
         return;
       }
 
@@ -86,12 +86,12 @@ export function RepoDetailPage({
         });
         const data = await rpcJson<{
           repository: Repository;
-          workspace?: { name?: string } | null;
+          space?: { name?: string } | null;
           owner?: { name?: string | null; picture?: string | null } | null;
         }>(res);
 
         setRepo(data.repository);
-        setResolvedWorkspaceId(data.repository.space_id || spaceId || null);
+        setResolvedSpaceId(data.repository.space_id || spaceId || null);
         return;
       }
 
@@ -128,7 +128,7 @@ export function RepoDetailPage({
 
   return (
     <RepoDetail
-      spaceId={resolvedWorkspaceId || ''}
+      spaceId={resolvedSpaceId || ''}
       repo={repo}
       onBack={onBack}
       isAuthenticated={isAuthenticated}

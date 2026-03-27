@@ -26,10 +26,13 @@ interface BodyRecord {
   [key: string]: unknown;
 }
 
-export interface SessionWorkspaceIds {
+export interface SessionSpaceIds {
   sessionId: string;
   spaceId: string;
 }
+
+/** @deprecated Use {@link SessionSpaceIds} instead. */
+export type SessionWorkspaceIds = SessionSpaceIds;
 
 function asBodyRecord(body: unknown): BodyRecord {
   if (body && typeof body === 'object') {
@@ -43,7 +46,7 @@ function readRequiredValue(body: BodyRecord, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-export function parseRequiredSessionWorkspaceIds(body: unknown): SessionWorkspaceIds | null {
+export function parseRequiredSessionSpaceIds(body: unknown): SessionSpaceIds | null {
   const record = asBodyRecord(body);
   const sessionId = readRequiredValue(record, 'session_id');
   const spaceId = readRequiredValue(record, 'space_id');
@@ -53,7 +56,7 @@ export function parseRequiredSessionWorkspaceIds(body: unknown): SessionWorkspac
   return { sessionId, spaceId };
 }
 
-export function parseRequiredWorkspaceId(body: unknown): string | null {
+export function parseRequiredSpaceId(body: unknown): string | null {
   const record = asBodyRecord(body);
   return readRequiredValue(record, 'space_id');
 }
@@ -70,14 +73,14 @@ export interface ResolvedSession {
 }
 
 /**
- * Parse session/workspace IDs from request body, resolve owner and working directory.
+ * Parse session/space IDs from request body, resolve owner and working directory.
  * Returns null and sends 400 if IDs are missing (returns a Response that should be returned by the handler).
  */
 export async function resolveSessionWorkDir(
   c: Context,
   body: unknown
 ): Promise<ResolvedSession | { error: Response }> {
-  const ids = parseRequiredSessionWorkspaceIds(body);
+  const ids = parseRequiredSessionSpaceIds(body);
   if (!ids) {
     return { error: badRequest(c, 'session_id and space_id are required') };
   }
@@ -86,3 +89,9 @@ export async function resolveSessionWorkDir(
   const workDir = await sessionStore.getSessionDir(sessionId, spaceId, ownerSub);
   return { sessionId, spaceId, ownerSub, workDir };
 }
+
+/** @deprecated Use {@link parseRequiredSessionSpaceIds} instead. */
+export const parseRequiredSessionWorkspaceIds = parseRequiredSessionSpaceIds;
+
+/** @deprecated Use {@link parseRequiredSpaceId} instead. */
+export const parseRequiredWorkspaceId = parseRequiredSpaceId;

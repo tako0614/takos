@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../shared/helpers';
+import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
 import { getDb } from '../../../../infra/db';
 import { workflowJobs, workflowSteps, workflowRuns } from '../../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { zValidator } from '../../zod-validator';
 import { LogsNotFoundError, parseLogRange, readJobLogs } from './logs';
 import { logError } from '../../../../shared/utils/logger';
-import { notFound, internalError } from '../../../../shared/utils/error-response';
+import { NotFoundError, InternalError } from '@takos/common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/jobs/:jobId', async (c) => {
@@ -19,7 +19,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     // Join workflowJobs with workflowRuns to filter by repoId
@@ -43,7 +43,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!jobResult) {
-      return notFound(c, 'Job');
+      throw new NotFoundError('Job');
     }
 
     const steps = await db.select().from(workflowSteps)
@@ -86,7 +86,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {
-      return notFound(c, 'Repository');
+      throw new NotFoundError('Repository');
     }
 
     const db = getDb(c.env.DB);
@@ -105,16 +105,16 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!job) {
-      return notFound(c, 'Job');
+      throw new NotFoundError('Job');
     }
 
     if (!job.logsR2Key) {
-      return notFound(c, 'Logs');
+      throw new NotFoundError('Logs');
     }
 
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      return internalError(c, 'Storage not configured');
+      throw new InternalError('Storage not configured');
     }
 
     try {
@@ -130,8 +130,8 @@ export default new Hono<AuthenticatedRouteEnv>()
     } catch (err) {
       logError('Failed to read job logs', err, { module: 'routes/repos/actions/jobs' });
       if (err instanceof LogsNotFoundError) {
-        return notFound(c, 'Logs');
+        throw new NotFoundError('Logs');
       }
-      return internalError(c, 'Failed to read logs');
+      throw new InternalError('Failed to read logs');
     }
   });

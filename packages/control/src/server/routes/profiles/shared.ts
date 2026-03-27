@@ -2,8 +2,8 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../../../infra/db';
 import { accountFollows, accountMutes, accountSettings, accounts, repositories, repoStars } from '../../../infra/db/schema';
-import type { Repository, Workspace } from '../../../shared/types';
-import { checkWorkspaceAccess } from '../../../shared/utils';
+import type { Repository, Space } from '../../../shared/types';
+import { checkSpaceAccess } from '../../../shared/utils';
 
 export interface ProfileUser {
   id: string;
@@ -161,7 +161,7 @@ export async function findRepoByUsernameAndName(
   username: string,
   repoName: string,
   currentUserId?: string
-): Promise<{ repo: Repository; workspace: Workspace; owner: ProfileUser } | null> {
+): Promise<{ repo: Repository; workspace: Space; owner: ProfileUser } | null> {
   const owner = await getUserByUsername(dbBinding, username);
   if (!owner) {
     return null;
@@ -206,13 +206,13 @@ export async function findRepoByUsernameAndName(
     return null;
   }
 
-  const kind: Workspace['kind'] = workspaceData.type === 'user'
+  const kind: Space['kind'] = workspaceData.type === 'user'
     ? 'user'
     : workspaceData.type === 'system'
       ? 'system'
       : 'team';
 
-  const workspace: Workspace = {
+  const workspace: Space = {
     id: workspaceData.id,
     kind,
     name: workspaceData.name,
@@ -235,7 +235,7 @@ export async function findRepoByUsernameAndName(
       return null;
     }
 
-    const access = await checkWorkspaceAccess(dbBinding, workspace.id, currentUserId);
+    const access = await checkSpaceAccess(dbBinding, workspace.id, currentUserId);
     if (!access) {
       return null;
     }

@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, WorkspaceRole } from '../../../shared/types';
-import { checkWorkspaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
+import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
+import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
 import { getDb, threads, messages, runs } from '../../../infra/db';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
@@ -9,7 +9,7 @@ import { logWarn } from '../../../shared/utils/logger';
 
 export interface ThreadAccess {
   thread: Thread;
-  role: WorkspaceRole;
+  role: SpaceRole;
 }
 
 type MessageRow = {
@@ -93,7 +93,7 @@ export async function checkThreadAccess(
   dbBinding: D1Database,
   threadId: string,
   userId: string,
-  requiredRole?: WorkspaceRole[]
+  requiredRole?: SpaceRole[]
 ): Promise<ThreadAccess | null> {
   if (!isValidOpaqueId(threadId) || !isValidOpaqueId(userId)) {
     return null;
@@ -108,12 +108,12 @@ export async function checkThreadAccess(
 
   const thread = toThread(row);
 
-  const access = await checkWorkspaceAccess(dbBinding, thread.space_id, userId, requiredRole);
+  const access = await checkSpaceAccess(dbBinding, thread.space_id, userId, requiredRole);
   if (!access) {
     return null;
   }
 
-  return { thread, role: access.member.role };
+  return { thread, role: access.membership.role };
 }
 
 export async function listThreads(

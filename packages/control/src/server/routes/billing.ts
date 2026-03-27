@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../../shared/types';
-import type { BaseVariables } from './shared/helpers';
+import type { BaseVariables } from './shared/route-auth';
 import { getDb } from '../../infra/db';
 import { billingAccounts, usageRollups } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -42,14 +42,14 @@ import {
   toTopupPackResponse,
   type BillingTopupPack,
   isEventType,
-} from './billing/helpers';
+} from './billing/billing-stripe';
 import { logError } from '../../shared/utils/logger';
-import { badRequest, notFound, conflict, internalError, badGateway } from '../../shared/utils/error-response';
+import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError } from '@takos/common/errors';
 
 export {
   getConfiguredProTopupPacks,
   resolveConfiguredProTopupPack,
-} from './billing/helpers';
+} from './billing/billing-stripe';
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
@@ -63,7 +63,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       topupPacks = getConfiguredProTopupPacks(c.env);
     } catch (err) {
       logError('invalid plan on account', err, { module: 'billing' });
-      return internalError(c, 'Billing configuration incomplete');
+      throw new InternalError('Billing configuration incomplete');
     }
 
     return c.json({
@@ -118,14 +118,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const secretKey = c.env.STRIPE_SECRET_KEY;
     const priceId = c.env.STRIPE_PLUS_PRICE_ID;
     if (!secretKey || !priceId) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
 
     if (account.stripeSubscriptionId) {
-      return badRequest(c, 'Already subscribed');
+      throw new BadRequestError('Already subscribed');
     }
 
     const origin = new URL(c.req.url).origin;
@@ -150,13 +150,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post('/credits/checkout', async (c) => {
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const body = await c.req.json().catch(() => null) as { pack_id?: unknown } | null;
     const packId = typeof body?.pack_id === 'string' ? body.pack_id.trim() : '';
     if (!packId) {
-      return badRequest(c, 'pack_id is required');
+      throw new BadRequestError('pack_id is required');
     }
 
     let pack: BillingTopupPack;
@@ -164,16 +164,16 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       pack = resolveConfiguredProTopupPack(c.env, packId);
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('Unknown top-up pack:')) {
-        return notFound(c, 'Top-up pack');
+        throw new NotFoundError('Top-up pack');
       }
       logError('invalid pro top-up configuration', err, { module: 'billing' });
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
     if (account.stripeSubscriptionId || account.planId === 'plan_plus') {
-      return conflict(c, 'Plus subscription is active; cancel it before switching to Pro');
+      throw new ConflictError('Plus subscription is active; cancel it before switching to Pro');
     }
 
     const origin = new URL(c.req.url).origin;
@@ -199,14 +199,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post('/portal', async (c) => {
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
 
     if (!account.stripeCustomerId) {
-      return badRequest(c, 'No Stripe customer found');
+      throw new BadRequestError('No Stripe customer found');
     }
 
     const origin = new URL(c.req.url).origin;
@@ -223,14 +223,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .get('/invoices', async (c) => {
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
 
     if (!account.stripeCustomerId) {
-      return badRequest(c, 'No Stripe customer found');
+      throw new BadRequestError('No Stripe customer found');
     }
 
     const url = new URL(c.req.url);
@@ -267,21 +267,21 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       });
     } catch (err) {
       logError('listInvoices failed', err, { module: 'billing' });
-      return badGateway(c, 'Failed to list invoices');
+      throw new BadGatewayError('Failed to list invoices');
     }
   })
 
   .get('/invoices/:id/pdf', async (c) => {
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
 
     if (!account.stripeCustomerId) {
-      return badRequest(c, 'No Stripe customer found');
+      throw new BadRequestError('No Stripe customer found');
     }
 
     const invoiceId = c.req.param('id');
@@ -291,19 +291,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       invoice = await retrieveInvoice({ secretKey, invoiceId });
     } catch (err) {
       logError('retrieveInvoice failed', err, { module: 'billing' });
-      return notFound(c, 'Invoice');
+      throw new NotFoundError('Invoice');
     }
 
     const invoiceCustomerId = toStripeCustomerId(invoice.customer);
     if (invoiceCustomerId !== account.stripeCustomerId) {
-      return notFound(c, 'Invoice');
+      throw new NotFoundError('Invoice');
     }
 
     const pdfUrl = typeof invoice.invoice_pdf === 'string' && invoice.invoice_pdf
       ? invoice.invoice_pdf
       : null;
     if (!pdfUrl) {
-      return notFound(c, 'Invoice PDF');
+      throw new NotFoundError('Invoice PDF');
     }
 
     let pdfUrlParsed: URL;
@@ -311,11 +311,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       pdfUrlParsed = new URL(pdfUrl);
     } catch {
       logError('invoice_pdf URL is malformed', pdfUrl, { module: 'billing' });
-      return notFound(c, 'Invoice PDF');
+      throw new NotFoundError('Invoice PDF');
     }
     if (!pdfUrlParsed.hostname.endsWith('.stripe.com')) {
       logError('invoice_pdf URL is not from stripe.com', pdfUrlParsed.hostname, { module: 'billing' });
-      return notFound(c, 'Invoice PDF');
+      throw new NotFoundError('Invoice PDF');
     }
 
     let pdfRes: Response;
@@ -323,13 +323,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       pdfRes = await fetch(pdfUrl);
     } catch (err) {
       logError('failed to fetch invoice_pdf URL', err, { module: 'billing' });
-      return badGateway(c, 'Failed to fetch invoice PDF');
+      throw new BadGatewayError('Failed to fetch invoice PDF');
     }
 
     if (!pdfRes.ok || !pdfRes.body) {
       const text = await pdfRes.text().catch(() => '');
       logError('invoice_pdf fetch failed', { status: pdfRes.status, text }, { module: 'billing' });
-      return badGateway(c, 'Failed to fetch invoice PDF');
+      throw new BadGatewayError('Failed to fetch invoice PDF');
     }
 
     const headers = new Headers();
@@ -345,14 +345,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post('/invoices/:id/send', async (c) => {
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      return internalError(c, 'Billing not configured');
+      throw new InternalError('Billing not configured');
     }
 
     const user = c.get('user');
     const account = await getOrCreateBillingAccount(c.env.DB, user.id);
 
     if (!account.stripeCustomerId) {
-      return badRequest(c, 'No Stripe customer found');
+      throw new BadRequestError('No Stripe customer found');
     }
 
     const invoiceId = c.req.param('id');
@@ -362,19 +362,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       invoice = await retrieveInvoice({ secretKey, invoiceId });
     } catch (err) {
       logError('retrieveInvoice failed', err, { module: 'billing' });
-      return notFound(c, 'Invoice');
+      throw new NotFoundError('Invoice');
     }
 
     const invoiceCustomerId = toStripeCustomerId(invoice.customer);
     if (invoiceCustomerId !== account.stripeCustomerId) {
-      return notFound(c, 'Invoice');
+      throw new NotFoundError('Invoice');
     }
 
     try {
       await sendInvoice({ secretKey, invoiceId });
     } catch (err) {
       logError('sendInvoice failed', err, { module: 'billing' });
-      return badGateway(c, 'Failed to send invoice email');
+      throw new BadGatewayError('Failed to send invoice email');
     }
 
     return c.json({ success: true });
@@ -386,12 +386,12 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
     const secret = c.env.STRIPE_WEBHOOK_SECRET;
     const secretKey = c.env.STRIPE_SECRET_KEY;
     if (!secret || !secretKey) {
-      return internalError(c, 'Webhook not configured');
+      throw new InternalError('Webhook not configured');
     }
 
     const signature = c.req.header('stripe-signature');
     if (!signature) {
-      return badRequest(c, 'Missing signature');
+      throw new BadRequestError('Missing signature');
     }
 
     const payload = await c.req.text();
@@ -405,7 +405,7 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
       }));
     } catch (err) {
       logError('Signature verification failed', err, { module: 'billing-webhook' });
-      return badRequest(c, 'Invalid signature');
+      throw new BadRequestError('Invalid signature');
     }
 
     const db = getDb(c.env.DB);
@@ -487,7 +487,7 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
       }
     } catch (err) {
       logError(`Error processing ${event.type}`, err, { module: 'billing-webhook' });
-      return internalError(c, 'Webhook processing failed');
+      throw new InternalError('Webhook processing failed');
     }
 
     return c.json({ received: true });

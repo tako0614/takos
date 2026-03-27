@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { badRequest, parseJsonBody, requireWorkspaceAccess, type BaseVariables } from './shared/helpers';
+import { badRequest, parseJsonBody, requireWorkspaceAccess, type BaseVariables } from './shared/route-auth';
 import {
   quickSearchPaths,
   searchWorkspace,
@@ -171,7 +171,7 @@ search.post('/spaces/:spaceId/search', async (c) => {
 
   return resolveCachedSearchResponse(c, {
     scope: 'workspace',
-    spaceId: access.workspace.id,
+    spaceId: access.space.id,
     userId: user.id,
     query: body.query,
     type: body.type || null,
@@ -180,7 +180,7 @@ search.post('/spaces/:spaceId/search', async (c) => {
   }, async () => {
     const result = await searchWorkspace({
       env: c.env,
-      spaceId: access.workspace.id,
+      spaceId: access.space.id,
       query: body.query,
       searchType: body.type,
       fileTypes: body.file_types,
@@ -213,11 +213,11 @@ search.get('/spaces/:spaceId/search/quick', async (c) => {
 
   return resolveCachedSearchResponse(c, {
     scope: 'quick',
-    spaceId: access.workspace.id,
+    spaceId: access.space.id,
     userId: user.id,
     query,
   }, async () => {
-    const results = await quickSearchPaths(c.env.DB, access.workspace.id, query);
+    const results = await quickSearchPaths(c.env.DB, access.space.id, query);
     return { results };
   });
 });

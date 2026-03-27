@@ -12,17 +12,17 @@ import { PLATFORM_TOOLS, PLATFORM_HANDLERS } from './platform';
 import { DEPLOY_TOOLS, DEPLOY_HANDLERS } from './deploy';
 import { AGENT_TOOLS, AGENT_HANDLERS } from './agent';
 import { MCP_TOOLS, MCP_HANDLERS } from './mcp';
-import { WORKSPACE_FILES_TOOLS, WORKSPACE_FILES_HANDLERS } from './workspace-files';
-import { WORKSPACE_COMMON_ENV_TOOLS, WORKSPACE_COMMON_ENV_HANDLERS } from './workspace-common-env';
-import { WORKSPACE_SKILL_TOOLS, WORKSPACE_SKILL_HANDLERS } from './workspace-skills';
+import { WORKSPACE_FILES_TOOLS, WORKSPACE_FILES_HANDLERS } from './space-files';
+import { WORKSPACE_COMMON_ENV_TOOLS, WORKSPACE_COMMON_ENV_HANDLERS } from './space-common-env';
+import { WORKSPACE_SKILL_TOOLS, WORKSPACE_SKILL_HANDLERS } from './space-skills';
 import {
   WORKSPACE_APP_DEPLOYMENT_TOOLS,
   WORKSPACE_APP_DEPLOYMENT_HANDLERS,
-} from './workspace-app-deployments';
+} from './space-app-deployments';
 import {
   WORKSPACE_SOURCE_TOOLS,
   WORKSPACE_SOURCE_HANDLERS,
-} from './workspace-source';
+} from './space-source';
 import { BROWSER_TOOLS, BROWSER_HANDLERS } from './browser';
 import { DISCOVERY_TOOLS, DISCOVERY_HANDLERS } from './discovery';
 import { MEMORY_GRAPH_TOOLS, MEMORY_GRAPH_HANDLERS } from './memory-graph';
@@ -145,9 +145,9 @@ export * from './artifact';
 export * from './deploy';
 export * from './agent';
 export * from './mcp';
-export * from './workspace-files';
-export * from './workspace-common-env';
-export * from './workspace-skills';
-export * from './workspace-app-deployments';
-export * from './workspace-source';
+export * from './space-files';
+export * from './space-common-env';
+export * from './space-skills';
+export * from './space-app-deployments';
+export * from './space-source';
 export * from './browser';

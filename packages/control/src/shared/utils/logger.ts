@@ -1,3 +1,16 @@
+/**
+ * Control-specific structured logger.
+ *
+ * NOT a duplicate of @takos/common's logger.  This module provides:
+ *  - Automatic sensitive-data masking (tokens, passwords, JWTs, PII, etc.)
+ *  - Standalone function API (logDebug/logInfo/logWarn/logError) used by 160+ files
+ *  - safeJsonParse / safeJsonParseOrDefault helpers integrated with log warnings
+ *  - LogContext with requestId / userId / action fields
+ *
+ * @takos/common's logger is a class-based, zero-feature structured logger
+ * (no masking, no JSON-parse helpers).  Merging would either strip security
+ * features from control or bloat the shared package.
+ */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogContext {

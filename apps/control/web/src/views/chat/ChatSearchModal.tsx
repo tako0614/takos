@@ -6,7 +6,7 @@ import { Icons } from '../../lib/Icons';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 
-type WorkspaceSearchResult = {
+type SpaceSearchResult = {
   kind: 'keyword' | 'semantic';
   score?: number;
   thread: { id: string; title: string | null; status: 'active' | 'archived' | 'deleted'; updated_at: string; created_at: string };
@@ -41,7 +41,7 @@ function SearchResultsBody({
   loading: boolean;
   error: string | null;
   query: string;
-  results: WorkspaceSearchResult[];
+  results: SpaceSearchResult[];
   onSelectResult: (threadId: string, messageId: string, sequence: number) => void;
   onClose: () => void;
 }) {
@@ -118,7 +118,7 @@ export function ChatSearchModal({ spaceId, onSelectResult, onClose }: ChatSearch
   }, [query]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<WorkspaceSearchResult[]>([]);
+  const [results, setResults] = useState<SpaceSearchResult[]>([]);
 
   useEffect(() => {
     const q = debouncedQuery.trim();
@@ -138,7 +138,7 @@ export function ChatSearchModal({ spaceId, onSelectResult, onClose }: ChatSearch
     })
       .then(async (res) => {
         if (cancelled) return;
-        const data = await rpcJson<{ results: WorkspaceSearchResult[] }>(res);
+        const data = await rpcJson<{ results: SpaceSearchResult[] }>(res);
         setResults(data.results || []);
       })
       .catch((err) => {

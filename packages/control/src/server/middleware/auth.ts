@@ -6,7 +6,7 @@ import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../ap
 import { getCachedUser, isValidUserId } from '../../shared/utils/user-cache';
 import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
-import { unauthorized, internalError } from '../../shared/utils/error-response';
+import { AppError, AuthenticationError, InternalError } from '@takos/common/errors';
 import { logError, logWarn } from '../../shared/utils/logger';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
@@ -132,14 +132,14 @@ async function resolveRequestUser(
 
   if (!sessionStore) {
     if (options.rejectInvalidSession) {
-      return { user: null, errorResponse: unauthorized(c, 'Session service unavailable') };
+      throw new AuthenticationError('Session service unavailable');
     }
     return { user: null };
   }
   const session = await getSession(sessionStore, sessionId);
   if (!session || !isValidUserId(session.user_id)) {
     if (options.rejectInvalidSession) {
-      return { user: null, errorResponse: unauthorized(c, 'Session expired') };
+      throw new AuthenticationError('Session expired');
     }
     return { user: null };
   }
@@ -147,7 +147,7 @@ async function resolveRequestUser(
   const user = await getCachedUser(c, session.user_id);
   if (!user) {
     if (options.rejectInvalidSession) {
-      return { user: null, errorResponse: unauthorized(c, 'User not found') };
+      throw new AuthenticationError('User not found');
     }
     return { user: null };
   }
@@ -171,14 +171,15 @@ export const requireAuth: AuthMiddleware = async (c, next) => {
       rejectInvalidSession: true,
     });
   } catch (err) {
+    if (err instanceof AppError) throw err;
     logError('Failed to resolve request user', err, { module: 'auth' });
-    return internalError(c, 'Internal authentication error');
+    throw new InternalError('Internal authentication error');
   }
   if (resolved.errorResponse) {
     return resolved.errorResponse;
   }
   if (!resolved.user) {
-    return unauthorized(c);
+    throw new AuthenticationError();
   }
   c.set('user', resolved.user);
 

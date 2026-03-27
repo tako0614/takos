@@ -75,7 +75,6 @@
     "@takos/actions-engine": "workspace:*",
     "@takos/cloudflare-compat": "workspace:*",
     "@takos/common": "workspace:*",
-    "@takos/control-core": "workspace:*",
     "@takos/control-hosts": "workspace:*",
     "@takos/control-local-platform": "workspace:*",
     "drizzle-orm": "^0.45.1",

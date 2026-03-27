@@ -10,7 +10,7 @@ import {
   verifyPathWithinAfterAccess,
 } from '../../runtime/paths.js';
 import { validateGitRef, validateGitPath } from '../../runtime/validation.js';
-import { getErrorMessage } from '../../utils/helpers.js';
+import { getErrorMessage } from '@takos/common/errors';
 import { isBoundaryViolationError } from '../../shared/errors.js';
 import { badRequest, forbidden, notFound } from '@takos/common/middleware/hono';
 

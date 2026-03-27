@@ -20,7 +20,7 @@ export {
 } from './session-maintenance';
 
 export {
-  type SnapshotGcWorkspaceResult,
+  type SnapshotGcSpaceResult,
   type SnapshotGcBatchSummary,
   runSnapshotGcBatch,
 } from './snapshot-maintenance';

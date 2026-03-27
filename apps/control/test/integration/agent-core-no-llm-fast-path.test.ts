@@ -29,6 +29,7 @@ describe('agent-core no-LLM fast path', () => {
       ok: true,
       payload: {
         runId: 'run-1',
+        serviceId: 'worker-1',
         workerId: 'worker-1',
         model: undefined,
         controlRpcToken: 'control-token',
@@ -96,6 +97,7 @@ describe('agent-core no-LLM fast path', () => {
     ]);
     expect(fetchCalls[2]?.body).toEqual({
       runId: 'run-1',
+      serviceId: 'worker-1',
       workerId: 'worker-1',
       response: expect.stringContaining('hello from test'),
     });

@@ -1,4 +1,4 @@
-import { createTakosWebEnv, disposeLocalPlatformState } from './adapters/local.ts';
+import { createNodeWebEnv, disposeNodePlatformState } from '../node-platform/env-builder.ts';
 import { getDb, accounts, accountMemberships, threads, messages, runs } from '../infra/db/index.ts';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../shared/types/queue-messages.ts';
 import { createPendingRun, updateRunStatus } from '../application/services/runs/create-thread-run-store.ts';
@@ -18,7 +18,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function ensureSeedData() {
-  const env = await createTakosWebEnv();
+  const env = await createNodeWebEnv();
   const db = getDb(env.DB);
   const suffix = Date.now().toString(36);
   const workspaceId = `smoke-workspace-${suffix}`;
@@ -102,7 +102,7 @@ async function ensureSeedData() {
 }
 
 async function waitForRunCompletion(runId: string) {
-  const env = await createTakosWebEnv();
+  const env = await createNodeWebEnv();
   const db = getDb(env.DB);
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
@@ -154,7 +154,7 @@ async function main() {
     const payload = await runLocalSmoke();
     console.log(JSON.stringify(payload, null, 2));
   } finally {
-    await disposeLocalPlatformState();
+    await disposeNodePlatformState();
   }
 }
 

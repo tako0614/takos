@@ -10,13 +10,13 @@ import { writeAuditLog, type AuditEntry } from '../../utils/audit-log.js';
 import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
 import { ErrorCodes } from '@takos/common/errors';
 import { createLogger } from '@takos/common/logger';
-import { hasWorkspaceScopeMismatch, WORKSPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/workspace-scope.js';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 import { validateRuntimeExecEnv } from '../../utils/env-filter.js';
 
 import {
   type ExecInput,
   getProcess,
-  isWorkspaceConcurrencyExceeded,
+  isSpaceConcurrencyExceeded,
   ensureProcessCapacity,
   sanitizeErrorMessage,
   runExec,
@@ -80,8 +80,8 @@ app.post('/exec', async (c) => {
       return badRequest(c, validationError);
     }
 
-    if (hasWorkspaceScopeMismatch(c, body.space_id)) {
-      return forbidden(c, WORKSPACE_SCOPE_MISMATCH_ERROR);
+    if (hasSpaceScopeMismatch(c, body.space_id)) {
+      return forbidden(c, SPACE_SCOPE_MISMATCH_ERROR);
     }
 
     // Validate user-supplied environment variables
@@ -102,8 +102,8 @@ app.post('/exec', async (c) => {
 
     fireAuditLog({ ...auditBase, timestamp: new Date().toISOString(), status: 'started' });
 
-    if (isWorkspaceConcurrencyExceeded(body.space_id)) {
-      return c.json({ error: { code: ErrorCodes.RATE_LIMITED, message: 'Workspace concurrency limit reached (max concurrent executions)' } }, 429);
+    if (isSpaceConcurrencyExceeded(body.space_id)) {
+      return c.json({ error: { code: ErrorCodes.RATE_LIMITED, message: 'Space concurrency limit reached (max concurrent executions)' } }, 429);
     }
 
     if (!ensureProcessCapacity()) {

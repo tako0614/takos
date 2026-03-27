@@ -4,14 +4,14 @@ import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useI18n } from '../../providers/I18nProvider';
 import { Modal } from '../../components/ui/Modal';
 import { CreateRepoModal } from '../shared/repos/CreateRepoModal';
-import type { Workspace } from '../../types';
+import type { Space } from '../../types';
 import { CatalogRepoCard } from './components/CatalogRepoCard';
 import { RepoDetailPanel } from './components/RepoDetailPanel';
 import { useSourceData, type SourceFilter, type SourceSort } from '../../hooks/useSourceData';
 import type { SourceItem, SourceItemTakopack } from '../../hooks/useSourceData';
 
 interface SourcePageProps {
-  workspaces: Workspace[];
+  spaces: Space[];
   onNavigateToRepo: (username: string, repoName: string) => void;
   isAuthenticated: boolean;
   onRequireLogin: () => void;
@@ -191,7 +191,7 @@ function Section({
   );
 }
 
-export function SourcePage({ workspaces, onNavigateToRepo, isAuthenticated, onRequireLogin }: SourcePageProps) {
+export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin }: SourcePageProps) {
   const { t } = useI18n();
   const { isMobile } = useBreakpoint();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -224,7 +224,7 @@ export function SourcePage({ workspaces, onNavigateToRepo, isAuthenticated, onRe
     loadMore,
     install, uninstall, rollback, toggleStar, createRepo, openRepo,
     getItemTakopack,
-  } = useSourceData({ workspaces, onNavigateToRepo, isAuthenticated, onRequireLogin });
+  } = useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin });
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
