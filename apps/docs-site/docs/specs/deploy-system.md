@@ -237,7 +237,8 @@ manifest の `spec.env.inject` にはテンプレート変数を記述でき、d
 
 ### テンプレート構文
 
-テンプレートは `${{ expression }}` の形式で記述します。`expression` はドット区切りのパスです。
+<!-- v-pre to prevent Vue interpolation -->
+<span v-pre>テンプレートは `${{ expression }}` の形式で記述します。</span>`expression` はドット区切りのパスです。
 
 ```yaml
 spec:
