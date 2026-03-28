@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
 import type { BaseVariables } from '../shared/route-auth';
-import { BadRequestError, AppError } from '@takoserver/common/errors';
+import { BadRequestError, AppError } from 'takos-common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 import { zValidator } from '../zod-validator';

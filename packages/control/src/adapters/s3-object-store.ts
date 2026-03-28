@@ -18,14 +18,7 @@ import type {
   R2Object,
   R2ObjectBody,
 } from '../../shared/types/bindings.ts';
-
-// R2Objects is not re-exported from bindings, define inline to match the Cloudflare shape.
-interface R2Objects {
-  objects: R2Object[];
-  truncated: boolean;
-  cursor?: string;
-  delimitedPrefixes: string[];
-}
+import type { R2Objects, R2ChecksumsLike, R2HTTPMetadataLike } from './r2-compat-types.ts';
 
 // ---------------------------------------------------------------------------
 // Local type helpers – avoid adding @smithy/types or @cloudflare/workers-types
@@ -36,26 +29,6 @@ interface R2Objects {
 interface SdkStreamLike {
   transformToByteArray: () => Promise<Uint8Array>;
   transformToWebStream: () => ReadableStream;
-}
-
-/** Matches the shape of Cloudflare R2Checksums without requiring the abstract class import. */
-interface R2ChecksumsLike {
-  readonly md5?: ArrayBuffer;
-  readonly sha1?: ArrayBuffer;
-  readonly sha256?: ArrayBuffer;
-  readonly sha384?: ArrayBuffer;
-  readonly sha512?: ArrayBuffer;
-  toJSON(): Record<string, string | undefined>;
-}
-
-/** Matches the shape of Cloudflare R2HTTPMetadata. */
-interface R2HTTPMetadataLike {
-  contentType?: string;
-  contentLanguage?: string;
-  contentDisposition?: string;
-  contentEncoding?: string;
-  cacheControl?: string;
-  cacheExpiry?: Date;
 }
 
 /** AWS SDK error shape with metadata. */

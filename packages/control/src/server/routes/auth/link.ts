@@ -9,7 +9,7 @@ import { getDb, accounts, authIdentities } from '../../../infra/db';
 import { generateId } from '../../../shared/utils';
 import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
-import { AuthenticationError } from '@takoserver/common/errors';
+import { AuthenticationError } from 'takos-common/errors';
 
 export const authLinkRouter = new Hono<OptionalAuthRouteEnv>();
 

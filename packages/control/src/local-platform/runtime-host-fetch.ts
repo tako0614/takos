@@ -7,7 +7,7 @@ import type {
 } from './runtime-types.ts';
 import type { DurableNamespaceBinding } from '../shared/types/bindings.ts';
 import { jsonResponse } from './runtime-http.ts';
-import { getErrorMessage } from '@takoserver/common/errors';
+import { getErrorMessage } from 'takos-common/errors';
 
 function getLocalRuntimeGatewayStub(env: { RUNTIME_CONTAINER: unknown }): LocalRuntimeGatewayStub {
   const namespace = env.RUNTIME_CONTAINER as DurableNamespaceBinding;

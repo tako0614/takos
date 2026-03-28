@@ -3,7 +3,7 @@ import {
   RESERVED_USERNAMES,
   isReservedUsername,
   validateUsername,
-} from '@/utils/reserved-usernames';
+} from '@/utils/domain-validation';
 
 describe('RESERVED_USERNAMES', () => {
   it('is a non-empty Set', () => {

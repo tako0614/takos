@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { badRequest, forbidden, internalError } from '@takoserver/common/middleware/hono';
+import { badRequest, forbidden, internalError } from 'takos-common/middleware/hono';
 import { getRepoPath } from '../../runtime/paths.js';
 import { generateTempSuffix } from '../../shared/temp-id.js';
 import { runGitCommand } from '../../runtime/git.js';

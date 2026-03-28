@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { JobResult, Step, StepResult } from '../../types.js';
+import type { JobResult, Step, StepResult } from '../../workflow-models.js';
 import { normalizeNeedsInput } from '../../scheduler/job.js';
 import {
   classifyStepControl,

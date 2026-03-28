@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { parseWorkflow } from '@takoserver/actions-engine';
+import { parseWorkflow } from 'takos-actions-engine';
 import { generateId, now, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { parseJsonBody } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
@@ -11,7 +11,7 @@ import { getDb } from '../../../infra/db';
 import type { Database } from '../../../infra/db';
 import { workflows } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
-import { NotFoundError, InternalError } from '@takoserver/common/errors';
+import { NotFoundError, InternalError } from 'takos-common/errors';
 
 interface WorkflowParseResult {
   name: string | null;

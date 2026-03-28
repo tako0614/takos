@@ -8,7 +8,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { zValidator } from '../../zod-validator';
 import { LogsNotFoundError, parseLogRange, readJobLogs } from './logs';
 import { logError } from '../../../../shared/utils/logger';
-import { NotFoundError, InternalError } from '@takoserver/common/errors';
+import { NotFoundError, InternalError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/jobs/:jobId', async (c) => {

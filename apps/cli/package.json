@@ -1,5 +1,5 @@
 {
-  "name": "@takoserver/cli",
+  "name": "takos-cli",
   "version": "0.1.0",
   "description": "CLI tool for Takos AI platform - deploy, manage workers, and interact with cloud resources",
   "type": "module",
@@ -16,7 +16,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@takoserver/actions-engine": "workspace:*",
+    "takos-actions-engine": "workspace:*",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "conf": "^13.0.1",

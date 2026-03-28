@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Workflow } from '../../types.js';
+import type { Workflow } from '../../workflow-models.js';
 import {
   buildDependencyGraph,
   DependencyError,

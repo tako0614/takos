@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useReducer } from 'react';
 import type { OAuthClientDev } from './OAuthSettingsModal';
 import { useI18n } from '../../store/i18n';
 import { useConfirmDialog } from '../../store/confirm-dialog';
@@ -31,6 +31,57 @@ const ALL_SCOPES = [
   'repos:write',
 ];
 
+interface FormState {
+  name: string;
+  redirectUris: string[];
+  clientType: 'confidential' | 'public';
+  scopes: string[];
+}
+
+const INITIAL_FORM_STATE: FormState = {
+  name: '',
+  redirectUris: [''],
+  clientType: 'confidential',
+  scopes: [],
+};
+
+type AsyncAction =
+  | { type: 'CREATE_START' }
+  | { type: 'CREATE_END' }
+  | { type: 'DELETE_START'; clientId: string }
+  | { type: 'DELETE_END' }
+  | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'RESET' };
+
+interface AsyncState {
+  creating: boolean;
+  deleting: string | null;
+  error: string | null;
+}
+
+const INITIAL_ASYNC_STATE: AsyncState = {
+  creating: false,
+  deleting: null,
+  error: null,
+};
+
+function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
+  switch (action.type) {
+    case 'CREATE_START':
+      return { ...state, creating: true, error: null };
+    case 'CREATE_END':
+      return { ...state, creating: false };
+    case 'DELETE_START':
+      return { ...state, deleting: action.clientId };
+    case 'DELETE_END':
+      return { ...state, deleting: null };
+    case 'SET_ERROR':
+      return { ...state, error: action.error };
+    case 'RESET':
+      return INITIAL_ASYNC_STATE;
+  }
+}
+
 interface OAuthClientTabProps {
   loading: boolean;
   onLoadingChange: (loading: boolean) => void;
@@ -41,15 +92,10 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
   const { confirm } = useConfirmDialog();
   const [clients, setClients] = useState<OAuthClientDev[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [newName, setNewName] = useState('');
-  const [newRedirectUris, setNewRedirectUris] = useState(['']);
-  const [newClientType, setNewClientType] = useState<'confidential' | 'public'>('confidential');
-  const [newScopes, setNewScopes] = useState<string[]>([]);
-  const [creating, setCreating] = useState(false);
+  const [formState, setFormState] = useState<FormState>(INITIAL_FORM_STATE);
+  const [asyncState, dispatchAsync] = useReducer(asyncReducer, INITIAL_ASYNC_STATE);
   const [createdClient, setCreatedClient] = useState<{ client_id: string; client_secret?: string } | null>(null);
   const [copied, setCopied] = useState<'id' | 'secret' | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -81,7 +127,7 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
       danger: true,
     });
     if (!confirmed) return;
-    setDeleting(clientId);
+    dispatchAsync({ type: 'DELETE_START', clientId });
     try {
       const res = await rpc.me.oauth.clients[':clientId'].$delete({ param: { clientId } });
       await rpcJson(res);
@@ -89,38 +135,37 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
     } catch (err) {
       console.error('Failed to delete:', err);
     } finally {
-      setDeleting(null);
+      dispatchAsync({ type: 'DELETE_END' });
     }
   }
 
   async function handleCreateClient(): Promise<void> {
-    if (!newName.trim()) {
-      setError(t('appNameRequired'));
+    if (!formState.name.trim()) {
+      dispatchAsync({ type: 'SET_ERROR', error: t('appNameRequired') });
       return;
     }
-    const validUris = newRedirectUris.filter(u => u.trim());
+    const validUris = formState.redirectUris.filter(u => u.trim());
     if (validUris.length === 0) {
-      setError(t('redirectUriRequired'));
+      dispatchAsync({ type: 'SET_ERROR', error: t('redirectUriRequired') });
       return;
     }
-    setCreating(true);
-    setError(null);
+    dispatchAsync({ type: 'CREATE_START' });
     try {
       const res = await rpc.me.oauth.clients.$post({
         json: {
-          client_name: newName,
+          client_name: formState.name,
           redirect_uris: validUris,
-          scope: newScopes.join(' '),
-          token_endpoint_auth_method: newClientType === 'public' ? 'none' : 'client_secret_post',
+          scope: formState.scopes.join(' '),
+          token_endpoint_auth_method: formState.clientType === 'public' ? 'none' : 'client_secret_post',
         },
       });
       const data = await rpcJson<{ client_id: string; client_secret?: string }>(res);
       setCreatedClient(data);
       fetchClients();
     } catch {
-      setError(t('failedToCreateClient'));
+      dispatchAsync({ type: 'SET_ERROR', error: t('failedToCreateClient') });
     } finally {
-      setCreating(false);
+      dispatchAsync({ type: 'CREATE_END' });
     }
   }
 
@@ -137,11 +182,8 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
   function resetCreateForm(): void {
     setShowCreate(false);
     setCreatedClient(null);
-    setNewName('');
-    setNewRedirectUris(['']);
-    setNewClientType('confidential');
-    setNewScopes([]);
-    setError(null);
+    setFormState(INITIAL_FORM_STATE);
+    dispatchAsync({ type: 'RESET' });
   }
 
   if (loading) return null;
@@ -186,27 +228,27 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
 
     return (
       <div className="flex flex-col gap-4">
-        {error && (
+        {asyncState.error && (
           <Card style={{ backgroundColor: 'var(--color-error-bg)', border: '1px solid var(--color-error)' }}>
-            <p className="text-sm text-[var(--color-error)] m-0">{error}</p>
+            <p className="text-sm text-[var(--color-error)] m-0">{asyncState.error}</p>
           </Card>
         )}
         <div>
           <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientName')}</label>
-          <Input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder={t('oauthClientNamePlaceholder')} />
+          <Input type="text" value={formState.name} onChange={e => setFormState(prev => ({ ...prev, name: e.target.value }))} placeholder={t('oauthClientNamePlaceholder')} />
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthRedirectUri')}</label>
           <div className="flex flex-col gap-2">
-            {newRedirectUris.map((uri, i) => (
+            {formState.redirectUris.map((uri, i) => (
               <div key={i} className="flex gap-2">
-                <Input type="text" value={uri} onChange={e => { const u = [...newRedirectUris]; u[i] = e.target.value; setNewRedirectUris(u); }} placeholder={t('oauthRedirectUriPlaceholder')} className="flex-1" />
-                {newRedirectUris.length > 1 && (
-                  <Button variant="ghost" size="sm" onClick={() => setNewRedirectUris(newRedirectUris.filter((_, j) => j !== i))}>{t('removeRedirectUri')}</Button>
+                <Input type="text" value={uri} onChange={e => { const u = [...formState.redirectUris]; u[i] = e.target.value; setFormState(prev => ({ ...prev, redirectUris: u })); }} placeholder={t('oauthRedirectUriPlaceholder')} className="flex-1" />
+                {formState.redirectUris.length > 1 && (
+                  <Button variant="ghost" size="sm" onClick={() => setFormState(prev => ({ ...prev, redirectUris: prev.redirectUris.filter((_, j) => j !== i) }))}>{t('removeRedirectUri')}</Button>
                 )}
               </div>
             ))}
-            <button className="bg-transparent border-none p-0 text-sm text-[var(--color-text-primary)] cursor-pointer text-left" onClick={() => setNewRedirectUris([...newRedirectUris, ''])}>
+            <button className="bg-transparent border-none p-0 text-sm text-[var(--color-text-primary)] cursor-pointer text-left" onClick={() => setFormState(prev => ({ ...prev, redirectUris: [...prev.redirectUris, ''] }))}>
               + {t('addRedirectUri')}
             </button>
           </div>
@@ -215,7 +257,7 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
           <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthClientType')}</label>
           <div className="grid grid-cols-2 gap-2">
             {(['confidential', 'public'] as const).map(type => (
-              <button key={type} className="p-3 rounded-lg text-left cursor-pointer transition-colors" style={{ border: `1px solid ${newClientType === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newClientType === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }} onClick={() => setNewClientType(type)}>
+              <button key={type} className="p-3 rounded-lg text-left cursor-pointer transition-colors" style={{ border: `1px solid ${formState.clientType === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: formState.clientType === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }} onClick={() => setFormState(prev => ({ ...prev, clientType: type }))}>
                 <div className="font-medium text-[var(--color-text-primary)]">{t(type === 'confidential' ? 'oauthClientTypeConfidential' : 'oauthClientTypePublic')}</div>
                 <div className="text-xs text-[var(--color-text-tertiary)] mt-1">{t(type === 'confidential' ? 'oauthClientTypeConfidentialDesc' : 'oauthClientTypePublicDesc')}</div>
               </button>
@@ -226,8 +268,8 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
           <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('oauthScopes')}</label>
           <div className="grid grid-cols-2 gap-2">
             {ALL_SCOPES.map(scope => (
-              <label key={scope} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors" style={{ border: `1px solid ${newScopes.includes(scope) ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: newScopes.includes(scope) ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }}>
-                <input type="checkbox" checked={newScopes.includes(scope)} onChange={() => setNewScopes(prev => prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope])} className="sr-only" aria-label={scope} />
+              <label key={scope} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors" style={{ border: `1px solid ${formState.scopes.includes(scope) ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, backgroundColor: formState.scopes.includes(scope) ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }}>
+                <input type="checkbox" checked={formState.scopes.includes(scope)} onChange={() => setFormState(prev => ({ ...prev, scopes: prev.scopes.includes(scope) ? prev.scopes.filter(s => s !== scope) : [...prev.scopes, scope] }))} className="sr-only" aria-label={scope} />
                 <span className="text-sm text-[var(--color-text-primary)]">{scope}</span>
               </label>
             ))}
@@ -235,7 +277,7 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
         </div>
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="secondary" onClick={resetCreateForm}>{t('cancel')}</Button>
-          <Button variant="primary" onClick={handleCreateClient} isLoading={creating}>{t('create')}</Button>
+          <Button variant="primary" onClick={handleCreateClient} isLoading={asyncState.creating}>{t('create')}</Button>
         </div>
       </div>
     );
@@ -275,7 +317,7 @@ export function OAuthClientTab({ loading, onLoadingChange }: OAuthClientTabProps
                     {t('createdAt')}: {formatShortDate(client.created_at)}
                   </p>
                 </div>
-                <Button variant="danger" size="sm" onClick={() => handleDeleteClient(client.client_id)} disabled={deleting === client.client_id} isLoading={deleting === client.client_id}>{t('delete')}</Button>
+                <Button variant="danger" size="sm" onClick={() => handleDeleteClient(client.client_id)} disabled={asyncState.deleting === client.client_id} isLoading={asyncState.deleting === client.client_id}>{t('delete')}</Button>
               </div>
             </Card>
           ))}

@@ -1,5 +1,5 @@
 {
-  "name": "@takoserver/runtime",
+  "name": "takos-runtime",
   "version": "1.0.0",
   "description": "Runtime environment for Takos agent command execution",
   "type": "module",
@@ -8,7 +8,7 @@
     "takos": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "pnpm -C ../.. --filter @takoserver/runtime-service build && tsc",
+    "build": "pnpm -C ../.. --filter takos-runtime-service build && tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "cli": "node dist/cli/index.js",
@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@takoserver/runtime-service": "workspace:*"
+    "takos-runtime-service": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { Readable } from 'stream';
 import { pushLog } from './logging.js';
-import { filterSafeEnv } from '../utils/env-filter.js';
+import { filterSafeEnv } from '../utils/sandbox-env.js';
 import { gracefulKill } from '../utils/process-kill.js';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;

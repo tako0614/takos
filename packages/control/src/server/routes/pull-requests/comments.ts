@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -13,7 +13,7 @@ import { createNotification } from '../../../application/services/notifications/
 import type { PullRequestCommentDto } from './dto';
 import { buildUserLiteMap, resolveActorLite } from './dto';
 import { logWarn } from '../../../shared/utils/logger';
-import { NotFoundError } from '@takoserver/common/errors';
+import { NotFoundError } from 'takos-common/errors';
 
 function toCommentDto(
   comment: {

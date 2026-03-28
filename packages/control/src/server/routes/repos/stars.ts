@@ -8,7 +8,7 @@ import { repoStars, repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { parseLimit, parseOffset } from '../shared/route-auth';
-import { BadRequestError, AuthenticationError, NotFoundError } from '@takoserver/common/errors';
+import { BadRequestError, AuthenticationError, NotFoundError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/star', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {

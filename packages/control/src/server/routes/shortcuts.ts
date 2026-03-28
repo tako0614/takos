@@ -5,7 +5,7 @@ import {
   getRequestedSpaceIdentifier,
   requireSpaceAccess,
 } from './shared/route-auth';
-import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {
   ALLOWED_SHORTCUT_RESOURCE_TYPES,

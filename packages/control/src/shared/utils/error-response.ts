@@ -2,10 +2,10 @@
  * @module error-response
  *
  * This module retains only the OAuth2 error helper (RFC 6749 format)
- * and re-exports from @takoserver/common/errors.
+ * and re-exports from takos-common/errors.
  *
  * All legacy flat-format error helpers (badRequest, unauthorized, etc.)
- * have been removed. Use AppError subclasses from @takoserver/common/errors
+ * have been removed. Use AppError subclasses from takos-common/errors
  * and throw them instead -- the global error handler produces the
  * standard nested response format.
  */
@@ -29,7 +29,7 @@ export {
   normalizeError,
   logError,
   type ValidationErrorDetail,
-} from '@takoserver/common/errors';
+} from 'takos-common/errors';
 
 export interface OAuth2ErrorResponse {
   error: string;

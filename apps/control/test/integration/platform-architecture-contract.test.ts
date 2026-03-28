@@ -310,7 +310,7 @@ describe('platform architecture contract', () => {
     expect(localPlatformPackage.exports?.['./run-public-entrypoint']).toBeUndefined();
     expect(localPlatformPackage.exports?.['./register-loader']).toBeUndefined();
     expect(localPlatformPackage.exports?.['./run-entrypoint']).toBeUndefined();
-    expect(localPlatformPackage.dependencies?.['@takoserver/control-hosts']).toBeUndefined();
+    expect(localPlatformPackage.dependencies?.['takos-control-hosts']).toBeUndefined();
     expect(localPlatformPackage.dependencies?.miniflare).toBeUndefined();
   });
 
@@ -336,9 +336,9 @@ describe('platform architecture contract', () => {
     const envBuilder = read('src/node-platform/env-builder.ts');
     const localTenantRuntime = read('src/local-platform/tenant-worker-runtime.ts');
 
-    expect(localRuntime).not.toContain("@takoserver/control-hosts/executor-host");
-    expect(localRuntime).not.toContain("@takoserver/control-hosts/runtime-host");
-    expect(localRuntime).not.toContain("@takoserver/control-hosts/browser-host");
+    expect(localRuntime).not.toContain("takos-control-hosts/executor-host");
+    expect(localRuntime).not.toContain("takos-control-hosts/runtime-host");
+    expect(localRuntime).not.toContain("takos-control-hosts/browser-host");
     expect(localRuntime).not.toContain("../runtime/container-hosts/runtime-host.ts");
     expect(localRuntime).not.toContain("../runtime/container-hosts/executor-host.ts");
     expect(localRuntime).not.toContain("../runtime/container-hosts/browser-session-host.ts");

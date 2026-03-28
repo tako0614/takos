@@ -1,7 +1,7 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import { generateId, slugifyName } from '../../../shared/utils';
 import { bytesToHex } from '../../../shared/utils/encoding-utils';
-import { validateUsername } from '../../../shared/utils/reserved-usernames';
+import { validateUsername } from '../../../shared/utils/domain-validation';
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';

@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { ConflictError } from '@takoserver/common/errors';
+import { ConflictError } from 'takos-common/errors';
 import { generateId, now } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import {

@@ -6,7 +6,7 @@ import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../ap
 import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache';
 import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
-import { AppError, AuthenticationError, InternalError } from '@takoserver/common/errors';
+import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
 import { logError, logWarn } from '../../shared/utils/logger';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 

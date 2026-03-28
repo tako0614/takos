@@ -8,7 +8,7 @@ import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositor
 import { eq, and, sql } from 'drizzle-orm';
 import { checkSpaceAccess, toIsoString } from '../../../shared/utils';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 
 const profilesRepo = new Hono<OptionalAuthRouteEnv>();
 type ProfileRepoContext = Context<OptionalAuthRouteEnv>;

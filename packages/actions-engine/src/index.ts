@@ -1,5 +1,5 @@
 /**
- * @takoserver/actions-engine
+ * takos-actions-engine
  * GitHub Actions compatible CI engine
  */
 

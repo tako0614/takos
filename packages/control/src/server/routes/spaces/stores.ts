@@ -4,7 +4,7 @@ import {
   requireSpaceAccess,
   type AuthenticatedRouteEnv,
 } from '../shared/route-auth';
-import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {
   createActivityPubStore,
@@ -12,7 +12,7 @@ import {
   listActivityPubStoresForWorkspace,
   updateActivityPubStore,
 } from '../../../application/services/activitypub/stores';
-import { InternalError } from '@takoserver/common/errors';
+import { InternalError } from 'takos-common/errors';
 import { logError } from '../../../shared/utils/logger';
 
 const storeBodySchema = z.object({

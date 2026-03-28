@@ -5,7 +5,7 @@ import {
   type MeterType,
   type BillingCheckResult,
 } from '../../application/services/billing/billing';
-import { ServiceUnavailableError, PaymentRequiredError } from '@takoserver/common/errors';
+import { ServiceUnavailableError, PaymentRequiredError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger';
 
 export type BillingVariables = {

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { parseLimit, parseOffset } from '../../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../../zod-validator';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import {
@@ -16,7 +16,7 @@ import {
   rerunWorkflowRun,
 } from '../../../../application/services/workflow-runs/commands';
 import { connectWorkflowRunStream } from '../../../../application/services/workflow-runs/stream';
-import { NotFoundError, AppError } from '@takoserver/common/errors';
+import { NotFoundError, AppError } from 'takos-common/errors';
 
 // ---------------------------------------------------------------------------
 // Shared helpers

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { getDb } from '../../../infra/db';
@@ -9,7 +9,7 @@ import { eq, and, or, inArray } from 'drizzle-orm';
 import { resources, resourceAccess } from '../../../infra/db/schema';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
-import { NotFoundError, InternalError } from '@takoserver/common/errors';
+import { NotFoundError, InternalError } from 'takos-common/errors';
 
 const settingsBindings = new Hono<AuthenticatedRouteEnv>()
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createBaseContext } from '../../context.js';
-import type { Step } from '../../types.js';
+import type { Step } from '../../workflow-models.js';
 import { StepRunner } from '../../scheduler/step.js';
 
 async function withProcessPlatform<T>(

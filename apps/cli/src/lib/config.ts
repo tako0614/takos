@@ -21,33 +21,4 @@ export {
   isAuthenticated,
 } from './config-auth.js';
 
-import { logWarning } from './config-auth.js';
-
-// ---------------------------------------------------------------------------
-// Timeout configuration
-// ---------------------------------------------------------------------------
-
-const SHARED_TIMEOUT_ENV_VAR = 'TAKOS_TIMEOUT_MS';
-const API_TIMEOUT_ENV_VAR = 'TAKOS_API_TIMEOUT_MS';
-const LOGIN_TIMEOUT_ENV_VAR = 'TAKOS_LOGIN_TIMEOUT_MS';
-const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60_000;
-
-function resolveTimeoutMs(envVar: string, defaultMs: number): number {
-  for (const name of [envVar, SHARED_TIMEOUT_ENV_VAR]) {
-    const raw = process.env[name];
-    if (raw === undefined) continue;
-    const parsed = Number(raw);
-    if (Number.isInteger(parsed) && parsed > 0) return parsed;
-    logWarning(`Ignoring invalid ${name}="${raw}". Expected a positive integer timeout in milliseconds.`);
-  }
-  return defaultMs;
-}
-
-export function getApiRequestTimeoutMs(): number {
-  return resolveTimeoutMs(API_TIMEOUT_ENV_VAR, DEFAULT_API_REQUEST_TIMEOUT_MS);
-}
-
-export function getLoginTimeoutMs(): number {
-  return resolveTimeoutMs(LOGIN_TIMEOUT_ENV_VAR, DEFAULT_LOGIN_TIMEOUT_MS);
-}
+export { getApiRequestTimeoutMs, getLoginTimeoutMs } from './config-timeout.js';

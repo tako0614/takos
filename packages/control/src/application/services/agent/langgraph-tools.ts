@@ -88,7 +88,7 @@ export function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-export { throwIfAborted } from '@takoserver/common/abort';
+export { throwIfAborted } from 'takos-common/abort';
 
 // ── Public types ────────────────────────────────────────────────────────
 

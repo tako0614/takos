@@ -4,7 +4,7 @@
  */
 
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
-import { createLogger } from '@takoserver/common/logger';
+import { createLogger } from 'takos-common/logger';
 
 const logger = createLogger({ service: 'browserd' });
 
@@ -123,6 +123,7 @@ function dispatchAction(page: Page, action: BrowserAction): Promise<string> {
     page: Page,
     action: BrowserAction,
   ) => Promise<string>;
+  if (!handler) throw new Error(`Unknown action type: ${(action as any).type}`);
   return handler(page, action);
 }
 

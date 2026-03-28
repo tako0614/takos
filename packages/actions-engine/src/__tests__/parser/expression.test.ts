@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ExecutionContext } from '../../types.js';
+import type { ExecutionContext } from '../../workflow-models.js';
 import {
   evaluateExpression,
   ExpressionError,

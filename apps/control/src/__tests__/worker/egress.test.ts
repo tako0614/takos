@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@takoserver/common/validation', () => ({
+vi.mock('takos-common/validation', () => ({
   isPrivateIP: vi.fn((ip: string) => {
     // Simulate private IP detection
     if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.16.') ||

@@ -1,5 +1,5 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
-import type { Step } from '@takoserver/actions-engine';
+import type { Step } from 'takos-actions-engine';
 import type { WorkflowEngine, WorkflowStepResult } from '../../application/services/execution/workflow-engine';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, repositories } from '../../infra/db';
 import { eq, and, ne, asc } from 'drizzle-orm';

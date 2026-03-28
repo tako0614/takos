@@ -1,5 +1,5 @@
 /**
- * @takoserver/common - Shared utilities for Takos services
+ * takos-common - Shared utilities for Takos services
  *
  * This package provides common utilities used across all takos packages:
  * - ID generation (generateId)
@@ -46,12 +46,17 @@ export {
   // HTTP errors
   BadRequestError,
   AuthenticationError,
+  PaymentRequiredError,
   AuthorizationError,
   NotFoundError,
   ConflictError,
+  GoneError,
+  PayloadTooLargeError,
   ValidationError,
   RateLimitError,
   InternalError,
+  NotImplementedError,
+  BadGatewayError,
   ServiceUnavailableError,
   GatewayTimeoutError,
   // Utility functions

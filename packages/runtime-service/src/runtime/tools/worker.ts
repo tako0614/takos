@@ -1,8 +1,8 @@
 import { parentPort } from 'worker_threads';
 import vm from 'vm';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.js';
-import { getErrorMessage } from '@takoserver/common/errors';
-import { createLogger } from '@takoserver/common/logger';
+import { getErrorMessage } from 'takos-common/errors';
+import { createLogger } from 'takos-common/logger';
 import {
   normalizeAllowedDomains,
   parseFetchUrl,

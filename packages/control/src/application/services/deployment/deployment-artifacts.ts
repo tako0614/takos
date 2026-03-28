@@ -18,7 +18,7 @@ import {
   type DeploymentProviderRegistryLike,
   parseDeploymentTargetConfig,
 } from './provider';
-import { BadRequestError, ConflictError } from '@takoserver/common/errors';
+import { BadRequestError, ConflictError } from 'takos-common/errors';
 
 export function getDeploymentProviderRegistry(env: DeploymentEnv): DeploymentProviderRegistryLike | undefined {
   return env.DEPLOYMENT_PROVIDER_REGISTRY;

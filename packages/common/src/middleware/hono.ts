@@ -37,7 +37,7 @@ import {
  *
  * Usage:
  * ```typescript
- * import type { ServiceTokenEnv } from '@takoserver/common/middleware/hono';
+ * import type { ServiceTokenEnv } from 'takos-common/middleware/hono';
  * const app = new Hono<ServiceTokenEnv>();
  * ```
  */
@@ -74,7 +74,7 @@ export interface ServiceTokenConfig {
  * Note: `takos/packages/control/src/shared/utils/url-utils.ts` contains an
  * equivalent lower-level helper `extractBearerToken(header: string | null)`
  * that operates on a raw header string.  The two cannot be unified here
- * because `@takoserver/common` must not import from the `control` package.
+ * because `takos-common` must not import from the `control` package.
  * If the extraction logic ever needs to change, update both places.
  */
 export function getServiceTokenFromHeader(c: Context): string | null {
@@ -102,7 +102,7 @@ function isJwtFormat(token: string): boolean {
  *
  * Usage:
  * ```typescript
- * import { createServiceTokenMiddleware } from '@takoserver/common/middleware/hono';
+ * import { createServiceTokenMiddleware } from 'takos-common/middleware/hono';
  *
  * const app = new Hono<ServiceTokenEnv>();
  * app.use('*', createServiceTokenMiddleware({ jwtPublicKey: '...' }));
@@ -188,7 +188,7 @@ export interface ErrorHandlerOptions {
  *
  * Usage:
  * ```typescript
- * import { createErrorHandler } from '@takoserver/common/middleware/hono';
+ * import { createErrorHandler } from 'takos-common/middleware/hono';
  *
  * const app = new Hono();
  * app.onError(createErrorHandler({ includeStack: true }));
@@ -240,7 +240,7 @@ export function createErrorHandler(
  *
  * Usage:
  * ```typescript
- * import { notFoundHandler } from '@takoserver/common/middleware/hono';
+ * import { notFoundHandler } from 'takos-common/middleware/hono';
  *
  * const app = new Hono();
  * app.notFound(notFoundHandler);

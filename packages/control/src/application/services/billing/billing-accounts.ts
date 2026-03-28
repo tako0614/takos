@@ -4,7 +4,7 @@
 
 import { getDb, billingAccounts, billingTransactions } from '../../../infra/db';
 import { generateId } from '../../../shared/utils';
-import { InternalError, NotFoundError } from '@takoserver/common/errors';
+import { InternalError, NotFoundError } from 'takos-common/errors';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { eq, sql } from 'drizzle-orm';
 import type { BillingAccountWithPlan } from './billing-types';

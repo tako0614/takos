@@ -1,5 +1,5 @@
 {
-  "name": "@takoserver/control-local-platform",
+  "name": "takos-control-local-platform",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,8 +7,8 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",
-    "@takoserver/actions-engine": "workspace:*",
-    "@takoserver/common": "workspace:*",
+    "takos-actions-engine": "workspace:*",
+    "takos-common": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.4",
     "pg": "^8.20.0",

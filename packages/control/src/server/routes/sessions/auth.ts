@@ -1,5 +1,5 @@
 import type { JwtHeartbeatPayload, SessionContext } from './session-mappers';
-import { AuthenticationError } from '@takoserver/common/errors';
+import { AuthenticationError } from 'takos-common/errors';
 
 export async function authenticateServiceRequest(
   c: SessionContext,

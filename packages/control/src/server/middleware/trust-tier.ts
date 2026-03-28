@@ -8,7 +8,7 @@
  */
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Env, User } from '../../shared/types';
-import { AuthenticationError, AuthorizationError } from '@takoserver/common/errors';
+import { AuthenticationError, AuthorizationError } from 'takos-common/errors';
 
 type TrustTierVariables = { user?: User };
 type TrustTierContext = Context<{ Bindings: Env; Variables: TrustTierVariables }>;

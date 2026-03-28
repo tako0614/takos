@@ -1,4 +1,4 @@
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { generateId, now } from '../../../shared/utils';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { RoutingTarget } from '../routing/types';

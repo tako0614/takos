@@ -1,4 +1,4 @@
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { now } from '../../../shared/utils';
 import {
   getDb,

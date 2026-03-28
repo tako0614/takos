@@ -6,7 +6,7 @@ import {
   parseJsonBody,
   requireSpaceAccess,
 } from './shared/route-auth';
-import { BadRequestError, AuthenticationError, NotFoundError, AuthorizationError } from '@takoserver/common/errors';
+import { BadRequestError, AuthenticationError, NotFoundError, AuthorizationError } from 'takos-common/errors';
 import { getDb } from '../../infra/db';
 import { apps as appsTable, accounts } from '../../infra/db/schema';
 import { services } from '../../infra/db/schema-services';

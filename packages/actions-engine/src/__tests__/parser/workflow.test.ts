@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Workflow } from '../../types.js';
+import type { Workflow } from '../../workflow-models.js';
 import { validateWorkflow } from '../../parser/validator.js';
 import { parseWorkflow, parseWorkflowFile, stringifyWorkflow } from '../../parser/workflow.js';
 

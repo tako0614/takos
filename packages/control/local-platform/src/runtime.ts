@@ -1,5 +1,5 @@
 /**
- * Runtime module for @takoserver/control-local-platform.
+ * Runtime module for takos-control-local-platform.
  *
  * Re-exports the platform-agnostic runtime API (fetch factories, types,
  * constants) from the parent control package, then adds Node-specific

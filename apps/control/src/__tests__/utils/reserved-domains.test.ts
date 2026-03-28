@@ -4,7 +4,7 @@ import {
   isReservedSubdomain,
   hasReservedSubdomain,
   isDomainReserved,
-} from '@/utils/reserved-domains';
+} from '@/utils/domain-validation';
 
 describe('RESERVED_SUBDOMAINS', () => {
   it('is a non-empty Set', () => {

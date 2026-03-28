@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../../shared/types';
 import type { BaseVariables } from './shared/route-auth';
-import { AppError, ErrorCodes } from '@takoserver/common/errors';
+import { AppError, ErrorCodes } from 'takos-common/errors';
 import { getPlatformServices } from '../../platform/accessors.ts';
 
 type NotificationSseRouteEnv = { Bindings: Env; Variables: BaseVariables };

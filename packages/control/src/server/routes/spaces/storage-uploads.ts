@@ -11,7 +11,7 @@ import {
   MAX_FILE_SIZE,
   PRESIGN_EXPIRY_SECONDS,
 } from '../../../application/services/source/space-storage';
-import { BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { requireOAuthScope, handleStorageError } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()

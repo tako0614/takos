@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Job, Workflow } from '@takoserver/actions-engine';
+import type { Job, Workflow } from 'takos-actions-engine';
 import { buildWorkflowDispatchEnv } from '@/services/actions/actions-env';
 
 const workflow = {

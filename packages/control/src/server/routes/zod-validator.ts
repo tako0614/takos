@@ -8,7 +8,7 @@
 import { validator } from 'hono/validator';
 import type { ValidationTargets } from 'hono';
 import type { z } from 'zod';
-import { ValidationError } from '@takoserver/common/errors';
+import { ValidationError } from 'takos-common/errors';
 
 export function zValidator<T extends z.ZodTypeAny, Target extends keyof ValidationTargets>(
   target: Target,

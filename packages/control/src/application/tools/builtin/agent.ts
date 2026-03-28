@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 import type { RunStatus } from '../../../shared/types';
-import { throwIfAborted } from '@takoserver/common/abort';
+import { throwIfAborted } from 'takos-common/abort';
 import { getDb, runs, artifacts, threads, messages } from '../../../infra/db';
 import { createThreadRun } from '../../services/execution/run-creation';
 import { resolveRunModel } from '../../services/runs/create-thread-run-validation';

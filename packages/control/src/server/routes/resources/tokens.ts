@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getResourceById, getResourceByName } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
@@ -9,7 +9,7 @@ import { resourceAccessTokens } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateId, now, base64UrlEncode } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
-import { AuthorizationError, NotFoundError } from '@takoserver/common/errors';
+import { AuthorizationError, NotFoundError } from 'takos-common/errors';
 
 function generateRandomBytes(length: number): Uint8Array {
   const bytes = new Uint8Array(length);

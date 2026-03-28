@@ -8,20 +8,13 @@ import Conf from 'conf';
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, chmodSync, mkdirSync } from 'fs';
+import { logWarning } from './cli-log.js';
 import { validateApiUrl, isValidId } from './config-validation.js';
 import {
   findSessionFile,
   isWindows,
   setSecurePermissions,
 } from './config-session-io.js';
-
-
-/**
- * Log warning messages to stderr (visible but doesn't break output parsing)
- */
-export function logWarning(message: string): void {
-  console.error(`[takos-cli warning] ${message}`);
-}
 
 export interface TakosConfig {
   apiUrl: string;

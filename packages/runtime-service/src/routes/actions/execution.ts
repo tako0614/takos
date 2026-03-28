@@ -24,7 +24,7 @@ import {
   jobManager,
   sanitizeOutputs,
 } from '../../runtime/actions/job-manager.js';
-import { internalError } from '@takoserver/common/middleware/hono';
+import { internalError } from 'takos-common/middleware/hono';
 
 const app = new Hono();
 

@@ -2,7 +2,7 @@
  * D1 database methods for WFPService.
  */
 
-import { InternalError } from '@takoserver/common/errors';
+import { InternalError } from 'takos-common/errors';
 import type { WfpContext, D1QueryResult } from './wfp-contracts';
 import { sanitizeTableName, extractD1Results } from './worker-metadata';
 

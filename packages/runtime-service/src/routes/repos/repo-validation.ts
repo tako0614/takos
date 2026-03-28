@@ -10,9 +10,9 @@ import {
   verifyPathWithinAfterAccess,
 } from '../../runtime/paths.js';
 import { validateGitRef, validateGitPath } from '../../runtime/validation.js';
-import { getErrorMessage } from '@takoserver/common/errors';
+import { getErrorMessage } from 'takos-common/errors';
 import { isBoundaryViolationError } from '../../shared/errors.js';
-import { badRequest, forbidden, notFound } from '@takoserver/common/middleware/hono';
+import { badRequest, forbidden, notFound } from 'takos-common/middleware/hono';
 
 // --- getVerifiedRepoPath ---
 

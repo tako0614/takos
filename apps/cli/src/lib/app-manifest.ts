@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
-import { parseWorkflow, validateWorkflow } from '@takoserver/actions-engine';
+import { parseWorkflow, validateWorkflow } from 'takos-actions-engine';
 
 // --- App manifest parsing ---
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { StepResult } from '../../types.js';
+import type { StepResult } from '../../workflow-models.js';
 import {
   buildStepsContext,
 } from '../../scheduler/job-policy.js';

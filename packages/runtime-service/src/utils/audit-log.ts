@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { createLogger } from '@takoserver/common/logger';
+import { createLogger } from 'takos-common/logger';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

@@ -7,7 +7,7 @@ import type {
   Step,
   StepResult,
   Workflow,
-} from '../../types.js';
+} from '../../workflow-models.js';
 import { JobScheduler } from '../../scheduler/job.js';
 import { StepRunner, type ShellExecutor, type StepRunMetadata } from '../../scheduler/step.js';
 

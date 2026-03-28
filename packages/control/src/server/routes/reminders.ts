@@ -8,7 +8,7 @@ import type {
 } from '../../shared/types';
 import { checkSpaceAccess } from '../../shared/utils';
 import { parseLimit, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
-import { AuthorizationError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {
   listReminders,
