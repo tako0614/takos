@@ -363,7 +363,7 @@ workers:
 | 利用可能リージョン | Cloudflare が自動選択（ユーザーは指定不可） |
 | instanceType | `basic`、`standard-2` などが利用可能 |
 | 最大インスタンス数 | `maxInstances` で制限可能（プランによる上限あり） |
-| IPv4 | `ipv4: true` で専用 IPv4 を割り当て可能 |
+| IPv4 | `services` セクション（常設コンテナ）で `ipv4: true` を使用可能。CF Containers では不可 |
 | コンテナサイズ | Cloudflare のイメージサイズ上限に準拠 |
 | Cloudflare provider では canary 不可 | container-image deploy では canary strategy が使えない |
 | Worker bindings 非対応 | container runtime には Workers bindings が inject されない |

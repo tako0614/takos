@@ -36,33 +36,15 @@ workers:
 
 Worker のコードからは `env.BROWSER_CONTAINER` で Durable Object にアクセスできる。
 
-## 独立稼働
-
-`ipv4: true` で専用 IPv4 が割り当てられ、Worker なしで独立稼働する。
-
-```yaml
-containers:
-  my-api:
-    dockerfile: Dockerfile
-    port: 3000
-    ipv4: true
-```
-
-<div v-pre>
-
-テンプレート変数 `{{containers.<name>.ipv4}}` で他の Worker から IP アドレスを参照できる。詳しくは [環境変数](/apps/environment) を参照。
-
-</div>
-
 ## コンテナ環境変数
 
 コンテナ固有の環境変数を `env` で設定できる。
 
 ```yaml
 containers:
-  my-api:
+  browser:
     dockerfile: Dockerfile
-    port: 3000
+    port: 8080
     env:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -78,10 +60,22 @@ containers:
 | `port` | yes | コンテナのリッスンポート |
 | `instanceType` | no | インスタンスタイプ (`basic`, `standard-2` など) |
 | `maxInstances` | no | 最大インスタンス数 |
-| `ipv4` | no | `true` で専用 IPv4 を割り当て (独立稼働向け) |
 | `env` | no | コンテナ環境変数 |
+
+## containers vs services
+
+`containers` は CF Containers (Worker に紐づく Durable Object) 専用。常設の独立稼働コンテナには `services` セクションを使う。
+
+| | containers | services |
+| --- | --- | --- |
+| 用途 | CF Containers (Worker に紐づく) | 常設コンテナ (VPS/独立稼働) |
+| IPv4 割当 | 不可 | `ipv4: true` で可能 |
+| Worker 連携 | `workers.<name>.containers` で参照 | routes の target で参照 |
+
+詳しくは [Services](/apps/services) を参照。
 
 ## 次のステップ
 
+- [Services](/apps/services) --- 常設コンテナの定義方法
 - [Workers](/apps/workers) --- Worker の定義方法
 - [Routes](/apps/routes) --- コンテナを公開する方法

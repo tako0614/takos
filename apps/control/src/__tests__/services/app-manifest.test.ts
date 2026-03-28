@@ -6,24 +6,35 @@ import {
 } from '@/services/source/app-manifest';
 
 describe('app manifest service', () => {
-  it('rejects spec.services (legacy format)', () => {
-    expect(() => parseAppManifestYaml(`
+  it('parses spec.services (常設コンテナ)', () => {
+    const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
-  name: broken-app
+  name: service-app
 spec:
   version: 1.0.0
   services:
-    api:
-      type: worker
+    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      ipv4: true
+  workers:
+    web:
       build:
         fromWorkflow:
           path: .takos/workflows/build.yml
-          job: build-api
-          artifact: api-dist
-          artifactPath: dist/api.mjs
-`)).toThrow(/spec\.services is no longer supported/);
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+`);
+
+    expect(manifest.spec.services).toBeDefined();
+    expect(manifest.spec.services!['my-api']).toEqual({
+      dockerfile: 'Dockerfile',
+      port: 3000,
+      ipv4: true,
+    });
   });
 
   it('rejects legacy local build fields', () => {
@@ -490,7 +501,6 @@ spec:
       port: 8080
       instanceType: standard-2
       maxInstances: 10
-      ipv4: true
   workers:
     browser-host:
       containers: [executor]
@@ -512,7 +522,6 @@ spec:
         port: 8080,
         instanceType: 'standard-2',
         maxInstances: 10,
-        ipv4: true,
       });
 
       expect(manifest.spec.workers).toBeDefined();
@@ -579,7 +588,7 @@ spec:
   routes:
     - name: main
       target: nonexistent
-`)).toThrow(/references unknown worker or container: nonexistent/);
+`)).toThrow(/references unknown worker, container, or service: nonexistent/);
     });
 
     it('requires name on routes', () => {
@@ -739,6 +748,179 @@ spec:
         NODE_ENV: 'production',
         PORT: '8080',
       });
+    });
+
+    it('parses services with ipv4 and env', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: service-app
+spec:
+  version: 1.0.0
+  services:
+    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      ipv4: true
+      env:
+        NODE_ENV: production
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+`);
+
+      expect(manifest.spec.services).toBeDefined();
+      expect(manifest.spec.services!['my-api']).toEqual({
+        dockerfile: 'Dockerfile',
+        port: 3000,
+        ipv4: true,
+        env: { NODE_ENV: 'production' },
+      });
+    });
+
+    it('allows routes to target services', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: service-route-app
+spec:
+  version: 1.0.0
+  services:
+    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      ipv4: true
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+  routes:
+    - name: api
+      target: my-api
+      path: /api
+`);
+
+      expect(manifest.spec.routes).toHaveLength(1);
+      expect(manifest.spec.routes![0]).toEqual({
+        name: 'api',
+        target: 'my-api',
+        path: '/api',
+      });
+    });
+
+    it('emits services into bundle docs as type service', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: service-bundle-app
+spec:
+  version: 1.0.0
+  services:
+    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      ipv4: true
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+`);
+
+      const docs = appManifestToBundleDocs(manifest, new Map([
+        ['web', {
+          service_name: 'web',
+          workflow_path: '.takos/workflows/build.yml',
+          workflow_job: 'build',
+          workflow_artifact: 'dist',
+          artifact_path: 'dist/worker.js',
+        }],
+      ]));
+
+      expect(docs).toContainEqual(expect.objectContaining({
+        kind: 'Workload',
+        metadata: { name: 'my-api' },
+        spec: expect.objectContaining({
+          type: 'service',
+          pluginConfig: {
+            dockerfile: 'Dockerfile',
+            port: 3000,
+            ipv4: true,
+          },
+        }),
+      }));
+    });
+
+    it('validates env.inject with services template references', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: service-template-app
+spec:
+  version: 1.0.0
+  env:
+    inject:
+      API_IP: "{{services.my-api.ipv4}}"
+      API_PORT: "{{services.my-api.port}}"
+  services:
+    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      ipv4: true
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+`);
+
+      expect(manifest.spec.env).toEqual({
+        inject: {
+          API_IP: '{{services.my-api.ipv4}}',
+          API_PORT: '{{services.my-api.port}}',
+        },
+      });
+    });
+
+    it('rejects env.inject referencing unknown service', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-service-ref
+spec:
+  version: 1.0.0
+  env:
+    inject:
+      BAD: "{{services.nonexistent.ipv4}}"
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+`)).toThrow(/template errors.*service "nonexistent" not found/);
     });
   });
 });

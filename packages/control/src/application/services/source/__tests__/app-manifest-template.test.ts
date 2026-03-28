@@ -12,8 +12,10 @@ describe('app-manifest-template', () => {
       api: { url: 'https://api.example.com', domain: 'api.example.com', path: '/' },
     },
     containers: {
-      executor: { ipv4: '10.0.0.1', port: 8080 },
       headless: { port: 9222 },
+    },
+    services: {
+      executor: { ipv4: '10.0.0.1', port: 8080 },
     },
     workers: {
       'browser-host': { url: 'https://browser-host.workers.dev' },
@@ -34,9 +36,9 @@ describe('app-manifest-template', () => {
       expect(result).toEqual({ API_URL: 'https://api.example.com' });
     });
 
-    it('resolves containers.xxx.ipv4', () => {
+    it('resolves services.xxx.ipv4', () => {
       const result = resolveTemplates(
-        { EXECUTOR_IP: '{{containers.executor.ipv4}}' },
+        { EXECUTOR_IP: '{{services.executor.ipv4}}' },
         context,
       );
       expect(result).toEqual({ EXECUTOR_IP: '10.0.0.1' });
@@ -48,6 +50,14 @@ describe('app-manifest-template', () => {
         context,
       );
       expect(result).toEqual({ HEADLESS_PORT: '9222' });
+    });
+
+    it('resolves services.xxx.port', () => {
+      const result = resolveTemplates(
+        { EXECUTOR_PORT: '{{services.executor.port}}' },
+        context,
+      );
+      expect(result).toEqual({ EXECUTOR_PORT: '8080' });
     });
 
     it('resolves workers.xxx.url', () => {
@@ -68,7 +78,7 @@ describe('app-manifest-template', () => {
 
     it('resolves multiple templates in one value', () => {
       const result = resolveTemplates(
-        { CONNECTION: '{{containers.executor.ipv4}}:{{containers.executor.port}}' },
+        { CONNECTION: '{{services.executor.ipv4}}:{{services.executor.port}}' },
         context,
       );
       expect(result).toEqual({ CONNECTION: '10.0.0.1:8080' });
@@ -110,10 +120,10 @@ describe('app-manifest-template', () => {
     it('throws on deeply unknown path', () => {
       expect(() =>
         resolveTemplates(
-          { BAD: '{{containers.executor.nonexistent}}' },
+          { BAD: '{{services.executor.nonexistent}}' },
           context,
         ),
-      ).toThrow('Template variable not found: {{containers.executor.nonexistent}}');
+      ).toThrow('Template variable not found: {{services.executor.nonexistent}}');
     });
 
     it('throws on unknown top-level section', () => {
@@ -128,7 +138,8 @@ describe('app-manifest-template', () => {
 
   describe('validateTemplateReferences', () => {
     const manifest = {
-      containers: { executor: {}, headless: {} },
+      containers: { headless: {} },
+      services: { executor: {} },
       workers: { 'browser-host': {}, api: {} },
       routes: [{ name: 'browser-api' }, { name: 'api' }],
       resources: { 'mcp-auth-secret': {}, db: {} },
@@ -138,7 +149,7 @@ describe('app-manifest-template', () => {
       const errors = validateTemplateReferences(
         {
           API_URL: '{{routes.api.url}}',
-          EXECUTOR_IP: '{{containers.executor.ipv4}}',
+          EXECUTOR_IP: '{{services.executor.ipv4}}',
           BROWSER_URL: '{{workers.browser-host.url}}',
           SECRET: '{{resources.mcp-auth-secret.id}}',
         },
@@ -195,17 +206,25 @@ describe('app-manifest-template', () => {
       expect(errors).toEqual(['BAD: invalid template path "routes"']);
     });
 
+    it('reports unknown service reference', () => {
+      const errors = validateTemplateReferences(
+        { IP: '{{services.missing.ipv4}}' },
+        manifest,
+      );
+      expect(errors).toEqual(['IP: service "missing" not found']);
+    });
+
     it('collects multiple errors', () => {
       const errors = validateTemplateReferences(
         {
           A: '{{routes.nope.url}}',
-          B: '{{containers.nope.port}}',
+          B: '{{services.nope.port}}',
         },
         manifest,
       );
       expect(errors).toHaveLength(2);
       expect(errors[0]).toContain('route "nope" not found');
-      expect(errors[1]).toContain('container "nope" not found');
+      expect(errors[1]).toContain('service "nope" not found');
     });
   });
 });

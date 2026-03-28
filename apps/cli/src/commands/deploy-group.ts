@@ -27,6 +27,7 @@ type DeployGroupCommandOptions = {
   apiToken?: string;
   compatibilityDate?: string;
   json?: boolean;
+  service?: string[];
   worker?: string[];
   container?: string[];
   baseDomain?: string;
@@ -167,6 +168,7 @@ export function registerDeployGroupCommand(program: Command): void {
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
+    .option('--service <name...>', 'Deploy only specific services (repeatable)')
     .option('--worker <name...>', 'Deploy only specific workers (repeatable)')
     .option('--container <name...>', 'Deploy only specific containers (repeatable)')
     .option('--base-domain <domain>', 'Base domain for template resolution')
@@ -181,8 +183,8 @@ export function registerDeployGroupCommand(program: Command): void {
         console.log(chalk.red('--wrangler-config and --manifest are mutually exclusive.'));
         cliExit(1);
       }
-      if (options.wranglerConfig && (options.worker || options.container)) {
-        console.log(chalk.red('--wrangler-config and --worker/--container are mutually exclusive.'));
+      if (options.wranglerConfig && (options.service || options.worker || options.container)) {
+        console.log(chalk.red('--wrangler-config and --service/--worker/--container are mutually exclusive.'));
         cliExit(1);
       }
 
@@ -237,16 +239,18 @@ export function registerDeployGroupCommand(program: Command): void {
       const allDeployableNames = [
         ...Object.keys((specAny.workers || {}) as Record<string, unknown>),
         ...Object.keys((specAny.containers || {}) as Record<string, unknown>),
+        ...Object.keys((specAny.services || {}) as Record<string, unknown>),
       ];
 
       const allFilterNames = [
+        ...(options.service || []),
         ...(options.worker || []),
         ...(options.container || []),
       ];
       if (allFilterNames.length > 0) {
         const unknownNames = allFilterNames.filter(s => !allDeployableNames.includes(s));
         if (unknownNames.length > 0) {
-          console.log(chalk.red(`Unknown workers/containers: ${unknownNames.join(', ')}`));
+          console.log(chalk.red(`Unknown workers/containers/services: ${unknownNames.join(', ')}`));
           console.log(chalk.dim(`Available: ${allDeployableNames.join(', ')}`));
           cliExit(1);
         }
@@ -275,6 +279,7 @@ export function registerDeployGroupCommand(program: Command): void {
         apiToken,
         dryRun: options.dryRun,
         compatibilityDate: options.compatibilityDate,
+        serviceFilter: options.service,
         workerFilter: options.worker,
         containerFilter: options.container,
         baseDomain: options.baseDomain,

@@ -24,7 +24,7 @@ async function createTempRepo(files: Record<string, string>) {
 }
 
 describe('app manifest', () => {
-  it('loads multi-service manifest', async () => {
+  it('loads workers manifest', async () => {
     const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
@@ -42,9 +42,8 @@ spec:
       migrations:
         up: .takos/migrations/main-db/up
         down: .takos/migrations/main-db/down
-  services:
+  workers:
     gateway:
-      type: worker
       build:
         fromWorkflow:
           path: .takos/workflows/build.yml
@@ -53,64 +52,31 @@ spec:
           artifactPath: dist/gateway.mjs
       bindings:
         d1: [main-db]
-    payments:
-      type: http
-      baseUrl: https://payments.internal.example
   routes:
     - name: gateway-root
-      service: gateway
+      target: gateway
       path: /
-    - name: payments-api
-      service: payments
-      path: /payments
-      ingress: gateway
   mcpServers:
-    - name: payments
-      route: payments-api
+    - name: gateway-mcp
+      route: gateway-root
 `,
     });
 
     const manifest = await loadAppManifest(path.join(repoDir, '.takos/app.yml'));
 
     expect(manifest.metadata.name).toBe('sample-app');
-    expect(manifest.spec.services.gateway.type).toBe('worker');
-    const gatewayService = manifest.spec.services.gateway;
-    if (gatewayService.type === 'worker') {
-      expect(gatewayService.build.fromWorkflow).toEqual({
-        path: '.takos/workflows/build.yml',
-        job: 'build-gateway',
-        artifact: 'gateway-dist',
-        artifactPath: 'dist/gateway.mjs',
-      });
-    }
-    expect(manifest.spec.services.payments.type).toBe('http');
-    expect(manifest.spec.routes).toHaveLength(2);
+    expect(manifest.spec.workers.gateway).toBeDefined();
+    expect(manifest.spec.workers.gateway.build.fromWorkflow).toEqual({
+      path: '.takos/workflows/build.yml',
+      job: 'build-gateway',
+      artifact: 'gateway-dist',
+      artifactPath: 'dist/gateway.mjs',
+    });
+    expect(manifest.spec.routes).toHaveLength(1);
     expect(manifest.spec.mcpServers).toHaveLength(1);
   });
 
-  it('rejects http routes without ingress', async () => {
-    const repoDir = await createTempRepo({
-      '.takos/app.yml': `
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: broken-app
-spec:
-  version: 1.0.0
-  services:
-    api:
-      type: http
-      baseUrl: https://api.example.com
-  routes:
-    - service: api
-      path: /api
-`,
-    });
-
-    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(/ingress is required/);
-  });
-
-  it('rejects worker services without fromWorkflow build source', async () => {
+  it('rejects workers without fromWorkflow build source', async () => {
     const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
@@ -119,9 +85,8 @@ metadata:
   name: broken-worker
 spec:
   version: 1.0.0
-  services:
+  workers:
     gateway:
-      type: worker
       build: {}
 `,
     });
@@ -138,9 +103,8 @@ metadata:
   name: missing-workflow
 spec:
   version: 1.0.0
-  services:
+  workers:
     gateway:
-      type: worker
       build:
         fromWorkflow:
           path: .takos/workflows/build.yml
@@ -163,9 +127,8 @@ metadata:
   name: missing-job
 spec:
   version: 1.0.0
-  services:
+  workers:
     gateway:
-      type: worker
       build:
         fromWorkflow:
           path: .takos/workflows/build.yml
@@ -195,9 +158,8 @@ metadata:
   name: invalid-job
 spec:
   version: 1.0.0
-  services:
+  workers:
     gateway:
-      type: worker
       build:
         fromWorkflow:
           path: .takos/workflows/build.yml
@@ -221,5 +183,20 @@ jobs:
 
     const { validateAppManifest } = await import('../src/lib/app-manifest.js');
     await expect(validateAppManifest(repoDir)).rejects.toThrow(/must not use needs/);
+  });
+
+  it('requires at least one worker', async () => {
+    const repoDir = await createTempRepo({
+      '.takos/app.yml': `
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: no-workers
+spec:
+  version: 1.0.0
+`,
+    });
+
+    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(/spec.workers must contain at least one worker/);
   });
 });

@@ -45,8 +45,17 @@ export type WorkflowArtifactBuild = {
 
 // --- Container & Worker types ---
 
-/** Container definition (Docker image, runs as CF Container or standalone) */
+/** Container definition (CF Containers — worker に紐づけて使う) */
 export type AppContainer = {
+  dockerfile: string;
+  port: number;
+  instanceType?: string;
+  maxInstances?: number;
+  env?: Record<string, string>;
+};
+
+/** Service definition (常設コンテナ — VPS/独立稼働) */
+export type AppService = {
   dockerfile: string;
   port: number;
   instanceType?: string;
@@ -132,6 +141,7 @@ export type AppManifest = {
     };
     resources?: Record<string, AppResource>;
     containers?: Record<string, AppContainer>;
+    services?: Record<string, AppService>;
     workers?: Record<string, AppWorker>;
     routes?: AppRoute[];
     mcpServers?: AppMcpServer[];

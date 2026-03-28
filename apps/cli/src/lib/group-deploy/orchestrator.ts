@@ -90,6 +90,7 @@ async function deployNewFormat(
   const { groupName, env, namespace, accountId, apiToken, dryRun, compatibilityDate } = ctx;
   const workers = manifest.spec.workers || {};
   const containers = manifest.spec.containers || {};
+  const services = manifest.spec.services || {};
 
   // Determine which containers are referenced by workers
   const workerReferencedContainers = new Set<string>();
@@ -122,7 +123,7 @@ async function deployNewFormat(
   );
   result.resources = resourceResults;
 
-  // Step 2a: Deploy standalone containers (not referenced by any worker)
+  // Step 2a: Deploy standalone containers (CF Containers not referenced by any worker)
   for (const [containerName, container] of Object.entries(containers)) {
     if (workerReferencedContainers.has(containerName)) continue;
     if (effectiveFilter && effectiveFilter.length > 0 && !effectiveFilter.includes(containerName)) continue;
@@ -140,6 +141,26 @@ async function deployNewFormat(
 
     const deployResult = await deployContainerWithWrangler(containerName, legacyService, options, provisioned);
     result.services.push(deployResult);
+  }
+
+  // Step 2a-2: Deploy services (常設コンテナ — Docker build + deploy)
+  for (const [serviceName, service] of Object.entries(services)) {
+    if (effectiveFilter && effectiveFilter.length > 0 && !effectiveFilter.includes(serviceName)) continue;
+
+    const legacyService = {
+      type: 'container' as const,
+      container: {
+        dockerfile: service.dockerfile,
+        port: service.port || 3000,
+        instanceType: service.instanceType,
+        maxInstances: service.maxInstances,
+      },
+      env: service.env,
+    };
+
+    const deployResult = await deployContainerWithWrangler(serviceName, legacyService, options, provisioned);
+    // Override type to 'service' for template context
+    result.services.push({ ...deployResult, type: 'service' });
   }
 
   // Step 2b: Deploy workers (with referenced containers included in wrangler config)

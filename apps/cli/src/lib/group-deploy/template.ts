@@ -22,10 +22,17 @@ export function buildTemplateContext(
     };
   }
 
-  const containers: Record<string, { ipv4?: string }> = {};
+  const containers: Record<string, { port?: number }> = {};
   for (const svc of result.services) {
     if (svc.type === 'container') {
-      containers[svc.name] = { ipv4: svc.url };
+      containers[svc.name] = {};
+    }
+  }
+
+  const services: Record<string, { ipv4?: string; port?: number }> = {};
+  for (const svc of result.services) {
+    if (svc.type === 'service') {
+      services[svc.name] = { ipv4: svc.url };
     }
   }
 
@@ -41,7 +48,7 @@ export function buildTemplateContext(
     resources[res.name] = { id: res.id };
   }
 
-  return { routes, containers, workers, resources };
+  return { routes, containers, services, workers, resources };
 }
 
 export function resolveTemplateString(template: string, context: TemplateContext): string {
