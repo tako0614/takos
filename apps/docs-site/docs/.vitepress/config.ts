@@ -55,10 +55,13 @@ export default defineConfig({
       {
         text: "ホスティング",
         items: [
+          { text: "環境ごとの差異", link: "/hosting/differences" },
           { text: "Cloudflare", link: "/hosting/cloudflare" },
+          { text: "AWS", link: "/hosting/aws" },
+          { text: "GCP", link: "/hosting/gcp" },
+          { text: "Kubernetes", link: "/hosting/kubernetes" },
           { text: "セルフホスト", link: "/hosting/self-hosted" },
           { text: "ローカル開発", link: "/hosting/local" },
-          { text: "環境ごとの差異", link: "/hosting/differences" },
         ],
       },
       {

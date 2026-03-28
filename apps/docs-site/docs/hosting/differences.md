@@ -1,140 +1,199 @@
 # 環境ごとの差異
 
-Cloudflare / セルフホスト / ローカルで同じ app.yml を使えるが、backend は同一ではない。ここでは何が揃っていて、何が違うかをまとめる。
+Takos は **app.yml を全環境で同じに保つ** 設計。環境の違いはプラットフォームアダプタが吸収するから、アプリ開発者がデプロイ先を意識する必要はほぼない。
 
-## 揃えているもの
+## リソースマッピング
 
-Takos が環境をまたいで parity の対象にしているもの:
+app.yml で `type: d1` と書くと、デプロイ先に応じて自動的に適切なバックエンドにマッピングされる。
 
-- tenant artifact は `worker-bundle`（Workers-compatible なコードがそのまま動く）
-- manifest で宣言する `queue`, `analyticsEngine`, `workflow`, `scheduled` trigger の contract
-- deployment は `active`, `canary`, `rollback`, `archived` の状態を持つ
-- deployment ごとの snapshot（runtime config, bindings, env vars）
-- dispatch を経由して tenant runtime に到達する request contract
+| app.yml | Cloudflare | AWS | GCP | セルフホスト |
+| --- | --- | --- | --- | --- |
+| `d1` | D1 | PostgreSQL (RDS) | PostgreSQL (Cloud SQL) | PostgreSQL |
+| `r2` | R2 | S3 | GCS | MinIO |
+| `kv` | KV Namespace | DynamoDB | Firestore | Redis |
+| `queue` | CF Queue | SQS | Pub/Sub | PostgreSQL |
+| `vectorize` | Vectorize | pgvector | pgvector | pgvector |
+| `analyticsEngine` | Analytics Engine | --- | --- | --- |
+| `durableObject` | Durable Object | --- | --- | --- |
+| `workflow` | CF Workflows | --- | --- | --- |
 
-つまり **同じ worker-bundle contract を、どの環境でも実行する** ことを目指している。
+`---` は現時点で対応するマッピングがないことを示す。Cloudflare 固有のリソース（Analytics Engine, Durable Object, Workflows）は他環境では未対応。
 
-## 機能サポートマトリクス
+## ワークロードマッピング
 
-| 機能 | Cloudflare | セルフホスト | ローカル |
-| --- | --- | --- | --- |
-| Workers | ✅ 完全対応 | ✅ Node.js 互換 | ✅ Node.js 互換 |
-| CF Containers | ✅ 完全対応 | ⚠️ Docker で代替 | ⚠️ Docker で代替 |
-| D1 | ✅ 完全対応 | ✅ PostgreSQL | ✅ PostgreSQL |
-| R2 | ✅ 完全対応 | ✅ MinIO | ✅ MinIO |
-| KV | ✅ 完全対応 | ✅ Redis | ✅ Redis |
-| Vectorize | ✅ 完全対応 | ⚠️ pgvector | ⚠️ pgvector（要 `PGVECTOR_ENABLED`） |
-| Queue | ✅ 完全対応 | ⚠️ PostgreSQL | ⚠️ PostgreSQL |
-| AI (embeddings) | ✅ 完全対応 | ⚠️ 外部 API 経由 | ⚠️ 外部 API 経由 |
-| Durable Objects | ✅ 完全対応 | ❌ 未対応 | ❌ 未対応 |
-| Dispatch Namespace | ✅ 完全対応 | ❌ 未対応 | ❌ 未対応 |
-| Analytics Engine | ✅ 完全対応 | ⚠️ write path は contract-first | ⚠️ write path は contract-first |
-| Browser Rendering | ✅ Puppeteer binding | ⚠️ browser-service container | ⚠️ browser-service container |
-| Scheduled Triggers | ✅ Cron Triggers | ⚠️ ポーリングベース | ⚠️ ポーリングベース |
-| Workflows | ✅ CF Workflows | ⚠️ Takos-managed runner | ⚠️ Takos-managed runner |
+| app.yml | Cloudflare | AWS | GCP | k8s | セルフホスト |
+| --- | --- | --- | --- | --- | --- |
+| `workers` | CF Workers | Node.js (ECS) | Node.js (Cloud Run) | Pod (Node.js) | Node.js |
+| `containers` (CF) | CF Containers | --- | --- | --- | Docker |
+| `services` (常設) | --- | ECS / Fargate | Cloud Run | Pod | Docker Compose |
 
-凡例:
-- ✅ 完全対応: provider-native の実装
-- ⚠️ 互換あり: 機能は動くが provider-native ではない / 制約がある
-- ❌ 未対応: 現時点ではサポートなし
+::: info workers のランタイム
+Workers のコードは Workers-compatible な JavaScript/TypeScript。Cloudflare 以外の環境では Node.js の local-platform adapter 上で同じ worker-bundle を実行する。V8 isolate ではなく Node.js プロセスとして動くけど、worker-bundle contract は同一。
+:::
+
+## 環境固有の制限
+
+### Cloudflare のみ
+
+以下は Cloudflare 環境でしか使えない:
+
+- **Durable Objects** --- セッション管理、レートリミッタ、ルーティングなどの control plane 機能
+- **CF Containers** --- Workers の `containers` フィールド。Durable Object として動くコンテナ
+- **Analytics Engine** --- 構造化ログ・メトリクス
+- **Workflows** --- CF Workflows ベースのワークフロー実行
+- **Dispatch Namespace** --- テナント Worker の論理分離
+- **Browser Rendering** --- Puppeteer binding
+- **AI binding** --- `@cloudflare/ai` のネイティブバインディング
+
+### AWS
+
+- `d1` は PostgreSQL (RDS) にマッピング（D1 は CF 固有）
+- Durable Objects 未対応
+- CF Containers 未対応 → ECS / Fargate で代替
+- デプロイプロバイダ: `ecs`（実装済み）
+
+### GCP
+
+- `d1` は PostgreSQL (Cloud SQL) にマッピング
+- Durable Objects 未対応
+- CF Containers 未対応 → Cloud Run で代替
+- デプロイプロバイダ: `cloud-run`（実装済み）
+
+### k8s
+
+- デプロイプロバイダ: `k8s`（実装済み）
+- 全リソースを k8s ネイティブにマッピング:
+  - KV → Redis (StatefulSet)
+  - R2 → S3 互換 (MinIO)
+  - Queue → SQS / Redis Streams / PostgreSQL
+  - Workers → Pod (Node.js)
+  - Services → Pod (Docker)
+
+::: warning Helm chart
+Helm chart (`deploy/helm/takos/`) は計画中。現時点では手動で k8s マニフェストを構成する必要がある。
+:::
+
+### セルフホスト (Docker Compose)
+
+- PostgreSQL --- d1 + queue + vectorize のバックエンド
+- Redis --- kv のバックエンド
+- MinIO --- r2 のバックエンド
+- Node.js --- workers の実行環境
+- Docker --- containers + services の実行環境
+
+## app.yml は変わらない
+
+以下の app.yml はどの環境でもそのまま動く:
+
+```yaml
+name: my-app
+workers:
+  api:
+    main: src/worker.ts
+resources:
+  db:
+    type: d1
+    binding: DB
+    migrations:
+      up: .takos/migrations/db/up
+      down: .takos/migrations/db/down
+  storage:
+    type: r2
+    binding: STORAGE
+  cache:
+    type: kv
+    binding: CACHE
+```
+
+デプロイ先だけが変わる:
+
+```bash
+# Cloudflare（デフォルト）
+takos deploy-group --env production
+
+# セルフホスト
+takos deploy-group --env production --provider oci
+
+# ECS
+takos deploy-group --env production --provider ecs
+
+# Cloud Run
+takos deploy-group --env production --provider cloud-run
+
+# k8s
+takos deploy-group --env production --provider k8s
+```
+
+::: tip --provider フラグ
+`--provider` はデプロイ先のプロバイダを指定する。省略すると環境設定に基づいて自動選択される。Cloudflare 環境なら `workers-dispatch`、それ以外なら `oci` がデフォルト。
+:::
+
+## アダプタの実装状況
+
+各アダプタの実装状況。Takos のコードベースに実際に存在するもの:
+
+| アダプタ | パッケージ | ステータス |
+| --- | --- | --- |
+| S3 Object Store | `@takos/control/bindings/s3-object-store` | stable |
+| GCS Object Store | `@takos/control/bindings/gcs-object-store` | stable |
+| DynamoDB KV Store | `@takos/control/bindings/dynamo-kv-store` | stable |
+| Firestore KV Store | `@takos/control/bindings/firestore-kv-store` | stable |
+| SQS Queue | `@takos/control/bindings/sqs-queue` | stable |
+| Pub/Sub Queue | `@takos/control/bindings/pubsub-queue` | stable |
+| pgvector Store | `@takos/control/bindings/pgvector-store` | stable |
+| Node.js Platform | `@takos/control/platform/adapters/node` | stable |
+| Workers Platform | `@takos/control/platform/adapters/workers` | stable |
 
 ## ランタイム構成の違い
 
-| コンポーネント | Cloudflare | セルフホスト / ローカル |
-| --- | --- | --- |
-| Control Web | CF Worker | Node.js（ローカルプラットフォーム） |
-| Dispatch | CF Worker | Node.js（ローカルプラットフォーム） |
-| Background Worker | CF Worker (Queue consumer) | Node.js（ポーリングベース） |
-| Runtime Host | CF Container | Node.js（ローカルプラットフォーム） |
-| Executor Host | CF Container | Node.js（ローカルプラットフォーム） |
-| Browser Host | CF Container | Node.js（ローカルプラットフォーム） |
-| DB | Cloudflare D1 (SQLite) | PostgreSQL 16+ |
-| Storage | Cloudflare R2 | MinIO (S3 互換) |
-| KV | Cloudflare KV | Redis 7+ |
-| Vectorize | Cloudflare Vectorize | PostgreSQL + pgvector |
-| Queue | Cloudflare Queues | PostgreSQL ベースのジョブキュー |
-| Container 管理 | CF Containers (DO) | OCI Orchestrator + Docker |
-
-## 機能ごとの対応状況
-
-| 機能 | manifest | Cloudflare | ローカル |
+| コンポーネント | Cloudflare | AWS / GCP / k8s | セルフホスト |
 | --- | --- | --- | --- |
-| `queue` | 対応 | backend native | delivery/orchestration は backend 依存 |
-| `scheduled` | 対応 | backend native | delivery は backend 依存 |
-| `workflow` | 対応 | リソース管理は可 | Takos-managed runner 前提 |
-| `analyticsEngine` | 対応 | backend native | write path は contract-first |
-| `vectorize` | 対応 | backend native | PostgreSQL + pgvector が必要 |
-| `durableObject` | 対応 | backend native | ローカルでも materialize |
-
-manifest で受け付けることと、provider-native 実装まで完全に揃うことは別。
-
-## container-image の制約
-
-| 制約 | 説明 |
-| --- | --- |
-| Cloudflare provider は拒否 | `cloudflare` provider では container-image deploy を受け付けない |
-| canary 不可 | container-image deploy では canary strategy が使えない |
-| artifact kind 混在不可 | 同一 service で初回 deploy 時に確定 |
-| Worker bindings 非対応 | container runtime には inject されない |
-| MCP / file handlers 非対応 | v1 制約 |
+| Control Web | CF Worker | Node.js (ECS / Cloud Run / Pod) | Node.js |
+| Dispatch | CF Worker | Node.js | Node.js |
+| Background Worker | CF Worker (Queue consumer) | Node.js (ポーリング) | Node.js (ポーリング) |
+| Runtime Host | CF Container | Node.js (ECS / Cloud Run / Pod) | Node.js |
+| DB | D1 (SQLite) | PostgreSQL | PostgreSQL |
+| Storage | R2 | S3 / GCS | MinIO |
+| KV | KV Namespace | DynamoDB / Firestore | Redis |
+| Queue | CF Queues | SQS / Pub/Sub | PostgreSQL |
+| Vector | Vectorize | pgvector | pgvector |
+| Container 管理 | CF Containers (DO) | ECS / Cloud Run / k8s | OCI Orchestrator + Docker |
 
 ## 意図的に残している差分
 
-### ローカル control plane は Node-backed
+### ランタイムの実行モデル
 
-ローカルの control plane は Node で動く。起動性と DX を優先した設計。
+- Cloudflare: V8 isolate 上で Workers API を直接利用
+- その他: Node.js プロセス上で Workers-compatible adapter を使用
 
-### ローカル tenant runtime は Workers-compatible adapter
-
-Workers-compatible だが Cloudflare backend と byte-for-byte 同一ではない。local adapter 上で worker-bundle を materialize して実行する。
-
-### Vectorize
-
-- Cloudflare: `vectorize` binding をそのまま利用
-- セルフホスト / ローカル: PostgreSQL + pgvector が必要（`POSTGRES_URL` + `PGVECTOR_ENABLED=true`）
-- 未設定の場合は Worker 起動時にエラー
+Workers-compatible だけど、Cloudflare backend と byte-for-byte 同一ではない。これは設計上の意図的な差分。
 
 ### Durable Objects
 
-Cloudflare 環境でのみ動作する。Takos の control plane が使う DO（SessionDO、RunNotifierDO、RateLimiterDO、RoutingDO、GitPushLockDO、NotificationNotifierDO）はローカルでは代替メカニズムが使われるか、未実装。
+Cloudflare 環境でのみ動作する。control plane が使う DO（SessionDO, RunNotifierDO, RateLimiterDO, RoutingDO, GitPushLockDO, NotificationNotifierDO）は他環境では代替メカニズムが使われるか、未実装。
 
 ### Dispatch Namespace
 
-テナント Worker の論理分離は Cloudflare Dispatch Namespace で行われる。ローカル / セルフホストではテナント Worker は直接 runtime-host に dispatch される。
-
-## ローカルでできないこと
-
-- Cloudflare platform 固有の内部最適化
-- backend ごとの performance 特性の再現
-- provider-native な queue consumer / scheduler / workflow semantics の byte-for-byte 再現
-- production traffic 上での最終的な実証
-- Durable Objects の利用
-- Dispatch Namespace によるテナント分離
-
-ローカルは production backend の代替ではなく、product contract を検証するための backend。
-
-## 使い分け
-
-| 環境 | 用途 |
-| --- | --- |
-| ローカル | 素早い検証、smoke test |
-| staging | actual provider 上での deploy / routing / rollback 検証 |
-| production | 実 traffic と実 resource を扱う本番運用 |
-
-ローカルが green でも、provider 固有の最終確認は staging / production で行う。
+テナント Worker の論理分離は Cloudflare Dispatch Namespace で行われる。他の環境ではテナント Worker は直接 runtime-host に dispatch される。
 
 ## サポートマトリクス
 
-| 環境 | ステータス | 設定ファイル |
+| 環境 | ステータス | 備考 |
 | --- | --- | --- |
-| Cloudflare Workers + CF Containers | `stable` | tracked Cloudflare templates |
-| Local Docker Compose | `stable` | `.env.local.example`, `compose.local.yml` |
-| セルフホスト手動起動 | `supported` | `.env.self-host.example` + `dev:local:*` scripts |
-| Helm / Kubernetes | `supported` | `deploy/helm/takos/` |
-| Generic OCI orchestrator | `experimental` | `OCI_ORCHESTRATOR_*` 環境変数 |
+| Cloudflare Workers + CF Containers | `stable` | フル機能 |
+| AWS (ECS + S3 + DynamoDB + SQS) | `stable` | アダプタ実装済み |
+| GCP (Cloud Run + GCS + Firestore + Pub/Sub) | `stable` | アダプタ実装済み |
+| k8s | `experimental` | デプロイプロバイダ実装済み、Helm chart 計画中 |
+| セルフホスト (Docker Compose) | `stable` | `.env.local.example` + `compose.local.yml` |
+| ローカル開発 | `stable` | 開発・テスト用 |
 
-## 次に読むページ
+## プロバイダ設定
 
-- [Cloudflare](/hosting/cloudflare) --- Cloudflare へのデプロイ
-- [セルフホスト](/hosting/self-hosted) --- セルフホスト環境
-- [ローカル開発](/hosting/local) --- ローカル開発環境
+各プロバイダの具体的なセットアップ:
+
+- [Cloudflare](/hosting/cloudflare) --- Cloudflare Workers へのデプロイ
+- [AWS](/hosting/aws) --- AWS (ECS + S3 + DynamoDB + SQS) へのデプロイ
+- [GCP](/hosting/gcp) --- GCP (Cloud Run + GCS + Firestore + Pub/Sub) へのデプロイ
+- [Kubernetes](/hosting/kubernetes) --- k8s クラスタへのデプロイ
+- [セルフホスト](/hosting/self-hosted) --- Docker Compose でのセルフホスト
+- [ローカル開発](/hosting/local) --- 開発用のローカル環境

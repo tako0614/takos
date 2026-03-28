@@ -461,8 +461,65 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | AI プロバイダ |
 
+## Cloudflare 固有の機能
+
+Cloudflare 環境でのみ利用できる機能。これらは他の環境（AWS / GCP / セルフホスト）では使えないか、代替メカニズムが使われる。
+
+### Durable Objects
+
+control plane のステート管理に使われる。他環境では代替メカニズム（PostgreSQL ベースなど）が使われる。
+
+| DO クラス | 用途 | 他環境での代替 |
+| --- | --- | --- |
+| `SessionDO` | ユーザーセッション管理 | PostgreSQL / Redis |
+| `RunNotifierDO` | Run イベントのリアルタイム通知 | ポーリングベース |
+| `NotificationNotifierDO` | 通知のリアルタイム配信 | ポーリングベース |
+| `RateLimiterDO` | 分散レートリミッタ | Redis ベース |
+| `RoutingDO` | ホスト名ベースルーティング | PostgreSQL + キャッシュ |
+| `GitPushLockDO` | Git push のロック管理 | PostgreSQL advisory lock |
+
+### CF Containers
+
+Docker コンテナを Cloudflare 上で Durable Object として実行する仕組み。他環境では ECS / Cloud Run / k8s Pod / Docker で代替する。
+
+### Dispatch Namespace
+
+テナント Worker を論理分離するための仕組み。他環境ではテナント Worker は直接 runtime-host に dispatch される。
+
+### Analytics Engine
+
+構造化ログ・メトリクスの書き込み。他環境では write path が contract-first（書き込み API は同じだけどバックエンドは未実装）。
+
+### Browser Rendering
+
+Puppeteer binding による Workers 内ブラウザ操作。他環境では browser-service コンテナで代替する。
+
+### AI Binding
+
+`@cloudflare/ai` のネイティブバインディング。他環境では OpenAI / Anthropic / Google AI の API を直接呼ぶ。
+
+### Workflows
+
+CF Workflows ベースのワークフロー実行。他環境では Takos-managed runner で代替する。
+
+## マルチクラウド対応
+
+Cloudflare をメインで使いつつ、一部のワークロードを他のクラウドにデプロイすることもできる。app.yml は同じまま、`--provider` フラグでデプロイ先を切り替える:
+
+```bash
+# Cloudflare（デフォルト）
+takos deploy-group --env production
+
+# 同じ app.yml を AWS にデプロイ
+takos deploy-group --env production --provider ecs
+```
+
+詳しくは [環境ごとの差異](/hosting/differences) を参照。
+
 ## 次に読むページ
 
 - [deploy-group](/deploy/deploy-group) --- デプロイコマンドの詳細
-- [環境ごとの差異](/hosting/differences) --- Cloudflare とセルフホストの違い
+- [環境ごとの差異](/hosting/differences) --- 全環境の比較
+- [AWS](/hosting/aws) --- AWS にデプロイする場合
+- [GCP](/hosting/gcp) --- GCP にデプロイする場合
 - [セルフホスト](/hosting/self-hosted) --- Cloudflare を使わない場合
