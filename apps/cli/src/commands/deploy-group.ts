@@ -28,6 +28,9 @@ type DeployGroupCommandOptions = {
   compatibilityDate?: string;
   json?: boolean;
   service?: string[];
+  worker?: string[];
+  container?: string[];
+  baseDomain?: string;
   wranglerConfig?: string;
 };
 
@@ -161,7 +164,10 @@ export function registerDeployGroupCommand(program: Command): void {
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
-    .option('--service <name...>', 'Deploy only specific services (repeatable)')
+    .option('--service <name...>', 'Deploy only specific services (legacy, matches workers+containers)')
+    .option('--worker <name...>', 'Deploy only specific workers (repeatable)')
+    .option('--container <name...>', 'Deploy only specific containers (repeatable)')
+    .option('--base-domain <domain>', 'Base domain for template resolution')
     .option('--wrangler-config <path>', 'Deploy using a wrangler.toml directly')
     .option('--json', 'Machine-readable JSON output')
     .action(async (options: DeployGroupCommandOptions) => {
@@ -173,8 +179,8 @@ export function registerDeployGroupCommand(program: Command): void {
         console.log(chalk.red('--wrangler-config and --manifest are mutually exclusive.'));
         cliExit(1);
       }
-      if (options.wranglerConfig && options.service) {
-        console.log(chalk.red('--wrangler-config and --service are mutually exclusive.'));
+      if (options.wranglerConfig && (options.service || options.worker || options.container)) {
+        console.log(chalk.red('--wrangler-config and --service/--worker/--container are mutually exclusive.'));
         cliExit(1);
       }
 
@@ -224,13 +230,25 @@ export function registerDeployGroupCommand(program: Command): void {
         cliExit(1);
       }
 
-      // Validate --service names against manifest
-      if (options.service) {
-        const manifestServiceNames = Object.keys(manifest.spec.services);
-        const unknownServices = options.service.filter(s => !manifestServiceNames.includes(s));
-        if (unknownServices.length > 0) {
-          console.log(chalk.red(`Unknown services: ${unknownServices.join(', ')}`));
-          console.log(chalk.dim(`Available: ${manifestServiceNames.join(', ')}`));
+      // Validate filter names against manifest
+      // Determine available names depending on manifest format
+      // Cast to Record to access workers/containers (types being updated by another agent)
+      const specAny = manifest.spec as Record<string, unknown>;
+      const isNewFormat = specAny.workers != null || specAny.containers != null;
+      const allDeployableNames = isNewFormat
+        ? [...Object.keys((specAny.workers || {}) as Record<string, unknown>), ...Object.keys((specAny.containers || {}) as Record<string, unknown>)]
+        : Object.keys(manifest.spec.services || {});
+
+      const allFilterNames = [
+        ...(options.service || []),
+        ...(options.worker || []),
+        ...(options.container || []),
+      ];
+      if (allFilterNames.length > 0) {
+        const unknownNames = allFilterNames.filter(s => !allDeployableNames.includes(s));
+        if (unknownNames.length > 0) {
+          console.log(chalk.red(`Unknown services/workers/containers: ${unknownNames.join(', ')}`));
+          console.log(chalk.dim(`Available: ${allDeployableNames.join(', ')}`));
           cliExit(1);
         }
       }
@@ -242,10 +260,8 @@ export function registerDeployGroupCommand(program: Command): void {
           console.log(`  Namespace: ${options.namespace}`);
         }
         console.log(`  Manifest:  ${manifestPath}`);
-        if (options.service) {
-          for (const svc of options.service) {
-            console.log(`  filtered: ${svc}`);
-          }
+        for (const svc of allFilterNames) {
+          console.log(`  filtered: ${svc}`);
         }
         console.log('');
       }
@@ -261,6 +277,9 @@ export function registerDeployGroupCommand(program: Command): void {
         dryRun: options.dryRun,
         compatibilityDate: options.compatibilityDate,
         serviceFilter: options.service,
+        workerFilter: options.worker,
+        containerFilter: options.container,
+        baseDomain: options.baseDomain,
         manifestDir: path.dirname(manifestPath),
       });
 

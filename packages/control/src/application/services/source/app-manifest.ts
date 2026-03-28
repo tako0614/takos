@@ -5,6 +5,11 @@ export type {
   WorkerService,
   WorkerContainer,
   ContainerService,
+  AppContainer,
+  AppWorker,
+  AppEnvConfig,
+  AppRoute,
+  LegacyAppRoute,
   AppDeploymentBuildSource,
   BundleDoc,
 } from './app-manifest-types';
@@ -14,6 +19,13 @@ export {
   parseAppManifestYaml,
   parseAppManifestText,
 } from './app-manifest-parser';
+
+// Re-export template engine
+export {
+  resolveTemplates,
+  validateTemplateReferences,
+  type TemplateContext,
+} from './app-manifest-template';
 
 // Re-export validation
 export {

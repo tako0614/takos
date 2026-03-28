@@ -73,6 +73,43 @@ export interface WorkerContainerSpec {
   maxInstances?: number;
 }
 
+// ── New-format manifest types (inline until type package merge) ───────────────
+
+export interface ManifestWorkerDef {
+  build?: {
+    fromWorkflow: {
+      path: string;
+      job: string;
+      artifact: string;
+      artifactPath: string;
+    };
+  };
+  env?: Record<string, string>;
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    services?: string[];
+  };
+  containers?: string[];
+}
+
+export interface ManifestContainerDef {
+  dockerfile: string;
+  port?: number;
+  instanceType?: string;
+  maxInstances?: number;
+  ipv4?: boolean;
+  env?: Record<string, string>;
+}
+
+export interface TemplateContext {
+  routes: Record<string, { url: string; domain: string; path: string }>;
+  containers: Record<string, { ipv4?: string }>;
+  workers: Record<string, { url?: string }>;
+  resources: Record<string, { id?: string }>;
+}
+
 export interface GroupDeployOptions {
   manifest: {
     apiVersion: string;
@@ -84,7 +121,11 @@ export interface GroupDeployOptions {
         type: 'd1' | 'r2' | 'kv' | 'secretRef';
         binding?: string;
       }>;
-      services: Record<string, {
+      // New format
+      workers?: Record<string, ManifestWorkerDef>;
+      containers?: Record<string, ManifestContainerDef>;
+      // Legacy format
+      services?: Record<string, {
         type: 'worker' | 'http' | 'container';
         build?: {
           fromWorkflow: {
@@ -108,9 +149,14 @@ export interface GroupDeployOptions {
       }>;
       routes?: Array<{
         name?: string;
-        service: string;
+        target?: string;
+        service?: string;
         path?: string;
       }>;
+      env?: {
+        required?: string[];
+        inject?: Record<string, string>;
+      };
     };
   };
   env: string;
@@ -121,7 +167,10 @@ export interface GroupDeployOptions {
   dryRun?: boolean;
   compatibilityDate?: string;
   serviceFilter?: string[];
+  workerFilter?: string[];
+  containerFilter?: string[];
   manifestDir?: string;
+  baseDomain?: string;
 }
 
 // ── Wrangler Direct Deploy Types ─────────────────────────────────────────────
@@ -307,8 +356,10 @@ async function provisionResources(
 
 // ── Wrangler Config Generator ────────────────────────────────────────────────
 
+type LegacyServiceDef = NonNullable<GroupDeployOptions['manifest']['spec']['services']>[string];
+
 function generateWranglerConfig(
-  service: GroupDeployOptions['manifest']['spec']['services'][string],
+  service: LegacyServiceDef,
   serviceName: string,
   options: { groupName: string; env: string; namespace?: string; resources: Map<string, ProvisionedResource>; compatibilityDate?: string; manifestDir?: string },
 ): WranglerConfig | ContainerWranglerConfig {
@@ -481,7 +532,7 @@ export function toPascalCase(str: string): string {
 
 export function generateContainerWranglerConfig(
   serviceName: string,
-  service: GroupDeployOptions['manifest']['spec']['services'][string],
+  service: LegacyServiceDef,
   options: GroupDeployOptions,
 ): ContainerWranglerConfig {
   const groupName = options.groupName || options.manifest?.metadata?.name || 'app';
@@ -569,7 +620,7 @@ export function serializeContainerWranglerToml(config: ContainerWranglerConfig):
   return lines.join('\n');
 }
 
-export function generateContainerHostEntry(serviceName: string, service: GroupDeployOptions['manifest']['spec']['services'][string]): string {
+export function generateContainerHostEntry(serviceName: string, service: LegacyServiceDef): string {
   const className = `${toPascalCase(serviceName)}Container`;
   const bindingName = `${serviceName.toUpperCase().replace(/-/g, '_')}_CONTAINER`;
   const port = service.container?.port || 8080;
@@ -596,7 +647,7 @@ export default {
 
 async function deployContainerWithWrangler(
   serviceName: string,
-  service: GroupDeployOptions['manifest']['spec']['services'][string],
+  service: LegacyServiceDef,
   options: GroupDeployOptions,
   _resources: Map<string, ProvisionedResource>,
 ): Promise<ServiceDeployResult> {
@@ -717,7 +768,7 @@ async function deployWorkerWithWrangler(
 
 function collectBindingResults(
   serviceName: string,
-  service: GroupDeployOptions['manifest']['spec']['services'][string],
+  service: LegacyServiceDef,
   status: 'bound' | 'failed',
 ): BindingResult[] {
   const results: BindingResult[] = [];
@@ -736,6 +787,102 @@ function collectBindingResults(
   return results;
 }
 
+// ── Template resolution helpers ──────────────────────────────────────────────
+
+export function buildTemplateContext(
+  result: GroupDeployResult,
+  manifest: GroupDeployOptions['manifest'],
+  options: GroupDeployOptions,
+): TemplateContext {
+  const routes: Record<string, { url: string; domain: string; path: string }> = {};
+  const baseDomain = options.baseDomain || `${manifest.metadata.name}.app.example.com`;
+
+  for (const route of manifest.spec.routes || []) {
+    const routeName = route.name;
+    if (!routeName) continue;
+    const domain = baseDomain;
+    const routePath = route.path || '/';
+    routes[routeName] = {
+      url: `https://${domain}${routePath}`,
+      domain,
+      path: routePath,
+    };
+  }
+
+  const containers: Record<string, { ipv4?: string }> = {};
+  for (const svc of result.services) {
+    if (svc.type === 'container') {
+      containers[svc.name] = { ipv4: svc.url };
+    }
+  }
+
+  const workers: Record<string, { url?: string }> = {};
+  for (const svc of result.services) {
+    if (svc.type === 'worker') {
+      workers[svc.name] = { url: svc.url };
+    }
+  }
+
+  const resources: Record<string, { id?: string }> = {};
+  for (const res of result.resources) {
+    resources[res.name] = { id: res.id };
+  }
+
+  return { routes, containers, workers, resources };
+}
+
+export function resolveTemplateString(template: string, context: TemplateContext): string {
+  return template.replace(/\$\{\{\s*([\w.]+)\s*\}\}/g, (_match, expr: string) => {
+    const parts = expr.split('.');
+    let current: unknown = context;
+    for (const part of parts) {
+      if (current == null || typeof current !== 'object') return _match;
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current != null ? String(current) : _match;
+  });
+}
+
+// ── Detect manifest format ───────────────────────────────────────────────────
+
+function isNewFormatManifest(spec: GroupDeployOptions['manifest']['spec']): boolean {
+  return spec.workers != null || spec.containers != null;
+}
+
+/** Collect all known service/worker/container names from either manifest format */
+function getAllDeployableNames(spec: GroupDeployOptions['manifest']['spec']): string[] {
+  if (isNewFormatManifest(spec)) {
+    return [
+      ...Object.keys(spec.workers || {}),
+      ...Object.keys(spec.containers || {}),
+    ];
+  }
+  return Object.keys(spec.services || {});
+}
+
+// ── New-format binding collector ─────────────────────────────────────────────
+
+function collectWorkerBindingResults(
+  workerName: string,
+  worker: ManifestWorkerDef,
+  status: 'bound' | 'failed',
+): BindingResult[] {
+  const results: BindingResult[] = [];
+  if (worker.bindings?.d1) {
+    for (const r of worker.bindings.d1) results.push({ from: workerName, to: r, type: 'd1', status });
+  }
+  if (worker.bindings?.r2) {
+    for (const r of worker.bindings.r2) results.push({ from: workerName, to: r, type: 'r2', status });
+  }
+  if (worker.bindings?.kv) {
+    for (const r of worker.bindings.kv) results.push({ from: workerName, to: r, type: 'kv', status });
+  }
+  if (worker.bindings?.services) {
+    for (const r of worker.bindings.services) results.push({ from: workerName, to: r, type: 'service', status });
+  }
+  return results;
+}
+
 // ── Main orchestrator ────────────────────────────────────────────────────────
 
 export async function deployGroup(options: GroupDeployOptions): Promise<GroupDeployResult> {
@@ -748,6 +895,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     dryRun = false,
     compatibilityDate,
     serviceFilter,
+    workerFilter,
+    containerFilter,
   } = options;
 
   const groupName = options.groupName || manifest.metadata.name;
@@ -762,14 +911,202 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     bindings: [],
   };
 
-  // ── Step 1: Provision resources ──────────────────────────────────────────
-  // When serviceFilter is set, only provision resources referenced by filtered services
+  // Build a unified filter from serviceFilter + workerFilter + containerFilter
+  const effectiveFilter: string[] | undefined = (() => {
+    const parts: string[] = [];
+    if (serviceFilter && serviceFilter.length > 0) parts.push(...serviceFilter);
+    if (workerFilter && workerFilter.length > 0) parts.push(...workerFilter);
+    if (containerFilter && containerFilter.length > 0) parts.push(...containerFilter);
+    return parts.length > 0 ? parts : undefined;
+  })();
 
+  // ── New-format path ────────────────────────────────────────────────────────
+  if (isNewFormatManifest(manifest.spec)) {
+    const workers = manifest.spec.workers || {};
+    const containers = manifest.spec.containers || {};
+
+    // Determine which containers are referenced by workers
+    const workerReferencedContainers = new Set<string>();
+    for (const w of Object.values(workers)) {
+      for (const cRef of w.containers || []) {
+        workerReferencedContainers.add(cRef);
+      }
+    }
+
+    // Step 1: Provision resources
+    let resourcesToProvision = manifest.spec.resources || {};
+    if (effectiveFilter && effectiveFilter.length > 0) {
+      const referencedResources = new Set<string>();
+      for (const name of effectiveFilter) {
+        const w = workers[name];
+        if (w?.bindings) {
+          for (const r of w.bindings.d1 || []) referencedResources.add(r);
+          for (const r of w.bindings.r2 || []) referencedResources.add(r);
+          for (const r of w.bindings.kv || []) referencedResources.add(r);
+        }
+      }
+      const allResources = manifest.spec.resources || {};
+      resourcesToProvision = Object.fromEntries(
+        Object.entries(allResources).filter(([name]) => referencedResources.has(name)),
+      );
+    }
+    const { provisioned, results: resourceResults } = await provisionResources(
+      resourcesToProvision,
+      { accountId, apiToken, groupName, env, dryRun },
+    );
+    result.resources = resourceResults;
+
+    // Step 2a: Deploy standalone containers (not referenced by any worker)
+    for (const [containerName, container] of Object.entries(containers)) {
+      if (workerReferencedContainers.has(containerName)) continue;
+      if (effectiveFilter && effectiveFilter.length > 0 && !effectiveFilter.includes(containerName)) continue;
+
+      // Build a legacy-shaped service for existing container deploy path
+      const legacyService = {
+        type: 'container' as const,
+        container: {
+          dockerfile: container.dockerfile,
+          port: container.port || 8080,
+          instanceType: container.instanceType,
+          maxInstances: container.maxInstances,
+        },
+        env: container.env,
+      };
+
+      const deployResult = await deployContainerWithWrangler(containerName, legacyService, options, provisioned);
+      result.services.push(deployResult);
+    }
+
+    // Step 2b: Deploy workers (with referenced containers included in wrangler config)
+    for (const [workerName, worker] of Object.entries(workers)) {
+      if (effectiveFilter && effectiveFilter.length > 0 && !effectiveFilter.includes(workerName)) continue;
+
+      try {
+        // Build a legacy-shaped service for existing worker deploy path
+        const resolvedContainers: WorkerContainerSpec[] = (worker.containers || []).map((cRef) => {
+          const cDef = containers[cRef];
+          if (!cDef) {
+            throw new Error(`Worker '${workerName}' references unknown container '${cRef}'`);
+          }
+          return {
+            name: cRef,
+            dockerfile: cDef.dockerfile,
+            port: cDef.port || 8080,
+            instanceType: cDef.instanceType,
+            maxInstances: cDef.maxInstances,
+          };
+        });
+
+        const legacyService = {
+          type: 'worker' as const,
+          build: worker.build,
+          env: worker.env,
+          bindings: worker.bindings,
+          containers: resolvedContainers.length > 0 ? resolvedContainers : undefined,
+        };
+
+        const wranglerConfig = generateWranglerConfig(
+          legacyService as GroupDeployOptions['manifest']['spec']['services'] extends Record<string, infer S> ? S : never,
+          workerName,
+          { groupName, env, namespace, resources: provisioned, compatibilityDate, manifestDir: options.manifestDir },
+        );
+
+        if (dryRun) {
+          const dryRunInfo = resolvedContainers.length > 0
+            ? ` (with ${resolvedContainers.length} CF container(s): ${resolvedContainers.map(c => c.name).join(', ')})`
+            : '';
+          result.services.push({
+            name: workerName,
+            type: 'worker',
+            status: 'deployed',
+            scriptName: wranglerConfig.name,
+            ...(dryRunInfo ? { error: `[dry-run] would deploy worker${dryRunInfo}` } : {}),
+          });
+          result.bindings.push(...collectWorkerBindingResults(workerName, worker, 'bound'));
+          continue;
+        }
+
+        const serviceSecrets = new Map<string, string>();
+        for (const [, resource] of provisioned) {
+          if (resource.type === 'secretRef') {
+            serviceSecrets.set(resource.binding, resource.id);
+          }
+        }
+
+        const isContainerConfig = 'containers' in wranglerConfig && Array.isArray((wranglerConfig as ContainerWranglerConfig).containers);
+        const toml = isContainerConfig
+          ? serializeContainerWranglerToml(wranglerConfig as ContainerWranglerConfig)
+          : serializeWranglerToml(wranglerConfig as WranglerConfig);
+
+        const wranglerResult = await deployWorkerWithWrangler(toml, {
+          accountId,
+          apiToken,
+          secrets: serviceSecrets.size > 0 ? serviceSecrets : undefined,
+          scriptName: wranglerConfig.name,
+        });
+
+        if (wranglerResult.success) {
+          result.services.push({ name: workerName, type: 'worker', status: 'deployed', scriptName: wranglerConfig.name });
+          result.bindings.push(...collectWorkerBindingResults(workerName, worker, 'bound'));
+        } else {
+          result.services.push({ name: workerName, type: 'worker', status: 'failed', scriptName: wranglerConfig.name, error: wranglerResult.error });
+          result.bindings.push(...collectWorkerBindingResults(workerName, worker, 'failed'));
+        }
+      } catch (error) {
+        result.services.push({
+          name: workerName,
+          type: 'worker',
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // Step 3: Template context & env.inject resolution
+    if (manifest.spec.env?.inject) {
+      const tmplCtx = buildTemplateContext(result, manifest, options);
+      const resolvedEnv: Record<string, string> = {};
+      for (const [key, template] of Object.entries(manifest.spec.env.inject)) {
+        resolvedEnv[key] = resolveTemplateString(template, tmplCtx);
+      }
+
+      // Inject resolved env as secrets into each deployed worker
+      if (!dryRun && Object.keys(resolvedEnv).length > 0) {
+        for (const svc of result.services) {
+          if (svc.type !== 'worker' || svc.status !== 'deployed' || !svc.scriptName) continue;
+          for (const [secretName, secretValue] of Object.entries(resolvedEnv)) {
+            const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-inject-'));
+            try {
+              const wranglerEnv: NodeJS.ProcessEnv = {
+                CLOUDFLARE_ACCOUNT_ID: accountId,
+                CLOUDFLARE_API_TOKEN: apiToken,
+              };
+              await execCommand(
+                'npx',
+                ['wrangler', 'secret', 'put', secretName, '--name', svc.scriptName],
+                { cwd: tmpDir, env: wranglerEnv, stdin: secretValue },
+              );
+            } finally {
+              await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // ── Legacy-format path (services) ──────────────────────────────────────────
+
+  const services = manifest.spec.services || {};
+
+  // Step 1: Provision resources
   let resourcesToProvision = manifest.spec.resources || {};
-  if (serviceFilter && serviceFilter.length > 0) {
+  if (effectiveFilter && effectiveFilter.length > 0) {
     const referencedResources = new Set<string>();
-    for (const svcName of serviceFilter) {
-      const svc = manifest.spec.services[svcName];
+    for (const svcName of effectiveFilter) {
+      const svc = services[svcName];
       if (svc?.bindings) {
         for (const r of svc.bindings.d1 || []) referencedResources.add(r);
         for (const r of svc.bindings.r2 || []) referencedResources.add(r);
@@ -788,11 +1125,9 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
   );
   result.resources = resourceResults;
 
-  // ── Step 2: Deploy each service ──────────────────────────────────────────
-
-  for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
-    // Skip services not in the filter
-    if (serviceFilter && serviceFilter.length > 0 && !serviceFilter.includes(serviceName)) {
+  // Step 2: Deploy each service
+  for (const [serviceName, service] of Object.entries(services)) {
+    if (effectiveFilter && effectiveFilter.length > 0 && !effectiveFilter.includes(serviceName)) {
       continue;
     }
     if (service.type === 'http') {
@@ -801,13 +1136,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     }
 
     if (service.type === 'container') {
-      // Persistent container (VPS-like): not a CF Container, independent deploy target
-      result.services.push({
-        name: serviceName,
-        type: 'container',
-        status: 'skipped',
-        error: 'Persistent container deployment target not configured. Use --container-target to specify (fly, railway, vps)',
-      });
+      const deployResult = await deployContainerWithWrangler(serviceName, service, options, provisioned);
+      result.services.push(deployResult);
       continue;
     }
 
