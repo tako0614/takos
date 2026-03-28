@@ -23,7 +23,7 @@ spec:
 `)).toThrow(/local build fields are not supported/);
   });
 
-  it('rejects non-worker services in current contract', () => {
+  it('rejects unsupported service types', () => {
     expect(() => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -35,7 +35,7 @@ spec:
     api:
       type: http
       baseUrl: https://example.internal
-`)).toThrow(/type must be worker/);
+`)).toThrow(/type must be worker or container/);
   });
 
   it('parses vectorize resources and worker bindings', () => {
@@ -74,7 +74,11 @@ spec:
         metric: 'euclidean',
       },
     });
-    expect(manifest.spec.services.api.bindings?.vectorize).toEqual(['semantic-index']);
+    const apiService = manifest.spec.services.api;
+    expect(apiService.type).toBe('worker');
+    if (apiService.type === 'worker') {
+      expect(apiService.bindings?.vectorize).toEqual(['semantic-index']);
+    }
   });
 
   it('parses queue, analyticsEngine, workflow resources and worker triggers', () => {
@@ -157,15 +161,19 @@ spec:
         maxRetries: 3,
       },
     });
-    expect(manifest.spec.services.api.bindings).toMatchObject({
-      queues: ['jobs'],
-      analytics: ['events'],
-      workflows: ['onboarding'],
-    });
-    expect(manifest.spec.services.api.triggers).toEqual({
-      schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
-      queues: [{ queue: 'jobs', export: 'handleJob' }],
-    });
+    const apiService = manifest.spec.services.api;
+    expect(apiService.type).toBe('worker');
+    if (apiService.type === 'worker') {
+      expect(apiService.bindings).toMatchObject({
+        queues: ['jobs'],
+        analytics: ['events'],
+        workflows: ['onboarding'],
+      });
+      expect(apiService.triggers).toEqual({
+        schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
+        queues: [{ queue: 'jobs', export: 'handleJob' }],
+      });
+    }
   });
 
   it('emits vectorize resources and worker bindings into bundle docs', () => {

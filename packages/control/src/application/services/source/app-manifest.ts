@@ -1,6 +1,9 @@
 // Re-export types
 export type {
   AppManifest,
+  AppService,
+  WorkerService,
+  ContainerService,
   AppDeploymentBuildSource,
   BundleDoc,
 } from './app-manifest-types';
