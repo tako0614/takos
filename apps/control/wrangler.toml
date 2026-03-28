@@ -181,23 +181,23 @@ name = "takos-staging"
 workers_dev = true
 
 [env.staging.vars]
-ADMIN_DOMAIN = "test.takos.jp"
-TENANT_BASE_DOMAIN = "app.test.takos.jp"
-GOOGLE_CLIENT_ID = "809769910884-jkcj6uqe8gjsh4cllghulfq5k213ve5m.apps.googleusercontent.com"
+ADMIN_DOMAIN = "staging-admin.example.com"
+TENANT_BASE_DOMAIN = "staging-app.example.com"
+GOOGLE_CLIENT_ID = "your-staging-google-client-id.apps.googleusercontent.com"
 ROUTING_DO_PHASE = "4"
-WFP_DISPATCH_NAMESPACE = "takos-staging-tenants"
-CF_ACCOUNT_ID = "a10162d23653f1ad1193dabf520a5dd0"
-CF_ZONE_ID = "0dbf0fc2fc29c4d7ede723c47009aa29"
+WFP_DISPATCH_NAMESPACE = "your-staging-dispatch-namespace"
+CF_ACCOUNT_ID = "replace-with-staging-account-id"
+CF_ZONE_ID = "replace-with-staging-zone-id"
 
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "takos-control-staging-db-2"
-database_id = "7f1c25b3-034c-4a0f-87c7-3795fbdb349f"
+database_id = "replace-with-staging-d1-database-id"
 migrations_dir = "db/migrations"
 
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
-id = "8562573b04b44c44b744154b46cba71d"
+id = "replace-with-staging-kv-namespace-id"
 
 [[env.staging.durable_objects.bindings]]
 name = "SESSION_DO"
