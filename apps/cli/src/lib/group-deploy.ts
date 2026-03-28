@@ -65,6 +65,14 @@ export interface ContainerSpec {
   maxInstances?: number;
 }
 
+export interface WorkerContainerSpec {
+  name: string;
+  dockerfile: string;
+  port: number;
+  instanceType?: string;
+  maxInstances?: number;
+}
+
 export interface GroupDeployOptions {
   manifest: {
     apiVersion: string;
@@ -89,6 +97,7 @@ export interface GroupDeployOptions {
         baseUrl?: string;
         image?: string;
         container?: ContainerSpec;
+        containers?: WorkerContainerSpec[];
         env?: Record<string, string>;
         bindings?: {
           d1?: string[];
@@ -301,8 +310,8 @@ async function provisionResources(
 function generateWranglerConfig(
   service: GroupDeployOptions['manifest']['spec']['services'][string],
   serviceName: string,
-  options: { groupName: string; env: string; namespace?: string; resources: Map<string, ProvisionedResource>; compatibilityDate?: string },
-): WranglerConfig {
+  options: { groupName: string; env: string; namespace?: string; resources: Map<string, ProvisionedResource>; compatibilityDate?: string; manifestDir?: string },
+): WranglerConfig | ContainerWranglerConfig {
   if (service.type !== 'worker' || !service.build) {
     throw new Error(`Cannot generate wrangler config for non-worker service: ${serviceName}`);
   }
@@ -310,6 +319,36 @@ function generateWranglerConfig(
   const scriptName = options.namespace
     ? `${options.groupName}-${serviceName}`
     : serviceName;
+
+  // Worker with CF Containers: generate ContainerWranglerConfig
+  if (service.containers && service.containers.length > 0) {
+    const containerConfig: ContainerWranglerConfig = {
+      name: scriptName,
+      main: service.build.fromWorkflow.artifactPath,
+      compatibility_date: options.compatibilityDate || '2025-01-01',
+      compatibility_flags: ['nodejs_compat'],
+      durable_objects: {
+        bindings: service.containers.map((c) => ({
+          name: `${c.name.toUpperCase().replace(/-/g, '_')}_CONTAINER`,
+          class_name: `${toPascalCase(c.name)}Container`,
+        })),
+      },
+      containers: service.containers.map((c) => ({
+        class_name: `${toPascalCase(c.name)}Container`,
+        image: c.dockerfile,
+        image_build_context: options.manifestDir || '.',
+        instance_type: c.instanceType || 'basic',
+        max_instances: c.maxInstances || 10,
+      })),
+      migrations: [{
+        tag: 'v1',
+        new_classes: service.containers.map((c) => `${toPascalCase(c.name)}Container`),
+      }],
+      ...(options.namespace ? { dispatch_namespace: options.namespace } : {}),
+    };
+
+    return containerConfig;
+  }
 
   const config: WranglerConfig = {
     name: scriptName,
@@ -762,26 +801,17 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     }
 
     if (service.type === 'container') {
-      try {
-        const containerResult = await deployContainerWithWrangler(
-          serviceName,
-          service,
-          options,
-          provisioned,
-        );
-        result.services.push(containerResult);
-      } catch (error) {
-        result.services.push({
-          name: serviceName,
-          type: 'container',
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      // Persistent container (VPS-like): not a CF Container, independent deploy target
+      result.services.push({
+        name: serviceName,
+        type: 'container',
+        status: 'skipped',
+        error: 'Persistent container deployment target not configured. Use --container-target to specify (fly, railway, vps)',
+      });
       continue;
     }
 
-    // Worker service
+    // Worker service (possibly with CF Containers)
     try {
       const wranglerConfig = generateWranglerConfig(service, serviceName, {
         groupName,
@@ -789,10 +819,20 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
         namespace,
         resources: provisioned,
         compatibilityDate,
+        manifestDir: options.manifestDir,
       });
 
       if (dryRun) {
-        result.services.push({ name: serviceName, type: 'worker', status: 'deployed', scriptName: wranglerConfig.name });
+        const dryRunInfo = service.containers?.length
+          ? ` (with ${service.containers.length} CF container(s): ${service.containers.map(c => c.name).join(', ')})`
+          : '';
+        result.services.push({
+          name: serviceName,
+          type: 'worker',
+          status: 'deployed',
+          scriptName: wranglerConfig.name,
+          ...(dryRunInfo ? { error: `[dry-run] would deploy worker${dryRunInfo}` } : {}),
+        });
         result.bindings.push(...collectBindingResults(serviceName, service, 'bound'));
         continue;
       }
@@ -805,7 +845,11 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
         }
       }
 
-      const toml = serializeWranglerToml(wranglerConfig);
+      // Serialize based on config type
+      const isContainerConfig = 'containers' in wranglerConfig && Array.isArray((wranglerConfig as ContainerWranglerConfig).containers);
+      const toml = isContainerConfig
+        ? serializeContainerWranglerToml(wranglerConfig as ContainerWranglerConfig)
+        : serializeWranglerToml(wranglerConfig as WranglerConfig);
 
       const deployResult = await deployWorkerWithWrangler(toml, {
         accountId,

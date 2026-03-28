@@ -3,6 +3,7 @@ export type {
   AppManifest,
   AppService,
   WorkerService,
+  WorkerContainer,
   ContainerService,
   AppDeploymentBuildSource,
   BundleDoc,
