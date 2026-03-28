@@ -1,5 +1,5 @@
 import type { PullRequestStatus, AuthorType } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import type { pullRequests } from '../../../infra/db/schema';
 import { accounts } from '../../../infra/db/schema';
 import { getDb, type Database } from '../../../infra/db';

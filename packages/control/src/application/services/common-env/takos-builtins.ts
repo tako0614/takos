@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { ALL_SCOPES } from '../../../shared/types/oauth';

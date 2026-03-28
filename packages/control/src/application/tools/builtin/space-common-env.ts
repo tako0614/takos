@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { createCommonEnvService } from '../../services/common-env';
+import { CommonEnvService } from '../../services/common-env';
 
 export const WORKSPACE_ENV_LIST: ToolDefinition = {
   name: 'workspace_env_list',
@@ -52,7 +52,7 @@ export const WORKSPACE_ENV_DELETE: ToolDefinition = {
 };
 
 export const workspaceEnvListHandler: ToolHandler = async (_args, context) => {
-  const service = createCommonEnvService(context.env);
+  const service = new CommonEnvService(context.env);
   const env = await service.listSpaceCommonEnv(context.spaceId);
 
   return JSON.stringify({
@@ -70,7 +70,7 @@ export const workspaceEnvSetHandler: ToolHandler = async (args, context) => {
     throw new Error('name is required');
   }
 
-  const service = createCommonEnvService(context.env);
+  const service = new CommonEnvService(context.env);
   await service.upsertSpaceCommonEnv({
     spaceId: context.spaceId,
     name,
@@ -93,7 +93,7 @@ export const workspaceEnvDeleteHandler: ToolHandler = async (args, context) => {
     throw new Error('name is required');
   }
 
-  const service = createCommonEnvService(context.env);
+  const service = new CommonEnvService(context.env);
   const deleted = await service.deleteSpaceCommonEnv(
     context.spaceId,
     name,

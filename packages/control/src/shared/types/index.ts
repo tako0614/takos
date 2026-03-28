@@ -1,4 +1,4 @@
-export type { SelectOf, InsertOf } from './drizzle-helpers';
+export type { SelectOf, InsertOf } from './drizzle-utils';
 
 export {
   RUN_QUEUE_MESSAGE_VERSION,

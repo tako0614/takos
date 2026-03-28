@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceRole, Space, SpaceMembership } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { resolveUserPrincipalId } from './principals';
 import { getDb } from '../../../infra/db';

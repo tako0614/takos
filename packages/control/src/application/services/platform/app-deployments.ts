@@ -377,7 +377,7 @@ export class AppDeploymentService {
     throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
-  async get(_spaceId: string, _appDeploymentId: string): Promise<never> {
+  async get(_spaceId: string, _appDeploymentId: string): Promise<{ hostnames?: string[] }> {
     throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
 
@@ -390,8 +390,4 @@ export class AppDeploymentService {
   }): Promise<never> {
     throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
   }
-}
-
-export function createAppDeploymentService(env: Env) {
-  return new AppDeploymentService(env);
 }

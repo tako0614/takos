@@ -9,7 +9,7 @@ import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.t
 import { generateId } from '../../../shared/utils';
 import { encrypt, encryptEnvVars } from '../../../shared/utils/crypto';
 import { computeSHA256 } from '../../../shared/utils/hash';
-import { createServiceDesiredStateService } from '../platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../platform/worker-desired-state';
 import type {
   ArtifactKind,
   Deployment,
@@ -118,7 +118,7 @@ export class DeploymentService {
         return existing;
       }
     }
-    const desiredState = createServiceDesiredStateService(this.env);
+    const desiredState = new ServiceDesiredStateService(this.env);
     const snapshot = input.snapshotOverride
       ? snapshotFromOverride(input.snapshotOverride)
       : await desiredState.resolveDeploymentState(input.spaceId, serviceId);

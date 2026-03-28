@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { createAppDeploymentService } from '../../services/platform/app-deployments';
+import { AppDeploymentService } from '../../services/platform/app-deployments';
 
 export const APP_DEPLOYMENT_LIST: ToolDefinition = {
   name: 'app_deployment_list',
@@ -66,7 +66,7 @@ export const APP_DEPLOYMENT_ROLLBACK: ToolDefinition = {
 };
 
 export const appDeploymentListHandler: ToolHandler = async (_args, context) => {
-  const service = createAppDeploymentService(context.env);
+  const service = new AppDeploymentService(context.env);
   return JSON.stringify({
     app_deployments: await service.list(context.spaceId),
   }, null, 2);
@@ -75,7 +75,7 @@ export const appDeploymentListHandler: ToolHandler = async (_args, context) => {
 export const appDeploymentGetHandler: ToolHandler = async (args, context) => {
   const id = String(args.app_deployment_id || '').trim();
   if (!id) throw new Error('app_deployment_id is required');
-  const service = createAppDeploymentService(context.env);
+  const service = new AppDeploymentService(context.env);
   const deployment = await service.get(context.spaceId, id);
   if (!deployment) throw new Error(`App deployment not found: ${id}`);
   return JSON.stringify({ app_deployment: deployment }, null, 2);
@@ -90,7 +90,7 @@ export const appDeploymentDeployFromRepoHandler: ToolHandler = async (args, cont
   if (refType !== 'branch' && refType !== 'tag' && refType !== 'commit') {
     throw new Error('ref_type must be one of: branch, tag, commit');
   }
-  const service = createAppDeploymentService(context.env);
+  const service = new AppDeploymentService(context.env);
   const result = await service.deployFromRepoRef(context.spaceId, context.userId, {
     repoId,
     ref,
@@ -104,7 +104,7 @@ export const appDeploymentDeployFromRepoHandler: ToolHandler = async (args, cont
 export const appDeploymentRemoveHandler: ToolHandler = async (args, context) => {
   const id = String(args.app_deployment_id || '').trim();
   if (!id) throw new Error('app_deployment_id is required');
-  const service = createAppDeploymentService(context.env);
+  const service = new AppDeploymentService(context.env);
   await service.remove(context.spaceId, id);
   return JSON.stringify({ success: true, app_deployment_id: id }, null, 2);
 };
@@ -112,7 +112,7 @@ export const appDeploymentRemoveHandler: ToolHandler = async (args, context) => 
 export const appDeploymentRollbackHandler: ToolHandler = async (args, context) => {
   const id = String(args.app_deployment_id || '').trim();
   if (!id) throw new Error('app_deployment_id is required');
-  const service = createAppDeploymentService(context.env);
+  const service = new AppDeploymentService(context.env);
   const result = await service.rollback(context.spaceId, context.userId, id, {
     approveOauthAutoEnv: args.approve_oauth_auto_env === true,
   });

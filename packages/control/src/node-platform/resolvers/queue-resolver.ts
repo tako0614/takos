@@ -2,7 +2,7 @@
  * Queue resolver — selects SQS/PubSub/Redis/persistent/in-memory per queue.
  */
 import path from 'node:path';
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 import {
   createInMemoryQueue,
 } from '../../local-platform/in-memory-bindings.ts';

@@ -3,7 +3,7 @@ import { generateId, now } from '../../../../shared/utils';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { deleteHostnameRouting, upsertHostnameRouting } from '../../../services/routing/service';
-import { createServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
 import { getServiceRouteRecord } from '../../../services/platform/workers';
 
 export const DOMAIN_LIST: ToolDefinition = {
@@ -143,7 +143,7 @@ export const domainAddHandler: ToolHandler = async (args, context) => {
     updatedAt: now(),
   });
 
-  const desiredState = createServiceDesiredStateService(env);
+  const desiredState = new ServiceDesiredStateService(env);
   const target = await desiredState.getRoutingTarget(serviceId);
   if (target) {
     await upsertHostnameRouting({

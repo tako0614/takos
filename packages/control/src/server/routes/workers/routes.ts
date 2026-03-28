@@ -19,8 +19,8 @@ import { deployments, serviceCustomDomains, serviceDeployments } from '../../../
 import { deleteHostnameRouting } from '../../../application/services/routing/service';
 import { createCloudflareApiClient } from '../../../application/services/cloudflare/api-client.ts';
 import { deleteCloudflareCustomHostname } from '../../../application/services/platform/custom-domains.ts';
-import { createCommonEnvService } from '../../../application/services/common-env';
-import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { CommonEnvService } from '../../../application/services/common-env';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
@@ -145,7 +145,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Service');
   }
 
-  const desiredState = createServiceDesiredStateService(c.env);
+  const desiredState = new ServiceDesiredStateService(c.env);
   const scriptName = await desiredState.getCurrentDeploymentArtifactRef(worker.id);
 
   if (!scriptName) {
@@ -292,7 +292,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     }
   }
 
-  const commonEnvService = createCommonEnvService(c.env);
+  const commonEnvService = new CommonEnvService(c.env);
   await commonEnvService.deleteWorkerTakosAccessTokenConfig({
     spaceId: worker.space_id,
     workerId: worker.id,

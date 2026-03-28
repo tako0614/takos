@@ -4,7 +4,7 @@ import { eq, and, notInArray } from 'drizzle-orm';
 import { isValidWorkflowJobQueueMessage } from '../../shared/types';
 import { logError, logWarn } from '../../shared/utils/logger';
 import type { WorkflowQueueEnv, WorkflowEngineBucket } from './workflow-types';
-import { buildSkippedStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-runtime-client';
+import { buildSkippedWorkflowStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-runtime-client';
 import { emitWorkflowEvent } from './workflow-events';
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ export async function handleWorkflowJobDlq(
     logWarn(`Failed to store DLQ logs for job ${jobId}`, { module: 'workflow_dlq', detail: err });
   }
 
-  const stepResults = await buildSkippedStepResultsFromDb(
+  const stepResults = await buildSkippedWorkflowStepResultsFromDb(
     env.DB,
     jobId,
     'dlq-failure',

@@ -8,7 +8,7 @@
 import type { AgentMessage } from './agent-models';
 import type { WorkflowContext, ReviewResult } from './workflow-types';
 import { extractJsonFromLLMResponse, REVIEW_PROMPT } from './workflow-types';
-import { createLLMClient } from './llm';
+import { LLMClient } from './llm';
 import { getDb, pullRequests, prReviews } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { generateId, now } from '../../../shared/utils';
@@ -42,7 +42,7 @@ export async function executeReview(
     .replace('{diff}', diff)
     .replace('{task}', pr.description || pr.title);
 
-  const llm = createLLMClient(apiKey);
+  const llm = new LLMClient({ apiKey });
   const messages: AgentMessage[] = [
     { role: 'system', content: 'You are a code reviewer. Return only valid JSON.' },
     { role: 'user', content: prompt },

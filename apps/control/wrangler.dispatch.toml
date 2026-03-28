@@ -36,12 +36,12 @@ name = "takos-dispatch-staging"
 workers_dev = true
 
 [env.staging.vars]
-ADMIN_DOMAIN = "test.takos.jp"
+ADMIN_DOMAIN = "staging-admin.example.com"
 ROUTING_DO_PHASE = "4"
 
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
-id = "8562573b04b44c44b744154b46cba71d"
+id = "replace-with-staging-kv-namespace-id"
 
 [[env.staging.durable_objects.bindings]]
 name = "ROUTING_DO"
@@ -50,4 +50,4 @@ script_name = "takos-staging"
 
 [[env.staging.dispatch_namespaces]]
 binding = "DISPATCHER"
-namespace = "takos-staging-tenants"
+namespace = "your-staging-dispatch-namespace"

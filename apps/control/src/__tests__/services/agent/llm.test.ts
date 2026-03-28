@@ -13,8 +13,6 @@ vi.mock('@/services/agent/providers', () => ({
 
 import {
   LLMClient,
-  createLLMClient,
-  createMultiModelClient,
   createLLMClientFromEnv,
   VALID_PROVIDERS,
 } from '@/services/agent/llm';
@@ -118,34 +116,6 @@ describe('LLMClient', () => {
     const result = await client.chat(msgs, tools, signal);
     expect(mockProvider.chat).toHaveBeenCalledWith(msgs, tools, signal);
     expect(result.content).toBe('hello');
-  });
-});
-
-describe('createLLMClient', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.createProvider.mockReturnValue({ chat: vi.fn() });
-    mocks.getProviderFromModel.mockReturnValue('openai');
-  });
-
-  it('creates a client with apiKey and optional config', () => {
-    const client = createLLMClient('my-key', { model: 'gpt-5.4-mini' });
-    expect(client).toBeInstanceOf(LLMClient);
-    expect(client.getConfig()).toEqual(expect.objectContaining({ apiKey: 'my-key', model: 'gpt-5.4-mini' }));
-  });
-});
-
-describe('createMultiModelClient', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.createProvider.mockReturnValue({ chat: vi.fn() });
-    mocks.getProviderFromModel.mockReturnValue('openai');
-  });
-
-  it('creates a client from full config', () => {
-    const config = { apiKey: 'key', model: 'gpt-5.4-mini', provider: 'openai' as const };
-    const client = createMultiModelClient(config);
-    expect(client).toBeInstanceOf(LLMClient);
   });
 });
 

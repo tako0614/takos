@@ -11,8 +11,8 @@ import {
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
 import { listSpaceEnvRows } from './repository';
 import { assertSpaceCommonEnvKeyAllowed, getChanges } from './link-state';
-import { accountEnvVars } from '../../../infra/db';
-import { db, runInTransaction } from './db-helpers';
+import { getDb, accountEnvVars } from '../../../infra/db';
+import { runInTransaction } from './db-utils';
 
 export interface SpaceEnvDeps {
   env: Env;
@@ -71,7 +71,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
   const timestamp = now();
   const encrypted = await encryptCommonEnvValue(deps.env, spaceId, name, nextValue);
 
-  const existing = await db(deps).select({
+  const existing = await getDb(deps.env.DB).select({
     id: accountEnvVars.id,
     accountId: accountEnvVars.accountId,
     name: accountEnvVars.name,
@@ -104,7 +104,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
     }
 
     await runInTransaction(deps, async () => {
-      await db(deps).update(accountEnvVars)
+      await getDb(deps.env.DB).update(accountEnvVars)
         .set({
           name,
           valueEncrypted: encrypted,
@@ -132,7 +132,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
     });
   } else {
     await runInTransaction(deps, async () => {
-      await db(deps).insert(accountEnvVars)
+      await getDb(deps.env.DB).insert(accountEnvVars)
         .values({
           id: generateId(),
           accountId: spaceId,
@@ -172,7 +172,7 @@ export async function ensureSystemCommonEnv(deps: SpaceEnvDeps, spaceId: string,
     const timestamp = now();
 
     await runInTransaction(deps, async () => {
-      const result = await db(deps).insert(accountEnvVars)
+      const result = await getDb(deps.env.DB).insert(accountEnvVars)
         .values({
           id: generateId(),
           accountId: spaceId,
@@ -207,7 +207,7 @@ export async function ensureSystemCommonEnv(deps: SpaceEnvDeps, spaceId: string,
 export async function deleteSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string, nameRaw: string, actor?: CommonEnvAuditActor): Promise<boolean> {
   const name = normalizeEnvName(nameRaw);
   assertSpaceCommonEnvKeyAllowed(name);
-  const existing = await db(deps).select({
+  const existing = await getDb(deps.env.DB).select({
     id: accountEnvVars.id,
     isSecret: accountEnvVars.isSecret,
   })
@@ -223,7 +223,7 @@ export async function deleteSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string, 
 
   let deleted = false;
   await runInTransaction(deps, async () => {
-    const result = await db(deps).delete(accountEnvVars)
+    const result = await getDb(deps.env.DB).delete(accountEnvVars)
       .where(eq(accountEnvVars.id, existing.id));
     const changes = getChanges(result);
     if (changes <= 0) return;

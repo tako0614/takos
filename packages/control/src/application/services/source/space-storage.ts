@@ -7,7 +7,7 @@
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { SpaceStorageFileType } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, accountStorageFiles } from '../../../infra/db';
 import type { Database } from '../../../infra/db';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';

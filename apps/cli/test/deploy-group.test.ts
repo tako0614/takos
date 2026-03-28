@@ -1392,3 +1392,201 @@ describe('services deploy', () => {
     expect(apiService!.status).toBe('deployed');
   });
 });
+
+describe('extended resource types', () => {
+  it('provisions queue resource in dry-run', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
+
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'queue-app' },
+      spec: {
+        version: '1.0.0',
+        workers: {
+          worker: {
+            build: {
+              fromWorkflow: {
+                path: '.takos/workflows/build.yml',
+                job: 'build',
+                artifact: 'worker',
+                artifactPath: 'dist/index.js',
+              },
+            },
+          },
+        },
+        resources: {
+          'task-queue': {
+            type: 'queue' as const,
+            binding: 'TASK_QUEUE',
+          },
+        },
+      },
+    };
+
+    const result = await deployGroup({
+      manifest: manifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    const queueResource = result.resources.find(r => r.name === 'task-queue');
+    expect(queueResource).toBeDefined();
+    expect(queueResource!.type).toBe('queue');
+    expect(queueResource!.status).toBe('provisioned');
+  });
+
+  it('provisions vectorize resource in dry-run', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
+
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'vectorize-app' },
+      spec: {
+        version: '1.0.0',
+        workers: {
+          worker: {
+            build: {
+              fromWorkflow: {
+                path: '.takos/workflows/build.yml',
+                job: 'build',
+                artifact: 'worker',
+                artifactPath: 'dist/index.js',
+              },
+            },
+          },
+        },
+        resources: {
+          embeddings: {
+            type: 'vectorize' as const,
+            binding: 'EMBEDDINGS',
+            vectorize: { dimensions: 768, metric: 'euclidean' },
+          },
+        },
+      },
+    };
+
+    const result = await deployGroup({
+      manifest: manifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    const vectorizeResource = result.resources.find(r => r.name === 'embeddings');
+    expect(vectorizeResource).toBeDefined();
+    expect(vectorizeResource!.type).toBe('vectorize');
+    expect(vectorizeResource!.status).toBe('provisioned');
+  });
+
+  it('skips analyticsEngine, durableObject, and workflow resources', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
+
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'skip-app' },
+      spec: {
+        version: '1.0.0',
+        workers: {
+          worker: {
+            build: {
+              fromWorkflow: {
+                path: '.takos/workflows/build.yml',
+                job: 'build',
+                artifact: 'worker',
+                artifactPath: 'dist/index.js',
+              },
+            },
+          },
+        },
+        resources: {
+          analytics: {
+            type: 'analyticsEngine' as const,
+            binding: 'ANALYTICS',
+          },
+          'my-do': {
+            type: 'durableObject' as const,
+            binding: 'MY_DO',
+          },
+          'my-workflow': {
+            type: 'workflow' as const,
+            binding: 'MY_WORKFLOW',
+          },
+        },
+      },
+    };
+
+    const result = await deployGroup({
+      manifest: manifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    // In dry-run mode, all resources are marked as provisioned (dry-run skips the switch)
+    for (const r of result.resources) {
+      expect(r.status).toBe('provisioned');
+    }
+
+    expect(result.resources).toHaveLength(3);
+    expect(result.resources.find(r => r.name === 'analytics')!.type).toBe('analyticsEngine');
+    expect(result.resources.find(r => r.name === 'my-do')!.type).toBe('durableObject');
+    expect(result.resources.find(r => r.name === 'my-workflow')!.type).toBe('workflow');
+  });
+
+  it('generates wrangler config with queue and vectorize bindings', async () => {
+    const { generateWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy/wrangler-config.js')>('../src/lib/group-deploy/wrangler-config.js');
+    const { serializeWranglerToml } = await vi.importActual<typeof import('../src/lib/group-deploy/wrangler-config.js')>('../src/lib/group-deploy/wrangler-config.js');
+
+    const resources = new Map<string, { name: string; type: string; id: string; binding: string }>();
+    resources.set('task-queue', { name: 'my-app-staging-task-queue', type: 'queue', id: 'my-app-staging-task-queue', binding: 'TASK_QUEUE' });
+    resources.set('embeddings', { name: 'my-app-staging-embeddings', type: 'vectorize', id: 'my-app-staging-embeddings', binding: 'EMBEDDINGS' });
+
+    const service = {
+      type: 'worker' as const,
+      build: {
+        fromWorkflow: {
+          path: '.takos/workflows/build.yml',
+          job: 'build',
+          artifact: 'api',
+          artifactPath: 'dist/index.js',
+        },
+      },
+      bindings: {
+        queues: ['task-queue'],
+        vectorize: ['embeddings'],
+      },
+    };
+
+    const config = generateWranglerConfig(service, 'api', {
+      groupName: 'my-app',
+      env: 'staging',
+      resources,
+    });
+
+    expect(config.queues_producers).toBeDefined();
+    expect(config.queues_producers).toHaveLength(1);
+    expect(config.queues_producers![0].queue).toBe('my-app-staging-task-queue');
+    expect(config.queues_producers![0].binding).toBe('TASK_QUEUE');
+
+    expect(config.vectorize_indexes).toBeDefined();
+    expect(config.vectorize_indexes).toHaveLength(1);
+    expect(config.vectorize_indexes![0].index_name).toBe('my-app-staging-embeddings');
+    expect(config.vectorize_indexes![0].binding).toBe('EMBEDDINGS');
+
+    // Verify TOML serialization
+    const toml = serializeWranglerToml(config);
+    expect(toml).toContain('[[queues.producers]]');
+    expect(toml).toContain('queue = "my-app-staging-task-queue"');
+    expect(toml).toContain('binding = "TASK_QUEUE"');
+    expect(toml).toContain('[[vectorize.indexes]]');
+    expect(toml).toContain('index_name = "my-app-staging-embeddings"');
+    expect(toml).toContain('binding = "EMBEDDINGS"');
+  });
+});

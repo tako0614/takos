@@ -16,7 +16,7 @@ const mockAppDeploymentService = {
 };
 
 vi.mock('@/services/platform/app-deployments', () => ({
-  createAppDeploymentService: vi.fn(() => mockAppDeploymentService),
+  AppDeploymentService: vi.fn(() => mockAppDeploymentService),
 }));
 
 import {

@@ -14,7 +14,7 @@
  */
 
 import type { AgentMessage } from './agent-models';
-import { createLLMClient } from './llm';
+import { LLMClient } from './llm';
 import { generateId } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
 
@@ -60,7 +60,7 @@ export async function analyzeTask(
     model?: string;
   }
 ): Promise<TaskPlan> {
-  const llm = createLLMClient(context.apiKey, context.model ? { model: context.model } : undefined);
+  const llm = new LLMClient({ apiKey: context.apiKey, ...(context.model ? { model: context.model } : undefined) });
 
   const prompt = TASK_ANALYSIS_PROMPT
     .replace('{tools}', context.tools.join(', '))

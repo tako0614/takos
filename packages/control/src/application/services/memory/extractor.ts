@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Message, MemoryType } from '../../../shared/types';
-import { type LLMClient, createLLMClient } from '../agent';
+import { LLMClient } from '../agent';
 import { getDb, memories, messages as messagesTable } from '../../../infra/db';
 import { eq, asc } from 'drizzle-orm';
 import { generateId, now } from '../../../shared/utils';
@@ -146,7 +146,7 @@ export class MemoryExtractor {
   constructor(dbBinding: D1Database, apiKey?: string) {
     this.dbBinding = dbBinding;
     if (apiKey) {
-      this.llmClient = createLLMClient(apiKey);
+      this.llmClient = new LLMClient({ apiKey });
     }
   }
 
@@ -313,8 +313,4 @@ const AUTO_EXTRACT_INTERVAL = 10;
 
 export function shouldAutoExtract(messageCount: number, lastExtractedCount: number): boolean {
   return messageCount - lastExtractedCount >= AUTO_EXTRACT_INTERVAL;
-}
-
-export function createMemoryExtractor(db: D1Database, apiKey?: string): MemoryExtractor {
-  return new MemoryExtractor(db, apiKey);
 }

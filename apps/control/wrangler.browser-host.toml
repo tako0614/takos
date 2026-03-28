@@ -20,10 +20,10 @@ class_name = "BrowserSessionContainer"
 tag = "v1"
 new_sqlite_classes = ["BrowserSessionContainer"]
 
+# Container image must be provided by your deployment (e.g. takos-computer).
 [[containers]]
 class_name = "BrowserSessionContainer"
-image = "../../../takos-computer/apps/browser/Dockerfile"
-image_build_context = "../../.."
+image = "your-browser-image:tag"
 instance_type = "standard-2"
 max_instances = 25
 
@@ -43,7 +43,7 @@ name = "takos-browser-host-staging"
 workers_dev = true
 
 [env.staging.vars]
-ADMIN_DOMAIN = "test.takos.jp"
+ADMIN_DOMAIN = "staging-admin.example.com"
 
 [[env.staging.durable_objects.bindings]]
 name = "BROWSER_CONTAINER"
@@ -51,8 +51,7 @@ class_name = "BrowserSessionContainer"
 
 [[env.staging.containers]]
 class_name = "BrowserSessionContainer"
-image = "../../../takos-computer/apps/browser/Dockerfile"
-image_build_context = "../../.."
+image = "your-browser-image:tag"
 instance_type = "standard-2"
 max_instances = 10
 

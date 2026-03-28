@@ -31,8 +31,8 @@ const mocks = vi.hoisted(() => {
     upsertHostnameRouting: vi.fn(),
     createCloudflareApiClient: vi.fn(),
     deleteCloudflareCustomHostname: vi.fn(),
-    createCommonEnvService: vi.fn(),
-    createWorkerDesiredStateService: vi.fn(),
+    CommonEnvService: vi.fn(),
+    ServiceDesiredStateService: vi.fn(),
     createOptionalCloudflareWfpProvider: vi.fn(),
     getDb: vi.fn(),
   };
@@ -74,12 +74,11 @@ vi.mock('@/platform/providers/cloudflare/custom-domains.ts', () => ({
 }));
 
 vi.mock('@/services/common-env', () => ({
-  createCommonEnvService: mocks.createCommonEnvService,
+  CommonEnvService: mocks.CommonEnvService,
 }));
 
 vi.mock('@/services/platform/worker-desired-state', () => ({
-  createWorkerDesiredStateService: mocks.createWorkerDesiredStateService,
-  createServiceDesiredStateService: mocks.createWorkerDesiredStateService,
+  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
 }));
 
 vi.mock('@/platform/providers/cloudflare/wfp.ts', () => ({
@@ -303,7 +302,7 @@ describe('services base routes', () => {
   describe('GET /api/services/:id/logs', () => {
     it('returns empty invocations when no active deployment', async () => {
       mocks.getWorkerForUser.mockResolvedValue({ id: 'w-1' });
-      mocks.createWorkerDesiredStateService.mockReturnValue({
+      mocks.ServiceDesiredStateService.mockReturnValue({
         getCurrentDeploymentArtifactRef: vi.fn().mockResolvedValue(null),
       });
 
@@ -363,7 +362,7 @@ describe('services base routes', () => {
         hostname: null,
         service_name: null,
       });
-      mocks.createCommonEnvService.mockReturnValue({
+      mocks.CommonEnvService.mockReturnValue({
         deleteWorkerTakosAccessTokenConfig: vi.fn().mockResolvedValue(undefined),
       });
       mocks.createOptionalCloudflareWfpProvider.mockReturnValue(null);

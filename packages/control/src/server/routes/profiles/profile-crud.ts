@@ -9,7 +9,7 @@ import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats
 import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
-import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-helpers';
+import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-utils';
 import type { UserProfileResponse, ProfileRepoResponse } from './dto';
 
 export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()

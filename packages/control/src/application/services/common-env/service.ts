@@ -348,8 +348,4 @@ export class CommonEnvService {
   }
 }
 
-export function createCommonEnvService(env: Env): CommonEnvService {
-  return new CommonEnvService(env);
-}
-
 export { CommonEnvService as ServiceCommonEnvService };

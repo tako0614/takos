@@ -26,10 +26,10 @@ script_name = "takos"
 tag = "v1"
 new_sqlite_classes = ["TakosAgentExecutorContainer"]
 
+# Container image must be provided by your deployment (e.g. takos-computer).
 [[containers]]
 class_name = "TakosAgentExecutorContainer"
-image = "../../../takos-computer/apps/executor/Dockerfile"
-image_build_context = "../../.."
+image = "your-executor-image:tag"
 instance_type = "standard-2"
 max_instances = 25
 
@@ -82,7 +82,7 @@ name = "takos-executor-host-staging"
 workers_dev = true
 
 [env.staging.vars]
-ADMIN_DOMAIN = "test.takos.jp"
+ADMIN_DOMAIN = "staging-admin.example.com"
 CONTROL_RPC_BASE_URL = "https://takos-executor-host-staging.example.workers.dev"
 
 [[env.staging.durable_objects.bindings]]
@@ -96,8 +96,7 @@ script_name = "takos-staging"
 
 [[env.staging.containers]]
 class_name = "TakosAgentExecutorContainer"
-image = "../../../takos-computer/apps/executor/Dockerfile"
-image_build_context = "../../.."
+image = "your-executor-image:tag"
 instance_type = "standard-2"
 max_instances = 10
 

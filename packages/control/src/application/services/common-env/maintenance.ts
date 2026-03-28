@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { createCommonEnvService } from './service';
+import { CommonEnvService } from './service';
 import { logInfo } from '../../../shared/utils/logger';
 
 export async function runCommonEnvScheduledMaintenance(params: {
@@ -8,7 +8,7 @@ export async function runCommonEnvScheduledMaintenance(params: {
   errors: Array<{ job: string; error: string }>;
 }): Promise<void> {
   const { env, cron, errors } = params;
-  const commonEnvService = createCommonEnvService(env);
+  const commonEnvService = new CommonEnvService(env);
 
   if (cron === '*/15 * * * *') {
     try {

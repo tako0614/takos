@@ -12,13 +12,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/platform/app-deployments', () => ({
-  createAppDeploymentService: () => ({
-    deployFromRepoRef: mocks.deployFromRepoRef,
-    list: mocks.list,
-    get: mocks.get,
-    remove: mocks.remove,
-    rollback: mocks.rollback,
-  }),
+  AppDeploymentService: class {
+    deployFromRepoRef = mocks.deployFromRepoRef;
+    list = mocks.list;
+    get = mocks.get;
+    remove = mocks.remove;
+    rollback = mocks.rollback;
+  },
 }));
 
 vi.mock('@/routes/shared/helpers', async (importOriginal) => {

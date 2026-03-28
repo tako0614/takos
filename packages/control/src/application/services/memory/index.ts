@@ -1,5 +1,5 @@
-export { MemoryExtractor, createMemoryExtractor, shouldAutoExtract } from './extractor';
-export { MemoryConsolidator, createMemoryConsolidator } from './consolidation';
+export { MemoryExtractor, shouldAutoExtract } from './extractor';
+export { MemoryConsolidator } from './consolidation';
 export {
   listMemories,
   bumpMemoryAccess,

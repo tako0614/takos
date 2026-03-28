@@ -7,7 +7,7 @@ import { getDb } from '../../infra/db';
 import { accounts, runs, messages, threads } from '../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { logError, logWarn } from '../../shared/utils/logger';
-import type { SelectOf } from '../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../shared/types/drizzle-utils';
 import { AuthorizationError, NotFoundError } from 'takos-common/errors';
 import { persistMessage } from '../../application/services/agent/message-persistence';
 import {

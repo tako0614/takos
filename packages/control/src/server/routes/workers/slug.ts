@@ -9,7 +9,7 @@ import { eq, and, or, ne } from 'drizzle-orm';
 import { services } from '../../../infra/db/schema-services';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing/service';
 import type { RoutingTarget } from '../../../application/services/routing/routing-models';
-import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 
@@ -45,7 +45,7 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
   }
 
   const db = getDb(c.env.DB);
-  const desiredState = createServiceDesiredStateService(c.env);
+  const desiredState = new ServiceDesiredStateService(c.env);
   const platformDomain = c.env.TENANT_BASE_DOMAIN;
   const newHostname = `${newSlug}.${platformDomain}`;
 

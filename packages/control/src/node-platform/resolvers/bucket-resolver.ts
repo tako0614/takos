@@ -2,7 +2,7 @@
  * Object storage resolver — selects S3/GCS/persistent/in-memory per bucket.
  */
 import path from 'node:path';
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 import {
   createInMemoryR2Bucket,
 } from '../../local-platform/in-memory-bindings.ts';

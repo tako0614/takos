@@ -28,7 +28,7 @@ export interface GroupDeployOptions {
 // ── Results ──────────────────────────────────────────────────────────────────
 
 export type ServiceDeployStatus = 'deployed' | 'failed' | 'skipped';
-export type ResourceProvisionStatus = 'provisioned' | 'exists' | 'failed';
+export type ResourceProvisionStatus = 'provisioned' | 'exists' | 'failed' | 'skipped';
 export type BindingStatus = 'bound' | 'failed';
 
 export interface ServiceDeployResult {
@@ -98,6 +98,16 @@ export interface WranglerServiceBinding {
   service: string;
 }
 
+export interface WranglerQueueProducer {
+  queue: string;
+  binding: string;
+}
+
+export interface WranglerVectorizeIndex {
+  index_name: string;
+  binding: string;
+}
+
 export interface WranglerVars {
   [key: string]: string;
 }
@@ -112,5 +122,7 @@ export interface WranglerConfig {
   r2_buckets?: WranglerR2Binding[];
   kv_namespaces?: WranglerKVBinding[];
   services?: WranglerServiceBinding[];
+  queues_producers?: WranglerQueueProducer[];
+  vectorize_indexes?: WranglerVectorizeIndex[];
   dispatch_namespace?: string;
 }

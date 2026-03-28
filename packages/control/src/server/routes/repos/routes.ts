@@ -42,7 +42,7 @@ import {
   deleteR2Prefix,
   cleanupRepoGitObjects,
   collectCleanupCandidates,
-} from './repo-helpers';
+} from './repo-utils';
 
 // ---------------------------------------------------------------------------
 // Type aliases for deletion cleanup

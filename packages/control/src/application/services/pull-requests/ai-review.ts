@@ -10,7 +10,7 @@ import type {
 import type { AgentMessage } from '../agent/types';
 import { generateId, now, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { getWorkspaceModelSettings } from '../identity/spaces';
-import { createMultiModelClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
+import { LLMClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
 import { getDb, prReviews, prComments } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import * as gitStore from '../git-smart';
@@ -274,7 +274,7 @@ export async function runAiReview(options: {
     { role: 'user', content: userPrompt },
   ];
 
-  const llm = createMultiModelClient({
+  const llm = new LLMClient({
     apiKey,
     model,
     provider,

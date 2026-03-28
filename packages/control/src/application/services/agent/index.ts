@@ -39,8 +39,6 @@ export {
   type LLMConfig,
   LLMClient,
   VALID_PROVIDERS,
-  createLLMClient,
-  createMultiModelClient,
   createLLMClientFromEnv,
   getProviderFromModel,
 } from './llm';

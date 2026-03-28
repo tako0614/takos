@@ -13,7 +13,7 @@ import type {
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
 } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { toIsoString } from '../../../shared/utils';
 import { listThreadMessages } from './thread-service';

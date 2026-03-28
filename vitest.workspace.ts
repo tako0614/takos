@@ -6,9 +6,7 @@ export default defineWorkspace([
   'apps/cli/vitest.config.ts',
   'packages/common',
   'packages/actions-engine',
-  'packages/agent-core',
   'packages/browser-service',
   'packages/cloudflare-compat',
-  'packages/executor-service',
   'packages/runtime-service',
 ]);

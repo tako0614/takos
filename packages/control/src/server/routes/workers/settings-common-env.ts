@@ -4,7 +4,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { TAKOS_ACCESS_TOKEN_ENV_NAME, createCommonEnvService } from '../../../application/services/common-env';
+import { TAKOS_ACCESS_TOKEN_ENV_NAME, CommonEnvService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env/handlers';
 import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
 import { getDb } from '../../../infra/db';
@@ -67,7 +67,7 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = createCommonEnvService(c.env);
+    const commonEnvService = new CommonEnvService(c.env);
     const links = await commonEnvService.listWorkerCommonEnvLinks(worker.space_id, worker.id);
     const builtins = await commonEnvService.listWorkerBuiltins(worker.space_id, worker.id);
     return c.json({ links, builtins });
@@ -97,7 +97,7 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = createCommonEnvService(c.env);
+    const commonEnvService = new CommonEnvService(c.env);
     const currentManualKeys = await commonEnvService.listWorkerManualLinkNames(worker.space_id, worker.id);
     const currentBuiltins = await commonEnvService.listWorkerBuiltins(worker.space_id, worker.id);
     const currentTakosLink = await getCurrentTakosAccessTokenLinkPresence(c.env, worker.space_id, worker.id);
@@ -193,7 +193,7 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = createCommonEnvService(c.env);
+    const commonEnvService = new CommonEnvService(c.env);
     const currentManualKeys = await commonEnvService.listWorkerManualLinkNames(worker.space_id, worker.id);
     const currentBuiltins = await commonEnvService.listWorkerBuiltins(worker.space_id, worker.id);
     const currentTakosLink = await getCurrentTakosAccessTokenLinkPresence(c.env, worker.space_id, worker.id);

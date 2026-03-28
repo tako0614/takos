@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
   chatAndParseJsonArray: vi.fn(),
-  createLLMClient: vi.fn(),
+  LLMClient: vi.fn(),
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
@@ -12,7 +12,7 @@ vi.mock('@/db', async (importOriginal) => ({
 }));
 
 vi.mock('@/services/agent', () => ({
-  createLLMClient: mocks.createLLMClient,
+  LLMClient: mocks.LLMClient,
 }));
 
 vi.mock('@/services/memory/helpers', () => ({
@@ -226,7 +226,7 @@ describe('MemoryExtractor', () => {
   describe('extractFromThread (LLM-based)', () => {
     it('uses LLM extraction when apiKey is provided and LLM returns valid memories', async () => {
       const mockLLMClient = { chat: vi.fn() };
-      mocks.createLLMClient.mockReturnValue(mockLLMClient);
+      mocks.LLMClient.mockImplementation(() => mockLLMClient);
 
       const llmMemories = [
         { type: 'semantic', content: 'User works at Acme Corp', category: 'user', importance: 0.8 },
@@ -251,7 +251,7 @@ describe('MemoryExtractor', () => {
 
     it('filters out invalid memories from LLM response', async () => {
       const mockLLMClient = { chat: vi.fn() };
-      mocks.createLLMClient.mockReturnValue(mockLLMClient);
+      mocks.LLMClient.mockImplementation(() => mockLLMClient);
 
       const llmMemories = [
         { type: 'semantic', content: 'Valid memory', importance: 0.8 },
@@ -276,7 +276,7 @@ describe('MemoryExtractor', () => {
 
     it('falls back to pattern matching when LLM throws', async () => {
       const mockLLMClient = { chat: vi.fn() };
-      mocks.createLLMClient.mockReturnValue(mockLLMClient);
+      mocks.LLMClient.mockImplementation(() => mockLLMClient);
       mocks.chatAndParseJsonArray.mockRejectedValue(new Error('LLM API error'));
 
       const drizzle = createDrizzleMock();
@@ -296,7 +296,7 @@ describe('MemoryExtractor', () => {
 
     it('returns empty when LLM returns null', async () => {
       const mockLLMClient = { chat: vi.fn() };
-      mocks.createLLMClient.mockReturnValue(mockLLMClient);
+      mocks.LLMClient.mockImplementation(() => mockLLMClient);
       mocks.chatAndParseJsonArray.mockResolvedValue(null);
 
       const drizzle = createDrizzleMock();

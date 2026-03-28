@@ -61,14 +61,6 @@ export class LLMClient {
   }
 }
 
-export function createLLMClient(apiKey: string, config?: Partial<LLMConfig>): LLMClient {
-  return new LLMClient({ apiKey, ...config });
-}
-
-export function createMultiModelClient(config: LLMConfig): LLMClient {
-  return new LLMClient(config);
-}
-
 export const VALID_PROVIDERS: readonly ModelProvider[] = ['openai', 'anthropic', 'google'];
 
 function parseModelProvider(value: string | undefined): ModelProvider | undefined {

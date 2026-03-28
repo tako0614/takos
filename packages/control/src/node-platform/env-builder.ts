@@ -54,7 +54,7 @@ import type { TenantWorkerRuntimeRegistry } from '../local-platform/tenant-worke
 import { DEFAULT_LOCAL_DOMAINS } from '../local-platform/runtime-types.ts';
 
 // -- Resolvers ----------------------------------------------------------------
-import { optionalEnv, resolveLocalDataDir, resolvePostgresUrl, resolveRedisUrl } from './resolvers/env-helpers.ts';
+import { optionalEnv, resolveLocalDataDir, resolvePostgresUrl, resolveRedisUrl } from './resolvers/env-utils.ts';
 import { resolveDatabase } from './resolvers/db-resolver.ts';
 import { resolveBucket } from './resolvers/bucket-resolver.ts';
 import { resolveQueue } from './resolvers/queue-resolver.ts';

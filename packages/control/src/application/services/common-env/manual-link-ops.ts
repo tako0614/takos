@@ -5,7 +5,7 @@ import { generateId, now } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
-import type { ServiceLinkRow, SyncState } from './repository';
+import { listServiceLinks, type ServiceLinkRow, type SyncState } from './repository';
 import type { CommonEnvOrchestrator } from './orchestrator';
 import type { CommonEnvReconcileTrigger } from './reconcile-jobs';
 import { getChanges } from './link-state';
@@ -14,9 +14,8 @@ import {
   upsertManagedTakosTokenConfig,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
-import { serviceCommonEnvLinks } from '../../../infra/db';
-import { listServiceLinksFromRepo } from './service-link-ops';
-import { db, runInTransaction } from './db-helpers';
+import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+import { runInTransaction } from './db-utils';
 
 export interface ManualLinkDeps {
   env: Env;
@@ -100,7 +99,7 @@ async function cleanupManagedBuiltinConfigsIfNeeded(deps: ManualLinkDeps, params
     return;
   }
 
-  const remaining = await listServiceLinksFromRepo(deps, params.spaceId, params.serviceId);
+  const remaining = await listServiceLinks(deps.env, params.spaceId, params.serviceId);
   const stillLinked = remaining.some((row) => normalizeEnvName(row.env_name) === TAKOS_ACCESS_TOKEN_ENV_NAME);
   if (!stillLinked) {
     await deleteManagedTakosTokenConfig({
@@ -115,7 +114,7 @@ async function cleanupManagedBuiltinConfigsIfNeeded(deps: ManualLinkDeps, params
 // --- Manual link key helpers ---
 
 export async function listManualLinkKeys(deps: ManualLinkDeps, spaceId: string, serviceId: string): Promise<Set<string>> {
-  const rows = await db(deps).select({ envName: serviceCommonEnvLinks.envName })
+  const rows = await getDb(deps.env.DB).select({ envName: serviceCommonEnvLinks.envName })
     .from(serviceCommonEnvLinks)
     .where(and(
       eq(serviceCommonEnvLinks.accountId, spaceId),
@@ -149,7 +148,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
     const actuallyRemoved: string[] = [];
 
     for (const key of params.toAdd) {
-      const result = await db(deps).insert(serviceCommonEnvLinks)
+      const result = await getDb(deps.env.DB).insert(serviceCommonEnvLinks)
         .values({
           id: generateId(),
           accountId: params.spaceId,
@@ -183,7 +182,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
     }
 
     if (params.toRemove.length > 0) {
-      const removableRows = await db(deps).select({
+      const removableRows = await getDb(deps.env.DB).select({
         id: serviceCommonEnvLinks.id,
         envName: serviceCommonEnvLinks.envName,
       })
@@ -198,7 +197,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
 
       if (removableRows.length > 0) {
         const removableIds = removableRows.map((row) => row.id);
-        await db(deps).delete(serviceCommonEnvLinks)
+        await getDb(deps.env.DB).delete(serviceCommonEnvLinks)
           .where(and(
             eq(serviceCommonEnvLinks.accountId, params.spaceId),
             eq(serviceCommonEnvLinks.serviceId, params.serviceId),
@@ -328,7 +327,7 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
   const keys = uniqueEnvNames(params.keys || []);
   if (keys.length === 0) return;
 
-  const targetRows = await db(deps).select({
+  const targetRows = await getDb(deps.env.DB).select({
     id: serviceCommonEnvLinks.id,
     envName: serviceCommonEnvLinks.envName,
     syncState: serviceCommonEnvLinks.syncState,
@@ -351,7 +350,7 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
   const timestamp = now();
 
   await runInTransaction(deps, async () => {
-    await db(deps).update(serviceCommonEnvLinks)
+    await getDb(deps.env.DB).update(serviceCommonEnvLinks)
       .set({
         syncState: 'overridden',
         syncReason: 'user_override',

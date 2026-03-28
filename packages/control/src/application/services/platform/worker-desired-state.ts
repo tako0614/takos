@@ -382,10 +382,6 @@ export class ServiceDesiredStateService {
   }
 }
 
-export function createServiceDesiredStateService(env: DesiredStateEnv): ServiceDesiredStateService {
-  return new ServiceDesiredStateService(env);
-}
-
 // Legacy aliases for backward compatibility
 export type WorkerManagedMcpServerState = import('./desired-state-types').ServiceManagedMcpServerState;
 export type WorkerRuntimeConfigState = import('./desired-state-types').ServiceRuntimeConfigState;
@@ -394,4 +390,3 @@ export type WorkerLocalEnvVarSummary = import('./desired-state-types').ServiceLo
 export type WorkerDesiredStateSnapshot = import('./desired-state-types').ServiceDesiredStateSnapshot;
 export { ServiceDesiredStateService as WorkerDesiredStateService };
 export { resolveServiceCommonEnvState as resolveWorkerCommonEnvState };
-export { createServiceDesiredStateService as createWorkerDesiredStateService };

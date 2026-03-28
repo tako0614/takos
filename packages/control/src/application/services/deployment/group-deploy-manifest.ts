@@ -8,7 +8,7 @@
  * Keep this in sync with the CLI's AppManifest type.
  */
 
-export type AppResourceType = 'd1' | 'r2' | 'kv' | 'secretRef';
+export type AppResourceType = 'd1' | 'r2' | 'kv' | 'secretRef' | 'queue' | 'vectorize' | 'analyticsEngine' | 'workflow' | 'durableObject';
 
 export interface AppResource {
   type: AppResourceType;
@@ -16,6 +16,10 @@ export interface AppResource {
   migrations?: string | { up: string; down: string };
   /** For secretRef: whether to auto-generate a random value */
   generate?: boolean;
+  /** For vectorize: index configuration */
+  vectorize?: { dimensions: number; metric: string };
+  /** For queue: queue configuration */
+  queue?: { maxRetries?: number; deadLetterQueue?: string };
 }
 
 export interface WorkerServiceBuild {
@@ -36,6 +40,8 @@ export interface WorkerService {
     r2?: string[];
     kv?: string[];
     services?: string[];
+    queues?: string[];
+    vectorize?: string[];
   };
 }
 

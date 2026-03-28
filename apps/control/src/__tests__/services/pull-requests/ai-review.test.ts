@@ -4,7 +4,7 @@ import type { Env } from '@/types';
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceModelSettings: vi.fn(),
-  createMultiModelClient: vi.fn(),
+  LLMClient: vi.fn(),
   getProviderFromModel: vi.fn(),
   getDb: vi.fn(),
   resolveRef: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@/services/identity/spaces', () => ({
 }));
 
 vi.mock('@/services/agent/llm', () => ({
-  createMultiModelClient: mocks.createMultiModelClient,
+  LLMClient: mocks.LLMClient,
   getProviderFromModel: mocks.getProviderFromModel,
 }));
 
@@ -86,7 +86,7 @@ describe('runAiReview contract alignment (issue 004)', () => {
     mocks.getWorkspaceModelSettings.mockResolvedValue(null);
     mocks.getProviderFromModel.mockReturnValue('openai');
 
-    mocks.createMultiModelClient.mockReturnValue({
+    mocks.LLMClient.mockImplementation(() => ({
       chat: vi.fn().mockResolvedValue({
         content: JSON.stringify({
           status: 'changes_requested',
@@ -101,7 +101,7 @@ describe('runAiReview contract alignment (issue 004)', () => {
           ],
         }),
       }),
-    });
+    }));
 
     mocks.resolveRef.mockImplementation(async (_db: D1Database, _repoId: string, ref: string) => {
       if (ref === 'main') {

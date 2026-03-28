@@ -5,7 +5,7 @@
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
 import type { Conclusion } from 'takos-actions-engine';
 import type { WorkflowJobQueueMessage } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import type { workflowRuns } from '../../../infra/db';
 import * as gitStore from '../git-smart';
 

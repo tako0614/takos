@@ -200,7 +200,7 @@ export async function executeWebSocketStream(path: string, options: StreamComman
     address: string,
     options: { headers: Record<string, string> }
   ) => {
-    on: (event: string, handler: (...args: any[]) => void) => void;
+    on: (event: string, handler: (...args: unknown[]) => void) => void;
     send: (data: string) => void;
     close: (code?: number, data?: string) => void;
   };

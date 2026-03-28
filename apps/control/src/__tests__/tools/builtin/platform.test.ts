@@ -57,8 +57,7 @@ const mockDesiredState = {
 };
 
 vi.mock('@/services/platform/worker-desired-state', () => ({
-  createWorkerDesiredStateService: vi.fn(() => mockDesiredState),
-  createServiceDesiredStateService: vi.fn(() => mockDesiredState),
+  ServiceDesiredStateService: vi.fn(() => mockDesiredState),
 }));
 
 const mockDeploymentService = {
@@ -80,7 +79,7 @@ vi.mock('@/services/platform/workers', () => ({
 }));
 
 vi.mock('@/services/common-env', () => ({
-  createCommonEnvService: vi.fn(() => ({
+  CommonEnvService: vi.fn(() => ({
     reconcileWorkerCommonEnv: vi.fn(),
   })),
 }));

@@ -52,8 +52,8 @@ binding = "TAKOS_WEB"
 service = "takos-staging"
 
 [env.staging.vars]
-ADMIN_DOMAIN = "test.takos.jp"
-PROXY_BASE_URL = "https://takos-runtime-host-staging.shoutatomiyama0614.workers.dev"
+ADMIN_DOMAIN = "staging-admin.example.com"
+PROXY_BASE_URL = "https://your-staging-runtime-host.workers.dev"
 
 [[env.staging.durable_objects.bindings]]
 name = "RUNTIME_CONTAINER"

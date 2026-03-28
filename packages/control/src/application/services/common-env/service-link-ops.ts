@@ -21,16 +21,12 @@ import {
   type TakosBuiltinStatus,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
-import { serviceCommonEnvLinks } from '../../../infra/db';
-import { db, runInTransaction } from './db-helpers';
+import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+import { runInTransaction } from './db-utils';
 
 export interface ServiceLinkDeps {
   env: Env;
   txManager: D1TransactionManager;
-}
-
-export async function listServiceLinksFromRepo(deps: ServiceLinkDeps, spaceId: string, serviceId: string): Promise<ServiceLinkRow[]> {
-  return listServiceLinks(deps.env, spaceId, serviceId);
 }
 
 export async function ensureRequiredServiceLinks(deps: ServiceLinkDeps, params: {
@@ -47,7 +43,7 @@ export async function ensureRequiredServiceLinks(deps: ServiceLinkDeps, params: 
   await runInTransaction(deps, async () => {
     for (const serviceId of params.serviceIds) {
       for (const key of keys) {
-        const result = await db(deps).insert(serviceCommonEnvLinks)
+        const result = await getDb(deps.env.DB).insert(serviceCommonEnvLinks)
           .values({
             id: generateId(),
             accountId: spaceId,
@@ -90,7 +86,7 @@ export async function listServiceCommonEnvLinks(deps: ServiceLinkDeps, spaceId: 
   syncState: SyncState;
   syncReason: string | null;
 }>> {
-  const rows = await listServiceLinksFromRepo(deps, spaceId, serviceId);
+  const rows = await listServiceLinks(deps.env, spaceId, serviceId);
   const effective = getEffectiveLinks(rows);
   const commonNameSet = new Set(
     (await listSpaceCommonEnvNames(deps.env, spaceId)).map((name) => normalizeEnvName(name))
@@ -118,7 +114,7 @@ export async function listServiceCommonEnvLinks(deps: ServiceLinkDeps, spaceId: 
 }
 
 export async function listServiceManualLinkNames(deps: ServiceLinkDeps, spaceId: string, serviceId: string): Promise<string[]> {
-  const rows = await db(deps).select({ envName: serviceCommonEnvLinks.envName })
+  const rows = await getDb(deps.env.DB).select({ envName: serviceCommonEnvLinks.envName })
     .from(serviceCommonEnvLinks)
     .where(and(
       eq(serviceCommonEnvLinks.accountId, spaceId),
@@ -134,7 +130,7 @@ export async function listServiceBuiltins(
   spaceId: string,
   serviceId: string,
 ): Promise<Record<string, TakosBuiltinStatus>> {
-  const rows = await listServiceLinksFromRepo(deps, spaceId, serviceId);
+  const rows = await listServiceLinks(deps.env, spaceId, serviceId);
   return listTakosBuiltinStatuses({
     env: deps.env,
     spaceId,

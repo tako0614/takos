@@ -21,7 +21,6 @@ import type {
  *   - .env.local.example                        (TAKOS_CONTROL_WEB_PORT etc.)
  *   - apps/control/.env.self-host.example       (TAKOS_CONTROL_WEB_PORT etc.)
  *   - apps/runtime/.env.example                 (TAKOS_API_URL)
- *   - packages/executor-service/.env.example    (CONTROL_RPC_BASE_URL)
  *   - scripts/local-smoke.mjs                   (defaults object)
  *   - deploy/helm/takos/values.yaml             (port fields)
  */

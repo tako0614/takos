@@ -576,4 +576,4 @@ export {
   isToolAllowedForAgent,
   filterAgentAllowedToolNames,
   validateBuiltinToolPolicies,
-} from './tool-policy-helpers';
+} from './tool-policy-utils';
