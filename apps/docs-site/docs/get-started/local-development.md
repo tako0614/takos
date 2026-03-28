@@ -74,4 +74,4 @@ compose を使わず manual に構成したい場合は `apps/control/.env.self-
 
 ## local での既知差分
 
-local runtime は Workers-compatible を目指しますが、provider 実体まで完全一致ではありません。既知差分は [互換性と制限](../architecture/compatibility-and-limitations.md) を参照してください。
+local runtime は Workers-compatible を目指しますが、provider 実体まで完全一致ではありません。既知差分は [互換性と制限](/architecture/compatibility) を参照してください。

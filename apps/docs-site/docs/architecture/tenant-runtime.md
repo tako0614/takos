@@ -78,4 +78,4 @@ Takos の deployment は、実行 contract を deployment ごとの snapshot と
 ## compatibility note
 
 Takos は local と Cloudflare で tenant contract をできるだけ揃えますが、backend は同一ではありません。  
-既知の差分と制限は [互換性と制限](./compatibility-and-limitations.md) にまとめています。
+既知の差分と制限は [互換性と制限](./compatibility.md) にまとめています。

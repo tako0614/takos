@@ -17,7 +17,7 @@ HTTP verb をそのまま露出するのではなく、domain ごとの task を
 
 ## implementation note
 
-CLI の deploy surface は [Deploy System](/specs/deploy-system) の public contract に従います。
+CLI の deploy surface は [Deploy System](/deploy/) の public contract に従います。
 `takos deploy` は current surface ですが、end-to-end availability は deploy system 側の implementation note と同じ差分を持ちます。
 
 ## 認証
@@ -38,7 +38,7 @@ takos logout
 ```
 
 ::: tip Device Flow との違い
-[OAuth 仕様](/specs/oauth) で文書化されている Device Authorization Grant はサードパーティアプリ向けです。`takos login` はブラウザコールバック方式を使い、Device Flow は使いません。
+[OAuth 仕様](/apps/oauth) で文書化されている Device Authorization Grant はサードパーティアプリ向けです。`takos login` はブラウザコールバック方式を使い、Device Flow は使いません。
 :::
 
 ## 認証情報の解決順序
@@ -150,6 +150,6 @@ Takos CLI は次を current surface に含めません。
 
 ## 次に読むページ
 
-- [CLI command reference](/reference/commands)
-- [Deploy System](/specs/deploy-system)
-- [OAuth](/specs/oauth)
+- [CLI command reference](/reference/cli)
+- [Deploy System](/deploy/)
+- [OAuth](/apps/oauth)

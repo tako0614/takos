@@ -349,7 +349,7 @@ oauth:
   autoEnv: true
 ```
 
-詳細は [OAuth](/specs/oauth) を参照してください。
+詳細は [OAuth](/apps/oauth) を参照してください。
 
 #### mcpServers
 
@@ -509,6 +509,6 @@ spec:
 
 ## 次に読むページ
 
-- [Deploy System](/specs/deploy-system)
-- [CLI / Auth model](/specs/cli-and-auth)
+- [Deploy System](/deploy/)
+- [CLI / Auth model](/reference/cli-auth)
 - [API リファレンス](/reference/api)

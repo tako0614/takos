@@ -53,13 +53,13 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 ## 最初に読むページ
 
-- docs の trust boundary は [仕様の読み方](/specs/reading-the-spec)
-- manifest と deploy は [独自仕様](/specs/)
-- CLI / API は [参照](/reference/)
+- はじめる は [Get Started](/get-started/)
+- manifest と deploy は [アプリ開発](/apps/) と [デプロイ](/deploy/)
+- CLI / API は [リファレンス](/reference/)
 - internal 構成は [アーキテクチャ](/architecture/)
 
 ## 次に読むページ
 
-- [仕様の読み方](/specs/reading-the-spec)
-- [中核概念](/concepts/)
-- [独自仕様](/specs/)
+- [はじめる](/get-started/)
+- [アプリ開発](/apps/)
+- [デプロイ](/deploy/)

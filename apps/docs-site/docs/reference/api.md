@@ -128,7 +128,7 @@ Takos CLI で `repo` domain が広い責務を持つのはこのためです。
 
 ## implementation note
 
-deploy family は current public surface ですが、today の implementation gap は [Deploy System](/specs/deploy-system) に従って読みます。
+deploy family は current public surface ですが、today の implementation gap は [Deploy System](/deploy/) に従って読みます。
 このリファレンスは route family の存在と役割を示すものであり、end-to-end availability の保証は implementation note を優先してください。
 
 ## Examples
@@ -170,6 +170,6 @@ curl -N \
 
 ## 次に読むページ
 
-- [Deploy System](/specs/deploy-system)
-- [CLI command reference](/reference/commands)
+- [Deploy System](/deploy/)
+- [CLI command reference](/reference/cli)
 - [用語集](/reference/glossary)
