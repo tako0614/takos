@@ -946,6 +946,10 @@ spec:
     takos?: string;
     resources?: string;
     services?: string;
+    routes?: string;
+    containers?: string;
+    env?: string;
+    overrides?: string;
   }): string {
     return `
 apiVersion: takos.dev/v1alpha1
@@ -954,10 +958,14 @@ metadata:
   name: test-app
 spec:
   version: ${overrides.version ?? '1.0.0'}
+${overrides.overrides ? `  overrides:\n${overrides.overrides}` : ''}
+${overrides.env ? `  env:\n${overrides.env}` : ''}
 ${overrides.resources ? `  resources:\n${overrides.resources}` : ''}
+${overrides.containers ? `  containers:\n${overrides.containers}` : ''}
 ${overrides.services ? `  services:\n${overrides.services}` : ''}
   workers:
 ${overrides.workers ?? `    web:${minWorkerYaml}`}
+${overrides.routes ? `  routes:\n${overrides.routes}` : ''}
 ${overrides.lifecycle ? `  lifecycle:\n${overrides.lifecycle}` : ''}
 ${overrides.update ? `  update:\n${overrides.update}` : ''}
 ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
@@ -1238,6 +1246,227 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
         up: '.takos/migrations/cache/up',
         down: '.takos/migrations/cache/down',
       });
+    });
+  });
+
+  // ============================================================
+  // 13 個の新仕様テスト
+  // ============================================================
+
+  // --- 1. Environment overrides ---
+
+  describe('environment overrides', () => {
+    it('parses environment overrides', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        overrides: `    staging:
+      containers:
+        browser:
+          maxInstances: 2`,
+        containers: `    browser:
+      dockerfile: Dockerfile
+      port: 8080
+      maxInstances: 10`,
+      }));
+      expect(manifest.spec.overrides).toBeDefined();
+      expect(manifest.spec.overrides!.staging.containers.browser.maxInstances).toBe(2);
+    });
+  });
+
+  // --- 2. Lifecycle sandbox ---
+
+  describe('lifecycle sandbox', () => {
+    it('parses lifecycle hook sandbox flag', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        lifecycle: `    preApply:
+      command: pnpm run migrate
+      sandbox: true`,
+      }));
+      expect(manifest.spec.lifecycle?.preApply?.sandbox).toBe(true);
+    });
+  });
+
+  // --- 3. Service bindings on services ---
+
+  describe('service bindings on services', () => {
+    it('parses service bindings on services', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    api:
+      dockerfile: Dockerfile
+      port: 3000
+      bindings:
+        services:
+          - other`,
+      }));
+      expect(manifest.spec.services!.api.bindings?.services).toEqual(['other']);
+    });
+  });
+
+  // --- 4. Worker scaling ---
+
+  describe('worker scaling', () => {
+    it('parses worker scaling', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      scaling:
+        minInstances: 1
+        maxConcurrency: 10`,
+      }));
+      expect(manifest.spec.workers?.web.scaling).toEqual({
+        minInstances: 1,
+        maxConcurrency: 10,
+      });
+    });
+  });
+
+  // --- 5. Volumes ---
+
+  describe('service volumes', () => {
+    it('parses service volumes', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    db:
+      dockerfile: Dockerfile
+      port: 5432
+      volumes:
+        - name: data
+          mountPath: /data
+          size: 10Gi`,
+      }));
+      expect(manifest.spec.services!.db.volumes).toEqual([
+        { name: 'data', mountPath: '/data', size: '10Gi' },
+      ]);
+    });
+  });
+
+  // --- 6. Health check types ---
+
+  describe('health check types', () => {
+    it('parses tcp health check', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    db:
+      dockerfile: Dockerfile
+      port: 5432
+      healthCheck:
+        type: tcp
+        port: 5432`,
+      }));
+      expect(manifest.spec.services!.db.healthCheck).toEqual({
+        type: 'tcp',
+        port: 5432,
+      });
+    });
+
+    it('parses exec health check', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    db:
+      dockerfile: Dockerfile
+      port: 5432
+      healthCheck:
+        type: exec
+        command: pg_isready`,
+      }));
+      expect(manifest.spec.services!.db.healthCheck).toEqual({
+        type: 'exec',
+        command: 'pg_isready',
+      });
+    });
+
+    it('rejects invalid health check type', () => {
+      expect(() => parseAppManifestYaml(yaml({
+        services: `    db:
+      dockerfile: Dockerfile
+      port: 5432
+      healthCheck:
+        type: grpc`,
+      }))).toThrow();
+    });
+  });
+
+  // --- 7. Service triggers ---
+
+  describe('service triggers', () => {
+    it('parses service schedules', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    worker:
+      dockerfile: Dockerfile
+      port: 8080
+      triggers:
+        schedules:
+          - cron: '*/5 * * * *'
+            export: runJob`,
+      }));
+      expect(manifest.spec.services!.worker.triggers?.schedules).toEqual([
+        { cron: '*/5 * * * *', export: 'runJob' },
+      ]);
+    });
+  });
+
+  // --- 8. DependsOn ---
+
+  describe('dependsOn', () => {
+    it('parses worker dependsOn', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    api:
+      dockerfile: Dockerfile
+      port: 3000`,
+        workers: `    web:${minWorkerYaml}
+      dependsOn:
+        - api`,
+      }));
+      expect(manifest.spec.workers?.web.dependsOn).toEqual(['api']);
+    });
+  });
+
+  // --- 9. Resource limits ---
+
+  describe('resource limits', () => {
+    it('parses resource limits', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        d1:
+          - db`,
+        resources: `    db:
+      type: d1
+      binding: DB
+      limits:
+        maxSizeMb: 500`,
+      }));
+      expect(manifest.spec.resources?.db.limits).toEqual({ maxSizeMb: 500 });
+    });
+  });
+
+  // --- 10. Route methods ---
+
+  describe('route methods', () => {
+    it('parses route methods', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        routes: `    - name: api
+      target: web
+      methods:
+        - GET
+        - POST`,
+      }));
+      expect(manifest.spec.routes![0].methods).toEqual(['GET', 'POST']);
+    });
+
+    it('rejects invalid route method', () => {
+      expect(() => parseAppManifestYaml(yaml({
+        routes: `    - name: api
+      target: web
+      methods:
+        - YOLO`,
+      }))).toThrow();
+    });
+  });
+
+  // --- 11. Recreate strategy ---
+
+  describe('recreate strategy', () => {
+    it('accepts recreate strategy', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        update: `    strategy: recreate`,
+      }));
+      expect(manifest.spec.update?.strategy).toBe('recreate');
     });
   });
 });

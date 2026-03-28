@@ -9,6 +9,7 @@ import {
   filterWorkflowErrors,
   type AppResource,
   type AppWorker,
+  type ResourceLimits,
 } from './app-manifest-types';
 
 /** Minimal service shape used by resource validation (supports both workers and containers) */
@@ -138,6 +139,16 @@ export function parseResources(
             },
           }
         : {}),
+      ...(((): { limits?: ResourceLimits } => {
+        if (!resource.limits) return {};
+        const limitsRecord = asRecord(resource.limits);
+        const limits: ResourceLimits = {
+          ...(limitsRecord.maxSizeMb != null ? { maxSizeMb: Number(limitsRecord.maxSizeMb) } : {}),
+          ...(limitsRecord.maxRows != null ? { maxRows: Number(limitsRecord.maxRows) } : {}),
+          ...(limitsRecord.maxKeys != null ? { maxKeys: Number(limitsRecord.maxKeys) } : {}),
+        };
+        return Object.keys(limits).length > 0 ? { limits } : {};
+      })()),
     };
   }
 

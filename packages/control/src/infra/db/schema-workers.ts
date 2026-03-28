@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps } from './schema-helpers';
 import { services, serviceBindings, serviceCommonEnvLinks } from './schema-services';
 
 // 14. App
@@ -11,8 +12,7 @@ const appsTable = sqliteTable('apps', {
   icon: text('icon'),
   appType: text('app_type').notNull(),
   takosClientKey: text('takos_client_key'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxService: index('idx_apps_service_id').on(table.serviceId),
   idxAppType: index('idx_apps_app_type').on(table.appType),
@@ -96,7 +96,7 @@ const commonEnvAuditLogsTable = sqliteTable('common_env_audit_logs', {
   requestId: text('request_id'),
   ipHash: text('ip_hash'),
   userAgent: text('user_agent'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxServiceCreatedAt: index('idx_common_env_audit_logs_service_created_at').on(table.serviceId, table.createdAt),
   idxAccountEnvCreatedAt: index('idx_common_env_audit_logs_account_env_created_at').on(table.accountId, table.envName, table.createdAt),
@@ -126,8 +126,7 @@ const commonEnvReconcileJobsTable = sqliteTable('common_env_reconcile_jobs', {
   enqueuedAt: text('enqueued_at'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxStatusNextAttempt: index('idx_common_env_reconcile_jobs_status_next_attempt').on(table.status, table.nextAttemptAt),
   idxAccountServiceStatus: index('idx_common_env_reconcile_jobs_account_service_status').on(table.accountId, table.serviceId, table.status),
@@ -151,8 +150,7 @@ const customDomainsTable = sqliteTable('custom_domains', {
   cfCustomHostnameId: text('cf_custom_hostname_id'),
   sslStatus: text('ssl_status').default('pending'),
   verifiedAt: text('verified_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxService: index('idx_custom_domains_service_id').on(table.serviceId),
   idxStatus: index('idx_custom_domains_status').on(table.status),
@@ -174,7 +172,7 @@ export const deploymentEvents = sqliteTable('deployment_events', {
   stepName: text('step_name'),
   message: text('message'),
   details: text('details'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxEventType: index('idx_deployment_events_event_type').on(table.eventType),
   idxDeployment: index('idx_deployment_events_deployment_id').on(table.deploymentId),
@@ -216,8 +214,7 @@ const deploymentTable = sqliteTable('deployments', {
   rolledBackBy: text('rolled_back_by'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqServiceVersion: uniqueIndex('idx_deployments_service_version').on(table.serviceId, table.version),
   idxServiceRouting: index('idx_deployments_service_routing_status').on(table.serviceId, table.routingStatus),
@@ -247,8 +244,7 @@ const managedTakosTokensTable = sqliteTable('managed_takos_tokens', {
   tokenPrefix: text('token_prefix').notNull(),
   tokenEncrypted: text('token_encrypted').notNull(),
   lastUsedAt: text('last_used_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqServiceEnv: uniqueIndex('idx_managed_takos_tokens_service_env').on(table.serviceId, table.envName),
   idxService: index('idx_managed_takos_tokens_service_id').on(table.serviceId),
@@ -280,8 +276,7 @@ const serviceEnvVarsTable = sqliteTable('service_env_vars', {
   name: text('name').notNull(),
   valueEncrypted: text('value_encrypted').notNull(),
   isSecret: integer('is_secret', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqServiceName: uniqueIndex('idx_service_env_vars_service_name').on(table.serviceId, table.name),
   idxService: index('idx_service_env_vars_service_id').on(table.serviceId),
@@ -343,8 +338,7 @@ const serviceRuntimeSettingsTable = sqliteTable('service_runtime_settings', {
   serviceId: text('service_id').primaryKey(),
   accountId: text('account_id').notNull(),
   compatibilityDate: text('compatibility_date'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxAccount: index('idx_service_runtime_settings_account_id').on(table.accountId),
 }));
