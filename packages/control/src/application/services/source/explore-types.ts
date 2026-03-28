@@ -84,6 +84,7 @@ export interface CatalogItemResponse {
   repo: CatalogRepoResponse;
   takopack: CatalogTakopackResponse;
   installation?: CatalogInstallationResponse;
+  official?: boolean;
 }
 
 export interface CatalogResult {

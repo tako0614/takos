@@ -17,6 +17,102 @@ import {
   parseCatalogTags,
   computeTrendingScore,
 } from './source-exploration';
+import { OFFICIAL_PACKAGES, type OfficialPackage } from './official-packages';
+
+function officialPackageToCatalogItem(pkg: OfficialPackage): CatalogItemResponse {
+  return {
+    repo: {
+      id: pkg.id,
+      name: pkg.name,
+      description: pkg.description,
+      visibility: 'public',
+      default_branch: 'main',
+      stars: 0,
+      forks: 0,
+      category: pkg.category,
+      language: 'TypeScript',
+      license: null,
+      is_starred: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      workspace: { id: 'official', name: 'Takos' },
+      owner: {
+        id: 'official',
+        name: pkg.owner.name,
+        username: pkg.owner.username,
+        avatar_url: null,
+      },
+    },
+    takopack: {
+      available: true,
+      app_id: pkg.id,
+      latest_version: null,
+      latest_tag: null,
+      release_id: null,
+      release_tag: null,
+      asset_id: null,
+      description: pkg.description,
+      icon: null,
+      category: pkg.category,
+      tags: pkg.tags,
+      downloads: 0,
+      rating_avg: null,
+      rating_count: 0,
+      publish_status: 'approved',
+      certified: true,
+      published_at: null,
+    },
+    official: true,
+  };
+}
+
+function filterOfficialPackages(options: {
+  searchQuery?: string;
+  category?: string;
+  type?: CatalogType;
+  tagsRaw?: string;
+  certifiedOnly?: boolean;
+}): CatalogItemResponse[] {
+  let packages = OFFICIAL_PACKAGES;
+
+  // Category filter
+  if (options.category) {
+    packages = packages.filter((pkg) => pkg.category === options.category);
+  }
+
+  // Search query filter
+  if (options.searchQuery) {
+    const query = options.searchQuery.trim().toLowerCase();
+    if (query) {
+      packages = packages.filter((pkg) =>
+        pkg.name.toLowerCase().includes(query) ||
+        pkg.description.toLowerCase().includes(query) ||
+        pkg.tags.some((tag) => tag.toLowerCase().includes(query)),
+      );
+    }
+  }
+
+  const items = packages
+    .sort((a, b) => b.priority - a.priority)
+    .map(officialPackageToCatalogItem);
+
+  // Tag filter
+  const parsedTags = parseCatalogTags(options.tagsRaw);
+  if (!parsedTags.invalid && parsedTags.tags.length > 0) {
+    return items.filter((item) => {
+      const packageTags = item.takopack.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+      return parsedTags.tags.every((tag) => packageTags.includes(tag));
+    });
+  }
+
+  // type=repo means non-deployable, official packages are always deployable
+  // type=deployable-app keeps them, type=all keeps them
+  if (options.type === 'repo') {
+    return [];
+  }
+
+  return items;
+}
 
 export async function listCatalogItems(
   dbBinding: Env['DB'],
@@ -58,7 +154,22 @@ export async function listCatalogItems(
   });
 
   if (repos.length === 0) {
-    return { items: [], total: 0, has_more: false };
+    // Even with no DB repos, official packages should still appear
+    const officialOnly = options.offset === 0
+      ? filterOfficialPackages({
+          searchQuery: options.searchQuery,
+          category: options.category,
+          type: options.type,
+          tagsRaw: options.tagsRaw,
+          certifiedOnly: options.certifiedOnly,
+        })
+      : [];
+    const pagedOfficial = officialOnly.slice(options.offset, options.offset + options.limit);
+    return {
+      items: pagedOfficial,
+      total: officialOnly.length,
+      has_more: options.offset + pagedOfficial.length < officialOnly.length,
+    };
   }
 
   const repoIds = repos.map((repo) => repo.id);
@@ -289,8 +400,26 @@ export async function listCatalogItems(
     return rightUpdated - leftUpdated;
   });
 
-  const total = items.length;
-  const pagedItems = items.slice(options.offset, options.offset + options.limit);
+  // Merge official packages on the first page
+  const officialItems = options.offset === 0
+    ? filterOfficialPackages({
+        searchQuery: options.searchQuery,
+        category: options.category,
+        type: options.type,
+        tagsRaw: options.tagsRaw,
+        certifiedOnly: options.certifiedOnly,
+      })
+    : [];
+
+  // Deduplicate: remove DB items whose repo name matches an official package id
+  const officialIds = new Set(officialItems.map((item) => item.repo.id));
+  const deduplicatedItems = items.filter((item) => !officialIds.has(item.repo.id));
+
+  // Prepend official packages before DB results
+  const merged = [...officialItems, ...deduplicatedItems];
+
+  const total = merged.length;
+  const pagedItems = merged.slice(options.offset, options.offset + options.limit);
 
   return {
     items: pagedItems,
