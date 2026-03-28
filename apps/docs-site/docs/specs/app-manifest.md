@@ -267,6 +267,8 @@ spec:
 | `required` | 必須環境変数のリスト。deploy 時に設定されていなければエラー |
 | `inject` | システム変数テンプレート。デプロイ後に解決されて環境変数に注入 |
 
+<div v-pre>
+
 ## テンプレート変数
 
 `spec.env.inject` の値には `{{...}}` 形式のテンプレート変数を使用できます。テンプレートはデプロイ後にシステムが実際の値に解決し、対象の worker / container へ環境変数として注入します。
@@ -280,6 +282,8 @@ spec:
 | `{{containers.<name>.port}}` | `8080` | コンテナのポート |
 | `{{workers.<name>.url}}` | `https://host.workers.dev` | ワーカーの URL |
 | `{{resources.<name>.id}}` | `abc-123` | リソース ID |
+
+</div>
 
 テンプレート参照はパース時に検証されます。存在しない名前を参照した場合は validation error になります。
 
