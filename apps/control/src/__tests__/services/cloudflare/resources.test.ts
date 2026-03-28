@@ -259,18 +259,11 @@ describe('CloudflareResourceService', () => {
     });
   });
 
-  describe('executeD1Query', () => {
-    it('executes SQL through the WFP service', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        mockSuccessResponse([{ results: [{ count: 5 }] }]),
-      );
-      vi.stubGlobal('fetch', fetchMock);
-
+  describe('wfp property', () => {
+    it('exposes the WFP service for direct access', () => {
       const svc = new CloudflareResourceService(env);
-      await svc.executeD1Query('db-1', 'SELECT COUNT(*) FROM users');
-
-      const url = fetchMock.mock.calls[0][0] as string;
-      expect(url).toContain('/d1/database/db-1/query');
+      expect(svc.wfp).toBeDefined();
+      expect(svc.wfp.d1).toBeDefined();
     });
   });
 });

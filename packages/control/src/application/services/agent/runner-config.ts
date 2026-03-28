@@ -3,6 +3,7 @@ import type { Env } from '../../../shared/types';
 import { BUILTIN_TOOLS } from '../../tools/builtin';
 import { SYSTEM_PROMPTS } from './prompt-builder';
 import { logWarn } from '../../../shared/utils/logger';
+import { parseIntValue, parseFloatValue } from 'takos-common/env-parse';
 import {
   AGENT_ITERATION_TIMEOUT_MS,
   AGENT_TOTAL_TIMEOUT_MS,
@@ -26,32 +27,28 @@ export function getTimeoutConfig(env?: Env): {
   toolExecutionTimeout: number;
   langGraphTimeout: number;
 } {
-  const parseTimeout = (value: string | undefined, defaultValue: number, min: number, max: number): number => {
-    if (!value) return defaultValue;
-    const parsed = parseInt(value, 10);
-    if (isNaN(parsed) || parsed < min || parsed > max) {
-      logWarn(`Invalid timeout value: ${value}, using default: ${defaultValue}`, { module: 'services/agent/runner-config' });
-      return defaultValue;
-    }
-    return parsed;
-  };
+  const warn = (msg: string) => logWarn(msg, { module: 'services/agent/runner-config' });
 
   const MIN_TIMEOUT = 1000;
   // In CF Container mode, AGENT_TOTAL_TIMEOUT env var sets a higher limit (up to 24h).
   // In CF Workers Queue mode, cap at 15 min (Queue consumer hard limit).
   const MAX_TIMEOUT = env?.AGENT_TOTAL_TIMEOUT
-    ? Math.min(parseInt(env.AGENT_TOTAL_TIMEOUT, 10), 86400000)  // respect env, cap at 24h
+    ? Math.min(parseIntValue('AGENT_TOTAL_TIMEOUT', env.AGENT_TOTAL_TIMEOUT, 900000, { min: MIN_TIMEOUT, max: 86400000, warn }), 86400000)
     : 900000; // default cap: 15 min (CF Workers Queue consumer limit)
 
+  const parseOpts = { min: MIN_TIMEOUT, max: MAX_TIMEOUT, warn };
+
   return {
-    iterationTimeout: parseTimeout(env?.AGENT_ITERATION_TIMEOUT, DEFAULT_ITERATION_TIMEOUT, MIN_TIMEOUT, MAX_TIMEOUT),
-    totalTimeout: parseTimeout(env?.AGENT_TOTAL_TIMEOUT, DEFAULT_TOTAL_TIMEOUT, MIN_TIMEOUT, MAX_TIMEOUT),
-    toolExecutionTimeout: parseTimeout(env?.TOOL_EXECUTION_TIMEOUT, DEFAULT_TOOL_EXECUTION_TIMEOUT, MIN_TIMEOUT, MAX_TIMEOUT),
-    langGraphTimeout: parseTimeout(env?.LANGGRAPH_TIMEOUT, DEFAULT_LANGGRAPH_TIMEOUT, MIN_TIMEOUT, MAX_TIMEOUT),
+    iterationTimeout: parseIntValue('AGENT_ITERATION_TIMEOUT', env?.AGENT_ITERATION_TIMEOUT, DEFAULT_ITERATION_TIMEOUT, parseOpts),
+    totalTimeout: parseIntValue('AGENT_TOTAL_TIMEOUT', env?.AGENT_TOTAL_TIMEOUT, DEFAULT_TOTAL_TIMEOUT, parseOpts),
+    toolExecutionTimeout: parseIntValue('TOOL_EXECUTION_TIMEOUT', env?.TOOL_EXECUTION_TIMEOUT, DEFAULT_TOOL_EXECUTION_TIMEOUT, parseOpts),
+    langGraphTimeout: parseIntValue('LANGGRAPH_TIMEOUT', env?.LANGGRAPH_TIMEOUT, DEFAULT_LANGGRAPH_TIMEOUT, parseOpts),
   };
 }
 
 export function getAgentConfig(agentType: string, env?: Env): AgentConfig {
+  const warn = (msg: string) => logWarn(msg, { module: 'services/agent/runner-config' });
+
   const systemPrompt = SYSTEM_PROMPTS[agentType] || SYSTEM_PROMPTS.default;
 
   const tools = BUILTIN_TOOLS.map((tool) => ({
@@ -60,21 +57,14 @@ export function getAgentConfig(agentType: string, env?: Env): AgentConfig {
     parameters: tool.parameters,
   }));
 
-  const maxIterations = env?.MAX_AGENT_ITERATIONS
-    ? parseInt(env.MAX_AGENT_ITERATIONS, 10)
-    : DEFAULT_MAX_ITERATIONS;
+  const maxIterations = parseIntValue('MAX_AGENT_ITERATIONS', env?.MAX_AGENT_ITERATIONS, DEFAULT_MAX_ITERATIONS, { min: 1, warn });
 
-  let temperature = DEFAULT_TEMPERATURE;
-  if (env?.AGENT_TEMPERATURE) {
-    const parsed = parseFloat(env.AGENT_TEMPERATURE);
-    if (!isNaN(parsed)) {
-      temperature = Math.max(0, Math.min(1, parsed));
-    }
-  }
+  const temperature = parseFloatValue('AGENT_TEMPERATURE', env?.AGENT_TEMPERATURE, DEFAULT_TEMPERATURE, { min: 0, max: 1, warn });
 
-  const rateLimit = env?.AGENT_RATE_LIMIT
-    ? parseInt(env.AGENT_RATE_LIMIT, 10)
+  const rateLimitRaw = env?.AGENT_RATE_LIMIT
+    ? parseIntValue('AGENT_RATE_LIMIT', env.AGENT_RATE_LIMIT, 0, { min: 1, warn })
     : undefined;
+  const rateLimit = rateLimitRaw && rateLimitRaw > 0 ? rateLimitRaw : undefined;
 
   return {
     type: agentType,

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import type {
   SourceItem,
@@ -45,8 +45,13 @@ export function useSourceFetchQueries({
   requestSeqRef,
   appendInFlightRef,
 }: UseSourceFetchQueriesOptions): UseSourceFetchQueriesResult {
-  // Fetch installation map from space app deployments
-  const fetchInstallations = useCallback(async (): Promise<Map<string, SourceItemInstallation>> => {
+  // In-flight promise ref to deduplicate concurrent fetchInstallations calls.
+  // When fetchAll, fetchMine, and fetchStarred run in parallel (e.g. via
+  // Promise.all), they each call fetchInstallations(). Without dedup this
+  // fires 3 identical HTTP requests. The ref collapses them into one.
+  const installationsInFlightRef = useRef<Promise<Map<string, SourceItemInstallation>> | null>(null);
+
+  const fetchInstallationsImpl = useCallback(async (): Promise<Map<string, SourceItemInstallation>> => {
     if (!isAuthenticated || !effectiveSpaceId) return new Map();
     try {
       const response = await fetch(`/api/spaces/${effectiveSpaceId}/app-deployments`);
@@ -76,6 +81,18 @@ export function useSourceFetchQueries({
       return new Map();
     }
   }, [effectiveSpaceId, isAuthenticated]);
+
+  // Memoized wrapper that deduplicates concurrent calls
+  const fetchInstallations = useCallback(async (): Promise<Map<string, SourceItemInstallation>> => {
+    if (installationsInFlightRef.current) {
+      return installationsInFlightRef.current;
+    }
+    const promise = fetchInstallationsImpl().finally(() => {
+      installationsInFlightRef.current = null;
+    });
+    installationsInFlightRef.current = promise;
+    return promise;
+  }, [fetchInstallationsImpl]);
 
   // Fetch catalog (all filter)
   const fetchAll = useCallback(

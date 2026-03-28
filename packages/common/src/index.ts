@@ -35,6 +35,17 @@ export { createLogger, type Logger, type LogLevel } from './logger.js';
 export { throwIfAborted } from './abort.js';
 
 // =============================================================================
+// Environment Variable Parsing
+// =============================================================================
+export {
+  parseIntEnv,
+  parseIntEnvRequired,
+  parseIntValue,
+  parseFloatEnv,
+  parseFloatValue,
+} from './env-parse.js';
+
+// =============================================================================
 // Error Handling
 // =============================================================================
 export {

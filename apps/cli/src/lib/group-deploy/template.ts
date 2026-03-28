@@ -55,10 +55,3 @@ export function resolveTemplateString(template: string, context: TemplateContext
     return current != null ? String(current) : _match;
   });
 }
-
-export function getAllDeployableNames(spec: GroupDeployOptions['manifest']['spec']): string[] {
-  return [
-    ...Object.keys(spec.workers || {}),
-    ...Object.keys(spec.containers || {}),
-  ];
-}

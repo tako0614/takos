@@ -5,6 +5,7 @@
  */
 
 import type { Env } from '../../../../shared/types';
+import type { SelectOf } from '../../../../shared/types/drizzle-helpers';
 import type { mcpServers } from '../../../../infra/db';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +98,7 @@ export function getInternalMcpIssuer(env: Pick<Env, 'SERVICE_INTERNAL_JWT_ISSUER
   return env.SERVICE_INTERNAL_JWT_ISSUER || `https://${env.ADMIN_DOMAIN}`;
 }
 
-export function mapMcpServerRow(row: typeof mcpServers.$inferSelect): McpServerRecord {
+export function mapMcpServerRow(row: SelectOf<typeof mcpServers>): McpServerRecord {
   return {
     id: row.id,
     spaceId: row.accountId,

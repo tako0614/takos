@@ -1,4 +1,4 @@
-export type { Toast } from './common';
+export type { Toast } from './ui-types';
 
 export type { User, UserSettings } from './user';
 

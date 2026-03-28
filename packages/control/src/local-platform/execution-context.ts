@@ -12,7 +12,7 @@ export function createLocalExecutionContext(): PlatformExecutionContext {
   return {
     waitUntil(promise: Promise<unknown>): void {
       const tracked = Promise.resolve(promise)
-        .catch(() => undefined)
+        .catch(() => undefined /* waitUntil: background task errors must not propagate to request lifecycle */)
         .finally(() => pending.delete(tracked));
       pending.add(tracked);
     },

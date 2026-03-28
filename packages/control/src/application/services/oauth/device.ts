@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { oauthDeviceCodes } from '../../../infra/db';
 import type { OAuthDeviceCode } from '../../../shared/types/oauth';
 import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
@@ -8,7 +9,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, isNull } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
 
-type OAuthDeviceCodeRow = typeof oauthDeviceCodes.$inferSelect;
+type OAuthDeviceCodeRow = SelectOf<typeof oauthDeviceCodes>;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
   return toIsoString(value);

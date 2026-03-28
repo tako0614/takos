@@ -4,7 +4,7 @@ import {
   generateDomainId,
   isValidDomain,
   normalizeDomain,
-} from '@/utils/domains';
+} from '@/utils/domain-validation';
 
 describe('generateVerificationToken', () => {
   it('returns a 64-char hex string', () => {

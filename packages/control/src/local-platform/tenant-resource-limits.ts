@@ -2,6 +2,8 @@
  * Tenant worker resource limit configuration, read from environment variables.
  */
 
+import { parseIntEnv } from 'takos-common/env-parse';
+
 export type TenantResourceLimits = {
   /** Request timeout in milliseconds. Default: 30000 (30s). */
   cpuTimeoutMs: number;
@@ -20,18 +22,11 @@ const DEFAULTS: TenantResourceLimits = {
   maxResponseSize: 25 * 1024 * 1024,
 };
 
-function parseIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 export function parseTenantResourceLimits(): TenantResourceLimits {
   return {
-    cpuTimeoutMs: parseIntEnv('TAKOS_TENANT_CPU_TIMEOUT_MS', DEFAULTS.cpuTimeoutMs),
-    maxSubrequests: parseIntEnv('TAKOS_TENANT_MAX_SUBREQUESTS', DEFAULTS.maxSubrequests),
-    maxRequestSize: parseIntEnv('TAKOS_TENANT_MAX_REQUEST_SIZE', DEFAULTS.maxRequestSize),
-    maxResponseSize: parseIntEnv('TAKOS_TENANT_MAX_RESPONSE_SIZE', DEFAULTS.maxResponseSize),
+    cpuTimeoutMs: parseIntEnv('TAKOS_TENANT_CPU_TIMEOUT_MS', DEFAULTS.cpuTimeoutMs, { min: 0 }),
+    maxSubrequests: parseIntEnv('TAKOS_TENANT_MAX_SUBREQUESTS', DEFAULTS.maxSubrequests, { min: 0 }),
+    maxRequestSize: parseIntEnv('TAKOS_TENANT_MAX_REQUEST_SIZE', DEFAULTS.maxRequestSize, { min: 0 }),
+    maxResponseSize: parseIntEnv('TAKOS_TENANT_MAX_RESPONSE_SIZE', DEFAULTS.maxResponseSize, { min: 0 }),
   };
 }

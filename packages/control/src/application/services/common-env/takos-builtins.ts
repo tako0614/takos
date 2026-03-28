@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { ALL_SCOPES } from '../../../shared/types/oauth';
@@ -146,7 +147,7 @@ async function decryptManagedToken(env: Pick<Env, 'ENCRYPTION_KEY'>, row: Manage
   return decrypt(encrypted, getCommonEnvSecret(env), buildManagedTokenSalt(row.service_id, row.env_name));
 }
 
-function toManagedTokenRow(row: typeof serviceManagedTakosTokens.$inferSelect): ManagedTakosTokenRow {
+function toManagedTokenRow(row: SelectOf<typeof serviceManagedTakosTokens>): ManagedTakosTokenRow {
   return {
     id: row.id,
     space_id: row.accountId,

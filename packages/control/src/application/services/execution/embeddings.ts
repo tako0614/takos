@@ -16,7 +16,7 @@ export interface EmbeddingResult {
   vector: number[];
 }
 
-export interface SearchResult {
+export interface EmbeddingSearchResult {
   id: string;
   score: number;
   content: string;
@@ -173,7 +173,7 @@ export class EmbeddingsService {
       fileTypes?: string[];
       minScore?: number;
     } = {}
-  ): Promise<SearchResult[]> {
+  ): Promise<EmbeddingSearchResult[]> {
     const { limit = 10, minScore = 0.5 } = options;
 
     const queryEmbedding = await this.generateEmbedding(query);
@@ -191,7 +191,7 @@ export class EmbeddingsService {
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
     )];
 
-    const results: SearchResult[] = [];
+    const results: EmbeddingSearchResult[] = [];
 
     for (const match of searchResult.matches) {
       if (match.score < minScore) continue;
@@ -228,7 +228,7 @@ export class EmbeddingsService {
       excludeFileId?: string;
       minScore?: number;
     } = {}
-  ): Promise<SearchResult[]> {
+  ): Promise<EmbeddingSearchResult[]> {
     const { limit = 5, excludeFileId, minScore = 0.7 } = options;
 
     const embedding = await this.generateEmbedding(content);
@@ -239,7 +239,7 @@ export class EmbeddingsService {
       returnMetadata: 'all',
     });
 
-    const results: SearchResult[] = [];
+    const results: EmbeddingSearchResult[] = [];
 
     for (const match of searchResult.matches) {
       if (match.score < minScore) continue;

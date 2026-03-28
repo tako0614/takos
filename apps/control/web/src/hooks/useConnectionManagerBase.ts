@@ -17,15 +17,11 @@ import {
 
 export const MAX_RECONNECT_ATTEMPTS = 8;
 
-export interface ConnectionManagerOptions {
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  isMountedRef: React.MutableRefObject<boolean>;
-  startMessagePolling: (currentRunIdRef: React.MutableRefObject<string | null>) => void;
-  stopMessagePolling: () => void;
-  setError: (value: string | null) => void;
-  // From message processor
-  currentRunIdRef: React.MutableRefObject<string | null>;
-  lastEventIdRef: React.MutableRefObject<number>;
+/**
+ * Processor-related callbacks and refs provided by the message processor hook.
+ * Grouped together to keep the top-level options interface small.
+ */
+export interface ConnectionProcessorDeps {
   setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   setStreaming: React.Dispatch<React.SetStateAction<import('../views/chat/types').ChatStreamingState>>;
@@ -46,6 +42,17 @@ export interface ConnectionManagerOptions {
     eventId?: number,
     sourceRunId?: string,
   ) => void>;
+}
+
+export interface ConnectionManagerOptions {
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  isMountedRef: React.MutableRefObject<boolean>;
+  startMessagePolling: (currentRunIdRef: React.MutableRefObject<string | null>) => void;
+  stopMessagePolling: () => void;
+  setError: (value: string | null) => void;
+  currentRunIdRef: React.MutableRefObject<string | null>;
+  lastEventIdRef: React.MutableRefObject<number>;
+  processor: ConnectionProcessorDeps;
 }
 
 export interface ConnectionManagerResult {
@@ -185,16 +192,40 @@ export function handleTransportClose(
 }
 
 // ---------------------------------------------------------------------------
+// Transport setup context -- kept minimal.
+// Transports receive pre-bound helpers instead of raw deps.
+// ---------------------------------------------------------------------------
+
+/**
+ * Context passed to the transport-specific `setupTransport` callback.
+ *
+ * - `onMessage(data)` handles dedup, gap detection, and event dispatch.
+ * - `onClose()` checks run status and reconnects with backoff.
+ * - `onOpen()` resets reconnect counter and starts message polling.
+ * - `runId` and `lastEventId` are needed for URL construction.
+ * - `wsRef` is exposed for interface compatibility (WS manager sets it).
+ */
+export interface TransportSetupContext {
+  runId: string;
+  lastEventId: number;
+  wsRef: React.MutableRefObject<WebSocket | null>;
+  /** Call when a message arrives from the transport. Handles dedup + dispatch. */
+  onMessage: (rawData: string) => void;
+  /** Call when the transport connection closes. Handles status check + reconnect. */
+  onClose: () => void;
+  /** Call when the transport connection opens. Resets reconnect counter + starts polling. */
+  onOpen: () => void;
+}
+
+// ---------------------------------------------------------------------------
 // Base hook
 // ---------------------------------------------------------------------------
 
 /**
  * Shared base hook for both WS and SSE connection managers.
  *
- * The `setupTransport` callback receives the runId, a close function for the
- * current transport, and shared refs/helpers. It must open the transport
- * connection and return a cleanup function that closes the raw transport
- * (EventSource or WebSocket).
+ * The `setupTransport` callback receives a minimal context with pre-bound
+ * helpers. It must open the transport connection and manage its lifecycle.
  */
 export function useConnectionManagerBase(
   options: ConnectionManagerOptions,
@@ -210,6 +241,10 @@ export function useConnectionManagerBase(
     setError,
     currentRunIdRef,
     lastEventIdRef,
+    processor,
+  } = options;
+
+  const {
     setCurrentRun,
     setIsLoading,
     setStreaming,
@@ -219,7 +254,7 @@ export function useConnectionManagerBase(
     upsertRunMeta,
     handleRunCompletedRef,
     handleWebSocketEventRef,
-  } = options;
+  } = processor;
 
   const wsRef = useRef<WebSocket | null>(null);
   const rootRunIdRef = useRef<string | null>(null);
@@ -284,22 +319,42 @@ export function useConnectionManagerBase(
     closeWebSocket();
     currentRunIdRef.current = runId;
 
+    // Build pre-bound helpers so transports don't need raw deps
+    const onMessage = (rawData: string) => {
+      processIncomingMessage(rawData, runId, '[Transport]', {
+        lastEventIdRef,
+        currentRunIdRef,
+        verifyRunStatus,
+        handleWebSocketEventRef,
+      });
+    };
+
+    const onClose = () => {
+      handleTransportClose(currentRunIdRef.current || '', 'Transport', {
+        isMountedRef,
+        currentRunIdRef,
+        reconnectAttemptsRef,
+        startWebSocketRef,
+        handleRunCompletedRef,
+        setIsLoading,
+        setCurrentRun,
+        setError,
+        t,
+      });
+    };
+
+    const onOpen = () => {
+      reconnectAttemptsRef.current = 0;
+      startMessagePolling(currentRunIdRef);
+    };
+
     setupTransport({
       runId,
+      lastEventId: lastEventIdRef.current,
       wsRef,
-      reconnectAttemptsRef,
-      startWebSocketRef,
-      startMessagePolling,
-      currentRunIdRef,
-      lastEventIdRef,
-      verifyRunStatus,
-      handleWebSocketEventRef,
-      isMountedRef,
-      handleRunCompletedRef,
-      setIsLoading,
-      setCurrentRun,
-      setError,
-      t,
+      onMessage,
+      onClose,
+      onOpen,
     });
   };
 
@@ -315,31 +370,4 @@ export function useConnectionManagerBase(
     closeWebSocket,
     startWebSocketRef,
   };
-}
-
-/**
- * Context passed to the transport-specific `setupTransport` callback.
- * Contains everything the transport needs to wire up its connection.
- */
-export interface TransportSetupContext {
-  runId: string;
-  wsRef: React.MutableRefObject<WebSocket | null>;
-  reconnectAttemptsRef: React.MutableRefObject<number>;
-  startWebSocketRef: React.MutableRefObject<(runId: string) => void>;
-  startMessagePolling: (currentRunIdRef: React.MutableRefObject<string | null>) => void;
-  currentRunIdRef: React.MutableRefObject<string | null>;
-  lastEventIdRef: React.MutableRefObject<number>;
-  verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
-  handleWebSocketEventRef: React.MutableRefObject<(
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => void>;
-  isMountedRef: React.MutableRefObject<boolean>;
-  handleRunCompletedRef: React.MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
-  setError: (value: string | null) => void;
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }

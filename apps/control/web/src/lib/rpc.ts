@@ -1,7 +1,44 @@
 import { hc } from 'hono/client';
+import type { ClientResponse } from 'hono/client';
 import type { ApiRoutes } from '../../../routes/rpc-types';
 
 export const rpc = hc<ApiRoutes>('/api');
+
+// ---------------------------------------------------------------------------
+// rpcPath – type-safe traversal of the Hono RPC proxy for routes that lack
+// compile-time types (wildcard `/*` routes, or routes not in the schema).
+//
+// At runtime, `hc()` returns a Proxy that builds up URL segments from
+// property access.  Paths like `/repos/:repoId/tree/:ref/*` work fine at
+// runtime but produce no type in Hono's `PathToChain` because `*` is not a
+// valid key.  This single helper encapsulates the lone `any` cast so every
+// call-site remains fully typed.
+// ---------------------------------------------------------------------------
+
+/** Shape of a terminal Hono RPC node that exposes HTTP-method helpers. */
+interface RpcEndpoint {
+  $get: (args: { param: Record<string, string>; query?: Record<string, string> }) => Promise<ClientResponse<unknown>>;
+  $post: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
+  $put: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
+  $delete: (args: { param: Record<string, string> }) => Promise<ClientResponse<unknown>>;
+}
+
+/**
+ * Walk the Hono RPC proxy through arbitrary path segments and return the
+ * terminal node typed as {@link RpcEndpoint}.
+ *
+ * Example:
+ * ```ts
+ * rpcPath(rpc, 'repos', ':repoId', 'tree', ':ref').$get({ param: { repoId, ref } })
+ * ```
+ */
+function rpcPath(base: unknown, ...segments: string[]): RpcEndpoint {
+  let current = base;
+  for (const seg of segments) {
+    current = (current as Record<string, unknown>)[seg];
+  }
+  return current as RpcEndpoint;
+}
 
 
 export class BillingQuotaError extends Error {
@@ -39,16 +76,14 @@ export async function rpcJson<T>(response: Response): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// Typed RPC helpers for routes whose path params contain colons that break
-// hono/client's type inference (e.g. /repos/:repoId/tree/:ref).
-// These centralise the `as any` casts so consumers stay type-safe.
+// Typed RPC helpers for routes whose wildcard patterns (`/*`) or missing
+// schema entries break hono/client's type inference.
+// These use `rpcPath` so no `as any` leaks into call-sites.
 // ---------------------------------------------------------------------------
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** GET /repos/:repoId/tree/:ref */
 export function repoTree(repoId: string, ref: string, query?: Record<string, string>) {
-  return (rpc.repos[':repoId'] as any).tree[':ref'].$get({
+  return rpcPath(rpc, 'repos', ':repoId', 'tree', ':ref').$get({
     param: { repoId, ref },
     query: query ?? {},
   }) as Promise<Response>;
@@ -56,7 +91,7 @@ export function repoTree(repoId: string, ref: string, query?: Record<string, str
 
 /** GET /repos/:repoId/blob/:ref */
 export function repoBlob(repoId: string, ref: string, query?: Record<string, string>) {
-  return (rpc.repos[':repoId'] as any).blob[':ref'].$get({
+  return rpcPath(rpc, 'repos', ':repoId', 'blob', ':ref').$get({
     param: { repoId, ref },
     query: query ?? {},
   }) as Promise<Response>;
@@ -64,18 +99,16 @@ export function repoBlob(repoId: string, ref: string, query?: Record<string, str
 
 /** GET /sessions/:sessionId/diff */
 export function sessionDiff(sessionId: string) {
-  return (rpc.sessions[':sessionId'] as any).diff.$get({
+  return rpcPath(rpc, 'sessions', ':sessionId', 'diff').$get({
     param: { sessionId },
   }) as Promise<Response>;
 }
 
 /** POST /sessions/:sessionId/merge */
 export function sessionMerge(sessionId: string, json: Record<string, unknown>) {
-  return (rpc.sessions[':sessionId'] as any).merge.$post({
+  return rpcPath(rpc, 'sessions', ':sessionId', 'merge').$post({
     param: { sessionId },
     json,
   }) as Promise<Response>;
 }
-
-/* eslint-enable @typescript-eslint/no-explicit-any */
 

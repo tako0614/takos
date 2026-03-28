@@ -13,6 +13,7 @@ import type {
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
 } from '../../../shared/types';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { toIsoString } from '../../../shared/utils';
 import { listThreadMessages } from './thread-service';
@@ -55,7 +56,7 @@ type HistoryRunSnapshot = {
   run: Run;
 };
 
-function toHistoryRunSnapshot(row: typeof runs.$inferSelect): HistoryRunSnapshot {
+function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
   const rootThreadId = row.rootThreadId ?? row.threadId;
   const rootRunId = row.rootRunId ?? row.id;
   return {

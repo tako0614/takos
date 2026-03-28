@@ -30,6 +30,7 @@ import { isInvalidArrayBufferError } from './shared/utils/db-guards';
 import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError, logInfo, logWarn } from './shared/utils/logger';
 import { AppError, RateLimitError, isAppError } from 'takos-common/errors';
+import { PRODUCTION_DOMAIN } from './shared/constants/app.ts';
 import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/platform-config.ts';
 import { setPlatformContext } from './platform/context.ts';
@@ -139,7 +140,7 @@ app.use('*', async (c, next) => {
   const headers = response.headers;
 
   // S28: Content Security Policy - restrict script/style/image sources
-  const adminDomain = getPlatformConfig(c).adminDomain || 'takos.jp';
+  const adminDomain = getPlatformConfig(c).adminDomain || PRODUCTION_DOMAIN;
   const csp = [
     "default-src 'self'",
     "script-src 'self' https://static.cloudflareinsights.com",

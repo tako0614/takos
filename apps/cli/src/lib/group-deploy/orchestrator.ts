@@ -250,7 +250,7 @@ async function deployNewFormat(
               { cwd: tmpDir, env: wranglerEnv, stdin: secretValue },
             );
           } finally {
-            await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+            await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => { /* cleanup: best-effort temp dir removal */ });
           }
         }
       }

@@ -14,7 +14,7 @@ const app = new Hono();
 app.get('/actions/jobs/:jobId/status', (c) => {
   const jobId = c.req.param('jobId');
 
-  const job = jobManager.getJob(jobId);
+  const job = jobManager.jobs.get(jobId);
   if (!job) return notFound(c, 'Job not found');
 
   return c.json({
@@ -33,7 +33,7 @@ app.get('/actions/jobs/:jobId/logs', (c) => {
   const jobId = c.req.param('jobId');
   const offset = c.req.query('offset');
 
-  const job = jobManager.getJob(jobId);
+  const job = jobManager.jobs.get(jobId);
   if (!job) return notFound(c, 'Job not found');
 
   const rawOffset = offset ? parseInt(offset, 10) : 0;

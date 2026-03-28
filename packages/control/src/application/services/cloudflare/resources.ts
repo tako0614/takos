@@ -34,7 +34,7 @@ type WorkflowCreateOptions = {
 };
 
 export class CloudflareResourceService {
-  private wfp: WFPService;
+  readonly wfp: WFPService;
 
   constructor(env: Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN' | 'WFP_DISPATCH_NAMESPACE'> | WfpEnv) {
     this.wfp = new WFPService(env);
@@ -131,11 +131,4 @@ export class CloudflareResourceService {
     }
   }
 
-  async executeD1Query(databaseId: string, sql: string): Promise<void> {
-    await this.wfp.d1.executeD1Query(databaseId, sql);
-  }
-
-  async queryD1<T>(databaseId: string, sql: string): Promise<T[]> {
-    return this.wfp.d1.queryD1<T>(databaseId, sql);
-  }
 }

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { createLogger } from 'takos-common/logger';
+import { parseIntEnv } from 'takos-common/env-parse';
 import { isPrivateIP, isLocalhost } from 'takos-common/validation';
 import { BrowserManager } from './browser-manager.js';
 import type {
@@ -144,10 +145,10 @@ export function createBrowserServiceApp(options: BrowserServiceOptions = {}) {
 }
 
 export function startBrowserService(options: BrowserServiceOptions = {}) {
-  const port = options.port ?? parseInt(process.env.PORT ?? '8080', 10);
+  const port = options.port ?? parseIntEnv('PORT', 8080, { min: 1, max: 65535 });
   // 15 s grace period — browser cleanup (page close + disconnect) is fast.
   // Executor service uses 30 s because it may need to drain in-flight agent runs.
-  const shutdownGraceMs = options.shutdownGraceMs ?? parseInt(process.env.SHUTDOWN_GRACE_MS ?? '15000', 10);
+  const shutdownGraceMs = options.shutdownGraceMs ?? parseIntEnv('SHUTDOWN_GRACE_MS', 15000, { min: 0 });
   const { app, browser, logger } = createBrowserServiceApp(options);
   const server = serve({ fetch: app.fetch, port }, () => {
     logger.info(`[browserd] Listening on port ${port}`);

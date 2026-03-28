@@ -13,7 +13,7 @@
  *   - simple-loop.ts      : simple LLM loop and no-LLM fallback
  *   - execute-run.ts      : queue consumer entry point
  *   - llm-manager.ts      : LLM client initialization, model selection, API key management
- *   - skill-manager.ts    : skill plan resolution, catalog management, locale processing
+ *   - skill-plan.ts       : skill plan resolution, catalog management, locale processing
  *   - memory-manager.ts   : memory runtime integration, memory graph processing
  */
 
@@ -51,7 +51,7 @@ import {
 
 // Manager functions and state
 import { createLLMState, type LLMState } from './llm-manager';
-import { resolveAndApplySkills, buildSkillPlan, type SkillState, type SkillManagerDeps } from './skill-manager';
+import { resolveAndApplySkills, buildSkillPlan, type SkillState, type SkillPlanDeps } from './skill-plan';
 import { bootstrapMemory, finalizeMemory, type MemoryState, type MemoryManagerDeps } from './memory-manager';
 
 // Re-export from split modules for backward compatibility
@@ -178,7 +178,7 @@ export class AgentRunner {
   // Manager state
   private llm: LLMState;
   private skillState: SkillState;
-  private skillDeps: SkillManagerDeps;
+  private skillDeps: SkillPlanDeps;
   private memoryState: MemoryState;
   private memoryDeps: MemoryManagerDeps;
 

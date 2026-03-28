@@ -433,11 +433,11 @@ app.put('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
         await verifyPathWithinAfterAccess(REPOS_BASE_DIR, objectPath, 'LFS upload target');
       } catch {
         // The file escaped the repo tree — remove it and reject.
-        await fsPromises.rm(objectPath, { force: true }).catch(() => undefined);
+        await fsPromises.rm(objectPath, { force: true }).catch(() => undefined /* cleanup: remove escaped file, best-effort */);
         return badRequest(c, 'Invalid LFS object path');
       }
     } catch (err) {
-      await fsPromises.rm(tempPath, { force: true }).catch(() => undefined);
+      await fsPromises.rm(tempPath, { force: true }).catch(() => undefined /* cleanup: remove temp file on upload error, best-effort */);
       const errMessage = err instanceof Error ? err.message : undefined;
       const errCode = err instanceof Error && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
       if (errMessage === LFS_UPLOAD_TOO_LARGE_ERROR) {

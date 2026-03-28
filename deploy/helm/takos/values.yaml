@@ -36,6 +36,8 @@ images:
 
 ## -----------------------------------------------------------------
 ## Control plane - Web (HTTP API)
+## Port defaults: canonical source is DEFAULT_LOCAL_PORTS in
+## packages/control/src/local-platform/runtime-types.ts
 ## -----------------------------------------------------------------
 controlWeb:
   replicaCount: 2

@@ -4,7 +4,7 @@ import { parseLimit } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
-import { createDeploymentService } from '../../../application/services/deployment/index';
+import { DeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
 import type { ArtifactKind, DeploymentProviderName } from '../../../application/services/deployment/models.ts';
 import { DEPLOYMENT_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
@@ -141,7 +141,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     : undefined;
   const idempotencyKey = c.req.header('Idempotency-Key')?.trim() || undefined;
 
-  const deploymentService = createDeploymentService(c.env);
+  const deploymentService = new DeploymentService(c.env);
   const deployment = await deploymentService.createDeployment({
     serviceId,
     spaceId: worker.space_id,
@@ -206,7 +206,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Service');
   }
 
-  const deploymentService = createDeploymentService(c.env);
+  const deploymentService = new DeploymentService(c.env);
   const deployments = await deploymentService.getDeploymentHistory(workerId, limit);
 
   const summaries: ApiDeploymentSummary[] = deployments.map((d) => {
@@ -256,7 +256,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     ? Math.floor(body.target_version)
     : undefined;
 
-  const deploymentService = createDeploymentService(c.env);
+  const deploymentService = new DeploymentService(c.env);
 
   const deployment = await deploymentService.rollback({ serviceId: worker.id, userId: user.id, targetVersion });
   return c.json({
@@ -283,7 +283,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Service');
   }
 
-  const deploymentService = createDeploymentService(c.env);
+  const deploymentService = new DeploymentService(c.env);
   const deployment = await deploymentService.getDeploymentById(deploymentId);
   if (!deployment || deployment.service_id !== workerId) {
     throw new NotFoundError('Deployment');

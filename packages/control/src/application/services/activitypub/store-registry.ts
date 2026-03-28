@@ -5,6 +5,7 @@
 
 import { and, eq, desc } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
 import { generateId, now } from '../../../shared/utils';
 import {
@@ -43,7 +44,7 @@ export interface AddRemoteStoreInput {
   subscribe?: boolean;
 }
 
-function rowToEntry(row: typeof storeRegistry.$inferSelect): StoreRegistryEntry {
+function rowToEntry(row: SelectOf<typeof storeRegistry>): StoreRegistryEntry {
   return {
     id: row.id,
     accountId: row.accountId,
@@ -142,7 +143,7 @@ export async function addRemoteStore(
   return rowToEntry({
     ...values,
     lastOutboxCheckedAt: null,
-  } as typeof storeRegistry.$inferSelect);
+  } as SelectOf<typeof storeRegistry>);
 }
 
 /**
@@ -279,7 +280,7 @@ export async function refreshRemoteStore(
   return rowToEntry({
     ...existing,
     ...updates,
-  } as typeof storeRegistry.$inferSelect);
+  } as SelectOf<typeof storeRegistry>);
 }
 
 /**

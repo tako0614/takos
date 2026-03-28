@@ -90,7 +90,7 @@ export function StoragePage({
       .then((data: { handlers: FileHandler[] } | null) => {
         if (data?.handlers) setFileHandlers(data.handlers);
       })
-      .catch(() => {});
+      .catch(() => { /* non-critical: file handlers are optional UI enhancement */ });
   }, [spaceId]);
 
   useEffect(() => {

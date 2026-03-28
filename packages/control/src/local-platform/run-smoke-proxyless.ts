@@ -1,5 +1,6 @@
 import { disposeNodePlatformState } from '../node-platform/env-builder.ts';
 import { runLocalSmoke } from './run-smoke.ts';
+import { DEFAULT_LOCAL_PORTS } from './runtime-types.ts';
 
 type ProxyUsageResponse = {
   counts?: Record<string, number>;
@@ -10,7 +11,7 @@ function executorHostBaseUrl(): string {
   if (raw) {
     return raw.replace(/\/$/, '');
   }
-  return 'http://executor-host:8790';
+  return `http://executor-host:${DEFAULT_LOCAL_PORTS.executorHost}`;
 }
 
 async function readProxyUsage(): Promise<Record<string, number>> {

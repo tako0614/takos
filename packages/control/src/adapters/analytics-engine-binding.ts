@@ -69,7 +69,7 @@ export function createAnalyticsEngineBinding(config: AnalyticsEngineConfig): Ana
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
-    }).catch(() => {});
+    }).catch(() => { /* fire-and-forget: OTEL collector POST failure is non-critical */ });
   }
 
   return {

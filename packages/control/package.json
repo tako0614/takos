@@ -1,6 +1,6 @@
 {
   "name": "takos-control",
-  "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -157,6 +157,8 @@
     "./shared/types": "./src/shared/types/index.ts",
     "./shared/config": "./src/shared/config/index.ts",
     "./shared/constants": "./src/shared/constants/index.ts",
+
+    "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts",
 
     "./package.json": "./package.json"
   },

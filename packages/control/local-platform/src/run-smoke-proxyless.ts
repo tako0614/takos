@@ -1,4 +1,5 @@
 import { disposeNodePlatformState } from '../../src/node-platform/env-builder.ts';
+import { DEFAULT_LOCAL_PORTS } from '../../src/local-platform/runtime-types.ts';
 import { runLocalSmoke } from './run-smoke.ts';
 import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
@@ -11,7 +12,7 @@ function executorHostBaseUrl(): string {
   if (raw) {
     return raw.replace(/\/$/, '');
   }
-  const port = process.env.TAKOS_EXECUTOR_HOST_PORT?.trim() || '8790';
+  const port = process.env.TAKOS_EXECUTOR_HOST_PORT?.trim() || String(DEFAULT_LOCAL_PORTS.executorHost);
   return `http://executor-host:${port}`;
 }
 

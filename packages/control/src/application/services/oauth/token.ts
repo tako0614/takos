@@ -1,5 +1,6 @@
 import * as jose from 'jose';
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { oauthTokens } from '../../../infra/db';
 import type {
   OAuthToken,
@@ -15,7 +16,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, lt, isNull } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
 
-type OAuthTokenRow = typeof oauthTokens.$inferSelect;
+type OAuthTokenRow = SelectOf<typeof oauthTokens>;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
   return toIsoString(value);

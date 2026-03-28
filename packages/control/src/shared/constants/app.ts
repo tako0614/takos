@@ -15,6 +15,18 @@
 export const CF_COMPATIBILITY_DATE = '2024-12-01';
 
 // ============================================================================
+// Production Domains
+// ============================================================================
+
+/**
+ * Production domain for the Takos platform.
+ *
+ * Used by the CLI and other external-facing clients as the default API endpoint.
+ * Local-development domain defaults live in local-platform/runtime-types.ts.
+ */
+export const PRODUCTION_DOMAIN = 'takos.jp';
+
+// ============================================================================
 // Standard Error Messages
 // ============================================================================
 

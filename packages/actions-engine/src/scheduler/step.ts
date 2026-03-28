@@ -23,6 +23,11 @@ import {
   interpolateString,
   interpolateObject,
 } from '../parser/expression.js';
+import {
+  parseOutputs,
+  iterateNormalizedLines,
+  parsePathFile,
+} from './step-output-parser.js';
 
 /**
  * Step runner options
@@ -82,7 +87,6 @@ interface StepCommandFiles {
   path: string;
 }
 
-const SIMPLE_OUTPUT_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const BUILTIN_NOOP_ACTIONS = new Set(['actions/checkout', 'actions/setup-node']);
 
 function resolvePlatformDefaultShell(): Step['shell'] {
@@ -434,7 +438,7 @@ export class StepRunner {
       });
 
       // Parse outputs from stdout (GitHub Actions format)
-      const stdoutOutputs = this.parseOutputs(shellResult.stdout);
+      const stdoutOutputs = parseOutputs(shellResult.stdout);
       Object.assign(result.outputs, stdoutOutputs);
 
       // Merge command-file outputs (echo "name=value" >> $GITHUB_OUTPUT)
@@ -500,25 +504,12 @@ export class StepRunner {
     }
 
     const pathContent = await this.readCommandFile(commandFiles.path);
-    const appendedPaths = this.parsePathFile(pathContent);
+    const appendedPaths = parsePathFile(pathContent);
     if (appendedPaths.length > 0) {
       const basePath = sharedEnv.PATH ?? shellEnv.PATH ?? process.env.PATH ?? '';
       const prefix = appendedPaths.join(pathDelimiter);
       sharedEnv.PATH = basePath.length > 0 ? `${prefix}${pathDelimiter}${basePath}` : prefix;
     }
-  }
-
-  private parsePathFile(content: string): string[] {
-    const entries: string[] = [];
-
-    this.iterateNormalizedLines(content, (line) => {
-      if (line.trim().length === 0) {
-        return;
-      }
-      entries.push(line);
-    });
-
-    return entries;
   }
 
   /** @see {@link MAX_COMMAND_FILE_BYTES} in constants.ts */
@@ -549,81 +540,4 @@ export class StepRunner {
       // Command-file cleanup should never fail step execution.
     }
   }
-
-  /**
-   * Parse GitHub Actions output format from stdout
-   * Format: ::set-output name=<name>::<value>
-   * Or: echo "name=value" >> $GITHUB_OUTPUT
-   */
-  private parseOutputs(stdout: string): Record<string, string> {
-    const outputs: Record<string, string> = {};
-
-    this.iterateNormalizedLines(stdout, (line) => {
-      this.parseLegacyOutputLine(line, outputs);
-      this.parseSimpleOutputLine(line, outputs);
-    });
-
-    return outputs;
-  }
-
-  private iterateNormalizedLines(
-    content: string,
-    iterate: (line: string) => void
-  ): void {
-    if (content.length === 0) {
-      return;
-    }
-
-    const lines = content.split('\n');
-    for (let line of lines) {
-      if (line.endsWith('\r')) {
-        line = line.slice(0, -1);
-      }
-      iterate(line);
-    }
-  }
-
-  private parseLegacyOutputLine(
-    line: string,
-    outputs: Record<string, string>
-  ): void {
-    const prefix = '::set-output name=';
-    if (!line.startsWith(prefix)) {
-      return;
-    }
-
-    const separatorIndex = line.indexOf('::', prefix.length);
-    if (separatorIndex === -1) {
-      return;
-    }
-
-    const name = line.slice(prefix.length, separatorIndex);
-    if (name.length === 0 || name.includes(':')) {
-      return;
-    }
-
-    const value = line.slice(separatorIndex + 2);
-    outputs[name] = value;
-  }
-
-  private parseSimpleOutputLine(
-    line: string,
-    outputs: Record<string, string>
-  ): void {
-    const separatorIndex = line.indexOf('=');
-    if (separatorIndex <= 0) {
-      return;
-    }
-
-    const name = line.slice(0, separatorIndex);
-    if (!SIMPLE_OUTPUT_NAME_REGEX.test(name)) {
-      return;
-    }
-
-    const value = line.slice(separatorIndex + 1);
-    if (!(name in outputs)) {
-      outputs[name] = value;
-    }
-  }
 }
-

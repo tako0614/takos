@@ -46,9 +46,6 @@ const LOGICAL_QUEUE_NAME_MAP: Record<QueueName, LocalQueueName> = {
   DEPLOY: LOCAL_QUEUE_NAMES.deployment,
 };
 
-/** @deprecated Use LOGICAL_QUEUE_NAME_MAP -- kept as alias for Redis/persistent factories. */
-const REDIS_QUEUE_MAP = LOGICAL_QUEUE_NAME_MAP;
-
 const PERSISTENT_QUEUE_MAP: Record<QueueName, string> = {
   RUN: 'run-queue.json',
   INDEX: 'index-queue.json',
@@ -92,11 +89,11 @@ export async function resolveQueue<T = unknown>(
   }
 
   // Redis
-  if (redisUrl) return createRedisQueue<T>(redisUrl, REDIS_QUEUE_MAP[name]);
+  if (redisUrl) return createRedisQueue<T>(redisUrl, LOGICAL_QUEUE_NAME_MAP[name]);
 
   // Persistent local
-  if (dataDir) return createPersistentQueue<T>(path.join(dataDir, 'queues', PERSISTENT_QUEUE_MAP[name]), REDIS_QUEUE_MAP[name]);
+  if (dataDir) return createPersistentQueue<T>(path.join(dataDir, 'queues', PERSISTENT_QUEUE_MAP[name]), LOGICAL_QUEUE_NAME_MAP[name]);
 
   // In-memory
-  return createInMemoryQueue<T>(REDIS_QUEUE_MAP[name]);
+  return createInMemoryQueue<T>(LOGICAL_QUEUE_NAME_MAP[name]);
 }

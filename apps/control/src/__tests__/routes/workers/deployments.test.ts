@@ -7,7 +7,7 @@ import { createMockEnv } from '../../../../test/integration/setup';
 const mocks = vi.hoisted(() => ({
   getServiceForUser: vi.fn(),
   getServiceForUserWithRole: vi.fn(),
-  createDeploymentService: vi.fn(),
+  DeploymentService: vi.fn(),
 }));
 
 vi.mock('@/services/platform/workers', () => ({
@@ -16,7 +16,7 @@ vi.mock('@/services/platform/workers', () => ({
 }));
 
 vi.mock('@/services/deployment/index', () => ({
-  createDeploymentService: mocks.createDeploymentService,
+  DeploymentService: mocks.DeploymentService,
 }));
 
 import workersDeployments from '@/routes/workers/deployments';
@@ -91,7 +91,7 @@ describe('services deployments routes', () => {
         created_at: '2026-03-22T00:00:00.000Z',
       }),
     });
-    mocks.createDeploymentService.mockReturnValue(service);
+    mocks.DeploymentService.mockImplementation(() => service);
     mocks.getServiceForUserWithRole.mockResolvedValue({
       id: 'worker-1',
       space_id: 'space-1',
@@ -198,7 +198,7 @@ describe('services deployments routes', () => {
         },
       ]),
     });
-    mocks.createDeploymentService.mockReturnValue(service);
+    mocks.DeploymentService.mockImplementation(() => service);
     mocks.getServiceForUser.mockResolvedValue({
       id: 'worker-1',
       space_id: 'space-1',
@@ -249,7 +249,7 @@ describe('services deployments routes', () => {
         routing_weight: 100,
       }),
     });
-    mocks.createDeploymentService.mockReturnValue(service);
+    mocks.DeploymentService.mockImplementation(() => service);
     mocks.getServiceForUserWithRole.mockResolvedValue({
       id: 'worker-1',
       space_id: 'space-1',
@@ -300,7 +300,7 @@ describe('services deployments routes', () => {
         step_error: null,
       }),
     });
-    mocks.createDeploymentService.mockReturnValue(service);
+    mocks.DeploymentService.mockImplementation(() => service);
     mocks.getServiceForUser.mockResolvedValue({
       id: 'worker-1',
       space_id: 'space-1',

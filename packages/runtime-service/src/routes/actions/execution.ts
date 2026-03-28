@@ -41,7 +41,7 @@ app.post('/actions/jobs/:jobId/checkout', async (c) => {
   };
 
   try {
-    const job = jobManager.getJob(jobId);
+    const job = jobManager.jobs.get(jobId);
     if (!job || job.status !== 'running') return c.json({ error: 'Job not found or not running' }, 404);
 
     const targetPath = checkoutPath
@@ -96,7 +96,7 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as ExecuteStepRequest;
 
   try {
-    const job = jobManager.getJob(jobId);
+    const job = jobManager.jobs.get(jobId);
     if (!job || job.status !== 'running') return c.json({ error: 'Job not found or not running' }, 404);
 
     const stepNum = parseInt(stepNumber, 10);

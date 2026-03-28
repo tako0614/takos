@@ -5,6 +5,7 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../../shared/types/drizzle-helpers';
 import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects';
 import { SHA1_PATTERN } from '../git-objects';
 import { getDb, branches, tags } from '../../../../infra/db';
@@ -65,7 +66,7 @@ function toBranch(row: D1BranchRow): GitBranch {
   };
 }
 
-function branchFromDrizzle(b: typeof branches.$inferSelect): GitBranch {
+function branchFromDrizzle(b: SelectOf<typeof branches>): GitBranch {
   return {
     id: b.id, repo_id: b.repoId, name: b.name, commit_sha: b.commitSha,
     is_default: b.isDefault, is_protected: b.isProtected,
@@ -81,7 +82,7 @@ function toTag(row: D1TagRow): GitTag {
   };
 }
 
-function tagFromDrizzle(t: typeof tags.$inferSelect): GitTag {
+function tagFromDrizzle(t: SelectOf<typeof tags>): GitTag {
   return {
     id: t.id, repo_id: t.repoId, name: t.name, commit_sha: t.commitSha,
     message: t.message, tagger_name: t.taggerName, tagger_email: t.taggerEmail,

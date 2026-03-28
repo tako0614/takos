@@ -21,7 +21,7 @@ export interface ContentMatch {
   highlight: { start: number; end: number }[];
 }
 
-export interface SearchResult {
+export interface CodeSearchResult {
   type: 'file' | 'content' | 'semantic';
   file: SpaceFile;
   matches?: ContentMatch[];
@@ -72,11 +72,11 @@ export async function searchWorkspace(params: {
   searchType?: SearchType;
   fileTypes?: string[];
   limit?: number;
-}): Promise<{ results: SearchResult[]; total: number; semanticAvailable: boolean }> {
+}): Promise<{ results: CodeSearchResult[]; total: number; semanticAvailable: boolean }> {
   const { env, spaceId, query, fileTypes } = params;
   const searchType = params.searchType || 'all';
   const limit = Math.min(params.limit || 20, 100);
-  const results: SearchResult[] = [];
+  const results: CodeSearchResult[] = [];
   const semanticAvailable = isEmbeddingsAvailable(env);
   const db = getDb(env.DB);
 
@@ -154,7 +154,7 @@ export async function quickSearchPaths(d1: D1Database, spaceId: string, query: s
   return fileRows.map(f => f.path);
 }
 
-export async function searchFilenames(d1: D1Database, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<SearchResult[]> {
+export async function searchFilenames(d1: D1Database, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<CodeSearchResult[]> {
   const db = getDb(d1);
   const conditions = [eq(files.accountId, spaceId), ne(files.origin, 'system'), like(files.path, `%${query}%`)];
 
@@ -171,7 +171,7 @@ export async function searchFilenames(d1: D1Database, spaceId: string, query: st
   }));
 }
 
-export async function searchContent(d1: D1Database, storage: R2Bucket | undefined, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<SearchResult[]> {
+export async function searchContent(d1: D1Database, storage: R2Bucket | undefined, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<CodeSearchResult[]> {
   if (!storage) return [];
   const db = getDb(d1);
   const fileRows = await db.select().from(files)
@@ -180,7 +180,7 @@ export async function searchContent(d1: D1Database, storage: R2Bucket | undefine
     .limit(100)
     .all();
 
-  const results: SearchResult[] = [];
+  const results: CodeSearchResult[] = [];
   const queryLower = query.toLowerCase();
 
   for (const file of fileRows) {

@@ -6,6 +6,7 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
+import type { InsertOf, SelectOf } from '../../../../shared/types/drizzle-helpers';
 import { getDb, mcpServers } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { generateId } from '../../../../shared/utils';
@@ -269,7 +270,7 @@ export async function getMcpServerWithTokens(
   dbBinding: D1Database,
   spaceId: string,
   serverId: string,
-): Promise<(typeof mcpServers.$inferSelect) | null> {
+): Promise<SelectOf<typeof mcpServers> | null> {
   const db = getDb(dbBinding);
   const row = await db.select().from(mcpServers)
     .where(and(eq(mcpServers.id, serverId), eq(mcpServers.accountId, spaceId)))
@@ -327,7 +328,7 @@ export async function updateMcpServer(
     throw new Error('Managed MCP server names are controlled by their source declaration');
   }
 
-  const updateData: Partial<typeof mcpServers.$inferInsert> = {
+  const updateData: Partial<InsertOf<typeof mcpServers>> = {
     updatedAt: new Date().toISOString(),
   };
   if (patch.enabled !== undefined) updateData.enabled = patch.enabled;

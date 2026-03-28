@@ -1,4 +1,4 @@
-import { createDeploymentService, type DeploymentEnv } from '../../application/services/deployment/index';
+import { DeploymentService, type DeploymentEnv } from '../../application/services/deployment/index';
 import { getDb, deployments } from '../../infra/db';
 import { eq, and, notInArray } from 'drizzle-orm';
 import { logError, logInfo } from '../../shared/utils/logger';
@@ -36,7 +36,7 @@ export async function handleDeploymentJob(
   const { deploymentId } = message;
   logInfo(`Processing deployment ${deploymentId}`, { module: 'deploy_queue' });
 
-  const deploymentService = createDeploymentService(env);
+  const deploymentService = new DeploymentService(env);
 
   try {
     await deploymentService.executeDeployment(deploymentId);
@@ -70,7 +70,7 @@ export async function handleDeploymentJobDlq(
 
   // Mark deployment as failed if still in progress
   try {
-    const deploymentService = createDeploymentService(env);
+    const deploymentService = new DeploymentService(env);
     const deployment = await deploymentService.getDeploymentById(deploymentId);
     if (deployment && deployment.status !== 'success' && deployment.status !== 'rolled_back') {
       const db = getDb(env.DB);

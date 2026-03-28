@@ -24,7 +24,7 @@ import {
 } from './merge';
 import { toGitBucket } from './git-store';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, NotFoundError, InternalError, AppError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError, InternalError, AppError } from 'takos-common/errors';
 import { findPullRequest } from './read-model';
 import { triggerPrEvent } from './workflow-trigger';
 
