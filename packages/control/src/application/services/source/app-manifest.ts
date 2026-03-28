@@ -1,15 +1,10 @@
 // Re-export types
 export type {
   AppManifest,
-  AppService,
-  WorkerService,
-  WorkerContainer,
-  ContainerService,
   AppContainer,
   AppWorker,
   AppEnvConfig,
   AppRoute,
-  LegacyAppRoute,
   AppDeploymentBuildSource,
   BundleDoc,
 } from './app-manifest-types';

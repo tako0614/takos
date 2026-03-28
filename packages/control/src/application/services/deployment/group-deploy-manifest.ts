@@ -39,23 +39,9 @@ export interface WorkerService {
   };
 }
 
-export interface HttpService {
-  type: 'http';
-  baseUrl: string;
-}
-
-export interface ContainerService {
-  type: 'container';
-  image: string;
-  port?: number;
-  env?: Record<string, string>;
-}
-
-export type AppService = WorkerService | HttpService | ContainerService;
-
 export interface AppRoute {
   name?: string;
-  service: string;
+  target: string;
   path?: string;
   ingress?: string;
   timeoutMs?: number;
@@ -79,7 +65,7 @@ export interface AppManifest {
       required?: string[];
     };
     resources?: Record<string, AppResource>;
-    services: Record<string, AppService>;
+    workers: Record<string, WorkerService>;
     routes?: AppRoute[];
   };
 }

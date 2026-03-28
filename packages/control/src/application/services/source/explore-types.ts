@@ -94,7 +94,7 @@ export interface CatalogResult {
 }
 
 export type CatalogSort = 'trending' | 'new' | 'stars' | 'updated' | 'downloads';
-export type CatalogType = 'all' | 'repo' | 'deployable-app';
+export type CatalogType = 'all' | 'repo' | 'deployable-app' | 'official';
 
 export type RepositoryWithAccount = {
   id: string;

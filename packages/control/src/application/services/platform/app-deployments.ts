@@ -256,9 +256,8 @@ export class AppDeploymentService {
     const packageFiles = new Map<string, ArrayBuffer | Uint8Array>();
     const buildSources: AppDeploymentBuildSource[] = [];
 
-    for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
-      if (service.type !== 'worker') continue;
-      const build = service.build.fromWorkflow;
+    for (const [workerName, worker] of Object.entries(manifest.spec.workers || {})) {
+      const build = worker.build.fromWorkflow;
       const workflowContent = await readRepoTextFileAtCommit(this.env, target.treeSha, build.path);
       if (!workflowContent) {
         throw new Error(`Workflow file not found at repo ref: ${build.path}`);
@@ -340,7 +339,7 @@ export class AppDeploymentService {
 
       packageFiles.set(artifactPath, new Uint8Array(await artifactObject.arrayBuffer()));
       buildSources.push({
-        service_name: serviceName,
+        service_name: workerName,
         workflow_path: build.path,
         workflow_job: build.job,
         workflow_artifact: build.artifact,

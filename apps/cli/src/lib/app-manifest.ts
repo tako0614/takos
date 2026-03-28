@@ -42,14 +42,9 @@ type WorkerService = {
   };
 };
 
-type HttpService = {
-  type: 'http';
-  baseUrl: string;
-};
-
 type AppRoute = {
   name?: string;
-  service: string;
+  target: string;
   path?: string;
   ingress?: string;
   timeoutMs?: number;
@@ -94,7 +89,7 @@ export type AppManifest = {
       scopes: string[];
     };
     resources?: Record<string, AppResource>;
-    services: Record<string, WorkerService | HttpService>;
+    workers: Record<string, WorkerService>;
     routes?: AppRoute[];
     mcpServers?: AppMcpServer[];
     fileHandlers?: AppFileHandler[];
@@ -181,65 +176,55 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
     ...optionalProp('appId', asString(metadataRecord.appId, 'metadata.appId')),
   };
 
-  const servicesRecord = asRecord(specRecord.services);
-  const services: Record<string, WorkerService | HttpService> = {};
-  const serviceNames = Object.keys(servicesRecord);
-  if (serviceNames.length === 0) {
-    throw new Error('spec.services must contain at least one service');
+  if (specRecord.services != null) {
+    throw new Error('spec.services is no longer supported. Use spec.workers instead.');
   }
 
-  for (const [serviceName, serviceValue] of Object.entries(servicesRecord)) {
-    const serviceSpec = asRecord(serviceValue);
-    const type = asString(serviceSpec.type, `spec.services.${serviceName}.type`, true)!;
+  const workersRecord = asRecord(specRecord.workers);
+  const workers: Record<string, WorkerService> = {};
+  const workerNames = Object.keys(workersRecord);
+  if (workerNames.length === 0) {
+    throw new Error('spec.workers must contain at least one worker');
+  }
 
-    if (type === 'worker') {
-      const buildSpec = asRecord(serviceSpec.build);
-      const fromWorkflow = asRecord(buildSpec.fromWorkflow);
-      if (Object.keys(buildSpec).length === 0) {
-        throw new Error(`spec.services.${serviceName}.build is required`);
-      }
-      if (buildSpec.command != null || buildSpec.output != null || buildSpec.cwd != null || serviceSpec.entry != null) {
-        throw new Error(`spec.services.${serviceName} local build fields are not supported; use build.fromWorkflow`);
-      }
-      if (Object.keys(fromWorkflow).length === 0) {
-        throw new Error(`spec.services.${serviceName}.build.fromWorkflow is required`);
-      }
-      const workflowPath = asString(fromWorkflow.path, `spec.services.${serviceName}.build.fromWorkflow.path`, true)!;
-      if (!workflowPath.startsWith('.takos/workflows/') || workflowPath.includes('..')) {
-        throw new Error(`spec.services.${serviceName}.build.fromWorkflow.path must be under .takos/workflows/ and must not contain path traversal`);
-      }
-      services[serviceName] = {
-        type: 'worker',
-        build: {
-          fromWorkflow: {
-            path: workflowPath,
-            job: asString(fromWorkflow.job, `spec.services.${serviceName}.build.fromWorkflow.job`, true)!,
-            artifact: asString(fromWorkflow.artifact, `spec.services.${serviceName}.build.fromWorkflow.artifact`, true)!,
-            artifactPath: asString(fromWorkflow.artifactPath, `spec.services.${serviceName}.build.fromWorkflow.artifactPath`, true)!,
-          },
+  for (const [workerName, workerValue] of Object.entries(workersRecord)) {
+    const workerSpec = asRecord(workerValue);
+
+    const buildSpec = asRecord(workerSpec.build);
+    const fromWorkflow = asRecord(buildSpec.fromWorkflow);
+    if (Object.keys(buildSpec).length === 0) {
+      throw new Error(`spec.workers.${workerName}.build is required`);
+    }
+    if (buildSpec.command != null || buildSpec.output != null || buildSpec.cwd != null || workerSpec.entry != null) {
+      throw new Error(`spec.workers.${workerName} local build fields are not supported; use build.fromWorkflow`);
+    }
+    if (Object.keys(fromWorkflow).length === 0) {
+      throw new Error(`spec.workers.${workerName}.build.fromWorkflow is required`);
+    }
+    const workflowPath = asString(fromWorkflow.path, `spec.workers.${workerName}.build.fromWorkflow.path`, true)!;
+    if (!workflowPath.startsWith('.takos/workflows/') || workflowPath.includes('..')) {
+      throw new Error(`spec.workers.${workerName}.build.fromWorkflow.path must be under .takos/workflows/ and must not contain path traversal`);
+    }
+    workers[workerName] = {
+      type: 'worker',
+      build: {
+        fromWorkflow: {
+          path: workflowPath,
+          job: asString(fromWorkflow.job, `spec.workers.${workerName}.build.fromWorkflow.job`, true)!,
+          artifact: asString(fromWorkflow.artifact, `spec.workers.${workerName}.build.fromWorkflow.artifact`, true)!,
+          artifactPath: asString(fromWorkflow.artifactPath, `spec.workers.${workerName}.build.fromWorkflow.artifactPath`, true)!,
         },
-        ...optionalProp('env', asStringMap(serviceSpec.env, `spec.services.${serviceName}.env`)),
-        ...(serviceSpec.bindings ? {
-          bindings: {
-            ...optionalProp('d1', asStringArray(asRecord(serviceSpec.bindings).d1, `spec.services.${serviceName}.bindings.d1`)),
-            ...optionalProp('r2', asStringArray(asRecord(serviceSpec.bindings).r2, `spec.services.${serviceName}.bindings.r2`)),
-            ...optionalProp('kv', asStringArray(asRecord(serviceSpec.bindings).kv, `spec.services.${serviceName}.bindings.kv`)),
-            ...optionalProp('services', asStringArray(asRecord(serviceSpec.bindings).services, `spec.services.${serviceName}.bindings.services`)),
-          },
-        } : {}),
-      };
-      continue;
-    }
-
-    if (type === 'http') {
-      services[serviceName] = {
-        type: 'http',
-        baseUrl: asString(serviceSpec.baseUrl, `spec.services.${serviceName}.baseUrl`, true)!,
-      };
-      continue;
-    }
-
-    throw new Error(`spec.services.${serviceName}.type must be worker or http`);
+      },
+      ...optionalProp('env', asStringMap(workerSpec.env, `spec.workers.${workerName}.env`)),
+      ...(workerSpec.bindings ? {
+        bindings: {
+          ...optionalProp('d1', asStringArray(asRecord(workerSpec.bindings).d1, `spec.workers.${workerName}.bindings.d1`)),
+          ...optionalProp('r2', asStringArray(asRecord(workerSpec.bindings).r2, `spec.workers.${workerName}.bindings.r2`)),
+          ...optionalProp('kv', asStringArray(asRecord(workerSpec.bindings).kv, `spec.workers.${workerName}.bindings.kv`)),
+          ...optionalProp('services', asStringArray(asRecord(workerSpec.bindings).services, `spec.workers.${workerName}.bindings.services`)),
+        },
+      } : {}),
+    };
   }
 
   const resourceSpecs = asRecord(specRecord.resources);
@@ -277,20 +262,17 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
     }
     return routesRaw.map((entry, index) => {
       const route = asRecord(entry);
-      const service = asString(route.service, `spec.routes[${index}].service`, true)!;
+      const target = asString(route.target, `spec.routes[${index}].target`, true)!;
       const ingress = asString(route.ingress, `spec.routes[${index}].ingress`);
-      if (!services[service]) {
-        throw new Error(`spec.routes[${index}].service references unknown service: ${service}`);
+      if (!workers[target]) {
+        throw new Error(`spec.routes[${index}].target references unknown worker: ${target}`);
       }
-      if (services[service]?.type === 'http' && !ingress) {
-        throw new Error(`spec.routes[${index}].ingress is required for http service routes`);
-      }
-      if (ingress && services[ingress]?.type !== 'worker') {
-        throw new Error(`spec.routes[${index}].ingress must reference a worker service`);
+      if (ingress && !workers[ingress]) {
+        throw new Error(`spec.routes[${index}].ingress must reference a worker`);
       }
       return {
         ...optionalProp('name', asString(route.name, `spec.routes[${index}].name`)),
-        service,
+        target,
         ...optionalProp('path', asString(route.path, `spec.routes[${index}].path`)),
         ...(ingress ? { ingress } : {}),
         ...(route.timeoutMs != null ? { timeoutMs: Number(route.timeoutMs) } : {}),
@@ -350,7 +332,7 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
       ...(specRecord.oauth ? { oauth: asRecord(specRecord.oauth) as AppManifest['spec']['oauth'] } : {}),
       ...(specRecord.takos ? { takos: asRecord(specRecord.takos) as AppManifest['spec']['takos'] } : {}),
       ...(Object.keys(resources).length > 0 ? { resources } : {}),
-      services,
+      workers,
       ...(routes ? { routes } : {}),
       ...(mcpServers ? { mcpServers } : {}),
       ...(fileHandlers ? { fileHandlers } : {}),
@@ -418,11 +400,10 @@ export async function validateAppManifest(startDir = process.cwd()) {
   const manifest = await loadAppManifest(manifestPath);
   const repoRoot = path.dirname(path.dirname(manifestPath));
 
-  for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
-    if (service.type !== 'worker') continue;
-    const build = service.build.fromWorkflow;
+  for (const [workerName, worker] of Object.entries(manifest.spec.workers)) {
+    const build = worker.build.fromWorkflow;
     if (!build.artifactPath) {
-      throw new Error(`spec.services.${serviceName}.build.fromWorkflow.artifactPath is required`);
+      throw new Error(`spec.workers.${workerName}.build.fromWorkflow.artifactPath is required`);
     }
     await validateDeployWorkflowJob(repoRoot, build.path, build.job);
   }
