@@ -1,6 +1,10 @@
 # Cloudflare
 
-Takos を Cloudflare Workers にデプロイする方法。
+Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。
+
+::: info アプリ開発者へ
+アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+:::
 
 ## 必要なもの
 
@@ -504,17 +508,14 @@ CF Workflows ベースのワークフロー実行。他環境では Takos-manage
 
 ## マルチクラウド対応
 
-Cloudflare をメインで使いつつ、一部のワークロードを他のクラウドにデプロイすることもできる。app.yml は同じまま、`--provider` フラグでデプロイ先を切り替える:
+takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `deploy-group` するだけで、デプロイ先を意識する必要はない:
 
 ```bash
-# Cloudflare（デフォルト）
+# アプリ開発者のコマンド（どの環境でも同じ）
 takos deploy-group --env production
-
-# 同じ app.yml を AWS にデプロイ
-takos deploy-group --env production --provider ecs
 ```
 
-詳しくは [環境ごとの差異](/hosting/differences) を参照。
+takos 自体を別のクラウドに移行したい場合は、オペレーターがそのクラウド用のインフラを構築して takos の設定を変更する。詳しくは [環境ごとの差異](/hosting/differences) を参照。
 
 ## 次に読むページ
 

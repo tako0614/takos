@@ -50,18 +50,18 @@ Workers のコードは Workers-compatible な JavaScript/TypeScript。Cloudflar
 - `d1` は PostgreSQL (RDS) にマッピング（D1 は CF 固有）
 - Durable Objects 未対応
 - CF Containers 未対応 → ECS / Fargate で代替
-- デプロイプロバイダ: `ecs`（実装済み）
+- takos オペレーターが Terraform / CDK でインフラを構築して takos を起動する
 
 ### GCP
 
 - `d1` は PostgreSQL (Cloud SQL) にマッピング
 - Durable Objects 未対応
 - CF Containers 未対応 → Cloud Run で代替
-- デプロイプロバイダ: `cloud-run`（実装済み）
+- takos オペレーターが gcloud / Terraform でインフラを構築して takos を起動する
 
 ### k8s
 
-- デプロイプロバイダ: `k8s`（実装済み）
+- takos オペレーターが k8s マニフェストで takos をデプロイする
 - 全リソースを k8s ネイティブにマッピング:
   - KV → Redis (StatefulSet)
   - R2 → S3 互換 (MinIO)
@@ -105,28 +105,13 @@ resources:
     binding: CACHE
 ```
 
-デプロイ先だけが変わる:
+アプリ開発者のデプロイコマンドはどの環境でも同じ:
 
 ```bash
-# Cloudflare（デフォルト）
 takos deploy-group --env production
-
-# セルフホスト
-takos deploy-group --env production --provider oci
-
-# ECS
-takos deploy-group --env production --provider ecs
-
-# Cloud Run
-takos deploy-group --env production --provider cloud-run
-
-# k8s
-takos deploy-group --env production --provider k8s
 ```
 
-::: tip --provider フラグ
-`--provider` はデプロイ先のプロバイダを指定する。省略すると環境設定に基づいて自動選択される。Cloudflare 環境なら `workers-dispatch`、それ以外なら `oci` がデフォルト。
-:::
+takos がどのクラウドで動いているかは、takos オペレーターのインストール時の設定（環境変数、wrangler.toml 等）で決まる。アプリ開発者はデプロイ先を意識しない。
 
 ## アダプタの実装状況
 
@@ -183,17 +168,17 @@ Cloudflare 環境でのみ動作する。control plane が使う DO（SessionDO,
 | Cloudflare Workers + CF Containers | `stable` | フル機能 |
 | AWS (ECS + S3 + DynamoDB + SQS) | `stable` | アダプタ実装済み |
 | GCP (Cloud Run + GCS + Firestore + Pub/Sub) | `stable` | アダプタ実装済み |
-| k8s | `experimental` | デプロイプロバイダ実装済み、Helm chart 計画中 |
+| k8s | `experimental` | アダプタ実装済み、Helm chart 計画中 |
 | セルフホスト (Docker Compose) | `stable` | `.env.local.example` + `compose.local.yml` |
 | ローカル開発 | `stable` | 開発・テスト用 |
 
-## プロバイダ設定
+## ホスティング環境ごとのセットアップ
 
-各プロバイダの具体的なセットアップ:
+takos オペレーター向け。takos 自体をどのクラウドにホストするかの設定ガイド:
 
-- [Cloudflare](/hosting/cloudflare) --- Cloudflare Workers へのデプロイ
-- [AWS](/hosting/aws) --- AWS (ECS + S3 + DynamoDB + SQS) へのデプロイ
-- [GCP](/hosting/gcp) --- GCP (Cloud Run + GCS + Firestore + Pub/Sub) へのデプロイ
-- [Kubernetes](/hosting/kubernetes) --- k8s クラスタへのデプロイ
-- [セルフホスト](/hosting/self-hosted) --- Docker Compose でのセルフホスト
+- [Cloudflare](/hosting/cloudflare) --- Cloudflare Workers に takos をホストする
+- [AWS](/hosting/aws) --- AWS (ECS + S3 + DynamoDB + SQS) に takos をホストする
+- [GCP](/hosting/gcp) --- GCP (Cloud Run + GCS + Firestore + Pub/Sub) に takos をホストする
+- [Kubernetes](/hosting/kubernetes) --- k8s クラスタに takos をホストする
+- [セルフホスト](/hosting/self-hosted) --- Docker Compose でセルフホストする
 - [ローカル開発](/hosting/local) --- 開発用のローカル環境
