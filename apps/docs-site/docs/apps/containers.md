@@ -72,10 +72,10 @@ containers:
 | IPv4 割当 | 不可 | `ipv4: true` で可能 |
 | Worker 連携 | `workers.<name>.containers` で参照 | routes の target で参照 |
 
-詳しくは [Services](/apps/services) を参照。
+詳しくは [Services](/apps/manifest) を参照。
 
 ## 次のステップ
 
-- [Services](/apps/services) --- 常設コンテナの定義方法
+- [Services](/apps/manifest) --- 常設コンテナの定義方法
 - [Workers](/apps/workers) --- Worker の定義方法
 - [Routes](/apps/routes) --- コンテナを公開する方法

@@ -189,5 +189,5 @@ pnpm db:migrate:local
 ## 次に読むページ
 
 - [セルフホスト](/hosting/self-hosted) --- 本番向けセルフホスト
-- [環境ごとの差異](/hosting/differences) --- Cloudflare との違い
+- [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [はじめてのアプリ](/get-started/your-first-app) --- アプリを作ってデプロイ

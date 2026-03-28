@@ -331,18 +331,15 @@ pnpm local:smoke              # 全体の疎通確認
 pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
 ```
 
-## Helm / Kubernetes
+## Kubernetes
 
-Helm chart が `deploy/helm/takos/` に用意されている。
-
-```bash
-helm install takos deploy/helm/takos/ -f values.yaml
-```
-
-各サービスは local-platform contract で動作する。
+k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes) を参照。
 
 ## 次に読むページ
 
 - [ローカル開発](/hosting/local) --- 開発用のローカル環境
-- [環境ごとの差異](/hosting/differences) --- Cloudflare との違い
+- [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [Cloudflare](/hosting/cloudflare) --- Cloudflare にデプロイする場合
+- [AWS](/hosting/aws) --- AWS にデプロイする場合
+- [GCP](/hosting/gcp) --- GCP にデプロイする場合
+- [Kubernetes](/hosting/kubernetes) --- k8s クラスタへのデプロイ
