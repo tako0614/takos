@@ -192,6 +192,10 @@ spec:
     assets:
       type: r2
       binding: ASSETS
+    mcp-auth-secret:
+      type: secretRef
+      binding: MCP_AUTH_TOKEN
+      generate: true          # システムが自動でランダムトークンを生成
 ```
 
 ### サポートされる resource type
@@ -207,6 +211,12 @@ spec:
 | `analyticsEngine` | `binding`, `analyticsEngine.dataset` |
 | `workflow` | `binding`, `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
 | `durableObject` | `binding`, `durableObject.className`, `durableObject.scriptName` |
+
+### 追加フィールド
+
+| field | 対象 type | 役割 |
+| --- | --- | --- |
+| `generate` | secretRef | true の場合、デプロイ時にシステムがランダムトークンを自動生成 |
 
 ### 追加ルール
 
@@ -291,7 +301,19 @@ spec:
     - name: notes
       route: /mcp
       transport: streamable-http
+    - name: takos-computer
+      route: browser-mcp
+      transport: streamable-http
+      authSecretRef: mcp-auth-secret
 ```
+
+| field | required | 役割 |
+| --- | --- | --- |
+| `name` | yes | MCP server 名 |
+| `route` | yes* | 対象ルート（`endpoint` と排他） |
+| `endpoint` | yes* | 対象エンドポイント（`route` と排他） |
+| `transport` | yes | トランスポート（現在は `streamable-http`） |
+| `authSecretRef` | no | 認証トークンに使用する secretRef リソース名 |
 
 - `endpoint` と `route` のどちらかが必要です。
 - current transport は `streamable-http` です。

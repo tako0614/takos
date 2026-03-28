@@ -64,6 +64,36 @@ background worker です。役割:
 
 host worker は request の入口であると同時に、container から control plane へ戻る proxy contract の境界でもあります。
 
+## takos-computer の分離
+
+takos-computer は元々 takos control plane の一部（`@takos/control-hosts` パッケージ）として browser-host と executor-host を提供していましたが、独立リポジトリに分離されました。
+
+### 分離前
+
+- `wrangler.browser-host.toml` / `wrangler.executor.toml` が takos 側に存在
+- `BROWSER_HOST` / `EXECUTOR_HOST` service binding で直結
+- デプロイは takos の deploy スクリプトから実行
+
+### 分離後
+
+- takos-computer は独立した `.takos/app.yml` を持つ
+- takos との service binding は optional（`BROWSER_HOST?`, `EXECUTOR_HOST?`）
+- デプロイは `takos deploy-group` または Store からのインストール
+- seed-repositories + official-packages で推奨表示
+
+## Container Host アーキテクチャ
+
+CF Containers は Durable Object として動作します。app.yml で worker に `containers` を紐づけると、deploy-group が以下を自動生成します。
+
+1. Durable Object ホストクラス（`@cloudflare/containers` の `Container` を extends）
+2. wrangler.toml の `[[containers]]` セクション
+3. `[[durable_objects.bindings]]` セクション
+4. `[[migrations]]` セクション
+
+## Dispatch Namespace
+
+テナントアプリは dispatch namespace 内にデプロイされます。`--namespace` オプションで worker を namespace 配下に配置し、worker 名は `{groupName}-{workerName}` に変更されます。
+
 ## API surface
 
 current API router は route family 単位で次をまとめます。
