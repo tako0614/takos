@@ -1,4 +1,5 @@
 export { CF_COMPATIBILITY_DATE, ERR, HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from './app.ts';
+export { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from './dns.ts';
 export {
   ROLE_HIERARCHY,
   ALL_ROLES,

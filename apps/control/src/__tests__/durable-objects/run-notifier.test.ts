@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RunNotifierDO } from '@/durable-objects/run-notifier';
 
 // ---------------------------------------------------------------------------
@@ -658,6 +658,14 @@ describe('RunNotifierDO', () => {
   });
 
   describe('constructor hydration', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('restores state from storage', async () => {
       const storage = createMockStorage();
       storage._store.set('bufferState', {
@@ -670,7 +678,7 @@ describe('RunNotifierDO', () => {
       const doInstance = new RunNotifierDO(state as unknown as DurableObjectState, createMockEnv() as never);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       const res = await doInstance.fetch(getRequest('/state'));
       const body = await jsonBody(res);
@@ -690,7 +698,7 @@ describe('RunNotifierDO', () => {
       const doInstance = new RunNotifierDO(state as unknown as DurableObjectState, createMockEnv() as never);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       const connections = (doInstance as unknown as { connections: Map<string, unknown> }).connections;
       expect(connections.has('conn-hibernated')).toBe(true);
@@ -704,7 +712,7 @@ describe('RunNotifierDO', () => {
       const doInstance = new RunNotifierDO(state as unknown as DurableObjectState, createMockEnv() as never);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       // Should not crash, and state should be default
       const res = await doInstance.fetch(getRequest('/state'));

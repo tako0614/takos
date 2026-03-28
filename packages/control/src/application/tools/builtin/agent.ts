@@ -1,5 +1,6 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 import type { RunStatus } from '../../../shared/types';
+import { throwIfAborted } from '@takos/common/abort';
 import { getDb, runs, artifacts, threads, messages } from '../../../infra/db';
 import { createThreadRun } from '../../services/execution/run-creation';
 import { resolveRunModel } from '../../services/runs/create-thread-run-validation';
@@ -138,20 +139,6 @@ function normalizeWaitTimeout(value: unknown): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (!signal?.aborted) {
-    return;
-  }
-
-  const reason = signal.reason;
-  const message = reason instanceof Error
-    ? reason.message
-    : typeof reason === 'string'
-      ? reason
-      : 'wait_agent aborted';
-  throw new Error(message);
 }
 
 function extractFinalResponse(output: string | null): string | null {
@@ -370,7 +357,7 @@ export const waitAgentHandler: ToolHandler = async (args, context) => {
   const deadline = Date.now() + timeoutMs;
 
   while (true) {
-    throwIfAborted(context.abortSignal);
+    throwIfAborted(context.abortSignal, 'wait_agent');
     const result = await loadChildRun(runId, context);
     if (TERMINAL_RUN_STATUSES.has(result.run.status as RunStatus)) {
       return buildWaitAgentResponse(result, false);
@@ -380,7 +367,7 @@ export const waitAgentHandler: ToolHandler = async (args, context) => {
       return buildWaitAgentResponse(result, true);
     }
 
-    throwIfAborted(context.abortSignal);
+    throwIfAborted(context.abortSignal, 'wait_agent');
     await sleep(Math.min(WAIT_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
   }
 };

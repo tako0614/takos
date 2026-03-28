@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 import { ToolExecutor } from '@/tools/executor';
 import type { ToolContext, ToolDefinition } from '@/tools/types';

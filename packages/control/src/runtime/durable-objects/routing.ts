@@ -1,6 +1,6 @@
 import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/types';
 
-import { jsonResponse } from './shared';
+import { jsonResponse } from './do-header-utils';
 
 type StoredRoutingRecord = Omit<RoutingRecord, 'hostname'>;
 

@@ -10,7 +10,7 @@ import {
 } from '../../application/services/run-notifier';
 
 import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { STALE_WORKER_THRESHOLD_MS, envGuard } from './shared';
+import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants';
 
 export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   // Validate environment on first invocation (cached).

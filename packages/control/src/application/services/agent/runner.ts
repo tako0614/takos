@@ -6,7 +6,7 @@
  * This file contains the AgentRunner class and re-exports.
  * Implementation is split into:
  *   - runner-events.ts    : event emission helpers
- *   - runner-messages.ts  : run status, conversation history, message helpers
+ *   - runner-history.ts   : run status, conversation history, message helpers
  *   - runner-types.ts     : constants, utility functions, shared types
  *   - session-closer.ts   : auto-close session (snapshot + file sync)
  *   - skills.ts           : skill loading, resolution, and context
@@ -28,7 +28,7 @@ import { runLangGraphRunner } from './langgraph-runner';
 import { getAgentConfig } from './runner-config';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { RunTerminalPayload } from '../run-notifier';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
+import { logError, logWarn } from '../../../shared/utils/logger';
 import { AppError, AuthenticationError, InternalError } from '@takos/common/errors';
 import {
   handleSuccessfulRunCompletion,
@@ -46,20 +46,17 @@ import { autoCloseSession as autoCloseSessionImpl } from './session-closer';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
 import { RemoteToolExecutor } from './remote-tool-executor';
 import {
-  buildDelegationSystemMessage,
-  buildDelegationUserMessage,
   getDelegationPacketFromRunInput,
 } from './delegation';
 
 // Manager functions and state
 import { createLLMState, type LLMState } from './llm-manager';
-import { createSkillState, resolveAndApplySkills, buildSkillPlan, type SkillState, type SkillManagerDeps } from './skill-manager';
-import { createMemoryState, bootstrapMemory, finalizeMemory, type MemoryState, type MemoryManagerDeps } from './memory-manager';
+import { resolveAndApplySkills, buildSkillPlan, type SkillState, type SkillManagerDeps } from './skill-manager';
+import { bootstrapMemory, finalizeMemory, type MemoryState, type MemoryManagerDeps } from './memory-manager';
 
 // Re-export from split modules for backward compatibility
 export {
   type EventEmitterState,
-  createEventEmitterState,
   emitEventImpl,
   buildTerminalEventPayloadImpl,
 } from './runner-events';
@@ -70,7 +67,7 @@ export {
   type ConversationHistoryDeps,
   normalizeRunStatus,
   buildConversationHistory,
-} from './runner-messages';
+} from './runner-history';
 
 // Re-export executeRun for backward compatibility (index.ts imports it from here)
 export { executeRun } from './execute-run';
@@ -78,11 +75,10 @@ export { executeRun } from './execute-run';
 // Import what we need from split modules
 import {
   type EventEmitterState,
-  createEventEmitterState,
   emitEventImpl,
   buildTerminalEventPayloadImpl,
 } from './runner-events';
-import { normalizeRunStatus } from './runner-messages';
+import { normalizeRunStatus } from './runner-history';
 
 // ── AgentRunnerIo interface ──────────────────────────────────────────
 
@@ -205,11 +201,20 @@ export class AgentRunner {
     this.config = getAgentConfig(agentType, env);
     this.abortSignal = options.abortSignal;
     this.runIo = options.runIo;
-    this.eventState = createEventEmitterState();
+    this.eventState = {
+      eventSequence: 0,
+      pendingEventEmissions: 0,
+      eventEmissionErrors: [],
+    };
 
     this.llm = createLLMState({ apiKey, env, aiModel });
 
-    this.skillState = createSkillState();
+    this.skillState = {
+      locale: 'en',
+      availableSkills: [],
+      selectedSkills: [],
+      activatedSkills: [],
+    };
     this.skillDeps = {
       runIo: options.runIo,
       runId: context.runId,
@@ -218,7 +223,7 @@ export class AgentRunner {
       agentType,
     };
 
-    this.memoryState = createMemoryState();
+    this.memoryState = { runtime: undefined };
     this.memoryDeps = { db, env, context, runIo: options.runIo };
   }
 

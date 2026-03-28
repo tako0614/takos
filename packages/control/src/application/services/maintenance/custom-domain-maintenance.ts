@@ -8,8 +8,8 @@ import type { RoutingTarget } from '../routing/types';
 import { createServiceDesiredStateService } from '../platform/worker-desired-state';
 import { listServiceRouteRecordsByIds } from '../platform/workers';
 import { logError, logWarn } from '../../../shared/utils/logger';
+import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
 
-const DNS_TIMEOUT_MS = 5000;
 const SSL_PENDING_STATES = new Set(['pending', 'pending_validation', 'pending_issuance', 'pending_deployment']);
 const SSL_FAILURE_STATES = new Set(['deleted', 'expired', 'validation_timed_out', 'issuance_timed_out']);
 
@@ -29,11 +29,11 @@ async function verifyOwnershipRecord(
   const recordType = method === 'cname' ? 'CNAME' : 'TXT';
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DNS_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), DNS_RESOLVE_TIMEOUT_MS);
 
   try {
     const response = await fetch(
-      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(recordName)}&type=${recordType}`,
+      `${DOH_ENDPOINT}?name=${encodeURIComponent(recordName)}&type=${recordType}`,
       {
         headers: { Accept: 'application/dns-json' },
         signal: controller.signal,

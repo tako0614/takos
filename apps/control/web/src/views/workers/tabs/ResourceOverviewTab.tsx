@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useI18n } from '../../../store/i18n';
 import { Icons } from '../../../lib/Icons';
 import { Button } from '../../../components/ui/Button';
@@ -6,6 +6,7 @@ import { Modal, ModalFooter } from '../../../components/ui/Modal';
 import type { Resource } from '../../../types';
 import { useResourceAccessTokens } from '../../../hooks/useResourceAccessTokens';
 import type { ResourceAccessToken, ResourceConnectionInfo } from '../../../hooks/useResourceAccessTokens';
+import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
 
 interface ResourceOverviewTabProps {
   resource: Resource;
@@ -82,26 +83,12 @@ function ConnectionInfoDisplay({
 }) {
   const { t } = useI18n();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copied, copy } = useCopyToClipboard();
 
-  const handleCopy = useCallback(async (key: string, value: string) => {
-    await navigator.clipboard.writeText(value);
+  const handleCopy = async (key: string, value: string) => {
+    await copy(value);
     setCopiedKey(key);
-    if (copyResetTimerRef.current) {
-      clearTimeout(copyResetTimerRef.current);
-    }
-    copyResetTimerRef.current = setTimeout(() => {
-      setCopiedKey(null);
-      copyResetTimerRef.current = null;
-    }, 2000);
-  }, []);
-
-  useEffect(() => () => {
-    if (copyResetTimerRef.current) {
-      clearTimeout(copyResetTimerRef.current);
-      copyResetTimerRef.current = null;
-    }
-  }, []);
+  };
 
   if (loading) {
     return (
@@ -133,7 +120,7 @@ function ConnectionInfoDisplay({
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 aria-label={`Copy ${key.replace(/_/g, ' ')} to clipboard`}
               >
-                {copiedKey === key ? (
+                {copied && copiedKey === key ? (
                   <Icons.Check className="w-4 h-4 text-green-600" aria-hidden="true" />
                 ) : (
                   <Icons.Copy className="w-4 h-4" aria-hidden="true" />
@@ -253,8 +240,7 @@ function CreateTokenModal({
   const [permission, setPermission] = useState<'read' | 'write'>('read');
   const [expiresInDays, setExpiresInDays] = useState<string>('');
   const [newToken, setNewToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const copyTokenResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { copied, copy } = useCopyToClipboard();
 
   const handleCreate = async () => {
     const result = await onCreate(
@@ -269,15 +255,7 @@ function CreateTokenModal({
 
   const handleCopyToken = async () => {
     if (newToken) {
-      await navigator.clipboard.writeText(newToken);
-      setCopied(true);
-      if (copyTokenResetTimerRef.current) {
-        clearTimeout(copyTokenResetTimerRef.current);
-      }
-      copyTokenResetTimerRef.current = setTimeout(() => {
-        setCopied(false);
-        copyTokenResetTimerRef.current = null;
-      }, 2000);
+      await copy(newToken);
     }
   };
 
@@ -286,16 +264,8 @@ function CreateTokenModal({
     setPermission('read');
     setExpiresInDays('');
     setNewToken(null);
-    setCopied(false);
     onClose();
   };
-
-  useEffect(() => () => {
-    if (copyTokenResetTimerRef.current) {
-      clearTimeout(copyTokenResetTimerRef.current);
-      copyTokenResetTimerRef.current = null;
-    }
-  }, []);
 
   if (newToken) {
     return (

@@ -7,7 +7,7 @@ import { getRunEventsAfterFromR2 } from '../offload/run-events';
 import { logWarn } from '../../../shared/utils/logger';
 
 
-const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 const MAX_INFO_UNIT_TOKENS = 2048;
 const MAX_EVENT_TEXT_CHARS = 4000;
 const CHARS_PER_TOKEN = 4;

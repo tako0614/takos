@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, Fragment } from 'react';
 import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { Button } from '../../../components/ui/Button';

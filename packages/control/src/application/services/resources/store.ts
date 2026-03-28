@@ -1,9 +1,16 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
-import { getDb, resources, resourceAccess, accountMemberships } from '../../../infra/db';
+import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
 import { toApiResource } from './format';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
+
+function buildAccessMap(grants: { resourceId: string; permission: string }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const grant of grants) map.set(grant.resourceId, grant.permission);
+  return map;
+}
 
 function toApiResourceRow(r: {
   id: string;
@@ -68,7 +75,7 @@ export async function listResourcesForWorkspace(
   }
 
   // Get access permissions for shared resources
-  const sharedResourceAccessMap = new Map<string, string>();
+  let sharedResourceAccessMap = new Map<string, string>();
   if (sharedResources.length > 0) {
     const accessRecords = await drizzle.select({
       resourceId: resourceAccess.resourceId,
@@ -79,9 +86,7 @@ export async function listResourcesForWorkspace(
         inArray(resourceAccess.resourceId, sharedResources.map(r => r.id)),
       ))
       .all();
-    for (const record of accessRecords) {
-      sharedResourceAccessMap.set(record.resourceId, record.permission);
-    }
+    sharedResourceAccessMap = buildAccessMap(accessRecords);
   }
 
   const ownedWithLevel = ownedResources.map((r) => ({
@@ -102,11 +107,7 @@ export async function listResourcesForWorkspace(
 
 export async function listResourcesForUser(db: D1Database, userId: string) {
   const drizzle = getDb(db);
-  const membershipIds = await drizzle.select({ accountId: accountMemberships.accountId })
-    .from(accountMemberships)
-    .where(eq(accountMemberships.memberId, userId))
-    .all();
-  const accessibleAccountIds = Array.from(new Set([userId, ...membershipIds.map((m) => m.accountId)]));
+  const accessibleAccountIds = await resolveAccessibleAccountIds(db, userId);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(eq(resources.ownerAccountId, userId))
@@ -119,10 +120,7 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
     .where(inArray(resourceAccess.accountId, accessibleAccountIds))
     .all();
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
-  const accessMap = new Map<string, string>();
-  for (const grant of accessGrants) {
-    accessMap.set(grant.resourceId, grant.permission);
-  }
+  const accessMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<typeof resources.$inferSelect> = [];
   if (sharedResourceIds.length > 0) {
@@ -153,11 +151,7 @@ export async function listResourcesByType(
   resourceType: ResourceType
 ) {
   const drizzle = getDb(db);
-  const membershipIds = await drizzle.select({ accountId: accountMemberships.accountId })
-    .from(accountMemberships)
-    .where(eq(accountMemberships.memberId, userId))
-    .all();
-  const accessibleAccountIds = Array.from(new Set([userId, ...membershipIds.map((m) => m.accountId)]));
+  const accessibleAccountIds = await resolveAccessibleAccountIds(db, userId);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(
@@ -173,10 +167,7 @@ export async function listResourcesByType(
     .where(inArray(resourceAccess.accountId, accessibleAccountIds))
     .all();
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
-  const accessPermMap = new Map<string, string>();
-  for (const grant of accessGrants) {
-    accessPermMap.set(grant.resourceId, grant.permission);
-  }
+  const accessPermMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<typeof resources.$inferSelect> = [];
   if (sharedResourceIds.length > 0) {
@@ -366,10 +357,7 @@ export async function getAvailableResourcesForWorkspace(
     .where(eq(resourceAccess.accountId, spaceId))
     .all();
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
-  const accessPermMap = new Map<string, string>();
-  for (const grant of accessGrants) {
-    accessPermMap.set(grant.resourceId, grant.permission);
-  }
+  const accessPermMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<typeof resources.$inferSelect> = [];
   if (sharedResourceIds.length > 0) {

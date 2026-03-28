@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icons } from '../../../lib/Icons';
 import type { Branch } from '../../../types';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
@@ -20,11 +20,9 @@ interface BranchWithCommit extends Branch {
 
 interface BranchesTabProps {
   repoId: string;
-  currentBranch: string;
-  onBranchChange?: (branch: string) => void;
 }
 
-export function BranchesTab({ repoId, currentBranch: _currentBranch, onBranchChange: _onBranchChange }: BranchesTabProps) {
+export function BranchesTab({ repoId }: BranchesTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();

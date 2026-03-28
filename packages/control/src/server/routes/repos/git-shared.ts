@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { getTreeFlattenLimitError, type RepoBucketBinding } from './base';
+import { getTreeFlattenLimitError, type RepoBucketBinding } from './routes';
 import { InternalError, PayloadTooLargeError } from '@takos/common/errors';
 import type * as gitStore from '../../../application/services/git-smart';
 import { logWarn } from '../../../shared/utils/logger';

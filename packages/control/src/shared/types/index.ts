@@ -10,6 +10,7 @@ export {
 } from './queue-messages';
 export type {
   WorkflowShell,
+  WorkflowStep,
   RunQueueMessage,
   IndexJobQueueMessage,
   WorkflowJobDefinition,
@@ -52,6 +53,7 @@ export type {
 } from './bindings';
 
 export type {
+  FetchBinding,
   DbEnv,
   StorageEnv,
   AiEnv,
@@ -61,6 +63,15 @@ export type {
   IndexerEnv,
   Env,
 } from './env';
+
+export type {
+  RoutingStore,
+  RoutingRecord,
+  RoutingTarget,
+  WeightedDeploymentTarget,
+  HttpRoute,
+  StoredHttpEndpoint,
+} from './routing';
 
 export type {
   PrincipalKind,

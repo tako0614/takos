@@ -1,3 +1,14 @@
+/**
+ * GitHub Actions workflow RunStatus for the web UI.
+ *
+ * This is the *Actions* domain status — intentionally different from the *Agent* RunStatus
+ * ('pending'|'queued'|'running'|'completed'|'failed'|'cancelled') in packages/control/src/shared/types/models.ts.
+ *
+ * Extends the engine definition (packages/actions-engine/src/types.ts) with 'waiting',
+ * which represents jobs blocked on concurrency groups or approval gates in the UI.
+ * The engine itself does not emit 'waiting' — it is derived by the web frontend when a
+ * queued run has not yet started any job execution.
+ */
 export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'cancelled' | 'waiting';
 export type RunConclusion = 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | null;
 

@@ -14,7 +14,7 @@ import type { ApiVariables } from './api';
 
 // Re-export individual route types for RPC client type inference
 import me from './me';
-import spacesBase from './spaces/base';
+import spacesBase from './spaces/routes';
 import spacesMembers from './spaces/members';
 import spacesRepos from './spaces/repositories';
 import spacesStorage from './spaces/storage';
@@ -24,7 +24,7 @@ import spacesStoreRegistry from './spaces/store-registry';
 import services from './workers';
 import resources from './resources';
 import threads from './threads';
-import runs from './runs/runs-routes';
+import runs from './runs/routes';
 import memories from './memories';
 import skills from './skills';
 import repos from './repos';
@@ -34,7 +34,7 @@ import setup from './setup';
 import sessions from './sessions';
 import agentTasks from './agent-tasks';
 import { profilesApi } from './profiles';
-import billing from './billing/billing-routes';
+import billing from './billing/routes';
 import notifications from './notifications';
 import publicShare from './public-share';
 import customDomains from './custom-domains';

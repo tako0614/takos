@@ -6,6 +6,7 @@
  */
 
 import { constantTimeEqual } from '../../../shared/utils/hash';
+import { bytesToHex } from '../../../shared/utils/encoding-utils';
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 
@@ -190,9 +191,7 @@ export async function verifyWebhookSignature(opts: {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
-  const expected = Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  const expected = bytesToHex(new Uint8Array(sig));
 
   // Constant-time comparison
   if (!signatures.some((s) => constantTimeEqual(s, expected))) {

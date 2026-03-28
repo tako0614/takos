@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext, ContainerStartFailure } from '@/tools/types';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ const mockRuntimeManager = {
 };
 
 vi.mock('@/services/sync', () => ({
-  createRuntimeSessionManager: vi.fn(() => mockRuntimeManager),
+  RuntimeSessionManager: vi.fn(() => mockRuntimeManager),
 }));
 
 vi.mock('@/services/execution/runtime', () => ({
@@ -112,7 +112,7 @@ import {
   containerStopHandler,
   createRepositoryHandler,
 } from '@/tools/builtin/container';
-import { createRuntimeSessionManager } from '@/services/sync';
+import { RuntimeSessionManager } from '@/services/sync';
 import { callRuntimeRequest } from '@/services/execution/runtime';
 
 // ---------------------------------------------------------------------------
@@ -230,7 +230,7 @@ describe('containerStartHandler', () => {
     expect(result).toContain('file_read');
     expect(result).toContain('container_commit');
     expect(ctx.setSessionId).toHaveBeenCalled();
-    expect(createRuntimeSessionManager).toHaveBeenCalled();
+    expect(RuntimeSessionManager).toHaveBeenCalled();
     expect(mockRuntimeManager.setRepositories).toHaveBeenCalled();
     expect(mockRuntimeManager.initSession).toHaveBeenCalled();
   });

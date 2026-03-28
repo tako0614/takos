@@ -13,6 +13,7 @@ import { inflateSync } from 'fflate';
 import { concatBytes } from '../core/sha1';
 import { putRawObject, getRawObject } from '../core/object-store';
 import { decodeObjectHeader } from '../core/object';
+import { bytesToHex } from '../../../../shared/utils/encoding-utils';
 
 const TEXT_ENCODER = new TextEncoder();
 
@@ -173,7 +174,7 @@ export async function readPackfileAsync(
 
     if (typeNum === OBJ_REF_DELTA) {
       const shaBytes = data.subarray(offset, offset + 20);
-      baseSha = Array.from(shaBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      baseSha = bytesToHex(shaBytes);
       offset += 20;
     } else if (typeNum === OBJ_OFS_DELTA) {
       byte = data[offset++];

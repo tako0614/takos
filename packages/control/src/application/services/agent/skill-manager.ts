@@ -25,16 +25,6 @@ export interface SkillState {
   activatedSkills: SkillContext[];
 }
 
-/** Create the initial (empty) skill state. */
-export function createSkillState(): SkillState {
-  return {
-    locale: 'en',
-    availableSkills: [],
-    selectedSkills: [],
-    activatedSkills: [],
-  };
-}
-
 /**
  * Resolve the skill plan for the current run, updating the provided skill state in place.
  * Returns the raw SkillLoadResult for further processing.

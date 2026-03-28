@@ -6,22 +6,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
     rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@${PNPM_VERSION}
 
+RUN groupadd -r takos && useradd -r -g takos -m takos
+
 WORKDIR /workspace
 
-COPY package.json ./
-COPY .npmrc ./
-COPY pnpm-workspace.yaml ./
-COPY pnpm-lock.yaml ./
-COPY tsconfig.base.json ./
-COPY packages ./packages
-COPY apps/control ./apps/control
-COPY scripts ./scripts
+COPY --chown=takos:takos package.json ./
+COPY --chown=takos:takos .npmrc ./
+COPY --chown=takos:takos pnpm-workspace.yaml ./
+COPY --chown=takos:takos pnpm-lock.yaml ./
+COPY --chown=takos:takos tsconfig.base.json ./
+COPY --chown=takos:takos packages ./packages
+COPY --chown=takos:takos apps/control ./apps/control
+COPY --chown=takos:takos scripts ./scripts
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @takos/common build
 RUN pnpm --filter @takos/actions-engine build
-RUN pnpm --filter @takos/cloudflare-compat build
 
+USER takos
 ENV NODE_ENV=production
 
 WORKDIR /workspace/apps/control

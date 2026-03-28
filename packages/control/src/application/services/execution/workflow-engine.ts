@@ -13,8 +13,8 @@ import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../sh
 export type {
   WorkflowEngineConfig,
   StartRunOptions,
-  JobResult,
-  StepResult,
+  WorkflowJobResult,
+  WorkflowStepResult,
   WorkflowRunRecord,
 } from './workflow-engine-types';
 
@@ -22,7 +22,7 @@ import type {
   WorkflowEngineConfig,
   StartRunOptions,
   WorkflowRunRecord,
-  JobResult,
+  WorkflowJobResult,
 } from './workflow-engine-types';
 
 import { startRun, cancelRun, enqueueJob } from './workflow-run-lifecycle';
@@ -42,7 +42,7 @@ export interface WorkflowEngine {
     env: Record<string, string>;
     secretIds: string[];
   }): Promise<void>;
-  onJobComplete(jobId: string, result: JobResult): Promise<void>;
+  onJobComplete(jobId: string, result: WorkflowJobResult): Promise<void>;
   cancelRun(runId: string): Promise<void>;
   onJobStart(jobId: string, runnerId?: string, runnerName?: string): Promise<void>;
   updateStepStatus(
@@ -81,7 +81,7 @@ export function createWorkflowEngine(config: WorkflowEngineConfig): WorkflowEngi
       env: Record<string, string>;
       secretIds: string[];
     }) => enqueueJob(queue as Queue<WorkflowJobQueueMessage>, options),
-    onJobComplete: (jobId: string, result: JobResult) => onJobComplete(db, bucket, queue, jobId, result),
+    onJobComplete: (jobId: string, result: WorkflowJobResult) => onJobComplete(db, bucket, queue, jobId, result),
     cancelRun: (runId: string) => cancelRun(db, runId),
     onJobStart: (jobId: string, runnerId?: string, runnerName?: string) => onJobStart(db, jobId, runnerId, runnerName),
     updateStepStatus: (

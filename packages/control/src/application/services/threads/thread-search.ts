@@ -3,6 +3,7 @@ import { eq, and, ne, like, desc, asc, inArray } from 'drizzle-orm';
 import { queryRelevantThreadMessages, THREAD_MESSAGE_VECTOR_KIND } from '../agent';
 import type { Env, ThreadStatus } from '../../../shared/types';
 import { logWarn } from '../../../shared/utils/logger';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
 function buildSnippet(
   content: string,
@@ -50,7 +51,7 @@ export async function searchSpaceThreads(options: {
 
   if ((type === 'semantic' || type === 'all') && semanticAvailable) {
     try {
-      const embed = await env.AI!.run('@cf/baai/bge-base-en-v1.5', { text: [query] }) as { data: number[][] };
+      const embed = await env.AI!.run(EMBEDDING_MODEL, { text: [query] }) as { data: number[][] };
       const queryEmbedding = embed?.data?.[0];
       if (queryEmbedding) {
         const search = await env.VECTORIZE!.query(queryEmbedding, {

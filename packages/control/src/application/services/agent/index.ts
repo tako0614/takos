@@ -10,16 +10,16 @@ export type {
 } from './types';
 export { AgentRunner, executeRun } from './runner';
 export { D1CheckpointSaver } from './langgraph-agent';
-export type { ModelProvider, ModelOption, AgentTier, SupportedModelId } from './model-catalog';
+export type { ModelProvider, ModelOption, SupportedModelId } from './model-catalog';
 export {
   OPENAI_MODELS,
   SUPPORTED_MODEL_IDS,
   DEFAULT_MODEL_ID,
+  MODEL_TOKEN_LIMITS,
   normalizeModelId,
   getModelProvider,
-  TIER_CONFIG,
-  getTierFromModel,
-  getContextWindowForModel,
+  getModelTokenLimit,
+  resolveHistoryTokenBudget,
 } from './model-catalog';
 export type { RetrievedThreadMessage } from './thread-context';
 export {

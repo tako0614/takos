@@ -1,7 +1,7 @@
 import type { AgentMessage } from './types';
 
 export const PRODUCT_HINTS = ['takos', 'yurucommu', 'roadtome'] as const;
-export type ProductHint = typeof PRODUCT_HINTS[number];
+type ProductHint = typeof PRODUCT_HINTS[number];
 
 export type DelegationLocale = 'ja' | 'en';
 
@@ -21,7 +21,7 @@ export type DelegationPacket = {
   thread_key_points: string[];
 };
 
-export type DelegationPacketObservability = {
+type DelegationPacketObservability = {
   explicit_field_count: number;
   inferred_field_count: number;
   has_thread_summary: boolean;

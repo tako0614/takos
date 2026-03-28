@@ -53,8 +53,8 @@ export {
 // --- Encoding ---
 
 export {
+  bytesToHex,
   base64UrlEncode,
-  base64UrlDecode,
 } from './encoding-utils';
 
 // --- Cryptography ---

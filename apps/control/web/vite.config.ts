@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
     root: resolve(__dirname),
     resolve: {
       dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
+      alias: {
+        '@takos/control-shared/types': resolve(__dirname, '../../../packages/control/src/shared/types/index.ts'),
+      },
     },
     build: {
       outDir: resolve(__dirname, '../../dist'),
@@ -24,6 +27,8 @@ export default defineConfig(({ mode }) => {
       minify: isDebugBuild ? false : 'esbuild',
     },
     server: {
+      // Port 8787 must match DEFAULT_LOCAL_PORTS.web in
+      // packages/control/src/local-platform/runtime-types.ts
       proxy: {
         '/auth': 'http://localhost:8787',
         '/me': 'http://localhost:8787',

@@ -5,16 +5,12 @@ import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
-  getWorkerForUser: vi.fn(),
-  getWorkerForUserWithRole: vi.fn(),
   getServiceForUser: vi.fn(),
   getServiceForUserWithRole: vi.fn(),
   createDeploymentService: vi.fn(),
 }));
 
 vi.mock('@/services/platform/workers', () => ({
-  getWorkerForUser: mocks.getWorkerForUser,
-  getWorkerForUserWithRole: mocks.getWorkerForUserWithRole,
   getServiceForUser: mocks.getServiceForUser,
   getServiceForUserWithRole: mocks.getServiceForUserWithRole,
 }));

@@ -1,10 +1,10 @@
-import type { StepResult } from './executor.js';
+import type { ExecutorStepResult } from './executor.js';
 
 /**
  * Append a step result's stdout/stderr to accumulator arrays.
  */
 export function appendOutput(
-  result: StepResult,
+  result: ExecutorStepResult,
   stdoutParts: string[],
   stderrParts: string[]
 ): void {
@@ -13,14 +13,14 @@ export function appendOutput(
 }
 
 /**
- * Build a combined StepResult from accumulated stdout/stderr parts.
+ * Build a combined ExecutorStepResult from accumulated stdout/stderr parts.
  */
 export function buildCombinedResult(
   stdoutParts: string[],
   stderrParts: string[],
   outputs: Record<string, string>,
   conclusion: 'success' | 'failure'
-): StepResult {
+): ExecutorStepResult {
   return {
     exitCode: conclusion === 'success' ? 0 : 1,
     stdout: stdoutParts.join('\n').trimEnd(),

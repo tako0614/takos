@@ -1,5 +1,5 @@
 import type { ToolHandler } from '../../../types';
-import { createRuntimeSessionManager } from '../../../../services/sync';
+import { RuntimeSessionManager } from '../../../../services/sync';
 import { generateId } from '../../../../../shared/utils';
 import { getDb, sessions, sessionRepos, repositories, runs } from '../../../../../infra/db';
 import { eq, and, asc, inArray } from 'drizzle-orm';
@@ -193,7 +193,7 @@ export const containerStartHandler: ToolHandler = async (args, context) => {
     await db.update(runs).set({ sessionId: newSessionId })
       .where(eq(runs.id, context.runId));
 
-    const runtimeManager = createRuntimeSessionManager(
+    const runtimeManager = new RuntimeSessionManager(
       context.env,
       context.db,
       context.storage,

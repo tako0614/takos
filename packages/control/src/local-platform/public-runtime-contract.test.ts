@@ -19,7 +19,6 @@ describe('local public runtime contract', () => {
   it('keeps bootstrap and package runtime exports free of loader registration and shim imports', async () => {
     const bootstrap = await read('local-platform/bootstrap.ts', sourcePackageRoot);
     const sourceRuntime = await read('local-platform/runtime.ts', sourcePackageRoot);
-    const packageBootstrap = await read('src/bootstrap.ts', packageRoot);
     const packageRuntime = await read('src/runtime.ts', packageRoot);
     const packageTransport = await read('src/transport.ts', packageRoot);
     const packageWeb = await read('src/web.ts', packageRoot);
@@ -33,7 +32,6 @@ describe('local public runtime contract', () => {
     for (const source of [
       bootstrap,
       sourceRuntime,
-      packageBootstrap,
       packageRuntime,
       packageWeb,
       packageDispatch,

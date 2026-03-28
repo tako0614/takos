@@ -168,7 +168,7 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
     name: 'workers-dispatch',
     async deploy(input) {
       if (input.wasmContent) {
-        await wfp.createWorkerWithWasm(
+        await wfp.workers.createWorkerWithWasm(
           input.artifactRef,
           input.bundleContent || '',
           input.wasmContent,
@@ -189,7 +189,7 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
         return;
       }
 
-      await wfp.createWorker({
+      await wfp.workers.createWorker({
         workerName: input.artifactRef,
         workerScript: input.bundleContent || '',
         bindings: input.bindings,
@@ -199,13 +199,13 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
       });
     },
     async assertRollbackTarget(artifactRef) {
-      const exists = await wfp.workerExists(artifactRef);
+      const exists = await wfp.workers.workerExists(artifactRef);
       if (!exists) {
         throw new Error(`Rollback target artifact not found in WFP: ${artifactRef}`);
       }
     },
     async cleanupDeploymentArtifact(artifactRef) {
-      await wfp.deleteWorker(artifactRef);
+      await wfp.workers.deleteWorker(artifactRef);
     },
   };
 }

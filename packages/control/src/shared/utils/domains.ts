@@ -1,3 +1,5 @@
+import { bytesToHex } from './encoding-utils';
+
 const VERIFICATION_TOKEN_LENGTH = 32;
 
 /** Byte length of a generated domain ID (produces a 32-char hex string). */
@@ -15,13 +17,13 @@ const MIN_DOMAIN_LABELS = 2;
 export function generateVerificationToken(): string {
   const buffer = new Uint8Array(VERIFICATION_TOKEN_LENGTH);
   crypto.getRandomValues(buffer);
-  return Array.from(buffer).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(buffer);
 }
 
 export function generateDomainId(): string {
   const buffer = new Uint8Array(DOMAIN_ID_BYTE_LENGTH);
   crypto.getRandomValues(buffer);
-  return 'dom_' + Array.from(buffer).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return 'dom_' + bytesToHex(buffer);
 }
 
 export function isValidDomain(domain: string): boolean {

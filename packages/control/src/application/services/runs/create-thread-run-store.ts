@@ -10,7 +10,7 @@ import {
   type D1CountRow,
   type RunHierarchyNode,
   type SpaceModelLookup,
-} from './shared';
+} from './run-serialization';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
 const TOP_LEVEL_RUN_RATE_LIMIT = {

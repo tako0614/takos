@@ -1,58 +1,71 @@
 import type {
-  Ai as CompatAi,
-  D1Database as CompatD1Database,
-  D1PreparedStatement as CompatD1PreparedStatement,
-  D1Result as CompatD1Result,
-  ExecutionContext as CompatExecutionContext,
-  Fetcher as CompatFetcher,
-  KVNamespace as CompatKVNamespace,
-  MessageBatch as CompatMessageBatch,
-  Queue as CompatQueue,
-  R2Bucket as CompatR2Bucket,
-  R2Object as CompatR2Object,
-  R2ObjectBody as CompatR2ObjectBody,
-  ScheduledController as CompatScheduledController,
-  ScheduledEvent as CompatScheduledEvent,
-  VectorizeIndex as CompatVectorizeIndex,
-} from '@takos/cloudflare-compat';
+  Ai as CfAi,
+  D1Database as CfD1Database,
+  D1PreparedStatement as CfD1PreparedStatement,
+  D1Result as CfD1Result,
+  Fetcher as CfFetcher,
+  KVNamespace as CfKVNamespace,
+  MessageBatch as CfMessageBatch,
+  Queue as CfQueue,
+  R2Bucket as CfR2Bucket,
+  R2Object as CfR2Object,
+  R2ObjectBody as CfR2ObjectBody,
+  ScheduledController as CfScheduledController,
+  ScheduledEvent as CfScheduledEvent,
+  VectorizeIndex as CfVectorizeIndex,
+} from '@cloudflare/workers-types';
+import type { ExecutionContext as CfExecutionContext } from 'hono';
 
-// Semantic binding aliases used throughout the codebase.
-export type SqlDatabaseBinding = CompatD1Database;
-export type SqlPreparedStatementBinding = CompatD1PreparedStatement;
-export type SqlResultBinding<T = unknown> = CompatD1Result<T>;
-export type KvStoreBinding = CompatKVNamespace;
-export type DurableObjectStubBinding<T = unknown> = {
+// ---------------------------------------------------------------------------
+// Cloudflare-idiomatic exports (canonical names matching the CF platform API).
+// These are the primary definitions; semantic aliases below reference them.
+// ---------------------------------------------------------------------------
+
+export type Ai = CfAi;
+export type D1Database = CfD1Database;
+export type D1PreparedStatement = CfD1PreparedStatement;
+export type D1Result<T = unknown> = CfD1Result<T>;
+export type ExecutionContext = CfExecutionContext;
+export type Fetcher = CfFetcher;
+export type KVNamespace = CfKVNamespace;
+export type MessageBatch<T = unknown> = CfMessageBatch<T>;
+export type Queue<T = unknown> = CfQueue<T>;
+export type R2Bucket = CfR2Bucket;
+export type R2Object = CfR2Object;
+export type R2ObjectBody = CfR2ObjectBody;
+export type ScheduledEvent = CfScheduledEvent;
+export type VectorizeIndex = CfVectorizeIndex;
+
+// ---------------------------------------------------------------------------
+// Durable Object structural types (no direct compat equivalent).
+// ---------------------------------------------------------------------------
+
+export type DurableObjectStub<T = unknown> = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
-export type DurableNamespaceBinding<T = unknown> = {
+export type DurableObjectNamespace<T = unknown> = {
   idFromName(name: string): unknown;
-  get(id: unknown): DurableObjectStubBinding<T>;
-  getByName?(name: string): DurableObjectStubBinding<T>;
+  get(id: unknown): DurableObjectStub<T>;
+  getByName?(name: string): DurableObjectStub<T>;
 };
-export type ObjectStoreBinding = CompatR2Bucket;
-export type AiBinding = CompatAi;
-export type QueueBinding<T = unknown> = CompatQueue<T>;
-export type QueueMessageBatch<T = unknown> = CompatMessageBatch<T>;
-export type VectorIndexBinding = CompatVectorizeIndex;
-export type ServiceBindingFetcher = CompatFetcher;
-export type PlatformExecutionContext = CompatExecutionContext;
-export type PlatformScheduledEvent = CompatScheduledEvent;
-export type PlatformScheduledController = CompatScheduledController;
 
-// Cloudflare-idiomatic re-exports so canonical modules can use familiar names.
-export type D1Database = CompatD1Database;
-export type D1PreparedStatement = CompatD1PreparedStatement;
-export type D1Result<T = unknown> = CompatD1Result<T>;
-export type KVNamespace = CompatKVNamespace;
-export type DurableObjectNamespace<T = unknown> = DurableNamespaceBinding<T>;
-export type DurableObjectStub<T = unknown> = DurableObjectStubBinding<T>;
-export type R2Bucket = CompatR2Bucket;
-export type R2Object = CompatR2Object;
-export type R2ObjectBody = CompatR2ObjectBody;
-export type Fetcher = CompatFetcher;
-export type MessageBatch<T = unknown> = CompatMessageBatch<T>;
-export type Queue<T = unknown> = CompatQueue<T>;
-export type ExecutionContext = CompatExecutionContext;
-export type ScheduledEvent = CompatScheduledEvent;
-export type VectorizeIndex = CompatVectorizeIndex;
-export type Ai = CompatAi;
+// ---------------------------------------------------------------------------
+// Semantic aliases used in the platform / infrastructure layer.
+// Each resolves to the canonical CF-idiomatic type above.
+// ---------------------------------------------------------------------------
+
+export type SqlDatabaseBinding = D1Database;
+export type SqlPreparedStatementBinding = D1PreparedStatement;
+export type SqlResultBinding<T = unknown> = D1Result<T>;
+export type KvStoreBinding = KVNamespace;
+export type DurableObjectStubBinding<T = unknown> = DurableObjectStub<T>;
+export type DurableNamespaceBinding<T = unknown> = DurableObjectNamespace<T>;
+export type ObjectStoreBinding = R2Bucket;
+export type AiBinding = Ai;
+export type QueueBinding<T = unknown> = Queue<T>;
+export type QueueMessageBatch<T = unknown> = MessageBatch<T>;
+export type VectorIndexBinding = VectorizeIndex;
+export type ServiceBindingFetcher = Fetcher;
+export type PlatformExecutionContext = ExecutionContext;
+export type PlatformScheduledEvent = ScheduledEvent;
+export type PlatformScheduledController = CfScheduledController;

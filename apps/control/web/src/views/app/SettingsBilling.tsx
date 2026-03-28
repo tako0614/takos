@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
 import { Button } from '../../components/ui';

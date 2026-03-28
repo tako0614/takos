@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 import type { ContainerStartFailure, ToolContext } from '@/tools/types';
 
@@ -72,7 +72,7 @@ vi.mock('@/db', async (importOriginal) => {
 });
 
 vi.mock('@/services/sync', () => ({
-  createRuntimeSessionManager: vi.fn(() => mockRuntimeManager),
+  RuntimeSessionManager: vi.fn(() => mockRuntimeManager),
 }));
 
 vi.mock('@/utils', () => ({

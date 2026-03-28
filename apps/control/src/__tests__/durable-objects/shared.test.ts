@@ -5,7 +5,7 @@ import {
   parseEventId,
   RING_BUFFER_SIZE,
   type RingBufferEvent,
-} from '@/durable-objects/shared';
+} from '@/durable-objects/do-header-utils';
 
 describe('parseEventId', () => {
   it('parses positive numbers', () => {

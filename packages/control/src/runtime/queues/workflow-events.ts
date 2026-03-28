@@ -3,6 +3,8 @@ import { logWarn } from '../../shared/utils/logger';
 import type { WorkflowQueueEnv, WorkflowEventType, WorkflowEventData } from './workflow-types';
 import { asDurableObjectFetcher } from './workflow-types';
 
+const EVENT_FETCH_TIMEOUT_MS = 5_000;
+
 // ---------------------------------------------------------------------------
 // Event emission
 // ---------------------------------------------------------------------------
@@ -18,7 +20,7 @@ export async function emitWorkflowEvent(
     const notifierFetcher = asDurableObjectFetcher(notifierStub);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), EVENT_FETCH_TIMEOUT_MS);
     try {
       const payload = buildRunNotifierEmitPayload(runId, type, data);
       const request = buildRunNotifierEmitRequest(payload, controller.signal);

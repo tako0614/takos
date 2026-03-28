@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RateLimiterDO } from '@/durable-objects/rate-limiter';
 
 // ---------------------------------------------------------------------------
@@ -421,6 +421,14 @@ describe('RateLimiterDO', () => {
   });
 
   describe('constructor hydration', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('restores data from storage on construction', async () => {
       const storage = createMockStorage();
       storage._store.set('data', {
@@ -449,7 +457,7 @@ describe('RateLimiterDO', () => {
       new RateLimiterDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       expect(storage.setAlarm).toHaveBeenCalled();
     });
@@ -463,7 +471,7 @@ describe('RateLimiterDO', () => {
       new RateLimiterDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       // setAlarm should not have been called since one already exists
       expect(storage.setAlarm).not.toHaveBeenCalled();

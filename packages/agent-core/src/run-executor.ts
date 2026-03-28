@@ -13,6 +13,14 @@ import { ControlRpcClient, createStaticControlRpcTokenSource } from './control-r
 // Pure functions that don't depend on takos-control internals.
 // ---------------------------------------------------------------------------
 
+// NOTE: Agent RunStatus — intentionally duplicated from @takos/control shared/types/models.ts.
+// @takos/agent-core has no dependency on @takos/control, so the type is redefined here to
+// keep this package self-contained. If you change the canonical definition in
+// packages/control/src/shared/types/models.ts, update this copy to match.
+// See also: takos-computer/packages/computer-core/src/shared/types.ts (another copy).
+//
+// This is NOT the same as the GitHub Actions RunStatus ('queued'|'in_progress'|'completed'|'cancelled')
+// defined in packages/actions-engine/src/types.ts — those are different domain concepts.
 export type RunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 /**

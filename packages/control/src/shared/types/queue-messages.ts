@@ -45,6 +45,20 @@ export function isValidIndexJobQueueMessage(msg: unknown): msg is IndexJobQueueM
   );
 }
 
+export interface WorkflowStep {
+  id?: string;
+  name?: string;
+  uses?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+  env?: Record<string, string>;
+  if?: string;
+  shell?: WorkflowShell;
+  'working-directory'?: string;
+  'continue-on-error'?: boolean;
+  'timeout-minutes'?: number;
+}
+
 export interface WorkflowJobDefinition {
   name?: string;
   'runs-on': string | string[];
@@ -57,19 +71,7 @@ export interface WorkflowJobDefinition {
       'working-directory'?: string;
     };
   };
-  steps: Array<{
-    id?: string;
-    name?: string;
-    uses?: string;
-    run?: string;
-    with?: Record<string, unknown>;
-    env?: Record<string, string>;
-    if?: string;
-    shell?: WorkflowShell;
-    'working-directory'?: string;
-    'continue-on-error'?: boolean;
-    'timeout-minutes'?: number;
-  }>;
+  steps: WorkflowStep[];
   outputs?: Record<string, string>;
   'timeout-minutes'?: number;
   'continue-on-error'?: boolean;

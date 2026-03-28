@@ -15,8 +15,8 @@ import type { Env, WorkflowJobQueueMessage } from '../../../shared/types';
 import * as gitStore from '../git-smart';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
-type RepoBucketBinding = NonNullable<Env['GIT_OBJECTS']>;
-type GitBucket = Parameters<typeof gitStore.getCommitData>[0];
+import { toGitBucket } from '../../../server/routes/repos/routes';
+import type { GitBucket } from '../../../server/routes/repos/routes';
 
 type WorkflowLoadResult =
   | { ok: true; workflow: Workflow }
@@ -25,10 +25,6 @@ type WorkflowLoadResult =
 type WorkflowBlobResult =
   | { ok: true; commitSha: string; content: string }
   | { ok: false; errorMessage: string };
-
-function toGitBucket(bucket: RepoBucketBinding): GitBucket {
-  return bucket as unknown as GitBucket;
-}
 
 function castGitBucket<T>(bucket: GitBucket): T {
   return bucket as unknown as T;

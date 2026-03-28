@@ -58,7 +58,7 @@ import {
   completeOperation,
   cleanupStaleOperations,
 } from '@/tools/idempotency';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 
 // ---------------------------------------------------------------------------
 // Tests

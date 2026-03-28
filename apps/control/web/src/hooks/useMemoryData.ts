@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useI18n } from '../store/i18n';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 import { useConfirmDialog } from '../store/confirm-dialog';
 import type { Memory, Reminder } from '../types';
 
@@ -38,6 +38,7 @@ export interface UseMemoryDataReturn {
   memories: Memory[];
   reminders: Reminder[];
   loading: boolean;
+  error: string | null;
   fetchMemories: () => Promise<void>;
   fetchReminders: () => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
@@ -65,6 +66,9 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const memoriesSeqRef = useRef(0);
+  const remindersSeqRef = useRef(0);
 
   const [memoryForm, setMemoryForm] = useState<MemoryFormState>({
     content: '',
@@ -82,28 +86,41 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
   });
 
   const fetchMemories = useCallback(async () => {
+    const seq = ++memoriesSeqRef.current;
     setLoading(true);
+    setError(null);
     try {
       const res = await rpc.spaces[':spaceId'].memories.$get({
         param: { spaceId },
       });
+      if (seq !== memoriesSeqRef.current) return;
       const data = await rpcJson<{ memories: Memory[] }>(res);
+      if (seq !== memoriesSeqRef.current) return;
       setMemories(data.memories || []);
-    } catch {
+    } catch (err) {
+      if (seq !== memoriesSeqRef.current) return;
+      setError(err instanceof Error ? err.message : 'Failed to fetch memories');
       setMemories([]);
     } finally {
-      setLoading(false);
+      if (seq === memoriesSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [spaceId]);
 
   const fetchReminders = useCallback(async () => {
+    const seq = ++remindersSeqRef.current;
     try {
       const res = await rpc.spaces[':spaceId'].reminders.$get({
         param: { spaceId },
       });
+      if (seq !== remindersSeqRef.current) return;
       const data = await rpcJson<{ reminders: Reminder[] }>(res);
+      if (seq !== remindersSeqRef.current) return;
       setReminders(data.reminders || []);
-    } catch {
+    } catch (err) {
+      if (seq !== remindersSeqRef.current) return;
+      setError(err instanceof Error ? err.message : 'Failed to fetch reminders');
       setReminders([]);
     }
   }, [spaceId]);
@@ -272,6 +289,7 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     memories,
     reminders,
     loading,
+    error,
     fetchMemories,
     fetchReminders,
     deleteMemory,

@@ -5,11 +5,11 @@ import { createNotification } from '../../../application/services/notifications/
 import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { NotFoundError, AuthenticationError, AuthorizationError, BadRequestError } from '@takos/common/errors';
-import { getUserByUsername, getUserPrivacySettings, getUserStats, isMutedBy } from './shared';
+import { getUserByUsername, getUserPrivacySettings, getUserStats, isMutedBy } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { accountFollows, accountFollowRequests, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
-import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './helpers';
+import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-helpers';
 import type { FollowUserResponse, FollowRequestResponse } from './types';
 
 const followListQuerySchema = z.object({

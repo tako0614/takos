@@ -6,14 +6,13 @@
  * - tokenizer.ts: Token types and tokenization logic
  * - evaluator.ts: Expression parsing and evaluation
  */
+import { MAX_EXPRESSION_SIZE } from '../constants.js';
 import type { ExecutionContext } from '../types.js';
 import { ExpressionError, tokenize } from './tokenizer.js';
 import { ExpressionEvaluator } from './evaluator.js';
 
 // Re-export for consumers that import from this module
 export { ExpressionError } from './tokenizer.js';
-
-const MAX_EXPRESSION_SIZE = 64 * 1024;
 
 /**
  * Extract expression content from ${{ }} wrapper.

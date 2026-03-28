@@ -4,13 +4,13 @@ import { eq, and } from 'drizzle-orm';
 import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions';
 import * as gitStore from '../../../application/services/git-smart';
 import {
-  createRuntimeSessionManager,
+  RuntimeSessionManager,
   type SessionInitResult,
 } from '../../../application/services/sync';
 import { requireSpaceAccess } from '../shared/route-auth';
 import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
-import { toSessionSnakeCase } from './shared';
-import type { SessionContext } from './shared';
+import { toSessionSnakeCase } from './session-mappers';
+import type { SessionContext } from './session-mappers';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from '@takos/common/errors';
 import {
@@ -107,7 +107,7 @@ export async function startSession(
 
   let runtimeInit: SessionInitResult | null = null;
   try {
-    const runtimeManager = createRuntimeSessionManager(
+    const runtimeManager = new RuntimeSessionManager(
       runtimeSessionEnv,
       dbBinding,
       runtimeSessionEnv.GIT_OBJECTS || runtimeSessionEnv.TENANT_SOURCE,
@@ -169,7 +169,7 @@ export async function stopSession(
     throw new BadRequestError('Session is not running');
   }
 
-  type GitSyncResult = Awaited<ReturnType<ReturnType<typeof createRuntimeSessionManager>['syncToGit']>>;
+  type GitSyncResult = Awaited<ReturnType<RuntimeSessionManager['syncToGit']>>;
   let gitResult: GitSyncResult | null = null;
 
   if (!session.repo_id) {
@@ -193,7 +193,7 @@ export async function stopSession(
   }
 
   try {
-    const runtimeManager = createRuntimeSessionManager(
+    const runtimeManager = new RuntimeSessionManager(
       runtimeSessionEnv,
       dbBinding,
       runtimeSessionEnv.GIT_OBJECTS || runtimeSessionEnv.TENANT_SOURCE,
@@ -320,7 +320,7 @@ export async function discardSession(c: SessionContext): Promise<Response> {
 
   if (runtimeSessionEnv) {
     try {
-      const runtimeManager = createRuntimeSessionManager(
+      const runtimeManager = new RuntimeSessionManager(
         runtimeSessionEnv,
         dbBinding,
         runtimeSessionEnv.GIT_OBJECTS || runtimeSessionEnv.TENANT_SOURCE,

@@ -10,6 +10,7 @@
  */
 
 import { constantTimeEqual } from '../../shared/utils/hash';
+import { bytesToHex } from '../../shared/utils/encoding-utils';
 
 /**
  * Token entry stored in the internal map.
@@ -68,9 +69,7 @@ export class ProxyTokenManager<T extends Record<string, unknown>> {
 
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
-    const token = Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    const token = bytesToHex(bytes);
 
     this.tokens.set(token, {
       info,

@@ -30,6 +30,11 @@ export {
 export { createLogger, type Logger, type LogLevel } from './logger.js';
 
 // =============================================================================
+// Abort Signal Utilities
+// =============================================================================
+export { throwIfAborted } from './abort.js';
+
+// =============================================================================
 // Error Handling
 // =============================================================================
 export {
@@ -53,6 +58,7 @@ export {
   isAppError,
   normalizeError,
   logError,
+  getErrorMessage,
   // Types
   type ErrorResponse,
   type ValidationErrorDetail,

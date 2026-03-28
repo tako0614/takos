@@ -90,6 +90,7 @@ export const agent = {
     saveModelSettings: 'モデル設定を保存',
     modelSettingsSaved: 'モデル設定を保存しました',
     modelSettingsFailed: 'モデル設定の保存に失敗しました',
+    tokenLimitLabel: '会話履歴トークン上限',
 
     // Skills / Agent tabs
     skills: 'スキル',

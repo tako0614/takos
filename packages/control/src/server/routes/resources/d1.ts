@@ -2,11 +2,10 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
 import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
-import { NotFoundError, AuthorizationError, InternalError, isAppError } from '@takos/common/errors';
 import { toIsoString } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
@@ -133,14 +132,14 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const tables = await wfp.listD1Tables(resource.cf_id);
+    const tables = await wfp.d1.listD1Tables(resource.cf_id);
 
     const tablesWithInfo = await Promise.all(
       tables.map(async (t: { name: string }) => {
         try {
           const [columns, count] = await Promise.all([
-            wfp.getD1TableInfo(resource.cf_id!, t.name),
-            wfp.getD1TableCount(resource.cf_id!, t.name),
+            wfp.d1.getD1TableInfo(resource.cf_id!, t.name),
+            wfp.d1.getD1TableCount(resource.cf_id!, t.name),
           ]);
           return {
             name: t.name,
@@ -187,9 +186,9 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     }
 
     const [columns, count, rowsResult] = await Promise.all([
-      wfp.getD1TableInfo(resource.cf_id, safeName),
-      wfp.getD1TableCount(resource.cf_id, safeName),
-      wfp.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
+      wfp.d1.getD1TableInfo(resource.cf_id, safeName),
+      wfp.d1.getD1TableCount(resource.cf_id, safeName),
+      wfp.d1.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
     ]);
 
     // Validate WFP response structure
@@ -240,7 +239,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const result = await wfp.runD1SQL(resource.cf_id, body.sql);
+    const result = await wfp.d1.runD1SQL(resource.cf_id, body.sql);
 
     return c.json({ result });
   } catch (err) {
@@ -267,12 +266,12 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     }
     const tableRows = body?.tables && body.tables.length > 0
       ? body.tables
-      : (await wfp.listD1Tables(resource.cf_id)).map((t: { name: string }) => t.name);
+      : (await wfp.d1.listD1Tables(resource.cf_id)).map((t: { name: string }) => t.name);
 
     const tables: Record<string, unknown[]> = {};
     for (const table of tableRows) {
       const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
-      const result = await wfp.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName}`);
+      const result = await wfp.d1.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName}`);
       // Validate WFP response structure
       if (!Array.isArray(result) || !result[0]?.results) {
         continue; // Skip tables with invalid response

@@ -1,15 +1,8 @@
 import type { Env } from '../../../shared/types';
 import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto';
+import { hexToBytes, bytesToHex, sha256Hex } from '../../../shared/utils/encoding-utils';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-}
 
 function parseSecretBytes(secret: string): Uint8Array {
   const normalized = secret.startsWith('0x') ? secret.slice(2) : secret;
@@ -28,16 +21,6 @@ function toBufferSource(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer as ArrayBuffer;
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  const bytes = new TextEncoder().encode(input);
-  const digestInput = new Uint8Array(bytes.byteLength);
-  digestInput.set(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', digestInput.buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 async function hmacSha256Hex(secret: string, input: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -47,9 +30,7 @@ async function hmacSha256Hex(secret: string, input: string): Promise<string> {
     ['sign']
   );
   const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  return bytesToHex(new Uint8Array(signature));
 }
 
 export function normalizeEnvName(name: string): string {
@@ -182,8 +163,6 @@ export async function fingerprintMatches(params: {
 export const MANAGED_COMMON_ENV_KEYS = new Set(['APP_BASE_URL', 'TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN']);
 export const RESERVED_SPACE_COMMON_ENV_KEYS = new Set(['TAKOS_API_URL', 'TAKOS_ACCESS_TOKEN']);
 
-/** @deprecated Use {@link RESERVED_SPACE_COMMON_ENV_KEYS} instead. */
-export const RESERVED_WORKSPACE_COMMON_ENV_KEYS = RESERVED_SPACE_COMMON_ENV_KEYS;
 
 export function normalizeCommonEnvName(name: string): string | null {
   try {
@@ -203,5 +182,3 @@ export function isReservedSpaceCommonEnvKey(name: string): boolean {
   return Boolean(normalized && RESERVED_SPACE_COMMON_ENV_KEYS.has(normalized));
 }
 
-/** @deprecated Use {@link isReservedSpaceCommonEnvKey} instead. */
-export const isReservedWorkspaceCommonEnvKey = isReservedSpaceCommonEnvKey;

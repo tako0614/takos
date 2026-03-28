@@ -66,7 +66,7 @@ vi.mock('@/db', async (importOriginal) => ({
   getDb: mocks.getDb,
 }));
 
-import resourcesBase from '@/routes/resources/base';
+import resourcesBase from '@/routes/resources/routes';
 
 const TEST_USER_ID = 'user-1';
 const TEST_TIMESTAMP = '2026-03-01T00:00:00.000Z';

@@ -2,12 +2,18 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { requireSpaceAccess, type BaseVariables } from './shared/route-auth';
-import { BadRequestError, NotFoundError, InternalError, isAppError } from '@takos/common/errors';
+import { NotFoundError, InternalError, isAppError } from '@takos/common/errors';
 import { createAppDeploymentService } from '../../application/services/platform/app-deployments';
 import { RolloutService } from '../../application/services/platform/rollout';
 import { zValidator } from './zod-validator';
 import { logError } from '../../shared/utils/logger';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
+
+function handleRouteError(error: unknown, context: string): never {
+  if (isAppError(error)) throw error;
+  logError(`${context} error`, error, { module: 'routes/app-deployments' });
+  throw new InternalError(`Failed to ${context}`);
+}
 
 const createAppDeploymentSchema = z.object({
   repo_id: z.string().min(1),
@@ -45,10 +51,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       });
       return c.json({ success: true, data: result }, 201);
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('App deployment create error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to deploy app');
+      handleRouteError(error, 'deploy app');
     }
   })
   .get('/spaces/:spaceId/app-deployments', async (c) => {
@@ -61,9 +64,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const deployments = await service.list(access.space.id);
       return c.json({ data: deployments });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('App deployment list error', error, { module: 'routes/app-deployments' });
-      throw new InternalError('Failed to list app deployments');
+      handleRouteError(error, 'list app deployments');
     }
   })
   .get('/spaces/:spaceId/app-deployments/:appDeploymentId', async (c) => {
@@ -78,9 +79,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       if (!deployment) throw new NotFoundError('App deployment');
       return c.json({ data: deployment });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('App deployment get error', error, { module: 'routes/app-deployments' });
-      throw new InternalError('Failed to get app deployment');
+      handleRouteError(error, 'get app deployment');
     }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollback', zValidator('json', rollbackSchema), async (c) => {
@@ -97,10 +96,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       });
       return c.json({ success: true, data: result });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('App deployment rollback error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to rollback app deployment');
+      handleRouteError(error, 'rollback app deployment');
     }
   })
   .get('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout', async (c) => {
@@ -114,9 +110,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const state = await rollout.getRolloutState(appDeploymentId);
       return c.json({ data: state });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('Rollout get error', error, { module: 'routes/app-deployments' });
-      throw new InternalError('Failed to get rollout state');
+      handleRouteError(error, 'get rollout state');
     }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause', async (c) => {
@@ -133,10 +127,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const state = await rollout.pauseRollout(appDeploymentId, hostname);
       return c.json({ success: true, data: state });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('Rollout pause error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to pause rollout');
+      handleRouteError(error, 'pause rollout');
     }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume', async (c) => {
@@ -153,10 +144,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const state = await rollout.resumeRollout(appDeploymentId, hostname);
       return c.json({ success: true, data: state });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('Rollout resume error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to resume rollout');
+      handleRouteError(error, 'resume rollout');
     }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort', async (c) => {
@@ -173,10 +161,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const state = await rollout.abortRollout(appDeploymentId, hostname);
       return c.json({ success: true, data: state });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('Rollout abort error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to abort rollout');
+      handleRouteError(error, 'abort rollout');
     }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote', async (c) => {
@@ -193,10 +178,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const state = await rollout.promoteRollout(appDeploymentId, hostname);
       return c.json({ success: true, data: state });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('Rollout promote error', error, { module: 'routes/app-deployments' });
-      if (error instanceof Error) throw new BadRequestError(error.message);
-      throw new InternalError('Failed to promote rollout');
+      handleRouteError(error, 'promote rollout');
     }
   })
   .delete('/spaces/:spaceId/app-deployments/:appDeploymentId', async (c) => {
@@ -212,9 +194,7 @@ const routes = new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       await service.remove(access.space.id, appDeploymentId);
       return c.json({ success: true });
     } catch (error) {
-      if (isAppError(error)) throw error;
-      logError('App deployment delete error', error, { module: 'routes/app-deployments' });
-      throw new InternalError('Failed to remove app deployment');
+      handleRouteError(error, 'remove app deployment');
     }
   });
 

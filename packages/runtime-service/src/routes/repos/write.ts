@@ -10,7 +10,7 @@ import {
   requireRepoParams,
 } from './repo-validation.js';
 import { isBoundaryViolationError } from '../../shared/errors.js';
-import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
+import { badRequest, forbidden, internalError } from '@takos/common/middleware/hono';
 import { ErrorCodes } from '@takos/common/errors';
 
 const app = new Hono();

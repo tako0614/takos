@@ -74,6 +74,15 @@ function escapeAttr(value: string): string {
 
 export { escapeHtml };
 
+/**
+ * Validate that a URL uses a safe scheme (http: or https: only).
+ * Rejects javascript:, data:, vbscript:, and any other dangerous schemes
+ * that could lead to XSS when used in href or src attributes.
+ */
+function isSafeUrl(url: URL): boolean {
+  return url.protocol === 'https:' || url.protocol === 'http:';
+}
+
 function resolveHomeLink(homeUrl?: string, homeLabel?: string): { href: string; label: string } {
   const fallback = { href: '/', label: 'ホーム' };
   if (!homeUrl) {
@@ -82,16 +91,19 @@ function resolveHomeLink(homeUrl?: string, homeLabel?: string): { href: string; 
 
   try {
     const parsed = new URL(homeUrl);
+    // XSS prevention: only allow http/https schemes.
+    // Reject javascript:, data:, vbscript:, etc.
+    if (!isSafeUrl(parsed)) {
+      return fallback;
+    }
     return {
       href: parsed.toString(),
       label: homeLabel?.trim() || parsed.host || fallback.label,
     };
   } catch {
-    // Malformed URL -- fall back to raw string values
-    return {
-      href: homeUrl,
-      label: homeLabel?.trim() || homeUrl,
-    };
+    // Malformed URL -- reject entirely instead of using the raw string,
+    // which could contain javascript: or other dangerous schemes.
+    return fallback;
   }
 }
 
@@ -214,6 +226,24 @@ document.getElementById('externalAuthPost')?.submit();
   });
 }
 
+/**
+ * Validate a client logo URI for use in an img src attribute.
+ * Only allows https: URLs to prevent XSS via javascript:, data:, or other
+ * dangerous URI schemes. Returns the escaped URL string or null if invalid.
+ */
+function safeLogoUri(uri: string | null): string | null {
+  if (!uri) return null;
+  try {
+    const parsed = new URL(uri);
+    // Only allow https: for logo images — no javascript:, data:, http:, etc.
+    // data: URIs could embed malicious SVGs with inline scripts.
+    if (parsed.protocol !== 'https:') return null;
+    return escapeAttr(parsed.toString());
+  } catch {
+    return null;
+  }
+}
+
 /** OAuth consent page */
 export function consentPage(opts: {
   clientName: string;
@@ -223,23 +253,27 @@ export function consentPage(opts: {
   resourceScopes: string[];
   hiddenFields: Record<string, string>;
 }): string {
-  const logo = opts.clientLogoUri
-    ? `<img src="${opts.clientLogoUri}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
+  const safeLogo = safeLogoUri(opts.clientLogoUri);
+  const logo = safeLogo
+    ? `<img src="${safeLogo}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
     : '';
 
+  const safeClientName = escapeHtml(opts.clientName);
+  const safeUserEmail = escapeHtml(opts.userEmail);
+
   const scopeItems = (items: string[]) =>
-    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${s}</div>`).join('');
+    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${escapeHtml(s)}</div>`).join('');
 
   const hiddenInputs = Object.entries(opts.hiddenFields)
-    .map(([name, value]) => `<input type="hidden" name="${name}" value="${value}">`)
+    .map(([name, value]) => `<input type="hidden" name="${escapeAttr(name)}" value="${escapeAttr(value)}">`)
     .join('\n    ');
 
-  return page(`${opts.clientName} を承認`, `
+  return page(`${safeClientName} を承認`, `
 <div class="card">
   ${logo}
-  <h1 style="font-size:18px">${opts.clientName}</h1>
-  <p style="color:#71717a;font-size:12px;margin:4px 0 16px">${opts.userEmail} でログイン中</p>
-  <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${opts.clientName}</strong> があなたのアカウントへのアクセスを要求しています</p>
+  <h1 style="font-size:18px">${safeClientName}</h1>
+  <p style="color:#71717a;font-size:12px;margin:4px 0 16px">${safeUserEmail} でログイン中</p>
+  <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${safeClientName}</strong> があなたのアカウントへのアクセスを要求しています</p>
   <div style="background:#09090b;border-radius:8px;padding:12px;margin-bottom:8px;text-align:left">
     ${opts.identityScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${scopeItems(opts.identityScopes)}` : ''}
     ${opts.resourceScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${scopeItems(opts.resourceScopes)}` : ''}
@@ -262,8 +296,9 @@ export function deviceCodeEntryPage(opts: {
   homeUrl?: string;
   homeLabel?: string;
 }): string {
-  const preset = opts.presetUserCode ?? '';
-  const msg = opts.message ? `<p class="message" style="color:#f59e0b">${opts.message}</p>` : '';
+  const safePreset = escapeAttr(opts.presetUserCode ?? '');
+  const safeUserEmail = escapeHtml(opts.userEmail);
+  const safeMsg = opts.message ? `<p class="message" style="color:#f59e0b">${escapeHtml(opts.message)}</p>` : '';
   const homeLink = resolveHomeLink(opts.homeUrl, opts.homeLabel);
   const safeHomeHref = escapeAttr(homeLink.href);
   const safeHomeLabel = escapeHtml(homeLink.label);
@@ -272,14 +307,14 @@ export function deviceCodeEntryPage(opts: {
 <div class="card">
   <div class="logo">🐙</div>
   <h1>デバイス認証</h1>
-  <p class="subtitle">${opts.userEmail} でログイン中</p>
+  <p class="subtitle">${safeUserEmail} でログイン中</p>
   <p class="message">デバイスに表示されたコードを入力してください。</p>
-  ${msg}
+  ${safeMsg}
   <form method="GET" action="/oauth/device" style="margin-top:16px;text-align:left">
     <label style="display:block;font-size:12px;color:#a1a1aa;margin-bottom:8px">コード</label>
     <input
       name="user_code"
-      value="${preset}"
+      value="${safePreset}"
       autocomplete="one-time-code"
       inputmode="latin"
       style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #27272a;background:#09090b;color:#fafafa;font-size:16px;letter-spacing:2px;text-transform:uppercase"
@@ -304,28 +339,35 @@ export function deviceConsentPage(opts: {
   identityScopes: string[];
   resourceScopes: string[];
 }): string {
-  const logo = opts.clientLogoUri
-    ? `<img src="${opts.clientLogoUri}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
+  const safeLogo = safeLogoUri(opts.clientLogoUri);
+  const logo = safeLogo
+    ? `<img src="${safeLogo}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
     : '';
 
-  const scopeItems = (items: string[]) =>
-    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${s}</div>`).join('');
+  const safeClientName = escapeHtml(opts.clientName);
+  const safeUserEmail = escapeHtml(opts.userEmail);
+  const safeUserCode = escapeHtml(opts.userCode);
+  const safeUserCodeAttr = escapeAttr(opts.userCode);
+  const safeCsrfTokenAttr = escapeAttr(opts.csrfToken);
 
-  return page(`${opts.clientName} を承認`, `
+  const scopeItems = (items: string[]) =>
+    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${escapeHtml(s)}</div>`).join('');
+
+  return page(`${safeClientName} を承認`, `
 <div class="card">
   ${logo}
-  <h1 style="font-size:18px">${opts.clientName}</h1>
-  <p style="color:#71717a;font-size:12px;margin:4px 0 16px">${opts.userEmail} でログイン中</p>
-  <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${opts.clientName}</strong> がデバイス認証を要求しています</p>
-  <p style="color:#71717a;font-size:12px;margin:-8px 0 16px">コード: <span style="color:#d4d4d8;letter-spacing:2px;text-transform:uppercase">${opts.userCode}</span></p>
+  <h1 style="font-size:18px">${safeClientName}</h1>
+  <p style="color:#71717a;font-size:12px;margin:4px 0 16px">${safeUserEmail} でログイン中</p>
+  <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${safeClientName}</strong> がデバイス認証を要求しています</p>
+  <p style="color:#71717a;font-size:12px;margin:-8px 0 16px">コード: <span style="color:#d4d4d8;letter-spacing:2px;text-transform:uppercase">${safeUserCode}</span></p>
   <div style="background:#09090b;border-radius:8px;padding:12px;margin-bottom:8px;text-align:left">
     ${opts.identityScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${scopeItems(opts.identityScopes)}` : ''}
     ${opts.resourceScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${scopeItems(opts.resourceScopes)}` : ''}
     ${(opts.identityScopes.length === 0 && opts.resourceScopes.length === 0) ? `<div style="font-size:13px;color:#a1a1aa">追加の権限はありません。</div>` : ''}
   </div>
   <form method="POST" action="/oauth/device">
-    <input type="hidden" name="user_code" value="${opts.userCode}">
-    <input type="hidden" name="csrf_token" value="${opts.csrfToken}">
+    <input type="hidden" name="user_code" value="${safeUserCodeAttr}">
+    <input type="hidden" name="csrf_token" value="${safeCsrfTokenAttr}">
     <div class="buttons">
       <button type="submit" name="action" value="deny" class="btn btn-deny">拒否</button>
       <button type="submit" name="action" value="allow" class="btn btn-allow">許可</button>
@@ -341,14 +383,16 @@ export function deviceResultPage(opts: {
   homeUrl?: string;
   homeLabel?: string;
 }): string {
+  const safeTitle = escapeHtml(opts.title);
+  const safeMessage = escapeHtml(opts.message);
   const homeLink = resolveHomeLink(opts.homeUrl, opts.homeLabel);
   const safeHomeHref = escapeAttr(homeLink.href);
   const safeHomeLabel = escapeHtml(homeLink.label);
-  return page(opts.title, `
+  return page(safeTitle, `
 <div class="card">
   <div class="logo">🐙</div>
-  <h1>${opts.title}</h1>
-  <p class="message">${opts.message}</p>
+  <h1>${safeTitle}</h1>
+  <p class="message">${safeMessage}</p>
   <div class="footer"><a href="${safeHomeHref}">${safeHomeLabel}</a></div>
 </div>`);
 }

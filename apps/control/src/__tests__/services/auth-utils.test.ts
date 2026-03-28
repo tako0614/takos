@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import {
   PASSWORD_PBKDF2_ITERATIONS,
   hashPassword,

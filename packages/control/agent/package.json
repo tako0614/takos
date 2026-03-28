@@ -2,6 +2,9 @@
   "name": "@takos/control-agent",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@takos/control-core": "workspace:*"
   },

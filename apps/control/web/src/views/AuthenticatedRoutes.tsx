@@ -142,7 +142,6 @@ export function AuthenticatedRoutes() {
           <ChatPage
             key={routeSpaceId ?? 'default'}
             spaces={spaces}
-            userSettings={userSettings}
             initialSpaceId={routeSpaceId}
             initialThreadId={route.threadId}
             initialRunId={route.runId}
@@ -203,7 +202,6 @@ export function AuthenticatedRoutes() {
                 setDeploySection(section);
                 navigate({ view: 'deploy', spaceId: deploySpaceId, deploySection: section });
               }}
-              onNavigateToRepo={(username, repoName) => navigate({ view: 'repo', username, repoName })}
               user={user}
               userSettings={userSettings}
               onSettingsChange={setUserSettings}
@@ -324,7 +322,6 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <AppsPage
-            spaceId={appsSpaceId}
             onNavigateToStore={() => navigate({ view: 'store', storeTab: 'discover' })}
           />
         </ErrorBoundary>

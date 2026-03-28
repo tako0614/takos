@@ -7,8 +7,8 @@ import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import { logError, logInfo } from '../../../shared/utils/logger';
 import { indexFile, runIndexJob } from './jobs';
-import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './shared';
-import { scheduleBackground } from './shared';
+import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './index-context';
+import { scheduleBackground } from './index-context';
 import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {

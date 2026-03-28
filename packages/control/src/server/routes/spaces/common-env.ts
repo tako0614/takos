@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { parseJsonBody, requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { createCommonEnvService } from '../../../application/services/common-env';
-import { buildCommonEnvActor } from '../common-env/common-env-handlers';
+import { buildCommonEnvActor } from '../common-env/handlers';
 import { logError } from '../../../shared/utils/logger';
 import { AppError, BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
 

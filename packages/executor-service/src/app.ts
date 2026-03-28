@@ -53,6 +53,8 @@ export function createExecutorServiceApp(options: ExecutorServiceOptions = {}) {
 
 export function startExecutorService(options: ExecutorServiceOptions = {}) {
   const port = options.port ?? parseInt(process.env.PORT ?? '8080', 10);
+  // 30 s grace period — longer than browser-service (15 s) because in-flight
+  // agent runs need time to reach a safe checkpoint before forced termination.
   const gracePeriodMs = options.shutdownGraceMs ?? parseInt(process.env.SHUTDOWN_GRACE_MS ?? '30000', 10);
   const { app, logger, concurrency, shutdownController, runtimeConfig } = createExecutorServiceApp(options);
 

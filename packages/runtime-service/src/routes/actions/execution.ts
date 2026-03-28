@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
-import { StepExecutor, type StepResult } from '../../runtime/actions/executor.js';
+import { StepExecutor, type ExecutorStepResult } from '../../runtime/actions/executor.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
 import { shouldBlockForSecretExposure, mightExposeSecrets } from '../../runtime/actions/secrets.js';
 import { pushLog } from '../../runtime/logging.js';
@@ -149,7 +149,7 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
       Math.min(requestedTimeoutMs, SANDBOX_LIMITS.maxExecutionTime, remainingBudgetMs)
     );
 
-    let result: StepResult;
+    let result: ExecutorStepResult;
 
     if (body.run) {
       // Block commands that would dump all environment variables (secrets included)

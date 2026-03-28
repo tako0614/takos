@@ -6,12 +6,15 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
+import {
+  MAX_EVALUATE_CALLS,
+  MAX_FROM_JSON_SIZE,
+  MAX_PARSE_ACCESS_DEPTH,
+} from '../constants.js';
 import type { ExecutionContext } from '../types.js';
 import { ExpressionError } from './tokenizer.js';
 import type { Token, TokenType } from './tokenizer.js';
 
-const MAX_EVALUATE_CALLS = 10_000;
-const MAX_PARSE_ACCESS_DEPTH = 128;
 const BLOCKED_PROPERTY_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const GLOB_PATTERN_CHARS = /[*?[\]]/;
 const REGEXP_META_CHARS = /[|\\{}()[\]^$+?.]/g;
@@ -484,7 +487,7 @@ export class ExpressionEvaluator {
   private fnFromJSON(args: unknown[]): unknown {
     const str = String(args[0]);
     // Limit input size to prevent OOM from attacker-controlled JSON strings
-    if (str.length > 1_048_576) { // 1MB
+    if (str.length > MAX_FROM_JSON_SIZE) {
       return null;
     }
     try {

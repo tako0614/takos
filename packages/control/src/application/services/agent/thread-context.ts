@@ -9,7 +9,7 @@ import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { AgentMessage } from './types';
 import { logWarn } from '../../../shared/utils/logger';
 
-const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
 export const THREAD_MESSAGE_VECTOR_KIND = 'thread_message';
 

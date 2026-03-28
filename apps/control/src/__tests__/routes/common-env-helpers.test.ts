@@ -9,7 +9,7 @@ vi.mock('@/services/common-env/audit', () => ({
   hashAuditIp: mocks.hashAuditIp,
 }));
 
-import { buildCommonEnvActor } from '@/routes/common-env/helpers';
+import { buildCommonEnvActor } from '@/routes/common-env/handlers';
 
 describe('buildCommonEnvActor', () => {
   beforeEach(() => {

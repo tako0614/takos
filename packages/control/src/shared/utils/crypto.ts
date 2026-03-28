@@ -1,3 +1,5 @@
+import { hexToBytes, bytesToBase64, base64ToBytes } from './encoding-utils';
+
 /** Number of PBKDF2 iterations for key derivation. */
 const PBKDF2_ITERATIONS = 100_000;
 
@@ -176,28 +178,4 @@ export function maskEnvVars(envVars: Record<string, string>): Record<string, str
   return masked;
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
 

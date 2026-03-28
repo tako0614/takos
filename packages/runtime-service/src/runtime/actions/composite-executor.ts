@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { isPathWithinBase } from '../paths.js';
 import { successResult } from './process-spawner.js';
-import type { StepResult, ActionContext } from './executor.js';
+import type { ExecutorStepResult, ActionContext } from './executor.js';
 import { appendOutput, buildCombinedResult } from './action-result-converter.js';
 import {
   type InterpolationContext,
@@ -111,14 +111,14 @@ export async function executeCompositeAction(
   timeout: number,
   outputs: Record<string, ActionOutputDefinition> | undefined,
   delegate: {
-    executeRun(command: string, timeoutMs?: number, options?: { shell?: string; workingDirectory?: string }): Promise<StepResult>;
-    executeAction(action: string, inputs: Record<string, unknown>, timeoutMs?: number, options?: { basePath?: string }): Promise<StepResult>;
+    executeRun(command: string, timeoutMs?: number, options?: { shell?: string; workingDirectory?: string }): Promise<ExecutorStepResult>;
+    executeAction(action: string, inputs: Record<string, unknown>, timeoutMs?: number, options?: { basePath?: string }): Promise<ExecutorStepResult>;
     getEnv(): Record<string, string>;
     setEnv(env: Record<string, string>): void;
     getWorkspacePath(): string;
     withTemporaryEnv<T>(tempEnv: Record<string, string>, fn: () => Promise<T>): Promise<T>;
   }
-): Promise<StepResult> {
+): Promise<ExecutorStepResult> {
   if (!runs.steps || !Array.isArray(runs.steps)) {
     return { exitCode: 1, stdout: '', stderr: 'Composite action missing "steps"', outputs: {}, conclusion: 'failure' };
   }

@@ -44,7 +44,7 @@ import {
   completeJobFailure,
 } from '@/queues/workflow-job-phases';
 import { createInitialState } from '@/queues/workflow-types';
-import type { JobContext, JobExecutionState } from '@/queues/workflow-types';
+import type { JobQueueContext, JobExecutionState } from '@/queues/workflow-types';
 import type { WorkflowJobQueueMessage } from '@/types';
 import { WORKFLOW_QUEUE_MESSAGE_VERSION } from '@/types';
 
@@ -121,7 +121,7 @@ function createMessage(overrides: Partial<WorkflowJobQueueMessage> = {}): Workfl
   };
 }
 
-function createJobContext(overrides: Partial<JobContext> = {}): JobContext {
+function createJobQueueContext(overrides: Partial<JobQueueContext> = {}): JobQueueContext {
   return {
     env: {
       DB: {} as any,
@@ -167,7 +167,7 @@ beforeEach(() => {
 
 describe('handleJobSkipped', () => {
   it('returns false when job has no if condition', async () => {
-    const ctx = createJobContext();
+    const ctx = createJobQueueContext();
     const state = createInitialState();
 
     const skipped = await handleJobSkipped(ctx, state);
@@ -176,7 +176,7 @@ describe('handleJobSkipped', () => {
   });
 
   it('returns false when condition evaluates to true', async () => {
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       message: createMessage({
         jobDefinition: {
           name: 'Build',
@@ -194,7 +194,7 @@ describe('handleJobSkipped', () => {
 
   it('returns true and marks job as skipped when condition is false', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -228,7 +228,7 @@ describe('handleJobSkipped', () => {
 
   it('skips job when always() is NOT the condition (unrecognized becomes false)', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -246,7 +246,7 @@ describe('handleJobSkipped', () => {
   });
 
   it('does not skip job when always() is condition', async () => {
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       message: createMessage({
         jobDefinition: {
           name: 'Build',
@@ -287,7 +287,7 @@ describe('executeStepLoop', () => {
       })
     );
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -320,7 +320,7 @@ describe('executeStepLoop', () => {
     });
     mocks.getDb.mockReturnValue(dbMock);
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
     });
     const state = createInitialState();
@@ -368,7 +368,7 @@ describe('executeStepLoop', () => {
       });
     });
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -421,7 +421,7 @@ describe('executeStepLoop', () => {
       });
     });
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -464,7 +464,7 @@ describe('executeStepLoop', () => {
       })
     );
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -507,7 +507,7 @@ describe('executeStepLoop', () => {
       })
     );
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -554,7 +554,7 @@ describe('executeStepLoop', () => {
       });
     });
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -585,7 +585,7 @@ describe('executeStepLoop', () => {
 describe('completeJobSuccess', () => {
   it('completes job with success conclusion', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({ engine: engine as any });
+    const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
     state.stepResults = [
       { stepNumber: 1, name: 'Build', status: 'completed', conclusion: 'success', outputs: {} },
@@ -603,7 +603,7 @@ describe('completeJobSuccess', () => {
 
   it('reports success when job has continue-on-error and conclusion is failure', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -627,7 +627,7 @@ describe('completeJobSuccess', () => {
 
   it('evaluates job outputs from step outputs', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -652,7 +652,7 @@ describe('completeJobSuccess', () => {
 
   it('handles expression evaluation errors gracefully', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -683,7 +683,7 @@ describe('completeJobSuccess', () => {
 describe('completeJobFailure', () => {
   it('sets job conclusion to failure and stores logs', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({ engine: engine as any });
+    const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     await completeJobFailure(ctx, state, new Error('build broke'));
@@ -698,7 +698,7 @@ describe('completeJobFailure', () => {
 
   it('marks unseen steps as skipped', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {
@@ -728,7 +728,7 @@ describe('completeJobFailure', () => {
 
   it('converts non-Error to string for error message', async () => {
     const engine = createEngine();
-    const ctx = createJobContext({ engine: engine as any });
+    const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     await completeJobFailure(ctx, state, 'string error');
@@ -740,7 +740,7 @@ describe('completeJobFailure', () => {
     const engine = createEngine();
     engine.storeJobLogs.mockRejectedValue(new Error('log storage failed'));
 
-    const ctx = createJobContext({ engine: engine as any });
+    const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     // Should not throw from storeJobLogs failure
@@ -753,7 +753,7 @@ describe('completeJobFailure', () => {
     const engine = createEngine();
     engine.onJobComplete.mockRejectedValue(new Error('db write failed'));
 
-    const ctx = createJobContext({ engine: engine as any });
+    const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     await expect(completeJobFailure(ctx, state, new Error('original'))).rejects.toThrow('db write failed');
@@ -763,7 +763,7 @@ describe('completeJobFailure', () => {
     const engine = createEngine();
     engine.updateStepStatus.mockRejectedValue(new Error('step update failed'));
 
-    const ctx = createJobContext({
+    const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
         jobDefinition: {

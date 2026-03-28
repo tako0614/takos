@@ -18,6 +18,10 @@
       "types": "./dist/validation.d.ts",
       "import": "./dist/validation.js"
     },
+    "./abort": {
+      "types": "./dist/abort.d.ts",
+      "import": "./dist/abort.js"
+    },
     "./errors": {
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
@@ -38,10 +42,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.7.0"
+    "hono": "^4.12.4"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

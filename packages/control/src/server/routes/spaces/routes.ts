@@ -16,10 +16,8 @@ import {
   DEFAULT_MODEL_ID,
   getModelProvider,
   normalizeModelId,
-  TIER_CONFIG,
-  getTierFromModel,
+  resolveHistoryTokenBudget,
   VALID_PROVIDERS,
-  type AgentTier,
   type ModelProvider,
 } from '../../../application/services/agent';
 import { getUISidebarItems } from '../../../application/services/platform/ui-extensions';
@@ -310,12 +308,11 @@ export default new Hono<AuthenticatedRouteEnv>()
       ai_provider: provider,
       model,
       provider,
-      tier: getTierFromModel(model),
+      token_limit: resolveHistoryTokenBudget(model, c.env.MODEL_CONTEXT_WINDOWS),
     });
   })
   .patch('/:spaceId/model',
     zValidator('json', z.object({
-      tier: z.string().optional(),
       model: z.string().optional(),
       provider: z.string().optional(),
       ai_model: z.string().optional(),
@@ -334,29 +331,11 @@ export default new Hono<AuthenticatedRouteEnv>()
       'Space not found or insufficient permissions'
     );
 
-    // Tier-based selection (new API)
-    if (body.tier !== undefined) {
-      const tierKey = body.tier as AgentTier;
-      const tierCfg = TIER_CONFIG[tierKey];
-      if (!tierCfg) {
-        throw new BadRequestError('Invalid tier');
-      }
-      await updateWorkspaceModel(c.env.DB, access.space.id, tierCfg.model, tierCfg.provider);
-      return c.json({
-        ai_model: tierCfg.model,
-        ai_provider: tierCfg.provider,
-        model: tierCfg.model,
-        provider: tierCfg.provider,
-        tier: tierKey,
-      });
-    }
-
-    // Legacy model+provider selection (backward compat)
     const requestedModel = body.model || body.ai_model;
     const providerInput = body.provider || body.ai_provider;
 
     if (!requestedModel) {
-      throw new BadRequestError('Model or tier is required');
+      throw new BadRequestError('Model is required');
     }
 
     const model = normalizeModelId(requestedModel);
@@ -377,7 +356,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       ai_provider: provider,
       model,
       provider,
-      tier: getTierFromModel(model),
+      token_limit: resolveHistoryTokenBudget(model, c.env.MODEL_CONTEXT_WINDOWS),
     });
   })
   .delete('/:spaceId', async (c) => {

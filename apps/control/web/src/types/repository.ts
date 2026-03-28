@@ -1,12 +1,25 @@
-export interface Repository {
-  id: string;
-  space_id: string;
-  name: string;
-  description: string | null;
-  visibility: 'public' | 'private';
-  default_branch: string;
-  stars: number;
-  forks: number;
+// Re-export common type aliases from backend shared models.
+// The frontend repository types differ significantly from the raw DB models
+// because they represent enriched API responses with joined data, so they
+// are defined locally and reference the backend types for shared primitives.
+import type {
+  RepositoryVisibility,
+  PullRequestStatus,
+  ReviewStatus,
+  PullRequestCommentAuthorType,
+  Repository as BackendRepository,
+} from '@takos/control-shared/types';
+
+/**
+ * Frontend Repository: extends the backend core with UI-specific enriched
+ * fields (e.g. fork info, owner display names, starred status).
+ */
+export interface Repository
+  extends Pick<
+    BackendRepository,
+    'id' | 'space_id' | 'name' | 'description' | 'default_branch' | 'stars' | 'forks' | 'created_at' | 'updated_at'
+  > {
+  visibility: RepositoryVisibility;
   is_starred?: boolean;
   forked_from_id?: string | null;
   forked_from?: {
@@ -22,8 +35,6 @@ export interface Repository {
   language?: string;
   homepage?: string;
   topics?: string[];
-  created_at: string;
-  updated_at: string;
 }
 
 export interface SyncStatus {
@@ -102,12 +113,16 @@ export interface Commit {
   };
 }
 
+/**
+ * Frontend PullRequest: an enriched API response shape with joined author
+ * info. Shares `status` with the backend PullRequestStatus type.
+ */
 export interface PullRequest {
   id: string;
   number: number;
   title: string;
   description: string | null;
-  status: 'open' | 'merged' | 'closed';
+  status: PullRequestStatus;
   author: {
     id: string;
     name: string;
@@ -125,6 +140,10 @@ export interface PullRequest {
   closed_at: string | null;
 }
 
+/**
+ * Frontend PRReview: enriched review with joined author info.
+ * Reuses ReviewStatus from backend.
+ */
 export interface PRReview {
   id: string;
   author: {
@@ -133,12 +152,16 @@ export interface PRReview {
     avatar_url?: string;
   };
   reviewer_type: 'user' | 'ai';
-  status: 'approved' | 'changes_requested' | 'commented';
+  status: ReviewStatus;
   body: string | null;
   analysis?: string | null;
   created_at: string;
 }
 
+/**
+ * Frontend PRComment: enriched comment with joined author info.
+ * Reuses PullRequestCommentAuthorType from backend.
+ */
 export interface PRComment {
   id: string;
   author: {
@@ -147,7 +170,7 @@ export interface PRComment {
     avatar_url?: string;
   };
   body: string;
-  author_type: 'user' | 'ai';
+  author_type: PullRequestCommentAuthorType;
   path: string | null;
   line: number | null;
   created_at: string;

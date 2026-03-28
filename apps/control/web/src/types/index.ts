@@ -4,7 +4,7 @@ export type { User, UserSettings } from './user';
 
 export type { Space } from './space';
 
-export type { Worker, App, Deployment, CustomDomain, Resource } from './worker';
+export type { Worker, Resource } from './worker';
 
 export type {
   Thread,
@@ -13,23 +13,16 @@ export type {
   Run,
   AgentTaskStatus,
   AgentTaskPriority,
-  AgentTaskBase,
   AgentTask,
-  AgentTaskRunSummary,
-  AgentTaskResumeTarget,
   SessionDiff,
   ThreadHistoryArtifactSummary,
-  ThreadHistoryEvent,
-  ThreadHistoryChildRunSummary,
   ThreadHistoryRunNode,
   ThreadHistoryFocus,
   ThreadHistoryTaskContext,
 } from './thread';
 
 export type {
-  BillingPlanTier,
   BillingMode,
-  BillingAvailableActions,
   BillingTopupPack,
   BillingSummary,
   BillingInvoice,
@@ -38,11 +31,9 @@ export type {
 export type {
   View,
   DeploySection,
-  LegalPageType,
   RouteState,
 } from './routing';
 export {
-  DEPLOY_SECTIONS,
   DEPLOY_NAV_SECTIONS,
   isDeploySection,
 } from './routing';
@@ -63,8 +54,6 @@ export type {
   PRReview,
   PRComment,
   FileDiff,
-  DiffHunk,
-  DiffLine,
 } from './repository';
 
-export type { DirectoryEntry, StorageFileType, StorageFile } from './storage';
+export type { StorageFile } from './storage';

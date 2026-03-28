@@ -36,7 +36,6 @@ vi.mock('@/services/git-smart', () => ({
 
 import {
   RuntimeSessionManager,
-  createRuntimeSessionManager,
 } from '@/services/sync/runtime-session';
 
 function createMockDrizzle(overrides: Record<string, unknown> = {}) {
@@ -82,7 +81,7 @@ describe('RuntimeSessionManager', () => {
   describe('setRepositoryInfo', () => {
     it('sets repoId, branch, and repoName', () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       mgr.setRepositoryInfo('repo-1', 'main', 'my-repo');
       expect(mgr.isGitMode()).toBe(true);
     });
@@ -91,7 +90,7 @@ describe('RuntimeSessionManager', () => {
   describe('setRepositories', () => {
     it('sets multiple repos and picks primary', () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       mgr.setRepositories([
         { repoId: 'r1', repoName: 'repo-1', branch: 'main' },
         { repoId: 'r2', repoName: 'repo-2', branch: 'dev' },
@@ -101,7 +100,7 @@ describe('RuntimeSessionManager', () => {
 
     it('defaults to first repo when primaryRepoId is not specified', () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       mgr.setRepositories([{ repoId: 'r1', repoName: 'repo-1' }]);
       expect(mgr.isGitMode()).toBe(true);
     });
@@ -110,7 +109,7 @@ describe('RuntimeSessionManager', () => {
   describe('isGitMode', () => {
     it('returns false when no repo is set', () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       expect(mgr.isGitMode()).toBe(false);
     });
   });
@@ -122,7 +121,7 @@ describe('RuntimeSessionManager', () => {
       mocks.getDb.mockReturnValue(drizzle);
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       mgr.setRepositoryInfo('repo-1', 'main');
 
       await expect(mgr.initSession()).rejects.toThrow('Session not found');
@@ -139,7 +138,7 @@ describe('RuntimeSessionManager', () => {
       mocks.getDb.mockReturnValue(drizzle);
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       mgr.setRepositoryInfo('repo-1', 'main');
 
       await expect(mgr.initSession()).rejects.toThrow('Session is already initialized');
@@ -147,7 +146,7 @@ describe('RuntimeSessionManager', () => {
 
     it('throws when repo_id is not set and skipDbLock is true', async () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       // No repo set
 
       await expect(mgr.initSession({ skipDbLock: true })).rejects.toThrow(
@@ -163,7 +162,7 @@ describe('RuntimeSessionManager', () => {
       );
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const result = await mgr.cloneRepository('my-repo', 'main', '/tmp/repo');
 
       expect(result.success).toBe(true);
@@ -176,7 +175,7 @@ describe('RuntimeSessionManager', () => {
       );
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const result = await mgr.cloneRepository('my-repo', 'main', '/tmp/repo');
 
       expect(result.success).toBe(false);
@@ -191,7 +190,7 @@ describe('RuntimeSessionManager', () => {
       );
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const result = await mgr.commitChanges('/tmp/repo', 'test commit');
 
       expect(result.success).toBe(true);
@@ -206,7 +205,7 @@ describe('RuntimeSessionManager', () => {
       );
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const result = await mgr.pushChanges('/tmp/repo', 'main');
 
       expect(result.success).toBe(true);
@@ -219,7 +218,7 @@ describe('RuntimeSessionManager', () => {
       );
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const result = await mgr.pushChanges('/tmp/repo');
 
       expect(result.success).toBe(false);
@@ -232,7 +231,7 @@ describe('RuntimeSessionManager', () => {
       mocks.callRuntimeRequest.mockResolvedValue(new Response('{}', { status: 200 }));
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const dir = await mgr.getWorkDir();
 
       expect(dir).toBe(`/tmp/takos-session-${sessionId}`);
@@ -242,7 +241,7 @@ describe('RuntimeSessionManager', () => {
       mocks.callRuntimeRequest.mockResolvedValue(new Response('error', { status: 500 }));
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       const dir = await mgr.getWorkDir();
 
       expect(dir).toBeNull();
@@ -252,7 +251,7 @@ describe('RuntimeSessionManager', () => {
   describe('syncToGit', () => {
     it('returns error when no repoId is set', async () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       // no repo set
       const result = await mgr.syncToGit();
 
@@ -264,7 +263,7 @@ describe('RuntimeSessionManager', () => {
   describe('syncSnapshotToRepo', () => {
     it('returns error when storage bucket is not configured', async () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, undefined, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, undefined, spaceId, sessionId);
 
       const result = await mgr.syncSnapshotToRepo(
         { files: [{ path: 'a.txt', content: 'hi', size: 2 }], file_count: 1 },
@@ -276,7 +275,7 @@ describe('RuntimeSessionManager', () => {
 
     it('returns error when repoId is empty', async () => {
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
 
       const result = await mgr.syncSnapshotToRepo(
         { files: [], file_count: 0 },
@@ -289,7 +288,7 @@ describe('RuntimeSessionManager', () => {
     it('returns success with committed=false when no files after filtering', async () => {
       mocks.resolveRef.mockResolvedValue(null);
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() }, GIT_OBJECTS: storage } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
 
       const result = await mgr.syncSnapshotToRepo(
         { files: [{ path: '.takos-session', content: 'x', size: 1 }], file_count: 1 },
@@ -305,7 +304,7 @@ describe('RuntimeSessionManager', () => {
       mocks.callRuntimeRequest.mockResolvedValue(new Response('ok', { status: 200 }));
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
       await mgr.destroySession();
 
       expect(mocks.callRuntimeRequest).toHaveBeenCalledTimes(1);
@@ -315,7 +314,7 @@ describe('RuntimeSessionManager', () => {
       mocks.callRuntimeRequest.mockRejectedValue(new Error('network error'));
 
       const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-      const mgr = createRuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
+      const mgr = new RuntimeSessionManager(env, db as never, storage as never, spaceId, sessionId);
 
       // Should not throw
       await mgr.destroySession();
@@ -323,12 +322,12 @@ describe('RuntimeSessionManager', () => {
   });
 });
 
-describe('createRuntimeSessionManager', () => {
+describe('RuntimeSessionManager constructor', () => {
   it('creates a RuntimeSessionManager instance', () => {
     const db = new MockD1Database();
     const storage = new MockR2Bucket();
     const env = { DB: db, RUNTIME_HOST: { fetch: vi.fn() } } as never;
-    const mgr = createRuntimeSessionManager(env, db as never, storage as never, 'sp', 'sess');
+    const mgr = new RuntimeSessionManager(env, db as never, storage as never, 'sp', 'sess');
     expect(mgr).toBeInstanceOf(RuntimeSessionManager);
   });
 });

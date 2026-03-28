@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Icons } from '../../../lib/Icons';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { formatShortDate } from '../../../lib/format';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { useI18n } from '../../../store/i18n';

@@ -15,7 +15,7 @@ function gracefulKill(child: ChildProcess): NodeJS.Timeout {
     }
   }, 5000);
 }
-import type { StepResult } from './executor.js';
+import type { ExecutorStepResult } from './executor.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,11 +57,11 @@ export function failureResult(
   stderr: string,
   outputs: Record<string, string> = {},
   exitCode: number = 1
-): StepResult {
+): ExecutorStepResult {
   return { exitCode, stdout: '', stderr, outputs, conclusion: 'failure' };
 }
 
-export function successResult(stdout: string, outputs: Record<string, string>): StepResult {
+export function successResult(stdout: string, outputs: Record<string, string>): ExecutorStepResult {
   return { exitCode: 0, stdout, stderr: '', outputs, conclusion: 'success' };
 }
 
@@ -189,7 +189,7 @@ export async function spawnWithTimeout(
   args: string[],
   options: SpawnOptions,
   ctx: SpawnContext
-): Promise<StepResult> {
+): Promise<ExecutorStepResult> {
   ctx.outputs = {};
   ctx.logs = [];
   const prepared = await prepareCommandFiles(ctx.workspacePath);
@@ -203,7 +203,7 @@ export async function spawnWithTimeout(
         cwd: options.cwd,
         env: createRuntimeEnv(ctx.env, ctx.workspacePath, prepared.envVars),
         stdio: ['ignore', 'pipe', 'pipe'],
-        ...(options.shell === false ? { shell: false } : {}),
+        shell: options.shell === true ? true : false,
       });
     } catch (err) {
       void cleanupCommandFiles(prepared);

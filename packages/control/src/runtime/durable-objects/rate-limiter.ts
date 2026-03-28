@@ -6,7 +6,7 @@ import {
 } from '../../shared/utils/sliding-window';
 import { checkTokenBucket, hitTokenBucket, type TokenBucketState } from '../../shared/utils/token-bucket';
 
-import { jsonResponse } from './shared';
+import { jsonResponse } from './do-header-utils';
 import { logWarn } from '../../shared/utils/logger';
 
 interface RateLimitEntry {

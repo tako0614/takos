@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import workersBase from './base';
+import workersBase from './routes';
 import workersDeployments from './deployments';
 import workersSettings from './settings';
 import workersSlug from './slug';

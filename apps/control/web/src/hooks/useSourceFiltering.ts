@@ -37,7 +37,7 @@ type PersistedSourceState = {
   filter: SourceFilter;
   sort: SourceSort;
   category: string;
-  installableOnly: boolean;
+  officialOnly: boolean;
   query: string;
   selectedSpaceId: string | null;
 };
@@ -55,7 +55,7 @@ function readPersistedSourceState(): Partial<PersistedSourceState> {
       filter: ALLOWED_FILTERS.includes(parsed.filter as SourceFilter) ? parsed.filter : undefined,
       sort: ALLOWED_SORTS.includes(parsed.sort as SourceSort) ? parsed.sort : undefined,
       category: typeof parsed.category === 'string' ? parsed.category : undefined,
-      installableOnly: typeof parsed.installableOnly === 'boolean' ? parsed.installableOnly : undefined,
+      officialOnly: typeof parsed.officialOnly === 'boolean' ? parsed.officialOnly : undefined,
       query: typeof parsed.query === 'string' ? parsed.query : undefined,
       selectedSpaceId: typeof parsed.selectedSpaceId === 'string'
         ? parsed.selectedSpaceId
@@ -89,8 +89,8 @@ export interface UseSourceFilteringResult {
   setSort: React.Dispatch<React.SetStateAction<SourceSort>>;
   category: string;
   setCategory: React.Dispatch<React.SetStateAction<string>>;
-  installableOnly: boolean;
-  setInstallableOnly: React.Dispatch<React.SetStateAction<boolean>>;
+  officialOnly: boolean;
+  setOfficialOnly: React.Dispatch<React.SetStateAction<boolean>>;
   query: string;
   setQuery: React.Dispatch<React.SetStateAction<string>>;
   debouncedQuery: string;
@@ -113,7 +113,7 @@ export function useSourceFiltering({
   const [filter, setFilter] = useState<SourceFilter>(persistedState.filter ?? 'all');
   const [sort, setSort] = useState<SourceSort>(persistedState.sort ?? 'trending');
   const [category, setCategory] = useState(persistedState.category ?? '');
-  const [installableOnly, setInstallableOnly] = useState(persistedState.installableOnly ?? false);
+  const [officialOnly, setOfficialOnly] = useState(persistedState.officialOnly ?? false);
   const [query, setQuery] = useState(persistedState.query ?? '');
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   useEffect(() => {
@@ -164,11 +164,11 @@ export function useSourceFiltering({
       filter,
       sort,
       category,
-      installableOnly,
+      officialOnly,
       query,
       selectedSpaceId: effectiveSpaceId,
     });
-  }, [category, effectiveSpaceId, filter, installableOnly, query, sort]);
+  }, [category, effectiveSpaceId, filter, officialOnly, query, sort]);
 
   // Search suggestions
   useEffect(() => {
@@ -212,8 +212,8 @@ export function useSourceFiltering({
     setSort,
     category,
     setCategory,
-    installableOnly,
-    setInstallableOnly,
+    officialOnly,
+    setOfficialOnly,
     query,
     setQuery,
     debouncedQuery,

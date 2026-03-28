@@ -8,7 +8,6 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "emitDeclarationOnly": true,
-    "incremental": true,
     "outDir": "./dist/types",
     "rootDir": "../..",
     "jsx": "react-jsx",
@@ -47,7 +46,6 @@
     "test/**/*.tsx",
     "../../packages/control/src/**/*.ts",
     "../../packages/control/src/**/*.tsx",
-    "../../packages/control/hosts/src/**/*.ts",
     "web/vite.config.ts"
   ],
   "exclude": ["node_modules", "web/src/**/*"]

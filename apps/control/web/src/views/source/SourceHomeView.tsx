@@ -131,7 +131,7 @@ interface SourceHomeViewProps {
   onInstall: (item: SourceItem) => void;
   onOpenRepo: (item: SourceItem) => void;
   onSeeAllTrending: () => void;
-  onSeeAllInstallable: () => void;
+  onSeeAllOfficial: () => void;
   onSeeAllMine: () => void;
 }
 
@@ -146,12 +146,12 @@ export function SourceHomeView({
   onInstall,
   onOpenRepo,
   onSeeAllTrending,
-  onSeeAllInstallable,
+  onSeeAllOfficial,
   onSeeAllMine,
 }: SourceHomeViewProps) {
   const { t } = useI18n();
 
-  const installable = items.filter((i) => getItemTakopack(i).available);
+  const official = items.filter((i) => i.official);
   const mine = items.filter((i) => i.is_mine);
 
   return (
@@ -185,11 +185,11 @@ export function SourceHomeView({
             onInstall={onInstall}
             onOpenRepo={onOpenRepo}
           />
-          {installable.length > 0 && (
+          {official.length > 0 && (
             <Section
-              title={t('installableLabel')}
-              items={installable.slice(0, 12)}
-              onSeeAll={onSeeAllInstallable}
+              title={t('officialLabel')}
+              items={official.slice(0, 12)}
+              onSeeAll={onSeeAllOfficial}
               installingId={installingId}
               getItemTakopack={getItemTakopack}
               onSelect={onSelect}

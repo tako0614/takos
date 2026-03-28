@@ -1,8 +1,21 @@
+// Re-export common type aliases from backend shared models.
+// The frontend worker/app/resource types represent enriched API response
+// shapes, so they are defined locally and reference backend types where useful.
+import type {
+  ServiceType,
+  ServiceStatus,
+  AppType,
+} from '@takos/control-shared/types';
+
+/**
+ * Frontend Worker (maps to backend Service): includes enriched fields
+ * (`workspace_name`, `apps`) that are joined at the API layer.
+ */
 export interface Worker {
   id: string;
   space_id: string;
-  service_type: 'app' | 'service';
-  status: 'pending' | 'building' | 'deployed' | 'failed' | 'stopped';
+  service_type: ServiceType;
+  status: ServiceStatus;
   config: string | null;
   hostname: string | null;
   service_name: string | null;
@@ -13,6 +26,10 @@ export interface Worker {
   apps?: App[];
 }
 
+/**
+ * Frontend App: uses `service_id` (vs backend `worker_id`) and adds
+ * enriched UI fields from joined service data.
+ */
 export interface App {
   id: string;
   space_id: string;
@@ -20,7 +37,7 @@ export interface App {
   name: string;
   description: string | null;
   icon: string | null;
-  app_type: 'platform' | 'builtin' | 'custom';
+  app_type: AppType;
   takos_client_key: string | null;
   created_at: string;
   updated_at: string;
@@ -37,8 +54,8 @@ export interface Deployment {
   space_id: string;
   name: string;
   description: string | null;
-  deploy_type: 'app' | 'service';
-  status: 'pending' | 'building' | 'deployed' | 'failed' | 'stopped';
+  deploy_type: ServiceType;
+  status: ServiceStatus;
   url: string | null;
   icon: string | null;
   hostname?: string | null;
@@ -68,6 +85,10 @@ export interface CustomDomain {
   updated_at: string;
 }
 
+/**
+ * Frontend Resource: a simplified view of the backend Resource type with
+ * a narrower set of resource types and statuses relevant to the UI.
+ */
 export interface Resource {
   id: string;
   owner_id: string;

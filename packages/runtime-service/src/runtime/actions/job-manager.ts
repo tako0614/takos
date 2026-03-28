@@ -211,8 +211,6 @@ export async function removeJobDirSafe(
   }
 }
 
-/** @deprecated Use {@link removeJobDirSafe} instead. */
-export const removeWorkspaceSafe = removeJobDirSafe;
 
 /** Sanitize a key-value map through the job's secrets sanitizer. */
 export function sanitizeOutputs(

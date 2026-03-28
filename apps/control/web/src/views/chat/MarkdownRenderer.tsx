@@ -1,28 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { toSafeHref } from '../../lib/safeHref';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copy = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setCopyFailed(false);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => { setCopied(false); copyTimerRef.current = null; }, 2000);
-    } catch (err) {
-      console.debug('Failed to copy to clipboard:', err);
-      setCopyFailed(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => { setCopyFailed(false); copyTimerRef.current = null; }, 2000);
-    }
-  }, []);
-  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
+  const { copied, copyFailed, copy } = useCopyToClipboard();
 
   return (
     <pre className="rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-4">

@@ -9,22 +9,12 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, authSessions, oauthStates } from '../../../infra/db';
 import { eq, and, gt, lt, desc, notInArray, sql } from 'drizzle-orm';
 import { logInfo } from '../../../shared/utils/logger';
+import { bytesToHex } from '../../../shared/utils/encoding-utils';
+import { now as nowISO } from '../../../shared/utils/date-utils';
 
 // ---------------------------------------------------------------------------
 // Internal helpers (not exported)
 // ---------------------------------------------------------------------------
-
-/** Convert a Uint8Array to a hex string. */
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-/** Current time as an ISO-8601 string. */
-function nowISO(): string {
-  return new Date().toISOString();
-}
 
 /** ISO-8601 string offset from now by `offsetMs` milliseconds. */
 function offsetISO(offsetMs: number): string {

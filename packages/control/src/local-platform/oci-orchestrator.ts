@@ -11,15 +11,9 @@ import { DockerContainerBackend } from './docker-container-backend.ts';
 
 type OciServiceStatus = 'deployed' | 'removed' | 'routing-only';
 
-type OciServiceEndpoint =
-  | {
-      kind: 'service-ref';
-      ref: string;
-    }
-  | {
-      kind: 'http-url';
-      base_url: string;
-    };
+// Derived from deploySchema.target.endpoint
+type DeployPayload = z.infer<typeof deploySchema>;
+type OciServiceEndpoint = DeployPayload['target']['endpoint'];
 
 type OciServiceRecord = {
   space_id: string;
@@ -252,14 +246,7 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
     const imageRef = payload.target.artifact?.image_ref ?? null;
     const exposedPort = payload.target.artifact?.exposed_port ?? 8080;
     const healthPath = payload.target.artifact?.health_path ?? '/health';
-    const runtime: {
-      compatibility_date?: string | null;
-      compatibility_flags?: string[];
-      limits?: {
-        cpu_ms?: number;
-        subrequests?: number;
-      } | null;
-    } = payload.runtime ?? {};
+    const runtime: NonNullable<DeployPayload['runtime']> = payload.runtime ?? {};
 
     let newContainerId: string | null = null;
     let resolvedEndpoint: { kind: 'http-url'; base_url: string } | null = null;

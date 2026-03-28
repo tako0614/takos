@@ -2,6 +2,9 @@
   "name": "@takos/control-bindings",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/client-s3": "^3.700.0",
@@ -13,16 +16,16 @@
     "redis": "^5.11.0"
   },
   "exports": {
-    "./dynamo-kv-store": "../src/bindings/dynamo-kv-store.ts",
-    "./firestore-kv-store": "../src/bindings/firestore-kv-store.ts",
-    "./gcs-object-store": "../src/bindings/gcs-object-store.ts",
-    "./openai-ai-binding": "../src/bindings/openai-ai-binding.ts",
-    "./pgvector-store": "../src/bindings/pgvector-store.ts",
-    "./pubsub-queue": "../src/bindings/pubsub-queue.ts",
-    "./s3-object-store": "../src/bindings/s3-object-store.ts",
-    "./sqs-queue": "../src/bindings/sqs-queue.ts",
-    "./redis-durable-object": "../src/shared-cloud-bindings/redis-durable-object.ts",
-    "./sse-notifier": "../src/shared-cloud-bindings/sse-notifier.ts",
+    "./dynamo-kv-store": "../src/adapters/dynamo-kv-store.ts",
+    "./firestore-kv-store": "../src/adapters/firestore-kv-store.ts",
+    "./gcs-object-store": "../src/adapters/gcs-object-store.ts",
+    "./openai-binding": "../src/adapters/openai-binding.ts",
+    "./pgvector-store": "../src/adapters/pgvector-store.ts",
+    "./pubsub-queue": "../src/adapters/pubsub-queue.ts",
+    "./s3-object-store": "../src/adapters/s3-object-store.ts",
+    "./sqs-queue": "../src/adapters/sqs-queue.ts",
+    "./redis-durable-object": "../src/worker-emulation/redis-durable-object.ts",
+    "./sse-notifier": "../src/worker-emulation/sse-notifier.ts",
     "./package.json": "./package.json"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
 import type { Resource } from '../types';
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { now } from '../../../shared/utils';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { NotFoundError, AuthenticationError, BadRequestError } from '@takos/common/errors';
-import { getUserByUsername } from './shared';
+import { getUserByUsername } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { accountBlocks, accountFollows, accountFollowRequests, accountMutes } from '../../../infra/db/schema';
 import { eq, and, or } from 'drizzle-orm';

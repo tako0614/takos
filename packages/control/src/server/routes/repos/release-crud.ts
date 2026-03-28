@@ -5,7 +5,7 @@ import { parseLimit, parseOffset } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { generateExploreInvalidationUrls, hasWriteRole } from './base';
+import { generateExploreInvalidationUrls, hasWriteRole } from './routes';
 import { getDb } from '../../../infra/db';
 import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';

@@ -15,7 +15,7 @@
     "@takos/common": "workspace:*",
     "@takos/control-agent": "workspace:*",
     "@takos/control-core": "workspace:*",
-    "hono": "^4.7.0",
+    "hono": "^4.12.4",
     "jszip": "^3.10.1",
     "yaml": "^2.5.1"
   },
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260118.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "esbuild": "^0.24.2",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"

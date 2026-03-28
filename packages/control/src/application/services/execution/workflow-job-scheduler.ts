@@ -12,7 +12,7 @@ import { eq, and, ne, or, count } from 'drizzle-orm';
 import { buildWorkflowDispatchEnv } from '../actions';
 import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import type { WorkflowBucket, JobResult, DependencyState } from './workflow-engine-types';
+import type { WorkflowBucket, WorkflowJobResult, DependencyState } from './workflow-engine-types';
 import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-converters';
 import { finalizeRunIfComplete, enqueueJob, getSecretIds } from './workflow-run-lifecycle';
 
@@ -25,7 +25,7 @@ export async function onJobComplete(
   bucket: WorkflowBucket,
   queue: Queue<WorkflowJobQueueMessage> | undefined,
   jobId: string,
-  result: JobResult,
+  result: WorkflowJobResult,
 ): Promise<void> {
   const drizzle = getDb(db);
 

@@ -1,22 +1,9 @@
-export interface AgentContext {
-  spaceId: string;
-  sessionId?: string;
-  threadId: string;
-  runId: string;
-  userId: string;
-}
+import type { ToolCall, ToolResult, ToolContext } from '../../tools/types';
 
-export interface ToolCall {
-  id: string;
-  name: string;
-  arguments: Record<string, unknown>;
-}
+// Re-export canonical types so existing imports from this file keep working.
+export type { ToolCall, ToolResult };
 
-export interface ToolResult {
-  tool_call_id: string;
-  output: string;
-  error?: string;
-}
+export type AgentContext = Pick<ToolContext, 'spaceId' | 'sessionId' | 'threadId' | 'runId' | 'userId'>;
 
 export interface AgentMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';

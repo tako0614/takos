@@ -7,6 +7,7 @@ function normalizeHostname(hostname: string): string {
   return stripped.endsWith('.') ? stripped.slice(0, -1) : stripped;
 }
 import { isPrivateIP } from '@takos/common/validation';
+import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
 
 export const WEB_FETCH: ToolDefinition = {
   name: 'web_fetch',
@@ -39,8 +40,6 @@ export const WEB_FETCH: ToolDefinition = {
 
 const MAX_RESPONSE_SIZE = 25 * 1024 * 1024;  // 25MB
 const FETCH_TIMEOUT_MS = 300000;               // 5 minutes
-const DNS_RESOLVE_TIMEOUT_MS = 5000;
-const DOH_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
 const ALLOWED_PORTS = [80, 443];
 
 const BLOCKED_HOSTNAMES = new Set([

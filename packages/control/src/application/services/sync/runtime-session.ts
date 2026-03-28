@@ -442,14 +442,3 @@ export class RuntimeSessionManager {
     }
   }
 }
-
-/** Create a RuntimeSessionManager. */
-export function createRuntimeSessionManager(
-  env: RuntimeSessionManagerEnv,
-  db: D1Database,
-  storage: R2Bucket | undefined,
-  spaceId: string,
-  sessionId: string
-): RuntimeSessionManager {
-  return new RuntimeSessionManager(env, db, storage, spaceId, sessionId);
-}

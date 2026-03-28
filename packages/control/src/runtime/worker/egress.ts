@@ -11,6 +11,7 @@ function normalizeHostname(hostname: string): string {
   return stripped.endsWith('.') ? stripped.slice(0, -1) : stripped;
 }
 import { isPrivateIP } from '@takos/common/validation';
+import { DOH_ENDPOINT } from '../../shared/constants/dns.ts';
 import { validateEgressEnv, createEnvGuard } from '../../shared/utils/validate-env';
 import { logError, logInfo, logWarn } from '../../shared/utils/logger';
 import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
@@ -29,8 +30,6 @@ type RateLimiterNamespace = {
   idFromName(name: string): unknown;
   get(id: unknown): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
 };
-
-const DOH_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
 
 const DEFAULT_MAX_REQUEST_BYTES = 10 * 1024 * 1024; // 10MB
 const DEFAULT_MAX_REQUESTS = 300;

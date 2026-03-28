@@ -16,7 +16,7 @@ vi.mock('../src/lib/app-manifest.js', () => ({
   resolveAppManifestPath: mocks.resolveAppManifestPath,
 }));
 
-vi.mock('../src/lib/group-deploy.js', () => ({
+vi.mock('../src/lib/group-deploy/index.js', () => ({
   deployGroup: mocks.deployGroup,
   deployWranglerDirect: mocks.deployWranglerDirect,
 }));
@@ -597,7 +597,7 @@ describe('deploy-group command', () => {
 describe('group-deploy lib', () => {
   it('generates correct wrangler TOML for a worker service', async () => {
     // Import the actual lib (not mocked) - inline to avoid mock interference
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -638,7 +638,7 @@ describe('group-deploy lib', () => {
   });
 
   it('skips http services', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const manifest = {
       ...sampleManifest,
@@ -670,7 +670,7 @@ describe('group-deploy lib', () => {
   });
 
   it('handles secretRef resources in dry-run', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const manifest = {
       ...sampleManifest,
@@ -701,7 +701,7 @@ describe('group-deploy lib', () => {
   });
 
   it('uses group name override when provided', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -716,7 +716,7 @@ describe('group-deploy lib', () => {
   });
 
   it('generates script name without namespace prefix when namespace is omitted', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -731,7 +731,7 @@ describe('group-deploy lib', () => {
   });
 
   it('filters services with serviceFilter', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -754,7 +754,7 @@ describe('group-deploy lib', () => {
   });
 
   it('filters multiple services with serviceFilter', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -808,7 +808,7 @@ describe('container deploy', () => {
   };
 
   it('deploys container service in dry-run (not skipped)', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: containerManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -832,7 +832,7 @@ describe('container deploy', () => {
   });
 
   it('generates correct container wrangler config', async () => {
-    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const config = generateContainerWranglerConfig(
       'browser',
@@ -868,7 +868,7 @@ describe('container deploy', () => {
   });
 
   it('generates correct container wrangler config without namespace', async () => {
-    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const config = generateContainerWranglerConfig(
       'browser',
@@ -886,7 +886,7 @@ describe('container deploy', () => {
   });
 
   it('generates correct container host entry', async () => {
-    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const entry = generateContainerHostEntry('browser', containerManifest.spec.services.browser);
 
@@ -899,7 +899,7 @@ describe('container deploy', () => {
   });
 
   it('generates correct host entry for hyphenated service name', async () => {
-    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const service = {
       type: 'container' as const,
@@ -917,7 +917,7 @@ describe('container deploy', () => {
   });
 
   it('serializes container wrangler TOML correctly', async () => {
-    const { serializeContainerWranglerToml } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { serializeContainerWranglerToml } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const toml = serializeContainerWranglerToml({
       name: 'test-app-browser',
@@ -960,7 +960,7 @@ describe('container deploy', () => {
   });
 
   it('uses default values for optional container fields', async () => {
-    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const minimalService = {
       type: 'container' as const,
@@ -985,7 +985,7 @@ describe('container deploy', () => {
   });
 
   it('toPascalCase converts various formats correctly', async () => {
-    const { toPascalCase } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { toPascalCase } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     expect(toPascalCase('browser')).toBe('Browser');
     expect(toPascalCase('browser-host')).toBe('BrowserHost');
@@ -994,7 +994,7 @@ describe('container deploy', () => {
   });
 
   it('dry-run container shows info but does not skip', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const containerOnlyManifest = {
       apiVersion: 'takos.dev/v1alpha1',
@@ -1094,7 +1094,7 @@ describe('new-format (workers/containers) deploy', () => {
   };
 
   it('deploys workers and standalone containers in dry-run', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -1142,7 +1142,7 @@ describe('new-format (workers/containers) deploy', () => {
   });
 
   it('filters by workerFilter', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -1164,7 +1164,7 @@ describe('new-format (workers/containers) deploy', () => {
   });
 
   it('filters by containerFilter', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
@@ -1182,7 +1182,7 @@ describe('new-format (workers/containers) deploy', () => {
   });
 
   it('errors when worker references unknown container', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const badManifest = {
       apiVersion: 'takos.dev/v1alpha1',
@@ -1224,7 +1224,7 @@ describe('new-format (workers/containers) deploy', () => {
 
 describe('template resolution', () => {
   it('resolves template strings', async () => {
-    const { resolveTemplateString } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { resolveTemplateString } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const context = {
       routes: {
@@ -1250,7 +1250,7 @@ describe('template resolution', () => {
   });
 
   it('buildTemplateContext creates context from deploy result', async () => {
-    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const deployResult = {
       groupName: 'test-app',
@@ -1297,7 +1297,7 @@ describe('template resolution', () => {
   });
 
   it('uses default baseDomain when not provided', async () => {
-    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const manifest = {
       apiVersion: 'takos.dev/v1alpha1',
@@ -1324,7 +1324,7 @@ describe('template resolution', () => {
 
 describe('legacy format backward compatibility', () => {
   it('still deploys services-based manifest correctly', async () => {
-    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy/index.js')>('../src/lib/group-deploy/index.js');
 
     const result = await deployGroup({
       manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],

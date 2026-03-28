@@ -2,11 +2,10 @@ import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 
 export interface AppsPageProps {
-  spaceId: string;
   onNavigateToStore?: () => void;
 }
 
-export function AppsPage({ spaceId: _spaceId, onNavigateToStore }: AppsPageProps) {
+export function AppsPage({ onNavigateToStore }: AppsPageProps) {
   const { t } = useI18n();
 
   return (

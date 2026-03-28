@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
-import type { D1Database, R2Bucket } from '@takos/cloudflare-compat';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // ---------------------------------------------------------------------------

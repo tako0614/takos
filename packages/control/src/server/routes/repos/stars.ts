@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { now, toIsoString } from '../../../shared/utils';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { generateExploreInvalidationUrls } from './base';
+import { generateExploreInvalidationUrls } from './routes';
 import { getDb } from '../../../infra/db';
 import { repoStars, repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';

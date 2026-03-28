@@ -22,6 +22,7 @@ export interface D1Result<T = Record<string, unknown>> {
   meta: Record<string, unknown>;
 }
 
+/** Mirrors the canonical definition in @cloudflare/workers-types. */
 export type D1RawOptions = { columnNames: true } | { columnNames?: false };
 
 export interface D1PreparedStatement {

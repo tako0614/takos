@@ -93,8 +93,6 @@ export function isSpaceConcurrencyExceeded(spaceId: string): boolean {
   return runningCount >= MAX_CONCURRENT_EXEC_PER_WORKSPACE;
 }
 
-/** @deprecated Use {@link isSpaceConcurrencyExceeded} instead. */
-export const isWorkspaceConcurrencyExceeded = isSpaceConcurrencyExceeded;
 
 /**
  * Evict old completed processes when at capacity.
@@ -128,12 +126,17 @@ export function sanitizeErrorMessage(err: unknown): string {
     .replace(/\.\/[^\s:]+/g, '[path]');
 }
 
+const DEFAULT_EXEC_TIMEOUT_SECONDS = 300;
+
+/** Maximum allowed execution timeout. Prevents runaway processes. */
+const MAX_EXECUTION_TIMEOUT_SECONDS = 1800;
+
 function computeTimeout(requestedTimeout: unknown): number {
   const seconds =
     typeof requestedTimeout === 'number' && Number.isFinite(requestedTimeout)
       ? Math.floor(requestedTimeout)
-      : 300;
-  return Math.max(1, Math.min(seconds, 1800)) * 1000;
+      : DEFAULT_EXEC_TIMEOUT_SECONDS;
+  return Math.max(1, Math.min(seconds, MAX_EXECUTION_TIMEOUT_SECONDS)) * 1000;
 }
 
 // ---------------------------------------------------------------------------

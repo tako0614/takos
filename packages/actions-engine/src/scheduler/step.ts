@@ -6,6 +6,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter as pathDelimiter, join } from 'node:path';
 
+import {
+  DEFAULT_TIMEOUT_MINUTES,
+  MAX_COMMAND_FILE_BYTES,
+  MINUTES_TO_MS,
+} from '../constants.js';
 import type {
   Step,
   StepResult,
@@ -277,7 +282,7 @@ export class StepRunner {
 
   constructor(options: StepRunnerOptions = {}) {
     this.options = {
-      defaultTimeout: options.defaultTimeout ?? 360,
+      defaultTimeout: options.defaultTimeout ?? DEFAULT_TIMEOUT_MINUTES,
       workingDirectory: options.workingDirectory ?? process.cwd(),
       defaultShell: options.defaultShell ?? resolvePlatformDefaultShell(),
       ...options,
@@ -407,7 +412,7 @@ export class StepRunner {
     const interpolatedWorkDir = interpolateString(workingDirectory!, context);
 
     // Calculate timeout
-    const timeout = (step['timeout-minutes'] ?? this.options.defaultTimeout!) * 60_000;
+    const timeout = (step['timeout-minutes'] ?? this.options.defaultTimeout!) * MINUTES_TO_MS;
 
     const commandFiles = await this.createCommandFiles(context);
     const runnerTemp = this.resolveRunnerTemp(context);
@@ -516,8 +521,8 @@ export class StepRunner {
     return entries;
   }
 
-  /** Maximum size for GITHUB_ENV / GITHUB_OUTPUT / GITHUB_PATH command files (10 MB) */
-  private static readonly MAX_COMMAND_FILE_BYTES = 10 * 1024 * 1024;
+  /** @see {@link MAX_COMMAND_FILE_BYTES} in constants.ts */
+  private static readonly MAX_COMMAND_FILE_BYTES = MAX_COMMAND_FILE_BYTES;
 
   private async readCommandFile(path: string): Promise<string> {
     try {

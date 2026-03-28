@@ -1,6 +1,9 @@
 import type { WFPConfig, CFAPIResponse } from './client';
 import { CF_API_BASE, sanitizeErrorMessage } from './client';
 import type { WfpClient } from './client';
+import { bytesToHex, bytesToBase64 } from '../../../shared/utils/encoding-utils';
+
+const ASSET_UPLOAD_TIMEOUT_MS = 60_000;
 
 /** Manifest entry for static assets upload */
 export interface AssetManifestEntry {
@@ -82,7 +85,7 @@ export async function uploadAssets(
 
   // S22: 60 second timeout for uploads (files can be large)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutId = setTimeout(() => controller.abort(), ASSET_UPLOAD_TIMEOUT_MS);
 
   try {
     // This endpoint uses the session JWT for auth, not the API token
@@ -140,8 +143,7 @@ export async function uploadAllAssets(
 
   for (const file of files) {
     const hashBuffer = await crypto.subtle.digest('SHA-256', file.content);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const fullHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const fullHash = bytesToHex(new Uint8Array(hashBuffer));
     // Use first 32 hex characters as required by Cloudflare
     const hash = fullHash.slice(0, 32);
 
@@ -169,13 +171,8 @@ export async function uploadAllAssets(
     const file = fileMap[hash];
     if (file) {
       // Convert ArrayBuffer to base64
-      const bytes = new Uint8Array(file.content);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
       toUpload[hash] = {
-        base64Content: btoa(binary),
+        base64Content: bytesToBase64(new Uint8Array(file.content)),
         contentType: file.contentType,
       };
     }

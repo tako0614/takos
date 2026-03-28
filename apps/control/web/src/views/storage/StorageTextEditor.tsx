@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { useFileContent } from '../../hooks/useFileContent';
 import { detectLanguage } from '../../lib/languageMap';
 import { Icons } from '../../lib/Icons';

@@ -4,10 +4,10 @@ import {
   uniqueEnvNames,
   getCommonEnvSecret,
   isManagedCommonEnvKey,
-  isReservedWorkspaceCommonEnvKey,
+  isReservedSpaceCommonEnvKey,
   normalizeCommonEnvName,
   MANAGED_COMMON_ENV_KEYS,
-  RESERVED_WORKSPACE_COMMON_ENV_KEYS,
+  RESERVED_SPACE_COMMON_ENV_KEYS,
   encryptCommonEnvValue,
   decryptCommonEnvValue,
   createBindingFingerprint,
@@ -118,18 +118,18 @@ describe('isManagedCommonEnvKey', () => {
   });
 });
 
-describe('isReservedWorkspaceCommonEnvKey', () => {
+describe('isReservedSpaceCommonEnvKey', () => {
   it('returns true for reserved keys', () => {
-    expect(isReservedWorkspaceCommonEnvKey('TAKOS_API_URL')).toBe(true);
-    expect(isReservedWorkspaceCommonEnvKey('TAKOS_ACCESS_TOKEN')).toBe(true);
+    expect(isReservedSpaceCommonEnvKey('TAKOS_API_URL')).toBe(true);
+    expect(isReservedSpaceCommonEnvKey('TAKOS_ACCESS_TOKEN')).toBe(true);
   });
 
   it('returns false for managed but not reserved keys', () => {
-    expect(isReservedWorkspaceCommonEnvKey('APP_BASE_URL')).toBe(false);
+    expect(isReservedSpaceCommonEnvKey('APP_BASE_URL')).toBe(false);
   });
 
   it('returns false for custom keys', () => {
-    expect(isReservedWorkspaceCommonEnvKey('MY_KEY')).toBe(false);
+    expect(isReservedSpaceCommonEnvKey('MY_KEY')).toBe(false);
   });
 });
 
@@ -142,11 +142,11 @@ describe('MANAGED_COMMON_ENV_KEYS', () => {
   });
 });
 
-describe('RESERVED_WORKSPACE_COMMON_ENV_KEYS', () => {
+describe('RESERVED_SPACE_COMMON_ENV_KEYS', () => {
   it('contains the expected keys', () => {
-    expect(RESERVED_WORKSPACE_COMMON_ENV_KEYS.has('TAKOS_API_URL')).toBe(true);
-    expect(RESERVED_WORKSPACE_COMMON_ENV_KEYS.has('TAKOS_ACCESS_TOKEN')).toBe(true);
-    expect(RESERVED_WORKSPACE_COMMON_ENV_KEYS.size).toBe(2);
+    expect(RESERVED_SPACE_COMMON_ENV_KEYS.has('TAKOS_API_URL')).toBe(true);
+    expect(RESERVED_SPACE_COMMON_ENV_KEYS.has('TAKOS_ACCESS_TOKEN')).toBe(true);
+    expect(RESERVED_SPACE_COMMON_ENV_KEYS.size).toBe(2);
   });
 });
 

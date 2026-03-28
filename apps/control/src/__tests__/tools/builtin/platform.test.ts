@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -75,9 +75,7 @@ vi.mock('@/services/deployment/index', () => ({
 }));
 
 vi.mock('@/services/platform/workers', () => ({
-  resolveWorkerReferenceRecord: platformServiceMocks.resolveServiceReferenceRecord,
   resolveServiceReferenceRecord: platformServiceMocks.resolveServiceReferenceRecord,
-  getWorkerRouteRecord: platformServiceMocks.getServiceRouteRecord,
   getServiceRouteRecord: platformServiceMocks.getServiceRouteRecord,
 }));
 

@@ -1,4 +1,4 @@
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/platform/mcp', () => ({

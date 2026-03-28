@@ -8,7 +8,6 @@
 import { z } from 'zod';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import type { BaseMessage } from '@langchain/core/messages';
-import { AppError } from '@takos/common/errors';
 import type { ToolExecutorLike } from '../../tools/executor';
 import type { ToolDefinition, ToolParameter } from '../../tools/types';
 
@@ -89,19 +88,7 @@ export function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-export function throwIfAborted(signal: AbortSignal | undefined, context: string): void {
-  if (!signal?.aborted) {
-    return;
-  }
-
-  const reason = signal.reason;
-  const message = reason instanceof Error
-    ? reason.message
-    : typeof reason === 'string'
-      ? reason
-      : 'Run aborted';
-  throw new AppError(`${message} (${context})`);
-}
+export { throwIfAborted } from '@takos/common/abort';
 
 // ── Public types ────────────────────────────────────────────────────────
 

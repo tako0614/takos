@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 type TimelineEventType = 'thinking' | 'tool' | 'result' | 'error' | 'completed' | 'cancelled' | 'run_status' | 'progress' | 'run.failed';
 type TimelineEvent = { type: TimelineEventType; data: Record<string, unknown> };
-type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+// Agent RunStatus — must match the canonical definition in packages/control/src/shared/types/models.ts
+type RunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

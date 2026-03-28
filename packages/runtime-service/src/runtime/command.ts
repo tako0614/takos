@@ -3,6 +3,9 @@ import { Readable } from 'stream';
 import { pushLog } from './logging.js';
 import { filterSafeEnv } from '../utils/env-filter.js';
 
+/** Grace period before SIGKILL after sending SIGTERM. */
+const GRACEFUL_KILL_TIMEOUT_MS = 5_000;
+
 function gracefulKill(child: ChildProcess): NodeJS.Timeout {
   child.kill('SIGTERM');
   return setTimeout(() => {
@@ -10,7 +13,7 @@ function gracefulKill(child: ChildProcess): NodeJS.Timeout {
     if (stillRunning) {
       child.kill('SIGKILL');
     }
-  }, 5000);
+  }, GRACEFUL_KILL_TIMEOUT_MS);
 }
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;

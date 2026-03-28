@@ -41,7 +41,7 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
     filter, setFilter,
     sort, setSort,
     category, setCategory,
-    installableOnly, setInstallableOnly,
+    officialOnly, setOfficialOnly,
     query, setQuery,
     items, loading, hasMore, total,
     selectedItem, setSelectedItem,
@@ -66,8 +66,8 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const isSearchMode = browseMode || query.length > 0 || filter !== 'all' || category !== '' || installableOnly;
-  const hasActiveFilters = filter !== 'all' || category !== '' || installableOnly;
+  const isSearchMode = browseMode || query.length > 0 || filter !== 'all' || category !== '' || officialOnly;
+  const hasActiveFilters = filter !== 'all' || category !== '' || officialOnly;
 
   // Restore scroll position when switching between home/search
   useEffect(() => {
@@ -95,14 +95,14 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
     setQuery('');
     setFilter('all');
     setCategory('');
-    setInstallableOnly(false);
+    setOfficialOnly(false);
     searchRef.current?.blur();
   }
 
   function clearFilters() {
     setFilter('all');
     setCategory('');
-    setInstallableOnly(false);
+    setOfficialOnly(false);
   }
 
   return (
@@ -171,8 +171,8 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
               setFilter={setFilter}
               category={category}
               setCategory={setCategory}
-              installableOnly={installableOnly}
-              setInstallableOnly={setInstallableOnly}
+              officialOnly={officialOnly}
+              setOfficialOnly={setOfficialOnly}
               sort={sort}
               setSort={setSort}
               isAuthenticated={isAuthenticated}
@@ -213,7 +213,7 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
           onInstall={install}
           onOpenRepo={openRepo}
           onSeeAllTrending={() => { setBrowseMode(true); setSort('trending'); }}
-          onSeeAllInstallable={() => { setBrowseMode(true); setInstallableOnly(true); }}
+          onSeeAllOfficial={() => { setBrowseMode(true); setOfficialOnly(true); }}
           onSeeAllMine={() => { setBrowseMode(true); setFilter('mine'); }}
         />
       )}
@@ -228,8 +228,8 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
           setFilter={setFilter}
           category={category}
           setCategory={setCategory}
-          installableOnly={installableOnly}
-          setInstallableOnly={setInstallableOnly}
+          officialOnly={officialOnly}
+          setOfficialOnly={setOfficialOnly}
           isAuthenticated={isAuthenticated}
           onRequireLogin={onRequireLogin}
         />

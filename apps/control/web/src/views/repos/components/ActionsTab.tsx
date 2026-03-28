@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icons } from '../../../lib/Icons';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { useI18n } from '../../../store/i18n';
 import {

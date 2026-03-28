@@ -115,8 +115,8 @@ interface DesktopFilterBarProps {
   setFilter: (v: SourceFilter) => void;
   category: string;
   setCategory: (v: string) => void;
-  installableOnly: boolean;
-  setInstallableOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
+  officialOnly: boolean;
+  setOfficialOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
   sort: SourceSort;
   setSort: (v: SourceSort) => void;
   isAuthenticated: boolean;
@@ -126,7 +126,7 @@ interface DesktopFilterBarProps {
 export function DesktopFilterBar({
   filter, setFilter,
   category, setCategory,
-  installableOnly, setInstallableOnly,
+  officialOnly, setOfficialOnly,
   sort, setSort,
   isAuthenticated, onRequireLogin,
 }: DesktopFilterBarProps) {
@@ -176,15 +176,15 @@ export function DesktopFilterBar({
       {filter !== 'mine' && (
         <button
           type="button"
-          onClick={() => setInstallableOnly((v) => !v)}
+          onClick={() => setOfficialOnly((v) => !v)}
           className={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            installableOnly
-              ? 'bg-emerald-600 text-white'
+            officialOnly
+              ? 'bg-blue-600 text-white'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
-          <Icons.Package className="w-3 h-3" />
-          {t('installableLabel')}
+          <Icons.Check className="w-3 h-3" />
+          {t('officialLabel')}
         </button>
       )}
 
@@ -255,8 +255,8 @@ interface MobileFiltersModalProps {
   setFilter: (v: SourceFilter) => void;
   category: string;
   setCategory: (v: string) => void;
-  installableOnly: boolean;
-  setInstallableOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
+  officialOnly: boolean;
+  setOfficialOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
   isAuthenticated: boolean;
   onRequireLogin: () => void;
 }
@@ -265,7 +265,7 @@ export function MobileFiltersModal({
   isOpen, onClose,
   filter, setFilter,
   category, setCategory,
-  installableOnly, setInstallableOnly,
+  officialOnly, setOfficialOnly,
   isAuthenticated, onRequireLogin,
 }: MobileFiltersModalProps) {
   const { t } = useI18n();
@@ -331,14 +331,14 @@ export function MobileFiltersModal({
         {filter !== 'mine' && (
           <button
             type="button"
-            onClick={() => setInstallableOnly((v) => !v)}
+            onClick={() => setOfficialOnly((v) => !v)}
             className={`w-full min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
-              installableOnly
-                ? 'bg-emerald-600 text-white'
+              officialOnly
+                ? 'bg-blue-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
             }`}
           >
-            {t('installableOnly')}
+            {t('officialOnly')}
           </button>
         )}
 
@@ -348,7 +348,7 @@ export function MobileFiltersModal({
           onClick={() => {
             setFilter('all');
             setCategory('');
-            setInstallableOnly(false);
+            setOfficialOnly(false);
           }}
         >
           {t('resetFilters')}

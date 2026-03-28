@@ -12,8 +12,17 @@ export type {
   ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-  WorkspaceOperationId,
-  WorkspaceOperationPolicy,
+} from './tool-policy-types';
+export {
+  WORKSPACE_STORAGE_OPS,
+  WORKSPACE_COMMON_ENV_OPS,
+  REPO_OPS,
+  SERVICE_OPS,
+  CUSTOM_DOMAIN_OPS,
+  DEPLOYMENT_OPS,
+  SKILL_OPS,
+  APP_DEPLOYMENT_OPS,
+  MCP_SERVER_OPS,
 } from './tool-policy-types';
 
 interface ToolPolicyMetadata {

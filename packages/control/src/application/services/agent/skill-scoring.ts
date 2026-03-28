@@ -12,7 +12,7 @@ import type {
   SkillCategory,
   SkillExecutionContract,
 } from './skill-contracts';
-import type { SkillContext, SkillSelection, SkillResolutionContext } from './skills-resolution';
+import type { SkillContext, SkillSelection, SkillResolutionContext } from './skill-resolution';
 import { getDelegationPacketFromRunInput } from './delegation';
 
 // ── Constants ───────────────────────────────────────────────────────────

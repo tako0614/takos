@@ -2,6 +2,9 @@ import { spawn, type ChildProcess } from 'child_process';
 import { filterSafeEnv } from '../utils/env-filter.js';
 import { createLogger } from '@takos/common/logger';
 
+/** Grace period before SIGKILL after sending SIGTERM. */
+const GRACEFUL_KILL_TIMEOUT_MS = 5_000;
+
 function gracefulKill(child: ChildProcess): NodeJS.Timeout {
   child.kill('SIGTERM');
   return setTimeout(() => {
@@ -9,7 +12,7 @@ function gracefulKill(child: ChildProcess): NodeJS.Timeout {
     if (stillRunning) {
       child.kill('SIGKILL');
     }
-  }, 5000);
+  }, GRACEFUL_KILL_TIMEOUT_MS);
 }
 
 const logger = createLogger({ service: 'takos-runtime' });

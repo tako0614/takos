@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { D1Database, R2Bucket } from '@takos/cloudflare-compat';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   logWarn: vi.fn(),
   logInfo: vi.fn(),
   safeJsonParseOrDefault: vi.fn(),
-  getContextWindowForModel: vi.fn(),
+  resolveContextWindow: vi.fn(),
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
@@ -65,7 +65,7 @@ vi.mock('@/utils', async (importOriginal) => ({
 
 vi.mock('@/services/agent/model-catalog', () => ({
   DEFAULT_MODEL_ID: 'gpt-5.4-nano',
-  getContextWindowForModel: mocks.getContextWindowForModel,
+  resolveHistoryTokenBudget: mocks.resolveContextWindow,
 }));
 
 vi.mock('@/services/agent/langgraph-runner', () => ({
@@ -117,7 +117,6 @@ vi.mock('@/services/agent/execute-run', () => ({
 
 import {
   isValidToolCallsArray,
-  createEventEmitterState,
   updateRunStatusImpl,
   buildConversationHistory,
 } from '@/services/agent/runner';
@@ -151,9 +150,13 @@ describe('isValidToolCallsArray', () => {
   });
 });
 
-describe('createEventEmitterState', () => {
-  it('creates initial state with zero counters', () => {
-    const state = createEventEmitterState();
+describe('EventEmitterState default values', () => {
+  it('has correct initial values when constructed inline', () => {
+    const state = {
+      eventSequence: 0,
+      pendingEventEmissions: 0,
+      eventEmissionErrors: [] as unknown[],
+    };
     expect(state.eventSequence).toBe(0);
     expect(state.pendingEventEmissions).toBe(0);
     expect(state.eventEmissionErrors).toEqual([]);
@@ -338,7 +341,7 @@ describe('buildConversationHistory', () => {
     mocks.buildThreadContextSystemMessage.mockReturnValue(null);
     mocks.getDelegationPacketFromRunInput.mockReturnValue(null);
     mocks.safeJsonParseOrDefault.mockReturnValue({});
-    mocks.getContextWindowForModel.mockReturnValue(50);
+    mocks.resolveContextWindow.mockReturnValue(50);
   });
 
   it('builds conversation from messages in the thread', async () => {

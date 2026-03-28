@@ -80,5 +80,3 @@ export async function writeFileWithinSpace(
   }
 }
 
-/** @deprecated Use {@link writeFileWithinSpace} instead. */
-export const writeFileWithinWorkspace = writeFileWithinSpace;

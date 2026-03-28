@@ -36,7 +36,7 @@ import {
   validateGitAuthorName,
   validateGitAuthorEmail,
   validateGitName,
-  validateWorkspaceId,
+  validateSpaceId,
   validateNameParam,
   validateCommand,
 } from '../../runtime/validation.js';
@@ -412,29 +412,29 @@ describe('validateGitName', () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateWorkspaceId
+// validateSpaceId
 // ---------------------------------------------------------------------------
 
-describe('validateWorkspaceId', () => {
-  it('accepts valid workspace ID', () => {
-    expect(validateWorkspaceId('ws123')).toBe('ws123');
+describe('validateSpaceId', () => {
+  it('accepts valid space ID', () => {
+    expect(validateSpaceId('ws123')).toBe('ws123');
   });
 
   it('accepts ID with hyphens', () => {
-    expect(validateWorkspaceId('my-workspace')).toBe('my-workspace');
+    expect(validateSpaceId('my-workspace')).toBe('my-workspace');
   });
 
   it('throws on empty string', () => {
-    expect(() => validateWorkspaceId('')).toThrow('space_id is required');
+    expect(() => validateSpaceId('')).toThrow('space_id is required');
   });
 
   it('throws on invalid format', () => {
-    expect(() => validateWorkspaceId('!invalid')).toThrow('Invalid space_id format');
+    expect(() => validateSpaceId('!invalid')).toThrow('Invalid space_id format');
   });
 
   it('throws on non-string', () => {
     // @ts-expect-error testing runtime behavior
-    expect(() => validateWorkspaceId(null)).toThrow('space_id is required');
+    expect(() => validateSpaceId(null)).toThrow('space_id is required');
   });
 });
 

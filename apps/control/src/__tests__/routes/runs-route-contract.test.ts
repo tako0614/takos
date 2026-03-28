@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
-import runsRouter from '@/routes/runs';
+import runsRouter from '@/routes/runs/routes';
 
 describe('runs route contract', () => {
   it('does not mount /runs/:id/emit', async () => {

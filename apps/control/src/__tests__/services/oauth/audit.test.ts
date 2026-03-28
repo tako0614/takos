@@ -23,7 +23,7 @@ vi.mock('@/db', async (importOriginal) => {
 
 import { logOAuthEvent } from '@/services/oauth/audit';
 import type { OAuthAuditEvent } from '@/services/oauth/audit';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 
 describe('logOAuthEvent', () => {
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NotificationNotifierDO } from '@/durable-objects/notification-notifier';
 
 // ---------------------------------------------------------------------------
@@ -435,6 +435,14 @@ describe('NotificationNotifierDO', () => {
   });
 
   describe('constructor hydration', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('restores state from storage on construction', async () => {
       const storage = createMockStorage();
       storage._store.set('bufferState', {
@@ -447,7 +455,7 @@ describe('NotificationNotifierDO', () => {
       const doInstance = new NotificationNotifierDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       // Verify state was restored by emitting and checking the counter
       const res = await doInstance.fetch(getRequest('/state'));
@@ -465,7 +473,7 @@ describe('NotificationNotifierDO', () => {
       const doInstance = new NotificationNotifierDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await new Promise((r) => setTimeout(r, 0));
+      await vi.advanceTimersByTimeAsync(0);
 
       const res = await doInstance.fetch(getRequest('/state'));
       const body = await jsonBody(res);

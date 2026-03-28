@@ -12,7 +12,7 @@ export interface UseSourceFetchQueriesOptions {
   debouncedQuery: string;
   sort: string;
   category: string;
-  installableOnly: boolean;
+  officialOnly: boolean;
   // Pagination state setters
   setItems: React.Dispatch<React.SetStateAction<SourceItem[]>>;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
@@ -36,7 +36,7 @@ export function useSourceFetchQueries({
   debouncedQuery,
   sort,
   category,
-  installableOnly,
+  officialOnly,
   setItems,
   setLoading,
   setHasMore,
@@ -87,7 +87,7 @@ export function useSourceFetchQueries({
           limit: String(PAGE_SIZE),
           offset: String(offset),
           sort,
-          type: installableOnly ? 'deployable-app' : 'all',
+          type: officialOnly ? 'official' : 'all',
         };
         if (debouncedQuery.trim()) queryParams.q = debouncedQuery.trim();
         if (category) queryParams.category = category;
@@ -141,6 +141,7 @@ export function useSourceFetchQueries({
               installed_version: string | null;
               deployed_at: string | null;
             };
+            official?: boolean;
           }>;
           total: number;
           has_more: boolean;
@@ -176,6 +177,7 @@ export function useSourceFetchQueries({
             description: item.takopack.description,
           },
           installation: installMap.get(item.repo.id) ?? item.installation,
+          official: item.official,
         }));
 
         setItems((prev) => (append
@@ -200,7 +202,7 @@ export function useSourceFetchQueries({
         }
       }
     },
-    [debouncedQuery, sort, category, installableOnly, effectiveSpaceId, fetchInstallations, requestSeqRef, appendInFlightRef, setItems, setLoading, setHasMore, setTotal, setSelectedItem],
+    [debouncedQuery, sort, category, officialOnly, effectiveSpaceId, fetchInstallations, requestSeqRef, appendInFlightRef, setItems, setLoading, setHasMore, setTotal, setSelectedItem],
   );
 
   // Fetch my repos (mine filter)

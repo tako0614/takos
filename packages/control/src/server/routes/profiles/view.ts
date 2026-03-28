@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ProfileRepoResponse, UserProfileResponse } from './api';
-import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './shared';
+import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { repositories, repoStars, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';

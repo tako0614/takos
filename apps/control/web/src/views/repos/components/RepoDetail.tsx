@@ -11,7 +11,7 @@ import { BranchesTab } from './BranchesTab';
 import { ForkModal } from './ForkModal';
 import { RepoDetailFiles } from './RepoDetailFiles';
 import { RepoDetailBranches } from './RepoDetailBranches';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { useI18n } from '../../../store/i18n';
 import { rpc, rpcJson, repoBlob } from '../../../lib/rpc';
@@ -355,11 +355,6 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
         {activeTab === 'branches' && (
           <BranchesTab
             repoId={repo.id}
-            currentBranch={currentBranch}
-            onBranchChange={(branch) => {
-              setCurrentBranch(branch);
-              fetchBranches();
-            }}
           />
         )}
 

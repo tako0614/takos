@@ -54,8 +54,6 @@ export class SpaceAccessError extends AppError {
   }
 }
 
-/** @deprecated Use {@link SpaceAccessError} instead. */
-export const WorkspaceAccessError = SpaceAccessError;
 
 /**
  * Require space access, throwing {@link SpaceAccessError} on failure.
@@ -105,8 +103,6 @@ export async function requireSpaceAccessOrThrow(
   return access;
 }
 
-/** @deprecated Use {@link requireSpaceAccessOrThrow} instead. */
-export const requireWorkspaceAccessOrThrow = requireSpaceAccessOrThrow;
 
 /**
  * Convenience predicate for use in error-handling middleware or
@@ -127,5 +123,3 @@ export function isSpaceAccessError(err: unknown): err is SpaceAccessError {
   return err instanceof SpaceAccessError;
 }
 
-/** @deprecated Use {@link isSpaceAccessError} instead. */
-export const isWorkspaceAccessError = isSpaceAccessError;

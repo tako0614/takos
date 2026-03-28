@@ -1,5 +1,6 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import { generateId, slugifyName } from '../../../shared/utils';
+import { bytesToHex } from '../../../shared/utils/encoding-utils';
 import { validateUsername } from '../../../shared/utils/reserved-usernames';
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
@@ -37,7 +38,7 @@ const ALLOWED_RETURN_PATTERNS: readonly RegExp[] = [
 function generateUserId(): string {
   const buffer = new Uint8Array(16);
   crypto.getRandomValues(buffer);
-  return Array.from(buffer).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(buffer);
 }
 
 export async function generateUniqueUserId(db: SqlDatabaseBinding): Promise<string> {

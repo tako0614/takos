@@ -1,3 +1,5 @@
+import { bytesToHex } from './encoding-utils';
+
 export async function computeSHA256(
   content: string | ArrayBuffer | Uint8Array
 ): Promise<string> {
@@ -13,8 +15,7 @@ export async function computeSHA256(
   const digestInput = new Uint8Array(data.byteLength);
   digestInput.set(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', digestInput.buffer.slice(0));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(new Uint8Array(hashBuffer));
 }
 
 export async function verifyBundleHash(

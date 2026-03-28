@@ -124,7 +124,6 @@ export async function resolveTakosTokenSubject(params: {
     };
   }
   // For team spaces, the account id itself acts as the principal
-  // (automation_principal_id concept has been removed)
   return {
     subjectUserId: space.owner_user_id,
     subjectMode: 'space_agent',

@@ -7,44 +7,10 @@ import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   type WorkflowJobDefinition,
   type WorkflowJobQueueMessage,
-  type WorkflowShell,
 } from '../../../shared/types';
 import { buildWorkflowDispatchEnv } from './actions-env';
 import { logWarn } from '../../../shared/utils/logger';
-
-function normalizeWorkflowShell(shell: string | undefined): WorkflowShell | undefined {
-  if (
-    shell === 'bash' ||
-    shell === 'pwsh' ||
-    shell === 'python' ||
-    shell === 'sh' ||
-    shell === 'cmd' ||
-    shell === 'powershell'
-  ) {
-    return shell;
-  }
-  return undefined;
-}
-
-function toWorkflowJobDefinition(job: Job): WorkflowJobDefinition {
-  const defaults: WorkflowJobDefinition['defaults'] = job.defaults?.run
-    ? {
-        run: {
-          shell: normalizeWorkflowShell(job.defaults.run.shell),
-          'working-directory': job.defaults.run['working-directory'],
-        },
-      }
-    : undefined;
-
-  return {
-    ...job,
-    defaults,
-    steps: job.steps.map((step) => ({
-      ...step,
-      shell: normalizeWorkflowShell(step.shell),
-    })),
-  };
-}
+import { normalizeWorkflowShell, toWorkflowJobDefinition } from '../execution/workflow-engine-converters';
 
 export async function getWorkflowSecretIds(
   db: D1Database,

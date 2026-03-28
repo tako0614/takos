@@ -70,6 +70,12 @@ export interface ServiceTokenConfig {
 
 /**
  * Extract service token from Authorization header.
+ *
+ * Note: `takos/packages/control/src/shared/utils/url-utils.ts` contains an
+ * equivalent lower-level helper `extractBearerToken(header: string | null)`
+ * that operates on a raw header string.  The two cannot be unified here
+ * because `@takos/common` must not import from the `control` package.
+ * If the extraction logic ever needs to change, update both places.
  */
 export function getServiceTokenFromHeader(c: Context): string | null {
   const authHeader = c.req.header('Authorization');

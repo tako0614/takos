@@ -1,7 +1,7 @@
 ﻿import { Hono } from 'hono';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import resourcesAccess from './access';
-import resourcesBase from './base';
+import resourcesBase from './routes';
 import resourcesBindings from './bindings';
 import resourcesD1 from './d1';
 import resourcesR2 from './r2';

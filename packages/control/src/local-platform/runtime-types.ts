@@ -9,6 +9,17 @@ import type {
   AgentExecutorDispatchPayload,
 } from '../runtime/container-hosts/executor-dispatch.ts';
 
+/**
+ * Default host-side ports for the local-platform stack.
+ *
+ * These values are the single source of truth for TypeScript code.
+ * The same port numbers are duplicated in build-time / env config files
+ * that cannot import this module. Keep them in sync when changing:
+ *   - apps/control/web/vite.config.ts          (dev server proxy target)
+ *   - apps/control/.env.self-host.example       (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - .env.local.example                        (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - .env.self-host                            (TAKOS_CONTROL_WEB_PORT etc.)
+ */
 export const DEFAULT_LOCAL_PORTS = {
   web: 8787,
   dispatch: 8788,
@@ -17,6 +28,11 @@ export const DEFAULT_LOCAL_PORTS = {
   browserHost: 8791,
 } as const;
 
+/**
+ * Default container-internal ports for service processes.
+ * Each container listens on this port; the host-side mapping is in
+ * {@link DEFAULT_LOCAL_PORTS}.
+ */
 export const DEFAULT_LOCAL_SERVICE_PORTS = {
   runtime: 8080,
   executor: 8080,

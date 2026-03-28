@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { safeJsonParseOrDefault } from '../../../../shared/utils';
 import { parseLimit, parseOffset } from '../../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
 import { BadRequestError } from '@takos/common/errors';

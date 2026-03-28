@@ -6,7 +6,7 @@ import { getDb, runs } from '../../infra/db';
 import { eq, and, lt } from 'drizzle-orm';
 
 import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { STALE_WORKER_THRESHOLD_MS, envGuard } from './shared';
+import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants';
 
 export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise<void> {
   // Validate environment on first invocation (cached).

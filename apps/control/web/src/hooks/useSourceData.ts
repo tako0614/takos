@@ -40,6 +40,7 @@ export interface SourceItem {
   category?: string | null;
   is_starred: boolean;
   is_mine: boolean;
+  official?: boolean;
   owner: {
     id?: string;
     name: string;
@@ -72,7 +73,7 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     debouncedQuery: filtering.debouncedQuery,
     sort: filtering.sort,
     category: filtering.category,
-    installableOnly: filtering.installableOnly,
+    officialOnly: filtering.officialOnly,
     filter: filtering.filter,
     onNavigateToRepo,
     onRequireLogin,
@@ -86,7 +87,7 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     appendInFlightRef: pagination.appendInFlightRef,
   });
 
-  // Refetch whenever filter/sort/category/installableOnly/query/space changes
+  // Refetch whenever filter/sort/category/officialOnly/query/space changes
   useEffect(() => {
     pagination.appendInFlightRef.current = false;
     const requestId = pagination.requestSeqRef.current + 1;
@@ -100,7 +101,7 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     } else {
       void fetching.fetchStarred(0, false, requestId);
     }
-  }, [filtering.filter, filtering.sort, filtering.category, filtering.installableOnly, filtering.debouncedQuery, filtering.effectiveSpaceId, isAuthenticated, fetching.fetchAll, fetching.fetchMine, fetching.fetchStarred]);
+  }, [filtering.filter, filtering.sort, filtering.category, filtering.officialOnly, filtering.debouncedQuery, filtering.effectiveSpaceId, isAuthenticated, fetching.fetchAll, fetching.fetchMine, fetching.fetchStarred]);
 
   const loadMore = () => {
     pagination.loadMore(
@@ -126,8 +127,8 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     setSort: filtering.setSort,
     category: filtering.category,
     setCategory: filtering.setCategory,
-    installableOnly: filtering.installableOnly,
-    setInstallableOnly: filtering.setInstallableOnly,
+    officialOnly: filtering.officialOnly,
+    setOfficialOnly: filtering.setOfficialOnly,
     query: filtering.query,
     setQuery: filtering.setQuery,
 

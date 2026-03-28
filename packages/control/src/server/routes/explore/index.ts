@@ -1,1 +1,1 @@
-export { default } from './explore-routes';
+export { default } from './routes';
