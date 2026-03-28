@@ -1,4 +1,4 @@
-import { createLogger } from '@takoserver/common/logger';
+import { createLogger } from 'takos-common/logger';
 import { HEARTBEAT_INTERVAL_MS, PROXY_BASE_URL } from '../shared/config.js';
 
 const logger = createLogger({ service: 'takos-runtime' });

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { SpaceRole } from '../../../shared/types';
 import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {
   createSpaceMember,
@@ -17,7 +17,7 @@ import { getDb } from '../../../infra/db';
 import { accounts, accountMemberships } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logWarn } from '../../../shared/utils/logger';
-import { AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takoserver/common/errors';
+import { AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 
 interface MemberWithOwnership {
   id: string;

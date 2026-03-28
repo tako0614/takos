@@ -6,7 +6,7 @@
  */
 
 import type { Queue } from '../../../shared/types/bindings.ts';
-import type { Conclusion } from '@takoserver/actions-engine';
+import type { Conclusion } from 'takos-actions-engine';
 import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
 
 // Re-export public types so existing consumers keep working.

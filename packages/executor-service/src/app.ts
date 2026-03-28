@@ -1,13 +1,13 @@
 import { serve } from '@hono/node-server';
-import { createLogger } from '@takoserver/common/logger';
-import { executeRunInContainer as sharedExecuteRun } from '@takoserver/agent-core/run-executor';
-import type { StartPayload } from '@takoserver/agent-core/run-executor';
+import { createLogger } from 'takos-common/logger';
+import { executeRunInContainer as sharedExecuteRun } from 'takos-agent-core/run-executor';
+import type { StartPayload } from 'takos-agent-core/run-executor';
 import {
   createConcurrencyGuard,
   installGracefulShutdown,
   type ConcurrencyGuard,
-} from '@takoserver/agent-core/executor-utils';
-import { executeRun } from '@takoserver/control/agent/public-runner';
+} from 'takos-agent-core/executor-utils';
+import { executeRun } from 'takos-control/agent/public-runner';
 import {
   buildExecutorRuntimeConfig,
   createExecutorApp,

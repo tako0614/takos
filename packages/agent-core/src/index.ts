@@ -1,12 +1,12 @@
 /**
- * @takoserver/agent-core
+ * takos-agent-core
  *
  * Shared runtime for Takos agent executors.
  * Used by the OSS container executor and private runner integrations.
  *
  * External consumers should use subpath imports:
- *   import { executeRunInContainer } from '@takoserver/agent-core/run-executor';
- *   import { parseStartPayload } from '@takoserver/agent-core/executor-utils';
+ *   import { executeRunInContainer } from 'takos-agent-core/run-executor';
+ *   import { parseStartPayload } from 'takos-agent-core/executor-utils';
  *
  * Internal modules stay unexported here; consumers should use the canonical
  * run-executor and executor-utils entrypoints only.

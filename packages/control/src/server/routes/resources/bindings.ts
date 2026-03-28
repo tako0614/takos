@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { generateId, now } from '../../../shared/utils';
 import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import {
   checkResourceAccess,
   createServiceBinding,
@@ -12,7 +12,7 @@ import {
 import { getDb, services } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
-import { AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takoserver/common/errors';
+import { AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 
 const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
 

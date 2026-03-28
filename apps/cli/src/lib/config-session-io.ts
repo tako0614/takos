@@ -15,15 +15,8 @@ import {
   readSync,
   closeSync,
 } from 'fs';
+import { logWarning } from './cli-log.js';
 import { validateApiUrl, isValidId } from './config-validation.js';
-
-/**
- * Log warning messages to stderr.
- * Local copy to avoid a circular dependency with config-auth.
- */
-function logWarning(message: string): void {
-  console.error(`[takos-cli warning] ${message}`);
-}
 
 // ---------------------------------------------------------------------------
 // Constants & helpers

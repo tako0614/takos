@@ -20,7 +20,7 @@ import { RunCancelledError } from './run-lifecycle';
 import { withTimeout } from '../../../shared/utils/with-timeout';
 import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
-import { throwIfAborted } from '@takoserver/common/abort';
+import { throwIfAborted } from 'takos-common/abort';
 import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
 
 type ToolExecutionRecord = {

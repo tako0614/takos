@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSandboxEnv, validateRuntimeExecEnv } from '../../utils/env-filter.js';
+import { createSandboxEnv, validateRuntimeExecEnv } from '../../utils/sandbox-env.js';
 
 const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
 

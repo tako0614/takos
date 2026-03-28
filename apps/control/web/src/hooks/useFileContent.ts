@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { getErrorMessage } from '@takoserver/common/errors';
+import { getErrorMessage } from 'takos-common/errors';
 
 interface UseFileContentReturn {
   content: string | null;

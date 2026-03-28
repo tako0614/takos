@@ -1,5 +1,5 @@
 {
-  "name": "@takoserver/control-infra",
+  "name": "takos-control-infra",
   "version": "0.0.0",
   "private": true,
   "type": "module",

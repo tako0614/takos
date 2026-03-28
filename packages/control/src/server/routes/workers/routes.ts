@@ -23,7 +23,7 @@ import { createCommonEnvService } from '../../../application/services/common-env
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger';
-import { NotFoundError, InternalError } from '@takoserver/common/errors';
+import { NotFoundError, InternalError } from 'takos-common/errors';
 
 /** Shape of a single invocation record from the Cloudflare GraphQL Analytics API */
 interface CfInvocationRecord {

@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.js';
 import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.js';
 
@@ -142,6 +143,86 @@ export async function verifyNoSymlinkPathComponents(
       throw err;
     }
   }
+}
+
+/**
+ * Resolve a base directory, optionally creating it, and verify it is a directory.
+ * Returns the real (symlink-resolved) path of the directory.
+ */
+export async function resolveBaseDirectory(baseDir: string, createIfMissing: boolean): Promise<string> {
+  if (createIfMissing) {
+    await fsPromises.mkdir(baseDir, { recursive: true });
+  }
+
+  const resolvedBase = await fsPromises.realpath(baseDir);
+  const baseStats = await fsPromises.stat(resolvedBase);
+  if (!baseStats.isDirectory()) {
+    throw new Error(`Base path is not a directory: ${baseDir}`);
+  }
+
+  return resolvedBase;
+}
+
+/**
+ * Resolve a target path via realpath and verify it is within the base directory.
+ * Returns the resolved path, or null if the path escapes or does not exist.
+ */
+export async function resolveAndVerifyPathWithinBase(baseDir: string, targetPath: string): Promise<string | null> {
+  try {
+    const resolvedPath = await fsPromises.realpath(targetPath);
+    if (!isPathWithinBase(baseDir, resolvedPath, { resolveInputs: true })) {
+      return null;
+    }
+    return resolvedPath;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check whether any symlink component of the target path escapes the base directory.
+ * Unlike `verifyNoSymlinkPathComponents`, this allows symlinks whose targets resolve
+ * within the base directory. Returns true if an escaping symlink is found.
+ */
+export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: string): Promise<boolean> {
+  const absoluteTarget = path.resolve(targetPath);
+  if (!isPathWithinBase(baseDir, absoluteTarget, { resolveInputs: true })) {
+    return true;
+  }
+
+  const relativePath = path.relative(baseDir, absoluteTarget);
+  if (relativePath === '' || relativePath === '.') {
+    return false;
+  }
+
+  const pathParts = relativePath.split(path.sep).filter(Boolean);
+  let currentPath = baseDir;
+
+  for (const pathPart of pathParts) {
+    currentPath = path.join(currentPath, pathPart);
+    let currentStats: Awaited<ReturnType<typeof fsPromises.lstat>>;
+
+    try {
+      currentStats = await fsPromises.lstat(currentPath);
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ENOENT') {
+        return false;
+      }
+      return true;
+    }
+
+    if (!currentStats.isSymbolicLink()) {
+      continue;
+    }
+
+    const resolvedLinkTarget = await resolveAndVerifyPathWithinBase(baseDir, currentPath);
+    if (!resolvedLinkTarget) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function resolveRepoGitPath(repoGitPath: string): string {

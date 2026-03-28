@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { JobScheduler, type JobSchedulerEvent } from '../../scheduler/job.js';
 import { createBaseContext } from '../../context.js';
-import type { Workflow } from '../../types.js';
+import type { Workflow } from '../../workflow-models.js';
 
 /**
  * Minimal workflow used purely to construct a JobScheduler instance.

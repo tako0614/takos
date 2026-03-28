@@ -6,7 +6,7 @@ Takos を Cloudflare Workers にデプロイする方法。
 
 - Cloudflare アカウント（Paid Workers プラン推奨）
 - API トークン（後述の権限設定を参照）
-- `@takoserver/cli` がインストール済み
+- `takos-cli` がインストール済み
 - `wrangler` CLI（v4 以上）
 
 ## セットアップ

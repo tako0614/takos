@@ -11,7 +11,7 @@ import { repositories } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
 import { now } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
 function normalizeBranchName(input: string): string {
   if (input.startsWith('refs/heads/')) {

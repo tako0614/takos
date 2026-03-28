@@ -1,5 +1,5 @@
 {
-  "name": "@takoserver/executor-service",
+  "name": "takos-executor-service",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@takoserver/actions-engine": "workspace:*",
-    "@takoserver/agent-core": "workspace:*",
-    "@takoserver/common": "workspace:*",
-    "@takoserver/control": "workspace:*",
+    "takos-actions-engine": "workspace:*",
+    "takos-agent-core": "workspace:*",
+    "takos-common": "workspace:*",
+    "takos-control": "workspace:*",
     "hono": "^4.12.4",
     "jszip": "^3.10.1",
     "yaml": "^2.5.1"

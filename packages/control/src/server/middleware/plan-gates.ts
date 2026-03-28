@@ -5,7 +5,7 @@ import {
   WEEKLY_RUNTIME_LIMIT_SECONDS,
   WEEKLY_RUNTIME_WINDOW_DAYS,
 } from '../../application/services/billing/billing';
-import { PaymentRequiredError } from '@takoserver/common/errors';
+import { PaymentRequiredError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger';
 
 type PlanGateVariables = {

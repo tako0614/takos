@@ -13,8 +13,8 @@ import { ControlRpcClient, createStaticControlRpcTokenSource } from './control-r
 // Pure functions that don't depend on takos-control internals.
 // ---------------------------------------------------------------------------
 
-// NOTE: Agent RunStatus — intentionally duplicated from @takoserver/control shared/types/models.ts.
-// @takoserver/agent-core has no dependency on @takoserver/control, so the type is redefined here to
+// NOTE: Agent RunStatus — intentionally duplicated from takos-control shared/types/models.ts.
+// takos-agent-core has no dependency on takos-control, so the type is redefined here to
 // keep this package self-contained. If you change the canonical definition in
 // packages/control/src/shared/types/models.ts, update this copy to match.
 // See also: takos-computer/packages/computer-core/src/shared/types.ts (another copy).
@@ -37,7 +37,7 @@ export function shouldResetRunToQueuedOnContainerError(
 /**
  * Function signature for the agent runner's `executeRun`.
  * Used for dependency injection — callers pass the concrete implementation
- * (resolved from @takoserver/control/agent/public-runner) into agent-core's executor.
+ * (resolved from takos-control/agent/public-runner) into agent-core's executor.
  */
 export type ExecuteRunFn = (
   env: Record<string, unknown>,
@@ -318,14 +318,14 @@ export async function executeRunInContainer(
       await runNoLlmFastPath(controlRpc, { runId, serviceId, workerId }, logger, tag);
       return;
     } else {
-    const msg = `No LLM API keys available for run ${runId}`;
-    logger.error(`[${tag}] ${msg}`);
-    try {
-      await controlRpc.resetRun({ runId, serviceId, workerId });
-    } catch (resetErr) {
-      logger.warn(`[${tag}] Failed to reset run ${runId} after missing LLM keys (best-effort)`, { error: resetErr });
-    }
-    throw new Error(msg);
+      const msg = `No LLM API keys available for run ${runId}`;
+      logger.error(`[${tag}] ${msg}`);
+      try {
+        await controlRpc.resetRun({ runId, serviceId, workerId });
+      } catch (resetErr) {
+        logger.warn(`[${tag}] Failed to reset run ${runId} after missing LLM keys (best-effort)`, { error: resetErr });
+      }
+      throw new Error(msg);
     }
   }
 

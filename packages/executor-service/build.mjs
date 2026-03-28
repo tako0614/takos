@@ -8,7 +8,7 @@ await buildContainer({
   appDir,
   name: 'takos-executor',
   external: [
-    '@takoserver/actions-engine',
+    'takos-actions-engine',
     '@langchain/langgraph',
     '@langchain/core',
     '@langchain/openai',

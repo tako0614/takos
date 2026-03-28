@@ -4,6 +4,7 @@ import { useI18n } from '../../store/i18n';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
+import { useToolForm } from '../../hooks/useToolForm';
 import type { CustomTool } from '../../types';
 
 export interface SchemaParameter {
@@ -218,11 +219,20 @@ export function CreateToolModal({
 }) {
   const { t } = useI18n();
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [creating, setCreating] = useState(false);
-  const [parameters, setParameters] = useState<SchemaParameter[]>([]);
-  const [showAddParam, setShowAddParam] = useState(false);
+
+  const {
+    description,
+    setDescription,
+    parameters,
+    showAddParam,
+    addParameter,
+    removeParameter,
+    openAddParam,
+    closeAddParam,
+    parameterNames,
+  } = useToolForm();
 
   const handleCreate = async () => {
     setCreating(true);
@@ -236,15 +246,6 @@ export function CreateToolModal({
     } finally {
       setCreating(false);
     }
-  };
-
-  const addParameter = (param: SchemaParameter) => {
-    setParameters([...parameters, param]);
-    setShowAddParam(false);
-  };
-
-  const removeParameter = (index: number) => {
-    setParameters(parameters.filter((_, i) => i !== index));
   };
 
   const isValid = name.trim() && description.trim() && workerId.trim();
@@ -288,7 +289,7 @@ export function CreateToolModal({
         <ParameterList
           parameters={parameters}
           onRemove={removeParameter}
-          onAdd={() => setShowAddParam(true)}
+          onAdd={openAddParam}
         />
 
         <div className="flex gap-2 justify-end pt-2">
@@ -307,9 +308,9 @@ export function CreateToolModal({
 
       {showAddParam && (
         <AddParameterModal
-          onClose={() => setShowAddParam(false)}
+          onClose={closeAddParam}
           onAdd={addParameter}
-          existingNames={parameters.map(p => p.name)}
+          existingNames={parameterNames}
         />
       )}
     </Modal>
@@ -326,20 +327,22 @@ export function EditToolModal({
   onSave: (data: UpdateToolInput) => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [description, setDescription] = useState(tool.description);
   const [saving, setSaving] = useState(false);
-  const [parameters, setParameters] = useState<SchemaParameter[]>(() => {
-    const schema = tool.inputSchema as { properties?: Record<string, { type: string; description?: string }>; required?: string[] };
-    if (!schema.properties) return [];
 
-    return Object.entries(schema.properties).map(([name, prop]) => ({
-      name,
-      type: prop.type as SchemaParameter['type'],
-      description: prop.description || '',
-      required: schema.required?.includes(name) || false,
-    }));
+  const {
+    description,
+    setDescription,
+    parameters,
+    showAddParam,
+    addParameter,
+    removeParameter,
+    openAddParam,
+    closeAddParam,
+    parameterNames,
+  } = useToolForm({
+    initialDescription: tool.description,
+    initialSchema: tool.inputSchema as { properties?: Record<string, { type: string; description?: string }>; required?: string[] },
   });
-  const [showAddParam, setShowAddParam] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -353,15 +356,6 @@ export function EditToolModal({
     } finally {
       setSaving(false);
     }
-  };
-
-  const addParameter = (param: SchemaParameter) => {
-    setParameters([...parameters, param]);
-    setShowAddParam(false);
-  };
-
-  const removeParameter = (index: number) => {
-    setParameters(parameters.filter((_, i) => i !== index));
   };
 
   const isValid = description.trim();
@@ -405,7 +399,7 @@ export function EditToolModal({
         <ParameterList
           parameters={parameters}
           onRemove={removeParameter}
-          onAdd={() => setShowAddParam(true)}
+          onAdd={openAddParam}
         />
 
         <div className="flex gap-2 justify-end pt-2">
@@ -424,9 +418,9 @@ export function EditToolModal({
 
       {showAddParam && (
         <AddParameterModal
-          onClose={() => setShowAddParam(false)}
+          onClose={closeAddParam}
           onAdd={addParameter}
-          existingNames={parameters.map(p => p.name)}
+          existingNames={parameterNames}
         />
       )}
     </Modal>

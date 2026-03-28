@@ -6,7 +6,7 @@ import { now, toIsoString } from '../../../shared/utils';
 import {
   requireSpaceAccess,
 } from '../shared/route-auth';
-import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from '@takoserver/common/errors';
+import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';

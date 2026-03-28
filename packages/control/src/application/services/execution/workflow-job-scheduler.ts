@@ -2,9 +2,9 @@
  * Workflow Engine – job scheduling, dependency evaluation, and status updates
  */
 
-import type { Workflow } from '@takoserver/actions-engine';
-import type { Conclusion } from '@takoserver/actions-engine';
-import { parseWorkflow } from '@takoserver/actions-engine';
+import type { Workflow } from 'takos-actions-engine';
+import type { Conclusion } from 'takos-actions-engine';
+import { parseWorkflow } from 'takos-actions-engine';
 import { now } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../../infra/db';

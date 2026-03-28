@@ -2,14 +2,14 @@
  * Hono context variable type declarations for takos-runtime.
  *
  * These are set via c.set() in middleware and accessed via c.get() in handlers.
- * The ServiceTokenEnv from @takoserver/common/middleware/hono provides serviceToken
+ * The ServiceTokenEnv from takos-common/middleware/hono provides serviceToken
  * and serviceAuthMethod types.
  *
  * Additional runtime-specific variables are declared here.
  */
 
-import type { Logger } from '@takoserver/common/logger';
-import type { ServiceTokenPayloadWithClaims } from '@takoserver/common/middleware/hono';
+import type { Logger } from 'takos-common/logger';
+import type { ServiceTokenPayloadWithClaims } from 'takos-common/middleware/hono';
 
 declare module 'hono' {
   interface ContextVariableMap {

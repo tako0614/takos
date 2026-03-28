@@ -3,7 +3,7 @@ import { parseJsonBody, requireSpaceAccess, type AuthenticatedRouteEnv } from '.
 import { createCommonEnvService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env/handlers';
 import { logError } from '../../../shared/utils/logger';
-import { AppError, BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { AppError, BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/common-env', async (c) => {

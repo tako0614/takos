@@ -112,10 +112,10 @@ describe('local public runtime contract', () => {
     expect(localPlatformPackage.exports?.['./run-public-entrypoint']).toBeUndefined();
     expect(localPlatformPackage.exports?.['./register-loader']).toBeUndefined();
     expect(localPlatformPackage.exports?.['./run-entrypoint']).toBeUndefined();
-    expect(localPlatformPackage.dependencies?.['@takoserver/control-hosts']).toBeUndefined();
+    expect(localPlatformPackage.dependencies?.['takos-control-hosts']).toBeUndefined();
     expect(localPlatformPackage.dependencies?.['@hono/node-server']).toBeUndefined();
     expect(localPlatformPackage.dependencies?.['@cloudflare/containers']).toBeUndefined();
-    expect(localPlatformPackage.dependencies?.['@takoserver/cloudflare-compat']).toBeUndefined();
+    expect(localPlatformPackage.dependencies?.['takos-cloudflare-compat']).toBeUndefined();
     expect(localPlatformPackage.dependencies?.miniflare).toBeUndefined();
     await expect(access(path.join(packageRoot, 'src/web-node.ts'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/dispatch-node.ts'), constants.F_OK)).rejects.toBeDefined();
@@ -181,7 +181,7 @@ describe('local public runtime contract', () => {
       const script = controlPackage.scripts?.[scriptName];
       expect(script).toContain('pnpm exec tsx ../../packages/control/local-platform/src/');
       expect(script).not.toContain('--eval');
-      expect(script).not.toContain('@takoserver/control-local-platform/');
+      expect(script).not.toContain('takos-control-local-platform/');
       expect(script).not.toContain('register-public-loader');
       expect(script).not.toContain('register-loader.mjs');
       expect(script).not.toContain('run-entrypoint.mjs');

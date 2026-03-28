@@ -2,7 +2,7 @@
  * Workflow Engine – pure helper / conversion functions
  */
 
-import type { Job } from '@takoserver/actions-engine';
+import type { Job } from 'takos-actions-engine';
 import { toIsoString } from '../../../shared/utils';
 import type { WorkflowJobDefinition, WorkflowShell } from '../../../shared/types';
 import type { DrizzleWorkflowRun, WorkflowRunRecord } from './workflow-engine-types';

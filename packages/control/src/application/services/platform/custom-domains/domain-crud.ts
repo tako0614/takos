@@ -1,8 +1,7 @@
 import type { Env } from '../../../../shared/types';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, count } from 'drizzle-orm';
-import { isDomainReserved } from '../../../../shared/utils/reserved-domains';
-import { generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domains';
+import { isDomainReserved, generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domain-validation';
 import { now } from '../../../../shared/utils';
 import { deleteHostnameRouting } from '../../routing/service';
 import { createServiceDesiredStateService } from '../worker-desired-state';

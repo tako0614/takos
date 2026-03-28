@@ -1,11 +1,11 @@
-# @takoserver/cli
+# takos-cli
 
 Task-oriented unified CLI for Takos.
 
 ## Installation
 
 ```bash
-npm install -g @takoserver/cli
+npm install -g takos-cli
 ```
 
 ## Authentication

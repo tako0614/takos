@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { ResourcePermission } from '../../../shared/types';
 import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import {
   deleteResourceAccess,
   getResourceById,
@@ -11,7 +11,7 @@ import {
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { NotFoundError, AuthorizationError } from '@takoserver/common/errors';
+import { NotFoundError, AuthorizationError } from 'takos-common/errors';
 
 const resourcesAccess = new Hono<AuthenticatedRouteEnv>()
 

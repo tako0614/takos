@@ -6,53 +6,13 @@ import type {
   R2Object,
   R2ObjectBody,
 } from '../../shared/types/bindings.ts';
-
-// R2Objects is not re-exported from bindings, define inline to match the Cloudflare shape.
-interface R2Objects {
-  objects: R2Object[];
-  truncated: boolean;
-  cursor?: string;
-  delimitedPrefixes: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Cloudflare R2 sub-types (not re-exported from bindings, defined locally)
-// ---------------------------------------------------------------------------
-
-/** Matches the Cloudflare R2Checksums interface for GCS interop. */
-interface R2ChecksumsLike {
-  readonly md5?: ArrayBuffer;
-  readonly sha1?: ArrayBuffer;
-  readonly sha256?: ArrayBuffer;
-  readonly sha384?: ArrayBuffer;
-  readonly sha512?: ArrayBuffer;
-  toJSON(): Record<string, string | undefined>;
-}
-
-/** Matches the Cloudflare R2HTTPMetadata interface for GCS interop. */
-interface R2HTTPMetadataLike {
-  contentType?: string;
-  contentLanguage?: string;
-  contentDisposition?: string;
-  contentEncoding?: string;
-  cacheControl?: string;
-  cacheExpiry?: Date;
-}
-
-/** Matches the Cloudflare R2Range type for GCS interop. */
-interface R2RangeLike {
-  offset: number;
-  length?: number;
-}
-
-/** Build an empty R2Checksums-compatible object. */
-function emptyChecksums(): R2ChecksumsLike {
-  return {
-    toJSON() {
-      return {};
-    },
-  };
-}
+import {
+  emptyChecksums,
+  type R2Objects,
+  type R2ChecksumsLike,
+  type R2HTTPMetadataLike,
+  type R2RangeLike,
+} from './r2-compat-types.ts';
 
 /** Type guard for GCS SDK errors that carry a numeric `code` property. */
 function isGcsError(err: unknown): err is Error & { code: number } {

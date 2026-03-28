@@ -4,9 +4,9 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.js';
 import { getWorkerResourceLimits } from '../../runtime/validation.js';
-import { getErrorMessage } from '@takoserver/common/errors';
-import { badRequest } from '@takoserver/common/middleware/hono';
-import { createLogger } from '@takoserver/common/logger';
+import { getErrorMessage } from 'takos-common/errors';
+import { badRequest } from 'takos-common/middleware/hono';
+import { createLogger } from 'takos-common/logger';
 const logger = createLogger({ service: 'takos-runtime' });
 
 interface ExecuteToolRequest {

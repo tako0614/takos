@@ -11,8 +11,8 @@ import {
   MAX_R2_DOWNLOAD_TOTAL_BYTES,
 } from '../shared/config.js';
 import { pushLog } from '../runtime/logging.js';
-import { isPathWithinBase } from '../runtime/paths.js';
-import { createLogger } from '@takoserver/common/logger';
+import { isPathWithinBase, resolveBaseDirectory, resolveAndVerifyPathWithinBase, hasEscapingSymlinkComponent } from '../runtime/paths.js';
+import { createLogger } from 'takos-common/logger';
 import { generateTempSuffix } from '../shared/temp-id.js';
 
 const logger = createLogger({ service: 'takos-runtime' });
@@ -87,73 +87,6 @@ function validateAndSanitizeFilePath(filePath: string, baseDir: string): string 
   return fullPath;
 }
 
-async function resolveBaseDirectory(baseDir: string, createIfMissing: boolean): Promise<string> {
-  if (createIfMissing) {
-    await fs.mkdir(baseDir, { recursive: true });
-  }
-
-  const resolvedBase = await fs.realpath(baseDir);
-  const baseStats = await fs.stat(resolvedBase);
-  if (!baseStats.isDirectory()) {
-    throw new Error(`Base path is not a directory: ${baseDir}`);
-  }
-
-  return resolvedBase;
-}
-
-async function resolvePathWithinBase(baseDir: string, targetPath: string): Promise<string | null> {
-  try {
-    const resolvedPath = await fs.realpath(targetPath);
-    if (!isPathWithinBase(baseDir, resolvedPath, { resolveInputs: true })) {
-      return null;
-    }
-    return resolvedPath;
-  } catch {
-    return null;
-  }
-}
-
-async function hasEscapingSymlinkComponent(baseDir: string, targetPath: string): Promise<boolean> {
-  const absoluteTarget = path.resolve(targetPath);
-  if (!isPathWithinBase(baseDir, absoluteTarget, { resolveInputs: true })) {
-    return true;
-  }
-
-  const relativePath = path.relative(baseDir, absoluteTarget);
-  if (relativePath === '' || relativePath === '.') {
-    return false;
-  }
-
-  const pathParts = relativePath.split(path.sep).filter(Boolean);
-  let currentPath = baseDir;
-
-  for (const pathPart of pathParts) {
-    currentPath = path.join(currentPath, pathPart);
-    let currentStats: Awaited<ReturnType<typeof fs.lstat>>;
-
-    try {
-      currentStats = await fs.lstat(currentPath);
-    } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      if (e.code === 'ENOENT') {
-        return false;
-      }
-      return true;
-    }
-
-    if (!currentStats.isSymbolicLink()) {
-      continue;
-    }
-
-    const resolvedLinkTarget = await resolvePathWithinBase(baseDir, currentPath);
-    if (!resolvedLinkTarget) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 async function downloadSpaceFiles(
   spaceId: string,
   localDir: string,
@@ -213,7 +146,7 @@ async function downloadSpaceFiles(
         }
 
         await fs.mkdir(targetDir, { recursive: true });
-        const resolvedTargetDir = await resolvePathWithinBase(resolvedBaseDir, targetDir);
+        const resolvedTargetDir = await resolveAndVerifyPathWithinBase(resolvedBaseDir, targetDir);
         if (!resolvedTargetDir) {
           pushLog(logs, `Warning: Skipping file due to symlink escape after mkdir: ${rawFilePath}`);
           continue;
@@ -230,7 +163,7 @@ async function downloadSpaceFiles(
         const tempPath = `${validatedPath}.${generateTempSuffix()}.tmp`;
         await fs.writeFile(tempPath, content);
 
-        const resolvedTempPath = await resolvePathWithinBase(resolvedBaseDir, tempPath);
+        const resolvedTempPath = await resolveAndVerifyPathWithinBase(resolvedBaseDir, tempPath);
         if (!resolvedTempPath) {
           await fs.unlink(tempPath).catch((err) => {
             logger.debug(`Failed to clean up temp file ${tempPath}`, { error: err });
@@ -239,7 +172,7 @@ async function downloadSpaceFiles(
           continue;
         }
 
-        if (!(await resolvePathWithinBase(resolvedBaseDir, resolvedTargetDir))) {
+        if (!(await resolveAndVerifyPathWithinBase(resolvedBaseDir, resolvedTargetDir))) {
           await fs.unlink(tempPath).catch(() => undefined);
           pushLog(logs, `Warning: Destination directory escaped base path, skipping: ${rawFilePath}`);
           continue;
@@ -247,7 +180,7 @@ async function downloadSpaceFiles(
 
         await fs.rename(tempPath, validatedPath);
 
-        const resolvedFinalPath = await resolvePathWithinBase(resolvedBaseDir, validatedPath);
+        const resolvedFinalPath = await resolveAndVerifyPathWithinBase(resolvedBaseDir, validatedPath);
         if (!resolvedFinalPath) {
           // Attempt to remove the escaped file
           await fs.unlink(validatedPath).catch(() => undefined);
@@ -305,7 +238,7 @@ async function uploadSpaceFiles(
     }
 
     try {
-      const resolvedLocalPath = await resolvePathWithinBase(resolvedBaseDir, validatedLocalPath);
+      const resolvedLocalPath = await resolveAndVerifyPathWithinBase(resolvedBaseDir, validatedLocalPath);
       if (!resolvedLocalPath) {
         pushLog(logs, `Warning: Skipping file with symlink escape attempt: ${sanitizedRelativePath}`);
         continue;

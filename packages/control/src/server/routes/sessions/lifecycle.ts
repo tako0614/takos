@@ -12,7 +12,7 @@ import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import { toSessionSnakeCase } from './session-mappers';
 import type { SessionContext } from './session-mappers';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import {
   getPlatformConfig,
   getPlatformGitObjects,

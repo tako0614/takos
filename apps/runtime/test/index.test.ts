@@ -9,7 +9,7 @@ describe('runtime app shell', () => {
       'utf8',
     );
 
-    expect(source).toContain("const pkg = '@takoserver/runtime-service';");
+    expect(source).toContain("const pkg = 'takos-runtime-service';");
     expect(source).toContain("await import(pkg)");
     expect(source).toContain("../../../packages/runtime-service/dist/index.js");
   });

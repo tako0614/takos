@@ -11,7 +11,7 @@ import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/sch
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { BadRequestError, AuthorizationError, NotFoundError, ConflictError } from '@takoserver/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError, ConflictError } from 'takos-common/errors';
 import { fetchReleaseWithDetails } from './release-shared';
 
 const releaseCrud = new Hono<AuthenticatedRouteEnv>()

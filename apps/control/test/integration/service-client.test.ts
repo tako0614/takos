@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ErrorCodes } from '@takoserver/common/errors';
+import { ErrorCodes } from 'takos-common/errors';
 import {
   parseServiceResponse,
   ServiceCallError,

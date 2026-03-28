@@ -43,7 +43,7 @@ export async function buildContainer(opts) {
       js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
     },
     alias: {
-      '@takoserver/common': resolve(REPO_ROOT, 'packages/common/src'),
+      'takos-common': resolve(REPO_ROOT, 'packages/common/src'),
       ...alias,
     },
     loader: {

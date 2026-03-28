@@ -7,7 +7,7 @@
  */
 
 import type { WorkerBinding, CloudflareBindingRecord } from './wfp-contracts';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 
 /**
  * Convert a strongly-typed WorkerBinding into the Cloudflare API record shape.

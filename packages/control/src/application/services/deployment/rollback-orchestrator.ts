@@ -34,7 +34,7 @@ import {
 import { deployments, getDb, serviceDeployments } from '../../../infra/db';
 import { eq, and, ne, inArray } from 'drizzle-orm';
 import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
-import { BadRequestError, ConflictError, NotFoundError } from '@takoserver/common/errors';
+import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
 import {
   getDeploymentProviderRegistry,
   resolveDeploymentServiceId,

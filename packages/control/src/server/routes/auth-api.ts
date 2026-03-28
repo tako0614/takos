@@ -15,7 +15,7 @@ import {
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
 import { now, extractBearerToken } from '../../shared/utils';
-import { BadRequestError, AuthenticationError, ConflictError } from '@takoserver/common/errors';
+import { BadRequestError, AuthenticationError, ConflictError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 
 type Variables = {

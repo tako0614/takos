@@ -21,7 +21,7 @@ import {
 import { getDb } from '../../infra/db';
 import { skills as skillsTable } from '../../infra/db/schema';
 import { eq, and, ne } from 'drizzle-orm';
-import { BadRequestError, NotFoundError, ConflictError, ValidationError } from '@takoserver/common/errors';
+import { BadRequestError, NotFoundError, ConflictError, ValidationError } from 'takos-common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 const skills = new Hono<{ Bindings: Env; Variables: BaseVariables }>();

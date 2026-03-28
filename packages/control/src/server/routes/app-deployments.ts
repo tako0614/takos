@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { requireSpaceAccess, type BaseVariables } from './shared/route-auth';
-import { NotFoundError, InternalError, isAppError } from '@takoserver/common/errors';
+import { NotFoundError, InternalError, isAppError } from 'takos-common/errors';
 import { createAppDeploymentService } from '../../application/services/platform/app-deployments';
 import { RolloutService } from '../../application/services/platform/rollout';
 import { zValidator } from './zod-validator';

@@ -1,9 +1,9 @@
 import type { Context } from 'hono';
 import type { Env, User } from '../../../shared/types';
 import { checkSpaceAccess } from '../../../shared/utils';
-import { AppError, ErrorCodes, NotFoundError, InternalError } from '@takoserver/common/errors';
+import { AppError, ErrorCodes, NotFoundError, InternalError } from 'takos-common/errors';
 
-// Re-export Error classes and types from @takoserver/common/errors (canonical location)
+// Re-export Error classes and types from takos-common/errors (canonical location)
 export {
   ErrorCodes,
   type ErrorCode,
@@ -22,7 +22,7 @@ export {
   logError,
   type ValidationErrorDetail,
   type ErrorResponse,
-} from '@takoserver/common/errors';
+} from 'takos-common/errors';
 
 // Re-export non-deprecated helpers from error-response
 export { oauth2Error, type OAuth2ErrorResponse } from '../../../shared/utils/error-response';

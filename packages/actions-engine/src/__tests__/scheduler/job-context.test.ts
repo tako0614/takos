@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ExecutionContext, JobResult } from '../../types.js';
+import type { ExecutionContext, JobResult } from '../../workflow-models.js';
 import { buildJobExecutionContext, buildNeedsContext } from '../../scheduler/job-policy.js';
 
 function createBaseContext(): ExecutionContext {

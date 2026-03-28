@@ -3,7 +3,7 @@
  *
  * Only symbols that are actually consumed via this barrel are re-exported.
  * For everything else, import the specific module directly
- * (e.g. `./logger`, `./hash`, `./reserved-domains`).
+ * (e.g. `./logger`, `./hash`, `./domain-validation`).
  */
 
 // --- Date/time utilities ---
@@ -36,7 +36,7 @@ export {
 
 // --- ID generation ---
 
-export { generateId } from '@takoserver/common/id';
+export { generateId } from 'takos-common/id';
 
 // --- Rate limiting ---
 

@@ -5,7 +5,7 @@
 
 import { getDb, billingAccounts, billingTransactions, usageEvents, usageRollups } from '../../../infra/db';
 import { generateId } from '../../../shared/utils';
-import { InternalError } from '@takoserver/common/errors';
+import { InternalError } from 'takos-common/errors';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { eq, and, gte, sum, asc, sql } from 'drizzle-orm';
 import type {

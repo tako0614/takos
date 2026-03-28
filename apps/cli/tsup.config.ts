@@ -12,7 +12,7 @@ export default defineConfig({
   target: 'node20',
   // Bundle everything into a single file for easy distribution
   noExternal: [
-    '@takoserver/actions-engine',
+    'takos-actions-engine',
     'commander',
     'chalk',
     'ora',
@@ -25,7 +25,7 @@ export default defineConfig({
   esbuildOptions(options) {
     options.alias = {
       ...(options.alias ?? {}),
-      '@takoserver/actions-engine': actionsEngineEntry,
+      'takos-actions-engine': actionsEngineEntry,
     };
   },
 });

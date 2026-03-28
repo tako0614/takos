@@ -106,9 +106,9 @@ export class ControlRpcClient {
   async fetchApiKeys(): Promise<{ openai?: string; anthropic?: string; google?: string }> {
     const result = await this.post<ApiKeysResponse>('/rpc/control/api-keys', {});
     return {
-      openai: result.openai,
-      anthropic: result.anthropic,
-      google: result.google,
+      openai: result.openai ?? undefined,
+      anthropic: result.anthropic ?? undefined,
+      google: result.google ?? undefined,
     };
   }
 

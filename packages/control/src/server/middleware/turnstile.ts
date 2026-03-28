@@ -7,7 +7,7 @@
  */
 import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../../shared/types';
-import { AuthorizationError } from '@takoserver/common/errors';
+import { AuthorizationError } from 'takos-common/errors';
 import { logWarn } from '../../shared/utils/logger';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';

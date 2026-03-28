@@ -13,7 +13,7 @@ import {
   type ChannelVersions,
 } from '@langchain/langgraph-checkpoint';
 import type { RunnableConfig } from '@langchain/core/runnables';
-import { BadRequestError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, InternalError } from 'takos-common/errors';
 import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db';
 import { eq, and, lt, desc } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';

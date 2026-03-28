@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import { ALLOWED_COMMANDS_SET } from '../../shared/config.js';
 import { runCommand } from '../../runtime/command.js';
-import { validateRuntimeExecEnv } from '../../utils/env-filter.js';
+import { validateRuntimeExecEnv } from '../../utils/sandbox-env.js';
 import { pushLog } from '../../runtime/logging.js';
 import {
   verifyNoSymlinkPathComponents,
@@ -13,7 +13,7 @@ import {
 import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
 import { isValidSessionId, validateCommandLine } from '../../runtime/validation.js';
 import { sessionStore } from './storage.js';
-import { getErrorMessage } from '@takoserver/common/errors';
+import { getErrorMessage } from 'takos-common/errors';
 import { writeAuditLog } from '../../utils/audit-log.js';
 import {
   getSessionOwnerSub,
@@ -21,7 +21,7 @@ import {
   parseRequiredSessionSpaceIds,
   resolveSessionWorkDir,
 } from './session-utils.js';
-import { forbidden, badRequest, internalError } from '@takoserver/common/middleware/hono';
+import { forbidden, badRequest, internalError } from 'takos-common/middleware/hono';
 import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.js';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 

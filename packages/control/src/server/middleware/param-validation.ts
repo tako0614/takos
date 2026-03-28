@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../../shared/types';
 import { isValidOpaqueId } from '../../shared/utils/db-guards';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 import { logWarn } from '../../shared/utils/logger';
 
 // Route params that must be opaque IDs

@@ -11,7 +11,7 @@ import {
   handleVectorizeIndex,
 } from './handlers';
 import { handleGraphNeighbors } from './graph';
-import { BadRequestError } from '@takoserver/common/errors';
+import { BadRequestError } from 'takos-common/errors';
 
 const index = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 

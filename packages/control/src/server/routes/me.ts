@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, User } from '../../shared/types';
 import { now, safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils';
-import { validateUsername } from '../../shared/utils/reserved-usernames';
+import { validateUsername } from '../../shared/utils/domain-validation';
 import { getDb } from '../../infra/db';
 import { accounts, oauthTokens, oauthAuditLogs, personalAccessTokens } from '../../infra/db/schema';
 import { eq, and, ne, desc } from 'drizzle-orm';
@@ -10,7 +10,7 @@ import { getClientsByOwner, createClient, updateClient, deleteClient } from '../
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
 import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
-import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takoserver/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 import { logWarn } from '../../shared/utils/logger';
 import {
   ensureUserSettings,

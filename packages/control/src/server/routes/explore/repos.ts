@@ -12,7 +12,7 @@ import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { parseLimit, parseOffset } from '../shared/route-auth';
-import { NotFoundError } from '@takoserver/common/errors';
+import { NotFoundError } from 'takos-common/errors';
 import {
   findRepoByUsernameAndName,
   parseExploreFilters,

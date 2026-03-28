@@ -21,7 +21,7 @@ import {
 import { getDb, accounts, authIdentities } from '../../../infra/db';
 import { externalTokenPostRedirectPage } from '../auth/html';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, AuthorizationError } from '@takoserver/common/errors';
+import { BadRequestError, AuthorizationError } from 'takos-common/errors';
 
 const oauth = new Hono<PublicRouteEnv>();
 

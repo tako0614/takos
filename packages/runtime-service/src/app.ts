@@ -19,7 +19,7 @@ import {
   createErrorHandler,
   notFoundHandler,
   forbidden,
-} from '@takoserver/common/middleware/hono';
+} from 'takos-common/middleware/hono';
 import { createRateLimiter } from './middleware/rate-limit.js';
 import execRoutes from './routes/runtime/exec.js';
 import toolsRoutes from './routes/runtime/tools.js';
@@ -41,7 +41,7 @@ import { jobManager } from './runtime/actions/job-manager.js';
 import cliProxyRoutes from './routes/cli/proxy.js';
 import { isR2Configured } from './storage/r2.js';
 import { sessionStore } from './routes/sessions/storage.js';
-import { createLogger } from '@takoserver/common/logger';
+import { createLogger } from 'takos-common/logger';
 
 export type RuntimeServiceOptions = {
   port?: number;

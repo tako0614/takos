@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { executeRunInContainer } from '@takoserver/agent-core/run-executor';
-import { parseStartPayload } from '@takoserver/agent-core/executor-utils';
+import { executeRunInContainer } from 'takos-agent-core/run-executor';
+import { parseStartPayload } from 'takos-agent-core/executor-utils';
 
 describe('agent-core no-LLM fast path', () => {
   const originalEnv = {

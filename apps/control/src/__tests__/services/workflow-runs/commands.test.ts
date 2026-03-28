@@ -32,7 +32,7 @@ vi.mock('@/services/git-smart', () => ({
   getBlobAtPath: mocks.getBlobAtPath,
 }));
 
-vi.mock('@takoserver/actions-engine', () => ({
+vi.mock('takos-actions-engine', () => ({
   parseWorkflow: mocks.parseWorkflow,
   validateWorkflow: mocks.validateWorkflow,
 }));

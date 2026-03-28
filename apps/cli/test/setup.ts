@@ -1,1 +1,1 @@
-// Test setup for @takoserver/cli
+// Test setup for takos-cli

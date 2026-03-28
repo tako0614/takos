@@ -4,7 +4,7 @@ import { toIsoString } from '../../../shared/utils';
 import { fetchProfileActivity } from '../../../application/services/identity/profile-activity';
 import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
-import { NotFoundError, AuthorizationError, BadRequestError } from '@takoserver/common/errors';
+import { NotFoundError, AuthorizationError, BadRequestError } from 'takos-common/errors';
 import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
