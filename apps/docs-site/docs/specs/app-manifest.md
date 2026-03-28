@@ -1,47 +1,108 @@
-# `.takos/app.yml`
+# .takos/app.yml
 
-<!-- docs:manifest-example specs/examples/app-manifest.current.example.yml -->
+app.yml は「何をデプロイするか」を宣言するファイルです。
+ビルド手順書ではなく、デプロイ後に何が起動し、どこで公開され、何が接続されるかを表します。
 
-::: tip Status
-このページは current contract です。Takos は **single-document YAML** の `kind: App` manifest を正本として解釈します。
+::: details 依存してよい / してはいけない範囲
+**依存してよい**: single-document YAML の `kind: App` / `spec.containers` / `spec.workers` / `spec.routes` / `spec.resources` / `spec.env` / `build.fromWorkflow` / OAuth / MCP / file handler の宣言方法
+
+**依存してはいけない**: multi-document `Package` / `Workload` / `Binding` / `build.command` や local shell を直接書く build 記法 / `container`, `http-url` など provider 寄りの target 記法
 :::
 
-Takos の app deploy は、repo 内の `.takos/app.yml` を読んで構成を決めます。
-この manifest は「ビルド手順の自由記述」ではなく、「deploy したい app を宣言する文書」です。
+## 5 分で書ける最小構成
 
-## このページで依存してよい範囲
+```yaml
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: my-app
+spec:
+  version: 0.1.0
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: bundle
+          artifact: web
+          artifactPath: dist/worker
+```
 
-- single-document YAML の `kind: App`
-- `spec.containers` / `spec.workers` / `spec.routes` / `spec.resources` の役割
-- `spec.env` によるテンプレート変数注入
-- `build.fromWorkflow` を使った artifact 参照 contract
-- OAuth / MCP / file handler を manifest で宣言する方法
+これだけで Worker が 1 つデプロイされます。ドメインはシステムが自動付与します。
 
-## このページで依存してはいけない範囲
+## よくあるパターン
 
-- multi-document `Package` / `Workload` / `Binding`
-- `build.command` や local shell を直接書く build 記法
-- `container`, `http-url` など provider 寄りの target 記法
-- repo に存在してもこのページに出てこない field
+### Worker + Database
 
-## implementation note
+```yaml
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: notes-app
+spec:
+  version: 0.1.0
+  workers:
+    web:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: bundle
+          artifact: web
+          artifactPath: dist/worker
+      bindings:
+        d1: [primary-db]
+        r2: [assets]
+  resources:
+    primary-db:
+      type: d1
+      binding: DB
+      migrations:
+        up: .takos/migrations/primary-db/up
+        down: .takos/migrations/primary-db/down
+    assets:
+      type: r2
+      binding: ASSETS
+  routes:
+    - name: app
+      target: web
+      path: /
+```
 
-現行 parser が受け付ける manifest は、`.takos/app.yml` または `.takos/app.yaml` に置かれた single-document YAML です。
-current public contract では `spec.containers` と `spec.workers` を正本とし、`build.fromWorkflow` で workflow artifact を参照します。
+D1 データベースと R2 バケットが自動作成され、`DB` / `ASSETS` バインディングで Worker から参照できます。
 
-これは「workflow artifact を deploy 入力にする」contract であり、build shell や provider ごとの実装手順を manifest に埋め込む面ではありません。
+### Worker + Container
 
-## この manifest が宣言するもの
+```yaml
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: browser-service
+spec:
+  version: 1.0.0
+  containers:
+    browser:
+      dockerfile: packages/browser-service/Dockerfile
+      port: 8080
+      instanceType: standard-2
+      maxInstances: 25
+  workers:
+    browser-host:
+      containers: [browser]
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: build-browser-host
+          artifact: browser-host
+          artifactPath: dist/browser-host.js
+  routes:
+    - name: browser-api
+      target: browser-host
+      path: /session
+```
 
-`.takos/app.yml` は、次の 5 つを束ねて宣言します。
+`browser-host` Worker が `browser` コンテナを CF Containers として管理します。Docker が必要な処理はコンテナ側、ルーティングは Worker 側が担います。
 
-1. app の identity と表示情報
-2. deploy される container と worker
-3. container / worker が必要とする resource と binding
-4. deploy 後に公開・連携される route / MCP / OAuth / file handler
-5. 環境変数の要求とテンプレート変数による注入
-
-## 最小構成
+### Worker + MCP Server
 
 ```yaml
 apiVersion: takos.dev/v1alpha1
@@ -58,220 +119,206 @@ spec:
           job: bundle
           artifact: web
           artifactPath: dist/worker
+  routes:
+    - name: mcp-endpoint
+      target: web
+      path: /mcp
+  resources:
+    mcp-auth-secret:
+      type: secretRef
+      binding: MCP_AUTH_TOKEN
+      generate: true
+  mcpServers:
+    - name: notes
+      route: mcp-endpoint
+      transport: streamable-http
+      authSecretRef: mcp-auth-secret
 ```
 
-有効な例全体は [current example](./examples/app-manifest.current.example.yml) を参照してください。
+MCP server が自動公開されます。`generate: true` の secretRef を `authSecretRef` に指定すると、認証トークンが自動生成されます。
 
-## トップレベルの見方
+## 構成の決め方
 
-| field | required | 役割 |
-| --- | --- | --- |
-| `apiVersion` | yes | 現在は `takos.dev/v1alpha1` 固定 |
-| `kind` | yes | `App` 固定 |
-| `metadata.name` | yes | app の表示名 / 識別名 |
-| `metadata.appId` | no | 既存 app identity を pin するときに使う |
-| `spec.version` | yes | deploy 単位で表示する version |
-| `spec.containers` | no | Docker コンテナ定義 |
-| `spec.workers` | no | CF Workers 定義 |
-| `spec.routes` | no | HTTP エンドポイント |
-| `spec.resources` | no | backing resource |
-| `spec.env` | no | 環境変数設定（required + inject） |
-| `spec.oauth` | no | OAuth client 自動登録設定 |
-| `spec.takos.scopes` | no | Takos-managed token の scope |
-| `spec.mcpServers` | no | MCP server 公開設定 |
-| `spec.fileHandlers` | no | file handler 登録 |
+**何で動かす?**
+- CF Workers だけで済む → `workers` だけ書く
+- Docker が必要 → `containers` + `workers` を書く
+- Docker だけで済む → `containers` に `ipv4: true` を付けて独立稼働させる
 
-::: danger 廃止
-`spec.services` は廃止されました。`spec.containers` / `spec.workers` を使用してください。`spec.services` が存在するとパースエラーになります。
-:::
+**データを保存する?**
+- はい → `resources` に `d1` / `r2` / `kv` などを追加し、Worker の `bindings` で参照
 
-## `spec.containers`
+**外部に公開する?**
+- はい → `routes` を追加。ドメインはシステムが自動付与するので書かない
 
-`spec.containers` は Docker コンテナの定義です。container は worker に紐づけて CF Containers として実行するか、`ipv4: true` を指定して常設コンテナとして独立稼働させます。
+**他のアプリから呼ばれたい?**
+- MCP server として → `mcpServers` を追加
+- OAuth で認証 → `oauth` を追加
+- ファイルを開く → `fileHandlers` を追加
+
+## セクション詳細
+
+### containers
+
+Docker コンテナの定義です。Worker に紐づけて CF Containers として実行するか、`ipv4: true` で常設コンテナとして独立稼働させます。
 
 ```yaml
-spec:
-  containers:
-    browser:
-      dockerfile: packages/browser-service/Dockerfile
-      port: 8080
-      instanceType: standard-2
-      maxInstances: 25
-    my-api:
-      dockerfile: Dockerfile
-      port: 3000
-      ipv4: true
+containers:
+  browser:
+    dockerfile: packages/browser-service/Dockerfile
+    port: 8080
+    instanceType: standard-2
+    maxInstances: 25
+  my-api:
+    dockerfile: Dockerfile
+    port: 3000
+    ipv4: true          # 専用 IPv4 を割り当てて独立稼働
 ```
 
-| field | required | 役割 |
+| field | required | 説明 |
 | --- | --- | --- |
 | `dockerfile` | yes | Dockerfile パス |
 | `port` | yes | コンテナのリッスンポート |
 | `instanceType` | no | インスタンスタイプ |
 | `maxInstances` | no | 最大インスタンス数 |
-| `ipv4` | no | 専用 IPv4 を割り当てる（container のみ、worker には不可） |
+| `ipv4` | no | `true` で専用 IPv4 を割り当て。独立稼働する常設コンテナ向け |
 | `env` | no | コンテナ環境変数 |
 
-## `spec.workers`
+::: tip containers と workers の使い分け
+| | containers | workers |
+| --- | --- | --- |
+| 実行モデル | Docker コンテナ | CF Workers (V8 isolate) |
+| IPv4 割当 | `ipv4: true` で可能 | 不可 |
+| ビルド | Dockerfile | workflow artifact |
+| 用途 | Docker が必要な処理 | ルーティング、軽量処理 |
+:::
 
-`spec.workers` は CF Workers (V8 isolate) の定義です。`containers` フィールドで `spec.containers` に定義した container を紐づけることができます。
+### workers
+
+CF Workers (V8 isolate) の定義です。`containers` フィールドで上の `spec.containers` に定義したコンテナを紐づけられます。
 
 ```yaml
-spec:
-  workers:
-    browser-host:
-      containers: [browser]
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: build-browser-host
-          artifact: browser-host
-          artifactPath: dist/browser-host.js
-      bindings:
-        services: [takos-control]
+workers:
+  browser-host:
+    containers: [browser]       # spec.containers の名前を参照
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-browser-host
+        artifact: browser-host
+        artifactPath: dist/browser-host.js
+    bindings:
+      services: [takos-control]
 ```
 
-| field | required | 役割 |
+| field | required | 説明 |
 | --- | --- | --- |
-| `build` | yes | ビルドソース（fromWorkflow） |
-| `containers` | no | 紐づける CF Containers（`spec.containers` の名前） |
+| `build` | yes | ビルドソース。現在は `fromWorkflow` のみ |
+| `containers` | no | 紐づける CF Containers (`spec.containers` の名前) |
 | `bindings` | no | リソースバインディング |
 | `triggers` | no | スケジュール / キュートリガー |
 | `env` | no | 環境変数 |
 
-### build contract
+#### build contract
 
-`spec.workers.<name>.build.fromWorkflow` は必須です。
+Worker のビルドは `build.fromWorkflow` で workflow artifact を参照します。
 
-| field | required | 役割 |
+| field | required | 説明 |
 | --- | --- | --- |
 | `path` | yes | `.takos/workflows/` 配下の workflow path |
 | `job` | yes | deploy artifact を出す job 名 |
 | `artifact` | yes | workflow artifact 名 |
 | `artifactPath` | yes | artifact 内の worker bundle path |
 
-Takos が受け付けるのは `build.fromWorkflow` です。
-現在は次を current contract に含めません。
+#### bindings と triggers
 
-- `build.command`
-- `build.output`
-- `build.cwd`
-- `entry`
-- local build shell を直接書く形式
-
-### bindings と triggers
-
-- binding list は resource 名を参照します。
-- 型が一致しない binding は validation error になります。
+- binding list は `spec.resources` の名前を参照します。型が一致しない場合は validation error です。
 - queue trigger の `queue` は `spec.resources` 内の `type: queue` を参照する必要があります。
 
-## containers と workers の違い
+### routes
 
-| | containers | workers |
-| --- | --- | --- |
-| 実行モデル | Docker コンテナ | CF Workers (V8 isolate) |
-| IPv4 | 割当可能 (`ipv4: true`) | 不可 |
-| CF Containers | worker に紐づけて使用 | `containers` フィールドで参照 |
-| 常設/VPS | `ipv4: true` で独立稼働 | N/A |
-| ビルド | Dockerfile | workflow artifact |
-
-## `spec.resources`
-
-`spec.resources` は worker / container が必要とする backing capability を宣言します。
-resource 名が binding の参照先になります。
+Worker / container をどの path で公開するかを宣言します。ドメインは app.yml に書きません。システムが自動付与します。
 
 ```yaml
-spec:
-  resources:
-    primary-db:
-      type: d1
-      binding: DB
-      migrations:
-        up: .takos/migrations/primary-db/up
-        down: .takos/migrations/primary-db/down
-    assets:
-      type: r2
-      binding: ASSETS
-    mcp-auth-secret:
-      type: secretRef
-      binding: MCP_AUTH_TOKEN
-      generate: true          # システムが自動でランダムトークンを生成
+routes:
+  - name: browser-api
+    target: browser-host
+    path: /session
+  - name: executor-api
+    target: executor-host
+    path: /dispatch
 ```
 
-### サポートされる resource type
-
-| type | fields |
-| --- | --- |
-| `d1` | `binding`, `migrations` |
-| `r2` | `binding` |
-| `kv` | `binding` |
-| `secretRef` | `binding` |
-| `vectorize` | `binding`, `vectorize.dimensions`, `vectorize.metric` |
-| `queue` | `binding`, `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds` |
-| `analyticsEngine` | `binding`, `analyticsEngine.dataset` |
-| `workflow` | `binding`, `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
-| `durableObject` | `binding`, `durableObject.className`, `durableObject.scriptName` |
-
-### 追加フィールド
-
-| field | 対象 type | 役割 |
+| field | required | 説明 |
 | --- | --- | --- |
-| `generate` | secretRef | true の場合、デプロイ時にシステムがランダムトークンを自動生成 |
-
-### 追加ルール
-
-- `queue.deadLetterQueue` は別の `type: queue` resource を参照する必要があります。
-- `workflow.service` は既存 worker 名を参照する必要があります。
-- `migrations` は文字列または `{ up, down }` のどちらでも指定できます。
-
-## `spec.routes`
-
-`spec.routes` は worker / container をどの path で公開するかを宣言します。
-ドメインは app.yml に記述しません。システムが自動付与します。
-
-```yaml
-spec:
-  routes:
-    - name: browser-api
-      target: browser-host
-      path: /session
-    - name: executor-api
-      target: executor-host
-      path: /dispatch
-```
-
-| field | required | 役割 |
-| --- | --- | --- |
-| `name` | yes | ルート名（テンプレート参照に使用） |
+| `name` | yes | ルート名。テンプレート変数で参照する際のキー |
 | `target` | yes | 対象の worker or container 名 |
 | `path` | no | 公開パス |
 | `ingress` | no | ingress worker |
-| `timeoutMs` | no | route timeout |
+| `timeoutMs` | no | route timeout (ms) |
 
-## `spec.env`
+### resources
 
-`spec.env` は app 全体の環境変数を宣言します。`required` で必須変数を列挙し、`inject` でテンプレート変数を使ってデプロイ後の値を注入します。
+Worker / container が必要とする backing resource を宣言します。resource 名が binding の参照先になります。
 
 ```yaml
-spec:
-  env:
-    required:
-      - TAKOS_ACCESS_TOKEN
-    inject:
-      BROWSER_API_URL: "{{routes.browser-api.url}}"
-      EXECUTOR_IP: "{{containers.executor.ipv4}}"
+resources:
+  primary-db:
+    type: d1
+    binding: DB
+    migrations:
+      up: .takos/migrations/primary-db/up
+      down: .takos/migrations/primary-db/down
+  assets:
+    type: r2
+    binding: ASSETS
+  mcp-auth-secret:
+    type: secretRef
+    binding: MCP_AUTH_TOKEN
+    generate: true          # ランダムトークンを自動生成
 ```
 
-| field | 役割 |
+| type | 追加フィールド |
 | --- | --- |
-| `required` | 必須環境変数のリスト。deploy 時に設定されていなければエラー |
-| `inject` | システム変数テンプレート。デプロイ後に解決されて環境変数に注入 |
+| `d1` | `migrations` |
+| `r2` | - |
+| `kv` | - |
+| `secretRef` | `generate` |
+| `vectorize` | `vectorize.dimensions`, `vectorize.metric` |
+| `queue` | `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds` |
+| `analyticsEngine` | `analyticsEngine.dataset` |
+| `workflow` | `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
+| `durableObject` | `durableObject.className`, `durableObject.scriptName` |
+
+すべての type に共通で `binding` (バインディング名) が必要です。
+
+- `generate: true` (secretRef): デプロイ時にシステムがランダムトークンを自動生成します。
+- `queue.deadLetterQueue`: 別の `type: queue` resource を参照する必要があります。
+- `workflow.service`: 既存の worker 名を参照する必要があります。
+- `migrations`: 文字列または `{ up, down }` のどちらでも指定できます。
+
+### env
+
+app 全体の環境変数を宣言します。
+
+```yaml
+env:
+  required:
+    - TAKOS_ACCESS_TOKEN
+  inject:
+    BROWSER_API_URL: "{{routes.browser-api.url}}"
+    EXECUTOR_IP: "{{containers.executor.ipv4}}"
+```
+
+| field | 説明 |
+| --- | --- |
+| `required` | 必須環境変数のリスト。deploy 時に未設定ならエラー |
+| `inject` | テンプレート変数を使ってデプロイ後の値を自動注入 |
 
 <div v-pre>
 
-## テンプレート変数
+### テンプレート変数
 
-`spec.env.inject` の値には `{{...}}` 形式のテンプレート変数を使用できます。テンプレートはデプロイ後にシステムが実際の値に解決し、対象の worker / container へ環境変数として注入します。
+`inject` の値には `{{...}}` 形式のテンプレート変数を使えます。デプロイ後にシステムが実際の値に解決し、worker / container に環境変数として注入します。
 
 | テンプレート | 解決例 | 説明 |
 | --- | --- | --- |
@@ -283,60 +330,60 @@ spec:
 | `{{workers.<name>.url}}` | `https://host.workers.dev` | ワーカーの URL |
 | `{{resources.<name>.id}}` | `abc-123` | リソース ID |
 
+存在しない名前を参照するとパース時に validation error になります。
+
 </div>
 
-テンプレート参照はパース時に検証されます。存在しない名前を参照した場合は validation error になります。
+### OAuth / MCP / file handlers
 
-## OAuth / MCP / file handlers
+#### oauth
 
-manifest は container / worker / resource だけでなく、deploy 後に公開される連携面も宣言します。
-
-### `spec.oauth`
-
-- OAuth client を app と一緒に登録したいときに使います。
-- redirect URI と scope を manifest 側で管理します。
-- 詳細な token / consent model は [OAuth](/specs/oauth) を参照してください。
-
-### `spec.mcpServers`
+OAuth client を app と一緒に登録します。redirect URI と scope を manifest 側で管理します。
 
 ```yaml
-spec:
-  mcpServers:
-    - name: notes
-      route: /mcp
-      transport: streamable-http
-    - name: takos-computer
-      route: browser-mcp
-      transport: streamable-http
-      authSecretRef: mcp-auth-secret
+oauth:
+  clientName: Notes Assistant
+  redirectUris:
+    - https://notes.example.com/oauth/callback
+  scopes: [openid, profile, spaces:read]
+  autoEnv: true
 ```
 
-| field | required | 役割 |
+詳細は [OAuth](/specs/oauth) を参照してください。
+
+#### mcpServers
+
+```yaml
+mcpServers:
+  - name: takos-computer
+    route: browser-mcp          # routes の name を参照
+    transport: streamable-http
+    authSecretRef: mcp-auth-secret  # resources の secretRef を参照
+```
+
+| field | required | 説明 |
 | --- | --- | --- |
 | `name` | yes | MCP server 名 |
-| `route` | yes* | 対象ルート（`endpoint` と排他） |
-| `endpoint` | yes* | 対象エンドポイント（`route` と排他） |
-| `transport` | yes | トランスポート（現在は `streamable-http`） |
-| `authSecretRef` | no | 認証トークンに使用する secretRef リソース名 |
+| `route` | yes* | 対象ルート (`endpoint` と排他) |
+| `endpoint` | yes* | 対象エンドポイント (`route` と排他) |
+| `transport` | yes | 現在は `streamable-http` |
+| `authSecretRef` | no | 認証トークンに使う secretRef リソース名 |
 
-- `endpoint` と `route` のどちらかが必要です。
-- current transport は `streamable-http` です。
-
-### `spec.fileHandlers`
+#### fileHandlers
 
 ```yaml
-spec:
-  fileHandlers:
-    - name: markdown
-      mimeTypes: [text/markdown]
-      extensions: [.md]
-      openPath: /files/:id
+fileHandlers:
+  - name: markdown
+    mimeTypes: [text/markdown]
+    extensions: [.md]
+    openPath: /files/:id
 ```
 
-- `openPath` は必須です。
-- MIME type / 拡張子マッチングを app 側へ結びつけます。
+`openPath` は必須です。MIME type / 拡張子にマッチするファイルを app で開きます。
 
-## 完全な例（takos-computer）
+## 完全な例
+
+実際に動いている takos-computer の app.yml です。
 
 ```yaml
 apiVersion: takos.dev/v1alpha1
@@ -347,12 +394,10 @@ spec:
   version: "1.0.0"
   description: Browser automation and agent executor
   category: service
-  tags:
-    - browser
-    - executor
-    - agent
-    - playwright
+  tags: [browser, executor, agent, playwright]
 
+  # --- Docker コンテナ ---
+  # Worker に紐づけて CF Containers として実行される
   containers:
     browser:
       dockerfile: packages/browser-service/Dockerfile
@@ -365,6 +410,8 @@ spec:
       instanceType: basic
       maxInstances: 100
 
+  # --- CF Workers ---
+  # containers フィールドでコンテナを紐づける
   workers:
     browser-host:
       containers: [browser]
@@ -383,10 +430,14 @@ spec:
           artifact: executor-host
           artifactPath: dist/executor-host.js
       bindings:
-        services:
-          - takos-control
+        services: [takos-control]
 
+  # --- 公開ルート ---
+  # ドメインはシステムが自動付与。path だけ指定する
   routes:
+    - name: browser-gui
+      target: browser-host
+      path: /gui
     - name: browser-api
       target: browser-host
       path: /session
@@ -397,12 +448,15 @@ spec:
       target: executor-host
       path: /dispatch
 
+  # --- backing resource ---
   resources:
     mcp-auth-secret:
       type: secretRef
       binding: MCP_AUTH_TOKEN
-      generate: true
+      generate: true            # ランダムトークンを自動生成
 
+  # --- 環境変数 ---
+  # inject のテンプレートはデプロイ後に実際の URL へ解決される
   env:
     required:
       - TAKOS_ACCESS_TOKEN
@@ -410,6 +464,7 @@ spec:
       BROWSER_API_URL: "{{routes.browser-api.url}}"
       EXECUTOR_API_URL: "{{routes.executor-api.url}}"
 
+  # --- Takos token scope ---
   takos:
     scopes:
       - threads:read
@@ -418,6 +473,7 @@ spec:
       - runs:write
       - repos:read
 
+  # --- MCP server 公開 ---
   mcpServers:
     - name: takos-computer
       route: browser-mcp
@@ -425,12 +481,31 @@ spec:
       authSecretRef: mcp-auth-secret
 ```
 
-## このページで覚えるべきこと
+## フィールドリファレンス
 
-- `.takos/app.yml` は build 手順書ではなく app 宣言です。
-- `spec.containers` が Docker コンテナ、`spec.workers` が CF Workers、`spec.resources` が backing capability、`spec.routes` が公開面です。
-- `spec.env.inject` のテンプレート変数でデプロイ後の URL や IP を環境変数に注入できます。
-- `build.fromWorkflow` は workflow artifact を deploy 入力にする current contract です。
+| field | required | 説明 |
+| --- | --- | --- |
+| `apiVersion` | yes | `takos.dev/v1alpha1` 固定 |
+| `kind` | yes | `App` 固定 |
+| `metadata.name` | yes | app の識別名 |
+| `metadata.appId` | no | 既存 app identity を pin する場合に使用 |
+| `spec.version` | yes | deploy 単位で表示する version |
+| `spec.description` | no | app の説明 |
+| `spec.category` | no | カテゴリ (`app`, `service` など) |
+| `spec.tags` | no | タグ |
+| `spec.containers` | no | [Docker コンテナ定義](#containers) |
+| `spec.workers` | no | [CF Workers 定義](#workers) |
+| `spec.routes` | no | [HTTP エンドポイント](#routes) |
+| `spec.resources` | no | [backing resource](#resources) |
+| `spec.env` | no | [環境変数設定](#env) |
+| `spec.oauth` | no | [OAuth client 登録](#oauth) |
+| `spec.takos.scopes` | no | Takos-managed token の scope |
+| `spec.mcpServers` | no | [MCP server 公開設定](#mcpservers) |
+| `spec.fileHandlers` | no | [file handler 登録](#filehandlers) |
+
+::: danger 廃止
+`spec.services` は廃止されました。`spec.containers` / `spec.workers` を使用してください。
+:::
 
 ## 次に読むページ
 
