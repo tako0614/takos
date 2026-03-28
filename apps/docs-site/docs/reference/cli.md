@@ -327,6 +327,6 @@ stream 系 domain は追加で `watch`・`follow` を持ちます。
 
 ## 次に読むページ
 
-- [CLI / Auth model](/specs/cli-and-auth)
+- [CLI / Auth model](/reference/cli-auth)
 - [API リファレンス](/reference/api)
-- [Deploy System](/specs/deploy-system)
+- [Deploy System](/deploy/)

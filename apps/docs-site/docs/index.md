@@ -2,44 +2,43 @@
 layout: home
 
 hero:
-  name: Takos Docs
-  text: Takos の public contract と動作モデル
-  tagline: 利用者・運用者・内部実装者が、public surface と internal model を混ぜずに読めるように整理した docs です。
+  name: Takos
+  text: アプリを宣言的にデプロイ
+  tagline: app.yml を書くだけで Worker、Container、データベースをまとめてデプロイ
   actions:
     - theme: brand
-      text: 概要から読む
-      link: /overview/
+      text: はじめる
+      link: /get-started/
     - theme: alt
-      text: 仕様の読み方
-      link: /specs/reading-the-spec
+      text: app.yml を書く
+      link: /apps/manifest
     - theme: alt
-      text: 独自仕様
-      link: /specs/
+      text: GitHub
+      link: https://github.com/tako0614/takos
 
 features:
-  - title: Contract first
-    details: "依存してよい surface を先に示し、architecture は internal model として後ろに分離します。"
-  - title: Status explicit
-    details: "差分がある surface は implementation note で明示し、contract と current wiring を混ぜません。"
-  - title: Reader-oriented
-    details: "overview / concepts / specs / reference の役割を分け、最初にどこを読むべきかを揃えます。"
+  - icon: 🚀
+    title: 宣言的デプロイ
+    details: app.yml にアプリの構成を書くだけ。リソース作成、binding 接続、ドメイン設定を自動化
+    link: /apps/manifest
+  - icon: 📦
+    title: Workers + Containers
+    details: CF Workers と Docker Container を1つのマニフェストで管理。CF Containers で自動スケール
+    link: /apps/containers
+  - icon: 🔌
+    title: MCP Server
+    details: MCP server をワンライン宣言で自動公開。認証トークンも自動生成
+    link: /apps/mcp
+  - icon: 🏪
+    title: App Store
+    details: アプリを Store に公開してワンクリックインストール。公式パッケージも自動表示
+    link: /platform/store
+  - icon: 🌐
+    title: マルチテナント
+    details: dispatch namespace でテナントごとに Worker を分離。deploy-group で一括管理
+    link: /deploy/namespaces
+  - icon: 🔧
+    title: テンプレート変数
+    details: デプロイ後のURL・IPを環境変数に自動注入。サービス間の接続を宣言的に
+    link: /apps/environment
 ---
-
-## この docs が対象にすること
-
-- Takos が扱う中核概念
-- Takos の独自仕様
-- app deploy と resource binding の契約
-- control plane / tenant runtime / provider の関係
-- CLI と運用モデル
-
-## 最初に読む順
-
-- まず [仕様の読み方](/specs/reading-the-spec)
-- Takos の全体像は [Takos overview](/overview/)
-- 用語とモデルは [中核概念](/concepts/)
-- `.takos/app.yml` と deploy 契約は [独自仕様](/specs/)
-- 動作構成は [アーキテクチャ](/architecture/)
-- 実運用の見方は [運用モデル](/operations/)
-- CLI と API は [参照](/reference/)
-- 手元で動かすには [ローカル開発ガイド](/guides/local-development)

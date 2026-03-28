@@ -390,12 +390,12 @@ new_classes = ["BrowserContainer"]
 
 ### Provider 差分
 
-Takos は Cloudflare を primary surface としつつ、local-platform / Helm / OCI orchestrator へ同じ app deploy contract を投影します。provider ごとの差分は [Platform Compatibility Matrix](/operations/platform-matrix) と [互換性と制限](/architecture/compatibility-and-limitations) を参照してください。
+Takos は Cloudflare を primary surface としつつ、local-platform / Helm / OCI orchestrator へ同じ app deploy contract を投影します。provider ごとの差分は [Platform Compatibility Matrix](/platform/compatibility) と [互換性と制限](/architecture/compatibility) を参照してください。
 
 :::
 
 ## 次に読むページ
 
-- [`.takos/app.yml`](/specs/app-manifest) --- manifest の書き方
-- [CLI / Auth model](/specs/cli-and-auth) --- 認証と CLI の設定
+- [`.takos/app.yml`](/apps/manifest) --- manifest の書き方
+- [CLI / Auth model](/reference/cli-auth) --- 認証と CLI の設定
 - [API リファレンス](/reference/api) --- API の詳細

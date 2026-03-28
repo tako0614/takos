@@ -85,4 +85,4 @@ current public billing API は `/api/billing` family です。`/api/billing/usag
 - usage rollup
 - billing status
 
-詳しい public path は [API リファレンス](/reference/api) を参照してください。billing の詳細は [Billing](/architecture/billing) を参照してください。
+詳しい public path は [API リファレンス](/reference/api) を参照してください。billing の詳細は [Billing](/platform/billing) を参照してください。
