@@ -111,6 +111,107 @@ stream 系 domain は追加で `watch`・`follow` を持つ。
 
 ---
 
+## `takos deploy` サブコマンド
+
+Store 経由の app deploy。リポジトリの `.takos/app.yml` を使い、最新の CI アーティファクトでデプロイする。
+
+```bash
+takos deploy --repo repo_abc --ref main
+```
+
+### オプション
+
+| オプション | 必須 | 説明 |
+|---|---|---|
+| `--repo <id>` | yes | リポジトリ ID |
+| `--space <id>` | no | ワークスペース ID |
+| `--ref <ref>` | no | ソース ref（デフォルト: 現在のブランチ or `main`） |
+| `--ref-type <type>` | no | ref の種類（`branch`/`tag`/`commit`、デフォルト: `branch`） |
+| `--approve-oauth-auto-env` | no | OAuth auto env の変更を承認 |
+| `--approve-source-change` | no | ソースプロバナンスの変更を承認 |
+| `--json` | no | JSON 形式で出力 |
+
+### サブコマンド
+
+| コマンド | 説明 |
+|---|---|
+| `takos deploy validate` | ローカルの `.takos/app.yml` をバリデーション |
+| `takos deploy status [id]` | デプロイ一覧の表示 or 特定デプロイの詳細 |
+| `takos deploy rollback <id>` | 指定デプロイへのロールバック |
+
+---
+
+## `takos endpoint` サブコマンド
+
+API 接続先の管理。
+
+| コマンド | 説明 |
+|---|---|
+| `takos endpoint use <target>` | 接続先を変更 |
+| `takos endpoint show` | 現在の接続先を表示 |
+
+プリセット:
+
+| target | URL |
+|---|---|
+| `prod` / `production` | `https://takos.jp` |
+| `staging` / `test` | `https://test.takos.jp` |
+| `local` | `http://localhost:8787` |
+
+カスタム URL も指定可能:
+
+```bash
+takos endpoint use https://custom.example.com
+```
+
+---
+
+## ローカル開発スクリプト
+
+pnpm で利用できるローカル開発用スクリプト一覧。
+
+### Docker Compose 操作
+
+| スクリプト | 説明 |
+|---|---|
+| `pnpm local:up` | 全サービスを起動（foreground） |
+| `pnpm local:down` | 全サービスを停止 |
+| `pnpm local:logs` | 全サービスのログをフォロー |
+
+### テスト
+
+| スクリプト | 説明 |
+|---|---|
+| `pnpm local:smoke` | 全サービスの疎通確認。各サービスの health エンドポイントに対してヘルスチェックを実行する |
+| `pnpm local:proxyless-smoke` | CF 固有パスの逆流チェック。Cloudflare Workers でのみ通るルーティングパスがローカル環境に紛れ込んでいないかを検証する |
+| `pnpm local:run-smoke` | Run 実行の E2E スモークテスト |
+
+### 個別サービス起動
+
+Docker を使わずに直接 Node.js で起動する場合:
+
+| スクリプト | 説明 |
+|---|---|
+| `pnpm -C apps/control dev:local:web` | Control Web（API サーバー）のみ起動 |
+| `pnpm -C apps/control dev:local:dispatch` | Dispatch Worker のみ起動 |
+| `pnpm -C apps/control dev:local:worker` | Background Worker のみ起動 |
+| `pnpm -C apps/control dev:local:runtime-host` | Runtime Host のみ起動 |
+| `pnpm -C apps/control dev:local:executor-host` | Executor Host のみ起動 |
+| `pnpm -C apps/control dev:local:browser-host` | Browser Host のみ起動 |
+
+### ビルド・品質
+
+| スクリプト | 説明 |
+|---|---|
+| `pnpm build:all` | 全パッケージをビルド |
+| `pnpm lint:all` | 全パッケージを lint |
+| `pnpm typecheck:all` | 全パッケージの型チェック |
+| `pnpm test:all` | 全テストを実行 |
+| `pnpm docs:dev` | ドキュメントサイトを開発モードで起動 |
+| `pnpm docs:build` | ドキュメントサイトをビルド |
+
+---
+
 ## 廃止されたコマンド
 
 | 旧 | 現在 |

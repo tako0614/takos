@@ -34,6 +34,39 @@ Takos API は、1 endpoint ずつの一覧よりも family 単位の責務で読
 
 PAT は `/api/me/personal-access-tokens` で管理します。
 
+認証ヘッダーの形式:
+
+```
+Authorization: Bearer <access_token>
+```
+
+`<access_token>` には PAT（`tak_pat_...`）か OAuth トークン（`tak_oat_...`）を指定する。
+
+## エラーレスポンスの共通形式
+
+すべての API エンドポイントは、エラー発生時に以下の共通形式で返す:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Resource not found"
+  }
+}
+```
+
+主要なエラーコード:
+
+| code | HTTP status | 意味 |
+| --- | --- | --- |
+| `BAD_REQUEST` | 400 | リクエストが不正 |
+| `UNAUTHORIZED` | 401 | 認証が必要 |
+| `FORBIDDEN` | 403 | 権限が不足 |
+| `NOT_FOUND` | 404 | リソースが見つからない |
+| `CONFLICT` | 409 | 競合が発生 |
+| `RATE_LIMITED` | 429 | レート制限に到達 |
+| `INTERNAL_ERROR` | 500 | サーバー内部エラー |
+
 ## Route families
 
 ### Public / optional auth
@@ -82,6 +115,30 @@ PAT は `/api/me/personal-access-tokens` で管理します。
 
 ## Representative operation models
 
+### `seed-repositories`
+
+初回導入時に表示される seed リポジトリの一覧を返す。認証不要。
+
+```bash
+GET /api/seed-repositories
+```
+
+レスポンス:
+
+```json
+{
+  "repositories": [
+    {
+      "url": "https://github.com/example/repo.git",
+      "name": "Example Repo",
+      "description": "A sample repository",
+      "category": "tool",
+      "checked": true
+    }
+  ]
+}
+```
+
 ### `spaces`
 
 `spaces` family は workspace/space を起点にした surface です。
@@ -94,20 +151,310 @@ PAT は `/api/me/personal-access-tokens` で管理します。
 - stores
 - store registry
 
+#### ワークスペース一覧
+
+```bash
+GET /api/spaces
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "spaces": [
+    {
+      "id": "ws_abc123",
+      "name": "My Workspace",
+      "slug": "my-workspace",
+      "kind": "user",
+      "role": "owner"
+    }
+  ]
+}
+```
+
+#### ワークスペース作成
+
+```bash
+POST /api/spaces
+Authorization: Bearer $TOKEN
+Content-Type: application/json
+```
+
+リクエスト:
+
+```json
+{
+  "name": "New Workspace"
+}
+```
+
+レスポンス (201):
+
+```json
+{
+  "space": {
+    "id": "ws_def456",
+    "name": "New Workspace",
+    "slug": "new-workspace",
+    "kind": "team"
+  },
+  "repository": {
+    "id": "repo_xyz789",
+    "name": "default"
+  }
+}
+```
+
+### `me`
+
+現在のユーザー情報を取得・更新する。
+
+#### ユーザー情報取得
+
+```bash
+GET /api/me
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "email": "user@example.com",
+  "name": "Tako",
+  "username": "tako",
+  "picture": "https://example.com/avatar.png",
+  "setup_completed": true
+}
+```
+
+### `threads`
+
+スレッド / メッセージの CRUD と共有。
+
+#### スレッド一覧
+
+```bash
+GET /api/spaces/:spaceId/threads
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "threads": [
+    {
+      "id": "thread_abc",
+      "title": "Debug session",
+      "created_at": "2026-01-15T10:00:00Z",
+      "updated_at": "2026-01-15T12:30:00Z"
+    }
+  ]
+}
+```
+
+#### スレッド作成
+
+```bash
+POST /api/spaces/:spaceId/threads
+Authorization: Bearer $TOKEN
+Content-Type: application/json
+```
+
+リクエスト:
+
+```json
+{
+  "title": "debug"
+}
+```
+
+レスポンス (201):
+
+```json
+{
+  "thread": {
+    "id": "thread_new123",
+    "title": "debug",
+    "created_at": "2026-03-27T10:00:00Z"
+  }
+}
+```
+
+#### メッセージ一覧
+
+```bash
+GET /api/threads/:id/messages
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "messages": [
+    {
+      "id": "msg_001",
+      "role": "user",
+      "content": "Hello",
+      "created_at": "2026-01-15T10:00:00Z"
+    },
+    {
+      "id": "msg_002",
+      "role": "assistant",
+      "content": "Hi there!",
+      "created_at": "2026-01-15T10:00:01Z"
+    }
+  ]
+}
+```
+
 ### `runs`
 
 `runs` family は request/response だけでなく stream surface も持ちます。
 状態変化を追うときは `/api/runs/:id/sse` または `/api/runs/:id/ws` を使います。
+
+#### Run 詳細取得
+
+```bash
+GET /api/runs/:id
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "run": {
+    "id": "run_abc123",
+    "thread_id": "thread_abc",
+    "status": "completed",
+    "created_at": "2026-01-15T10:00:00Z",
+    "completed_at": "2026-01-15T10:01:30Z"
+  }
+}
+```
+
+#### Run イベントを SSE で取得
+
+```bash
+GET /api/runs/:id/sse
+Authorization: Bearer $TOKEN
+```
+
+Server-Sent Events 形式で Run の状態変化・ログをストリーミングで受信する。
+
+#### Run キャンセル
+
+```bash
+POST /api/runs/:id/cancel
+Authorization: Bearer $TOKEN
+```
 
 ### `services`
 
 `services` family は service/runtime surface の current public route family です。
 codebase や UI に `worker` という語が残る場面がありますが、API path の正本は `/api/services` として読みます。
 
+#### サービス一覧
+
+```bash
+GET /api/services
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "services": [
+    {
+      "id": "svc_abc123",
+      "name": "my-api",
+      "status": "active"
+    }
+  ]
+}
+```
+
 ### `repos`
 
 `repos` family は repo CRUD に加えて、tree/blob/history、releases、actions、pull requests への入口でもあります。
 Takos CLI で `repo` domain が広い責務を持つのはこのためです。
+
+#### リポジトリ一覧
+
+```bash
+GET /api/spaces/:spaceId/repos
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "repositories": [
+    {
+      "id": "repo_abc123",
+      "name": "my-app",
+      "default_branch": "main"
+    }
+  ]
+}
+```
+
+### `search`
+
+#### セマンティック検索
+
+```bash
+POST /api/spaces/:spaceId/search
+Authorization: Bearer $TOKEN
+Content-Type: application/json
+```
+
+リクエスト:
+
+```json
+{
+  "query": "how to deploy",
+  "limit": 10
+}
+```
+
+### `notifications`
+
+#### 通知一覧
+
+```bash
+GET /api/notifications
+Authorization: Bearer $TOKEN
+```
+
+レスポンス:
+
+```json
+{
+  "notifications": [
+    {
+      "id": "notif_abc123",
+      "type": "run_completed",
+      "read": false,
+      "created_at": "2026-01-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+#### SSE で通知をストリーミング受信
+
+```bash
+GET /api/notifications/sse
+Authorization: Bearer $TOKEN
+```
 
 ### `app-deployments`
 
@@ -125,6 +472,85 @@ Takos CLI で `repo` domain が広い責務を持つのはこのためです。
 - `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume`
 - `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort`
 - `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote`
+
+#### デプロイ開始
+
+```bash
+POST /api/spaces/:spaceId/app-deployments
+Authorization: Bearer $TOKEN
+Content-Type: application/json
+```
+
+リクエスト:
+
+```json
+{
+  "repo_id": "repo_abc123",
+  "ref": "main",
+  "ref_type": "branch"
+}
+```
+
+レスポンス (201):
+
+```json
+{
+  "success": true,
+  "data": {
+    "app_deployment_id": "adep_xyz789",
+    "app_id": "app_def456",
+    "name": "my-app",
+    "version": "1.0.0",
+    "source": {
+      "repo_id": "repo_abc123",
+      "ref": "main",
+      "ref_type": "branch",
+      "commit_sha": "abc123def456"
+    }
+  }
+}
+```
+
+#### ロールバック
+
+```bash
+POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback
+Authorization: Bearer $TOKEN
+```
+
+### `billing`
+
+#### 利用状況
+
+```bash
+GET /api/billing/usage
+Authorization: Bearer $TOKEN
+```
+
+#### Stripe Webhook
+
+```bash
+POST /api/billing/webhook
+Stripe-Signature: t=...,v1=...
+```
+
+Stripe の署名検証を使用。セッション認証は不要。
+
+### `auth`
+
+#### ログイン中のユーザー情報
+
+```bash
+GET /api/auth/me
+Authorization: Bearer $TOKEN
+```
+
+#### ログアウト
+
+```bash
+POST /api/auth/logout
+Authorization: Bearer $TOKEN
+```
 
 ## implementation note
 
@@ -166,6 +592,27 @@ curl -X POST \
 curl -N \
   -H "Authorization: Bearer tak_pat_..." \
   https://your-takos.example/api/runs/run_123/sse
+```
+
+### seed repositories を取得
+
+```bash
+curl https://your-takos.example/api/seed-repositories
+```
+
+### workspace 一覧を取得
+
+```bash
+curl -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/spaces
+```
+
+### 通知を SSE でストリーミング受信
+
+```bash
+curl -N \
+  -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/notifications/sse
 ```
 
 ## 次に読むページ

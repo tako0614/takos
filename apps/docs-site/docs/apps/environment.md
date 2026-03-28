@@ -46,6 +46,24 @@ env:
 
 存在しない名前を参照するとバリデーションエラーになる。
 
+### 使用例: コンテナのポートを注入
+
+コンテナの `port` を他の Worker やコンテナに注入する例。
+
+```yaml
+containers:
+  api-server:
+    dockerfile: Dockerfile
+    port: 3000
+
+env:
+  inject:
+    API_PORT: "{{containers.api-server.port}}"
+    API_IP: "{{containers.api-server.ipv4}}"
+```
+
+`{{containers.api-server.port}}` はデプロイ時に `3000` に解決される。
+
 </div>
 
 ## Worker 固有の環境変数

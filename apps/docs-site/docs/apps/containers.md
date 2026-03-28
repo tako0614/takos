@@ -54,6 +54,22 @@ containers:
 
 </div>
 
+## コンテナ環境変数
+
+コンテナ固有の環境変数を `env` で設定できる。
+
+```yaml
+containers:
+  my-api:
+    dockerfile: Dockerfile
+    port: 3000
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+```
+
+アプリ全体の環境変数は `spec.env` で設定する。詳しくは [環境変数](/apps/environment) を参照。
+
 ## フィールド
 
 | field | required | 説明 |

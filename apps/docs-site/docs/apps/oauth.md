@@ -16,7 +16,35 @@ spec:
     autoEnv: true
 ```
 
-`autoEnv: true` にすると、client ID と secret が環境変数に自動注入される。
+`autoEnv: true` にすると、以下の環境変数が Worker / Container に自動注入される。
+
+| 環境変数名 | 内容 |
+| --- | --- |
+| `OAUTH_CLIENT_ID` | 登録された OAuth client ID |
+| `OAUTH_CLIENT_SECRET` | 登録された OAuth client secret |
+
+## metadata
+
+OAuth client に追加のメタデータを設定できる。ロゴ画像や利用規約・プライバシーポリシーの URL など。
+
+```yaml
+spec:
+  oauth:
+    clientName: My App
+    redirectUris: [https://example.com/callback]
+    scopes: [threads:read]
+    autoEnv: true
+    metadata:
+      logoUri: https://example.com/logo.png
+      tosUri: https://example.com/terms
+      policyUri: https://example.com/privacy
+```
+
+| field | 説明 |
+| --- | --- |
+| `logoUri` | OAuth 認可画面に表示するロゴ画像の URL |
+| `tosUri` | 利用規約ページの URL |
+| `policyUri` | プライバシーポリシーページの URL |
 
 ## よく使うスコープ
 

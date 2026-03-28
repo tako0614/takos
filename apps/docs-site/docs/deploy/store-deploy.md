@@ -67,6 +67,75 @@ POST   /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/{pause|resu
 DELETE /api/spaces/:spaceId/app-deployments/:appDeploymentId
 ```
 
+## API リクエスト・レスポンス例
+
+### デプロイの作成
+
+```bash
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"repo_id": "repo_abc123", "ref": "main"}'
+```
+
+レスポンス:
+
+```json
+{
+  "id": "deploy_xxx",
+  "status": "pending",
+  "created_at": "2026-03-28T00:00:00.000Z"
+}
+```
+
+### デプロイ一覧の取得
+
+```bash
+curl https://takos.example.com/api/spaces/{spaceId}/app-deployments \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 特定デプロイの詳細
+
+```bash
+curl https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### ロールバック
+
+```bash
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollback \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Rollout 制御
+
+```bash
+# 一時停止
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/pause \
+  -H "Authorization: Bearer $TOKEN"
+
+# 再開
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/resume \
+  -H "Authorization: Bearer $TOKEN"
+
+# 中止
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/abort \
+  -H "Authorization: Bearer $TOKEN"
+
+# 即時完了（全トラフィックを新バージョンに切り替え）
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/promote \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### デプロイの削除
+
+```bash
+curl -X DELETE https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## 次のステップ
 
 - [deploy-group](/deploy/deploy-group) --- ローカルからの直接デプロイ

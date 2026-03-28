@@ -114,6 +114,10 @@ export default defineConfig({
               link: "/examples/worker-with-container",
             },
             { text: "MCP Server", link: "/examples/mcp-server" },
+            {
+              text: "マルチサービス構成",
+              link: "/examples/multi-service",
+            },
           ],
         },
       ],

@@ -33,6 +33,37 @@ mcpServers:
 
 `generate: true` でデプロイ時にランダムトークンが生成され、Worker の `env.MCP_AUTH_TOKEN` に注入される。
 
+## endpoint と route の使い分け
+
+MCP Server のエンドポイント指定には `route` と `endpoint` の 2 つの方法がある。**両方を同時に指定するとエラー**になる。
+
+### route（推奨）
+
+`spec.routes` の `name` を参照する。ルーティングをマニフェスト内で一元管理できるのでこちらが推奨。
+
+```yaml
+routes:
+  - name: mcp-endpoint
+    target: web
+    path: /mcp
+
+mcpServers:
+  - name: my-tools
+    route: mcp-endpoint          # routes の name を参照
+    transport: streamable-http
+```
+
+### endpoint
+
+外部 URL を直接指定する。routes を使わずに外部の MCP Server を登録したいときに使う。
+
+```yaml
+mcpServers:
+  - name: external-tools
+    endpoint: https://external.example.com/mcp   # 外部 URL を直接指定
+    transport: streamable-http
+```
+
 ## フィールド
 
 | field | required | 説明 |
