@@ -38,6 +38,11 @@ export { toPascalCase, generateContainerWranglerConfig, serializeContainerWrangl
 // Re-export template helpers (exported in original)
 export { buildTemplateContext, resolveTemplateString } from './template.js';
 
+// Re-export provider abstraction
+export type { ResourceProvider, ProvisionResult, ProviderOptions } from './resource-provider.js';
+export { resolveProvider } from './provisioner.js';
+export { CloudflareProvider, AWSProvider, GCPProvider, K8sProvider, DockerProvider } from './providers/index.js';
+
 // Re-export public API
 export { deployGroup } from './orchestrator.js';
 export { deployWranglerDirect } from './wrangler-direct.js';
