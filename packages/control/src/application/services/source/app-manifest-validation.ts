@@ -7,9 +7,15 @@ import {
   normalizeRepoPath,
   filterWorkflowErrors,
   type AppResource,
-  type AppService,
-  type WorkerService,
+  type AppWorker,
 } from './app-manifest-types';
+
+/** Minimal service shape used by resource validation (supports both workers and containers) */
+type ValidatableService = {
+  type: 'worker' | 'container';
+  bindings?: AppWorker['bindings'];
+  triggers?: AppWorker['triggers'];
+};
 
 export function parseAndValidateWorkflowYaml(raw: string, workflowPath: string): Workflow {
   const { workflow, diagnostics } = parseWorkflow(raw);
@@ -45,7 +51,7 @@ export function validateDeployProducerJob(workflow: Workflow, workflowPath: stri
 
 export function parseResources(
   specRecord: Record<string, unknown>,
-  services: Record<string, AppService>,
+  services: Record<string, ValidatableService>,
 ): Record<string, AppResource> {
   const resourcesRecord = asRecord(specRecord.resources);
   const resources: Record<string, AppResource> = {};
@@ -150,7 +156,7 @@ export function parseResources(
 }
 
 export function validateResourceBindings(
-  services: Record<string, AppService>,
+  services: Record<string, ValidatableService>,
   resources: Record<string, AppResource>,
 ): void {
   for (const [serviceName, service] of Object.entries(services)) {
@@ -158,47 +164,47 @@ export function validateResourceBindings(
     const bindingLists = service.bindings || {};
     for (const resourceName of bindingLists.d1 || []) {
       if (resources[resourceName]?.type !== 'd1') {
-        throw new Error(`spec.services.${serviceName}.bindings.d1 references unknown d1 resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.d1 references unknown d1 resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.r2 || []) {
       if (resources[resourceName]?.type !== 'r2') {
-        throw new Error(`spec.services.${serviceName}.bindings.r2 references unknown r2 resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.r2 references unknown r2 resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.kv || []) {
       if (resources[resourceName]?.type !== 'kv') {
-        throw new Error(`spec.services.${serviceName}.bindings.kv references unknown kv resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.kv references unknown kv resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.vectorize || []) {
       if (resources[resourceName]?.type !== 'vectorize') {
-        throw new Error(`spec.services.${serviceName}.bindings.vectorize references unknown vectorize resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.vectorize references unknown vectorize resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.queues || []) {
       if (resources[resourceName]?.type !== 'queue') {
-        throw new Error(`spec.services.${serviceName}.bindings.queues references unknown queue resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.queues references unknown queue resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.analytics || []) {
       if (resources[resourceName]?.type !== 'analyticsEngine') {
-        throw new Error(`spec.services.${serviceName}.bindings.analytics references unknown analyticsEngine resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.analytics references unknown analyticsEngine resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.workflows || []) {
       if (resources[resourceName]?.type !== 'workflow') {
-        throw new Error(`spec.services.${serviceName}.bindings.workflows references unknown workflow resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.workflows references unknown workflow resource: ${resourceName}`);
       }
     }
     for (const resourceName of bindingLists.durableObjects || []) {
       if (resources[resourceName]?.type !== 'durableObject') {
-        throw new Error(`spec.services.${serviceName}.bindings.durableObjects references unknown durableObject resource: ${resourceName}`);
+        throw new Error(`spec.workers.${serviceName}.bindings.durableObjects references unknown durableObject resource: ${resourceName}`);
       }
     }
     for (const trigger of service.triggers?.queues || []) {
       if (resources[trigger.queue]?.type !== 'queue') {
-        throw new Error(`spec.services.${serviceName}.triggers.queues references unknown queue resource: ${trigger.queue}`);
+        throw new Error(`spec.workers.${serviceName}.triggers.queues references unknown queue resource: ${trigger.queue}`);
       }
     }
   }

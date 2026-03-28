@@ -62,19 +62,12 @@ interface ManifestWorker {
   containers?: string[];
 }
 
-/** Route in the new format uses `target` instead of `service` */
 interface ManifestRoute {
   name?: string;
-  target?: string;
-  service?: string;
+  target: string;
   path?: string;
   ingress?: string;
   timeoutMs?: number;
-}
-
-/** Detect whether the manifest uses the new (workers/containers) format */
-function isNewFormat(spec: Record<string, unknown>): boolean {
-  return spec.workers != null || spec.containers != null;
 }
 
 // ── New-format bundle generation ─────────────────────────────────────────────
@@ -233,158 +226,9 @@ function emitNewFormatDocs(
     }
   }
 
-  // ── Routes (new format: target instead of service) ─────────────────────────
+  // ── Routes ─────────────────────────────────────────────────────────────────
   for (const [index, route] of routes.entries()) {
-    const targetRef = route.target || route.service;
-    docs.push({
-      apiVersion: 'takos.dev/v1alpha1',
-      kind: 'Endpoint',
-      metadata: { name: route.name || `route-${index + 1}` },
-      spec: {
-        protocol: 'http',
-        targetRef,
-        ...(route.ingress ? { ingressRef: route.ingress } : {}),
-        ...(route.path ? { path: route.path } : {}),
-        ...(route.timeoutMs != null ? { timeoutMs: route.timeoutMs } : {}),
-      },
-    });
-  }
-}
-
-// ── Legacy-format bundle generation ──────────────────────────────────────────
-
-function emitLegacyFormatDocs(
-  manifest: AppManifest,
-  buildSources: Map<string, AppDeploymentBuildSource>,
-  docs: BundleDoc[],
-): void {
-  for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
-    if (service.type === 'container') {
-      docs.push({
-        apiVersion: 'takos.dev/v1alpha1',
-        kind: 'Workload',
-        metadata: { name: serviceName },
-        spec: {
-          type: 'container',
-          pluginConfig: {
-            dockerfile: service.container.dockerfile,
-            port: service.container.port,
-            ...(service.container.instanceType ? { instanceType: service.container.instanceType } : {}),
-            ...(service.container.maxInstances ? { maxInstances: service.container.maxInstances } : {}),
-          },
-          ...(service.env ? { env: service.env } : {}),
-        },
-      });
-      continue;
-    }
-
-    const source = buildSources.get(serviceName);
-    if (!source) {
-      throw new Error(`Build source is missing for worker service: ${serviceName}`);
-    }
-    docs.push({
-      apiVersion: 'takos.dev/v1alpha1',
-      kind: 'Workload',
-      metadata: {
-        name: serviceName,
-        labels: buildSourceLabels(source),
-      },
-      spec: {
-        type: 'cloudflare.worker',
-        artifactRef: source.artifact_path,
-        pluginConfig: {
-          env: service.env || {},
-          bindings: {
-            services: service.bindings?.services || [],
-          },
-          ...(service.triggers ? { triggers: service.triggers } : {}),
-          ...(service.containers && service.containers.length > 0
-            ? {
-                containers: service.containers.map((c) => ({
-                  name: c.name,
-                  dockerfile: c.dockerfile,
-                  port: c.port,
-                  ...(c.instanceType ? { instanceType: c.instanceType } : {}),
-                  ...(c.maxInstances ? { maxInstances: c.maxInstances } : {}),
-                })),
-              }
-            : {}),
-        },
-      },
-    });
-
-    // Emit container workload docs for each CF Container attached to this worker
-    if (service.containers && service.containers.length > 0) {
-      for (const container of service.containers) {
-        docs.push({
-          apiVersion: 'takos.dev/v1alpha1',
-          kind: 'Workload',
-          metadata: { name: `${serviceName}-${container.name}` },
-          spec: {
-            type: 'container',
-            parentRef: serviceName,
-            pluginConfig: {
-              dockerfile: container.dockerfile,
-              port: container.port,
-              ...(container.instanceType ? { instanceType: container.instanceType } : {}),
-              ...(container.maxInstances ? { maxInstances: container.maxInstances } : {}),
-            },
-          },
-        });
-
-        docs.push({
-          apiVersion: 'takos.dev/v1alpha1',
-          kind: 'Binding',
-          metadata: { name: `${container.name}-container-to-${serviceName}` },
-          spec: {
-            from: `${serviceName}-${container.name}`,
-            to: serviceName,
-            mount: {
-              as: `${container.name.toUpperCase().replace(/-/g, '_')}_CONTAINER`,
-              type: 'durableObject',
-            },
-          },
-        });
-      }
-    }
-  }
-
-  for (const [resourceName, resource] of Object.entries(manifest.spec.resources || {})) {
-    if (!resource.binding) continue;
-    for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
-      if (service.type !== 'worker') continue;
-      const bindingLists = service.bindings || {};
-      const mountType = resource.type === 'secretRef' ? undefined : resource.type;
-      const inBindings = [
-        ...(bindingLists.d1 || []),
-        ...(bindingLists.r2 || []),
-        ...(bindingLists.kv || []),
-        ...(bindingLists.vectorize || []),
-        ...(bindingLists.queues || []),
-        ...(bindingLists.analytics || []),
-        ...(bindingLists.workflows || []),
-        ...(bindingLists.durableObjects || []),
-      ];
-      if (!inBindings.includes(resourceName) || !mountType) continue;
-      docs.push({
-        apiVersion: 'takos.dev/v1alpha1',
-        kind: 'Binding',
-        metadata: { name: `${resourceName}-to-${serviceName}` },
-        spec: {
-          from: resourceName,
-          to: serviceName,
-          mount: {
-            as: resource.binding,
-            type: mountType,
-          },
-        },
-      });
-    }
-  }
-
-  for (const [index, route] of (manifest.spec.routes || []).entries()) {
-    const routeAsAny = route as Record<string, unknown>;
-    const targetRef = (routeAsAny.target || routeAsAny.service) as string;
+    const targetRef = route.target;
     docs.push({
       apiVersion: 'takos.dev/v1alpha1',
       kind: 'Endpoint',
@@ -461,13 +305,7 @@ export function appManifestToBundleDocs(
     });
   }
 
-  // Branch on new (workers/containers) vs legacy (services) format
-  const spec = manifest.spec as unknown as Record<string, unknown>;
-  if (isNewFormat(spec)) {
-    emitNewFormatDocs(manifest, buildSources, docs);
-  } else {
-    emitLegacyFormatDocs(manifest, buildSources, docs);
-  }
+  emitNewFormatDocs(manifest, buildSources, docs);
 
   // MCP servers (shared)
   for (const server of manifest.spec.mcpServers || []) {

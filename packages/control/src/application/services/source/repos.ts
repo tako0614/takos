@@ -4,7 +4,7 @@ import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb, accounts, repositories } from '../../../infra/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { generateId, now } from '../../../shared/utils';
+import { generateId, now, sanitizeRepoName } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { logError } from '../../../shared/utils/logger';
 
@@ -121,10 +121,6 @@ export async function listRepositoriesBySpace(db: D1Database, spaceId: string): 
   return rows.map(toApiRepositoryFromDb);
 }
 
-export function sanitizeRepositoryName(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-}
-
 async function resolveRepositoryInitActor(
   db: ReturnType<typeof getDb>,
   actorAccountId?: string,
@@ -163,7 +159,7 @@ export async function createRepository(
   input: CreateRepositoryInput,
 ): Promise<Repository> {
   const db = getDb(dbBinding);
-  const name = sanitizeRepositoryName(input.name);
+  const name = sanitizeRepoName(input.name);
 
   if (!name) {
     throw new RepositoryCreationError('Invalid repository name', 'INVALID_NAME');

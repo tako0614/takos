@@ -125,9 +125,9 @@ export function registerDeployCommand(program: Command): void {
         manifest_path: manifestPath,
         app: manifest.metadata.name,
         version: manifest.spec.version,
-        services: Object.keys(manifest.spec.services),
+        workers: Object.keys(manifest.spec.workers),
         resources: Object.keys(manifest.spec.resources || {}),
-        routes: (manifest.spec.routes || []).map((route: { name?: string; service: string }) => route.name || route.service),
+        routes: (manifest.spec.routes || []).map((route: { name?: string; target: string }) => route.name || route.target),
       };
 
       if (options.json) {
@@ -139,7 +139,7 @@ export function registerDeployCommand(program: Command): void {
       console.log(`  File:      ${summary.manifest_path}`);
       console.log(`  App:       ${summary.app}`);
       console.log(`  Version:   ${summary.version}`);
-      console.log(`  Services:  ${summary.services.join(', ') || '-'}`);
+      console.log(`  Workers:   ${summary.workers.join(', ') || '-'}`);
       console.log(`  Resources: ${summary.resources.join(', ') || '-'}`);
       console.log(`  Routes:    ${summary.routes.join(', ') || '-'}`);
     });

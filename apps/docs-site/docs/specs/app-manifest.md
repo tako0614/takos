@@ -81,8 +81,8 @@ spec:
 | `spec.mcpServers` | no | MCP server 公開設定 |
 | `spec.fileHandlers` | no | file handler 登録 |
 
-::: warning 後方互換
-`spec.services` は引き続きサポートされますが deprecated です。新規 app では `spec.containers` / `spec.workers` を使用してください。`spec.services` と `spec.containers` / `spec.workers` の併用はエラーになります。
+::: danger 廃止
+`spec.services` は廃止されました。`spec.containers` / `spec.workers` を使用してください。`spec.services` が存在するとパースエラーになります。
 :::
 
 ## `spec.containers`
