@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Env, User, SpaceRole } from '../../../shared/types';
 import type { SpaceAccess } from '../../../application/services/identity/space-access';
-import { checkSpaceAccess } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { AppError, ErrorCodes, NotFoundError, InternalError, AuthenticationError, BadRequestError as BadRequestErr } from 'takos-common/errors';
 
 // Re-export Error classes and types from takos-common/errors (canonical location)

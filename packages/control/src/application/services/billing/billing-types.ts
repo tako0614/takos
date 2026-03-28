@@ -17,10 +17,6 @@ export const METER_TYPES = [
 
 export type MeterType = typeof METER_TYPES[number];
 
-export function asMeterType(value: string): MeterType | null {
-  return (METER_TYPES as readonly string[]).includes(value) ? (value as MeterType) : null;
-}
-
 export type TransactionType = 'purchase' | 'usage' | 'refund' | 'bonus' | 'adjustment';
 
 export interface BillingCheckResult {

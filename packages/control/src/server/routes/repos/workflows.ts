@@ -12,7 +12,7 @@ import type { Database } from '../../../infra/db';
 import { workflows } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { NotFoundError, InternalError } from 'takos-common/errors';
-import { ok } from '../response-helpers';
+import { ok } from '../response-utils';
 
 interface WorkflowParseResult {
   name: string | null;

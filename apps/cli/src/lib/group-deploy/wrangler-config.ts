@@ -7,7 +7,7 @@ import type {
   WranglerConfig,
   WorkerServiceDef,
 } from './deploy-models.js';
-import { toBinding } from './cloudflare-helpers.js';
+import { toBinding } from './cloudflare-utils.js';
 import { toPascalCase } from './container.js';
 
 // ── Wrangler Config Generator ────────────────────────────────────────────────

@@ -9,7 +9,8 @@ import { getUserConsentsWithClients, revokeConsent } from '../../application/ser
 import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
-import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './route-auth';
+import { parseJsonBody, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 import { logWarn } from '../../shared/utils/logger';
 import {
@@ -203,8 +204,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   .get('/oauth/audit-logs', async (c) => {
     const user = c.get('user');
-    const limit = parseLimit(c.req.query('limit'), 50, 100);
-    const offset = parseOffset(c.req.query('offset'));
+    const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
     const clientId = c.req.query('client_id') || null;
     const db = getDb(c.env.DB);
 

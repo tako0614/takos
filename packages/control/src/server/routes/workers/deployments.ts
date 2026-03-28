@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { DeploymentService } from '../../../application/services/deployment/index';
@@ -198,7 +198,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/deployments', async (c) => {
   const user = c.get('user');
   const workerId = c.req.param('id');
-  const limit = parseLimit(c.req.query('limit'), 20, 50);
+  const { limit } = parsePagination(c.req.query(), { limit: 20, maxLimit: 50 });
 
   const worker = await getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {

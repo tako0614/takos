@@ -5,10 +5,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const controlRoot = import.meta.dirname;
-const appRoot = path.resolve(controlRoot, '../../../../apps/control');
-const sourcePackageRoot = path.resolve(controlRoot, '..');
-const packageRoot = path.resolve(controlRoot, '../../local-platform');
-const repoRoot = path.resolve(controlRoot, '../../../../');
+const appRoot = path.resolve(controlRoot, '../../../../../apps/control');
+const sourcePackageRoot = path.resolve(controlRoot, '../..');
+const packageRoot = path.resolve(controlRoot, '../../../local-platform');
+const repoRoot = path.resolve(controlRoot, '../../../../../');
 const monorepoRootPackageJson = path.join(repoRoot, 'package.json');
 
 async function read(relativePath: string, root = appRoot): Promise<string> {

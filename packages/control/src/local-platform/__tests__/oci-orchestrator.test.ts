@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createLocalOciOrchestratorFetchForTests } from './oci-orchestrator.ts';
+import { createLocalOciOrchestratorFetchForTests } from '../oci-orchestrator.ts';
 
 describe('oci orchestrator local service', () => {
   const originalEnv = {

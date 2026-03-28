@@ -121,7 +121,7 @@ export async function executeSseStream(path: string, options: StreamCommandOptio
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      const body = await response.text().catch((e) => { console.warn('Failed to read SSE error response body:', e); return ''; });
       console.log(chalk.red(body || `HTTP ${response.status} ${response.statusText}`));
       cliExit(1);
     }

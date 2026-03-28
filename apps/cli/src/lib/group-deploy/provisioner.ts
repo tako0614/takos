@@ -6,7 +6,7 @@
  * from the supplied options and environment variables.
  */
 import type { ProvisionedResource, ResourceProvisionResult } from './deploy-models.js';
-import { toBinding } from './cloudflare-helpers.js';
+import { toBinding } from './cloudflare-utils.js';
 import type { ResourceProvider, ProviderOptions } from './resource-provider.js';
 import { CloudflareProvider } from './providers/cloudflare.js';
 import { AWSProvider } from './providers/aws.js';

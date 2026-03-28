@@ -1,13 +1,13 @@
 /**
  * CLI command: `takos deploy-group`
  *
- * Deploy an app group from .takos/app.yml directly to Cloudflare,
- * bypassing the store install flow. Provisions resources, deploys
- * workers, and wires up service bindings.
+ * Backward-compatible alias for `takos apply --auto-approve`.
  *
- * NOTE: This command is kept for backward compatibility. For new
- * workflows, prefer `takos apply` which adds state tracking,
- * diff-based planning, and selective targeting.
+ * Loads the manifest, computes a diff, and delegates to the apply
+ * coordinator with auto-approve enabled.  Wrangler-config mode and
+ * dry-run are still supported for backward compatibility.
+ *
+ * For new workflows, prefer `takos apply`.
  *
  * Usage:
  *   takos deploy-group --env staging --namespace takos-staging-tenants
@@ -18,8 +18,13 @@ import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
-import { deployGroup, deployWranglerDirect } from '../lib/group-deploy/index.js';
-import type { GroupDeployResult, WranglerDirectDeployResult } from '../lib/group-deploy/index.js';
+import { readState, getStateDir } from '../lib/state/state-file.js';
+import { computeDiff } from '../lib/state/diff.js';
+import type { TakosState } from '../lib/state/state-types.js';
+import { applyDiff } from '../lib/apply/coordinator.js';
+import type { ApplyResult } from '../lib/apply/coordinator.js';
+import { deployWranglerDirect } from '../lib/group-deploy/index.js';
+import type { WranglerDirectDeployResult } from '../lib/group-deploy/index.js';
 
 type DeployGroupCommandOptions = {
   manifest?: string;
@@ -39,8 +44,6 @@ type DeployGroupCommandOptions = {
 };
 
 function resolveAccountId(override?: string): string {
-  // Canonical env var: CLOUDFLARE_ACCOUNT_ID
-  // CF_ACCOUNT_ID is deprecated but kept as a fallback for backward compatibility.
   const accountId = override || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
   if (!accountId.trim()) {
     console.log(chalk.red('Cloudflare account ID is required.'));
@@ -51,8 +54,6 @@ function resolveAccountId(override?: string): string {
 }
 
 function resolveApiToken(override?: string): string {
-  // Canonical env var: CLOUDFLARE_API_TOKEN
-  // CF_API_TOKEN is deprecated but kept as a fallback for backward compatibility.
   const apiToken = override || process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || '';
   if (!apiToken.trim()) {
     console.log(chalk.red('Cloudflare API token is required.'));
@@ -66,75 +67,43 @@ function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function printResult(result: GroupDeployResult): void {
-  const titlePrefix = result.dryRun ? '[DRY RUN] ' : '';
+function printApplyResult(result: ApplyResult, env: string, groupName: string, dryRun?: boolean): void {
+  const titlePrefix = dryRun ? '[DRY RUN] ' : '';
 
   console.log('');
-  console.log(chalk.bold(`${titlePrefix}Group Deploy: ${result.groupName}`));
-  console.log(`  Environment: ${result.env}`);
-  if (result.namespace) {
-    console.log(`  Namespace:   ${result.namespace}`);
-  }
+  console.log(chalk.bold(`${titlePrefix}Group Deploy: ${groupName}`));
+  console.log(`  Environment: ${env}`);
   console.log('');
 
-  // Resources
-  if (result.resources.length > 0) {
-    console.log(chalk.bold('Resources:'));
-    for (const resource of result.resources) {
-      const icon = resource.status === 'provisioned' ? chalk.green('✓')
-        : resource.status === 'exists' ? chalk.yellow('~')
-        : chalk.red('✗');
-      const idInfo = resource.id ? chalk.dim(` (${resource.id})`) : '';
-      const errorInfo = resource.error ? chalk.red(` — ${resource.error}`) : '';
-      console.log(`  ${icon} ${resource.name} [${resource.type}]${idInfo}${errorInfo}`);
+  if (result.applied.length > 0) {
+    console.log(chalk.bold('Applied:'));
+    for (const entry of result.applied) {
+      const icon = entry.status === 'success' ? chalk.green('+') : chalk.red('!');
+      const errorInfo = entry.error ? chalk.red(` -- ${entry.error}`) : '';
+      console.log(`  ${icon} ${entry.name} [${entry.category}] ${entry.action}${errorInfo}`);
     }
     console.log('');
   }
 
-  // Services
-  if (result.services.length > 0) {
-    console.log(chalk.bold('Services:'));
-    for (const service of result.services) {
-      const icon = service.status === 'deployed' ? chalk.green('✓')
-        : service.status === 'skipped' ? chalk.yellow('~')
-        : chalk.red('✗');
-      const scriptInfo = service.scriptName ? chalk.dim(` → ${service.scriptName}`) : '';
-      const urlInfo = service.url ? chalk.dim(` (${service.url})`) : '';
-      const errorInfo = service.error ? chalk.red(` — ${service.error}`) : '';
-      console.log(`  ${icon} ${service.name} [${service.type}]${scriptInfo}${urlInfo}${errorInfo}`);
+  if (result.skipped.length > 0) {
+    console.log(chalk.bold('Unchanged:'));
+    for (const name of result.skipped) {
+      console.log(`  ${chalk.dim('=')} ${name}`);
     }
     console.log('');
   }
 
-  // Bindings
-  if (result.bindings.length > 0) {
-    console.log(chalk.bold('Bindings:'));
-    for (const binding of result.bindings) {
-      const icon = binding.status === 'bound' ? chalk.green('✓') : chalk.red('✗');
-      const errorInfo = binding.error ? chalk.red(` — ${binding.error}`) : '';
-      console.log(`  ${icon} ${binding.from} → ${binding.to} [${binding.type}]${errorInfo}`);
-    }
-    console.log('');
-  }
-
-  // Summary
-  const totalServices = result.services.length;
-  const deployedServices = result.services.filter(s => s.status === 'deployed').length;
-  const failedServices = result.services.filter(s => s.status === 'failed').length;
-  const skippedServices = result.services.filter(s => s.status === 'skipped').length;
-
-  const totalResources = result.resources.length;
-  const provisionedResources = result.resources.filter(r => r.status === 'provisioned').length;
-  const failedResources = result.resources.filter(r => r.status === 'failed').length;
+  const succeeded = result.applied.filter(e => e.status === 'success').length;
+  const failed = result.applied.filter(e => e.status === 'failed').length;
 
   console.log(chalk.bold('Summary:'));
-  console.log(`  Services:  ${deployedServices}/${totalServices} deployed, ${failedServices} failed, ${skippedServices} skipped`);
-  console.log(`  Resources: ${provisionedResources}/${totalResources} provisioned, ${failedResources} failed`);
+  console.log(`  Applied:   ${succeeded} succeeded, ${failed} failed`);
+  console.log(`  Unchanged: ${result.skipped.length}`);
 
-  if (failedServices > 0 || failedResources > 0) {
+  if (failed > 0) {
     console.log('');
     console.log(chalk.red('Some steps failed. Review errors above.'));
-  } else if (!result.dryRun) {
+  } else if (!dryRun) {
     console.log('');
     console.log(chalk.green('Group deployment completed successfully.'));
   }
@@ -149,9 +118,9 @@ function printWranglerDirectResult(result: WranglerDirectDeployResult): void {
     console.log(`  Namespace: ${result.namespace}`);
   }
 
-  const icon = result.status === 'deployed' ? chalk.green('✓')
+  const icon = result.status === 'deployed' ? chalk.green('+')
     : result.status === 'dry-run' ? chalk.yellow('~')
-    : chalk.red('✗');
+    : chalk.red('!');
   console.log(`  Status: ${icon} ${result.status}`);
 
   if (result.error) {
@@ -163,7 +132,7 @@ function printWranglerDirectResult(result: WranglerDirectDeployResult): void {
 export function registerDeployGroupCommand(program: Command): void {
   program
     .command('deploy-group')
-    .description('Deploy an app group from .takos/app.yml directly to Cloudflare')
+    .description('Deploy an app group from .takos/app.yml (alias for apply --auto-approve)')
     .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
     .requiredOption('--env <env>', 'Target environment (staging/production)')
     .option('--namespace <name>', 'Dispatch namespace (omit for account top-level)')
@@ -192,7 +161,7 @@ export function registerDeployGroupCommand(program: Command): void {
         cliExit(1);
       }
 
-      // ── Wrangler-config mode ─────────────────────────────────────────
+      // ── Wrangler-config mode (unchanged — bypasses coordinator) ─────
       if (options.wranglerConfig) {
         const wranglerResult = await deployWranglerDirect({
           wranglerConfigPath: options.wranglerConfig,
@@ -216,7 +185,7 @@ export function registerDeployGroupCommand(program: Command): void {
         return;
       }
 
-      // ── Manifest mode (default) ──────────────────────────────────────
+      // ── Manifest mode — delegate to coordinator ─────────────────────
 
       // Load and validate manifest
       let manifestPath: string;
@@ -238,68 +207,60 @@ export function registerDeployGroupCommand(program: Command): void {
         cliExit(1);
       }
 
-      // Validate filter names against manifest
-      const specAny = manifest.spec as Record<string, unknown>;
-      const allDeployableNames = [
-        ...Object.keys((specAny.workers || {}) as Record<string, unknown>),
-        ...Object.keys((specAny.containers || {}) as Record<string, unknown>),
-        ...Object.keys((specAny.services || {}) as Record<string, unknown>),
-      ];
-
-      const allFilterNames = [
-        ...(options.service || []),
-        ...(options.worker || []),
-        ...(options.container || []),
-      ];
-      if (allFilterNames.length > 0) {
-        const unknownNames = allFilterNames.filter(s => !allDeployableNames.includes(s));
-        if (unknownNames.length > 0) {
-          console.log(chalk.red(`Unknown workers/containers/services: ${unknownNames.join(', ')}`));
-          console.log(chalk.dim(`Available: ${allDeployableNames.join(', ')}`));
-          cliExit(1);
-        }
+      // Read current state and compute diff
+      const stateDir = getStateDir(process.cwd());
+      let currentState: TakosState | null = null;
+      try {
+        currentState = await readState(stateDir);
+      } catch {
+        // No state file yet
       }
 
+      const diff = computeDiff(manifest, currentState);
+
+      // dry-run: display diff and return
+      if (options.dryRun) {
+        if (options.json) {
+          printJson(diff);
+        } else {
+          const { formatPlan } = await import('../lib/state/plan.js');
+          console.log(formatPlan(diff));
+        }
+        return;
+      }
+
+      const groupName = options.group || manifest.metadata.name;
+
       if (!options.json) {
-        const modeLabel = options.dryRun ? chalk.yellow('[DRY RUN]') : chalk.cyan('[DEPLOY]');
-        console.log(`${modeLabel} ${chalk.bold(manifest.metadata.name)} → ${options.env}`);
+        console.log(`${chalk.cyan('[DEPLOY]')} ${chalk.bold(manifest.metadata.name)} -> ${options.env}`);
         if (options.namespace) {
           console.log(`  Namespace: ${options.namespace}`);
         }
         console.log(`  Manifest:  ${manifestPath}`);
-        for (const svc of allFilterNames) {
-          console.log(`  filtered: ${svc}`);
-        }
         console.log('');
       }
 
-      // Run the deploy
-      const result = await deployGroup({
-        manifest: manifest as Parameters<typeof deployGroup>[0]['manifest'],
+      // Delegate to coordinator (auto-approve, since deploy-group never prompts)
+      const applyResult = await applyDiff(diff, manifest, {
         env: options.env,
-        namespace: options.namespace,
-        groupName: options.group,
         accountId,
         apiToken,
-        dryRun: options.dryRun,
-        compatibilityDate: options.compatibilityDate,
-        serviceFilter: options.service,
-        workerFilter: options.worker,
-        containerFilter: options.container,
-        baseDomain: options.baseDomain,
+        groupName,
+        namespace: options.namespace,
         manifestDir: path.dirname(manifestPath),
+        baseDomain: options.baseDomain,
+        autoApprove: true,
       });
 
       if (options.json) {
-        printJson(result);
+        printJson(applyResult);
         return;
       }
 
-      printResult(result);
+      printApplyResult(applyResult, options.env, groupName);
 
-      // Exit with error code if any service failed
-      const hasFailures = result.services.some(s => s.status === 'failed')
-        || result.resources.some(r => r.status === 'failed');
+      // Exit with error code if any entry failed
+      const hasFailures = applyResult.applied.some(e => e.status === 'failed');
       if (hasFailures) {
         cliExit(1);
       }

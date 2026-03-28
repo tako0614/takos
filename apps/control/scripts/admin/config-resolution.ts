@@ -4,7 +4,7 @@
  */
 
 import type { DeployEnvironment, GlobalOptions, ResolvedConfig } from './admin-types.ts';
-import { fail, takeFlag, takeOption } from './cli-helpers.ts';
+import { fail, takeFlag, takeOption } from './cli-utils.ts';
 import { parseTomlPrimitive, readTomlArraySections, readTomlSection, readWranglerToml } from './toml.ts';
 import { normalizePrefix } from './validation.ts';
 

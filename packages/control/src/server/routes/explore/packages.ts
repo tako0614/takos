@@ -9,12 +9,12 @@ import {
   getTakopackRatingSummary,
 } from '../../../application/services/source/explore-packages';
 import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
-import { checkSpaceAccess } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { getDb } from '../../../infra/db';
 import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { parseLimit, parseOffset } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from 'takos-common/errors';
 import {
   buildCatalogSuggestions,
@@ -107,8 +107,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const result = await listCatalogItems(c.env.DB, {
       sort,
       type: catalogType,
-      limit: parseLimit(c.req.query('limit'), 20, 50),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query(), { limit: 20, maxLimit: 50 }),
       searchQuery: c.req.query('q')?.trim() || '',
       ...filters,
       tagsRaw,
@@ -126,7 +125,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const db = getDb(c.env.DB);
     const q = c.req.query('q')?.trim() || '';
-    const limit = parseLimit(c.req.query('limit'), 8, 20);
+    const { limit } = parsePagination(c.req.query(), { limit: 8, maxLimit: 20 });
 
     if (!q) {
       return c.json({ users: [], repos: [] });
@@ -142,7 +141,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const db = getDb(c.env.DB);
     const q = c.req.query('q')?.trim() || '';
-    const limit = parseLimit(c.req.query('limit'), 8, 20);
+    const { limit } = parsePagination(c.req.query(), { limit: 8, maxLimit: 20 });
 
     if (!q) {
       return c.json({ users: [], repos: [] });
@@ -179,8 +178,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const result = await searchPackages(c.env.DB, {
       searchQuery: c.req.query('q')?.trim() || '',
       sortParamRaw,
-      limit: parseLimit(c.req.query('limit'), 20, 100),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query()),
       category,
       tags,
       certifiedOnly: c.req.query('certified_only') === 'true',
@@ -194,7 +192,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     queryParamsToInclude: ['q', 'category', 'tags', 'limit'],
   }), async (c) => {
     const q = c.req.query('q')?.trim() || '';
-    const limit = parseLimit(c.req.query('limit'), 10, 20);
+    const { limit } = parsePagination(c.req.query(), { limit: 10, maxLimit: 20 });
     const category = normalizeSimpleFilter(c.req.query('category'), { maxLen: 32, pattern: /^[a-z0-9_-]+$/ });
     const tagsRaw = c.req.query('tags');
 
@@ -366,8 +364,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   }), async (c) => {
     const user = c.get('user');
     const repoId = c.req.param('repoId');
-    const limit = parseLimit(c.req.query('limit'), 20, 50);
-    const offset = parseOffset(c.req.query('offset'));
+    const { limit, offset } = parsePagination(c.req.query(), { limit: 20, maxLimit: 50 });
     const db = getDb(c.env.DB);
 
     const repo = await db.select({ id: repositories.id, name: repositories.name }).from(repositories).where(

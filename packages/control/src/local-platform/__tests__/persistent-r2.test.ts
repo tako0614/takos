@@ -2,8 +2,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createPersistentR2Bucket } from './persistent-r2.ts';
-import { removeLocalDataDir } from './persistent-shared.ts';
+import { createPersistentR2Bucket } from '../persistent-r2.ts';
+import { removeLocalDataDir } from '../persistent-shared.ts';
 
 const tempDirs: string[] = [];
 

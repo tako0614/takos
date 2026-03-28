@@ -8,7 +8,7 @@
  * Requires: kubectl configured with a valid kubeconfig.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-helpers.js';
+import { execCommand } from '../cloudflare-utils.js';
 
 export class K8sProvider implements ResourceProvider {
   readonly name = 'k8s';

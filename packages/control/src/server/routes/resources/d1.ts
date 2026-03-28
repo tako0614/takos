@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
-import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
@@ -171,8 +172,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError( 'D1 database not provisioned');
   }
 
-  const limit = parseLimit(c.req.query('limit'), 50, 1000);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 1000 });
 
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);

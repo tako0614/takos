@@ -6,7 +6,8 @@ import { findRepoByUsernameAndName } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { checkSpaceAccess, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 

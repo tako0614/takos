@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Resource } from '../../../shared/types';
-import { parseLimit, type AuthenticatedRouteEnv } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
@@ -78,7 +79,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const prefix = c.req.query('prefix') || undefined;
   const cursor = c.req.query('cursor') || undefined;
-  const limit = parseLimit(c.req.query('limit'), 100, 1000);
+  const { limit } = parsePagination(c.req.query(), { limit: 100, maxLimit: 1000 });
 
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);

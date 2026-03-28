@@ -43,7 +43,7 @@ import {
   type BillingTopupPack,
   isEventType,
 } from './stripe';
-import { logError } from '../../../shared/utils/logger';
+import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError } from 'takos-common/errors';
 
 export {
@@ -327,7 +327,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     if (!pdfRes.ok || !pdfRes.body) {
-      const text = await pdfRes.text().catch(() => '');
+      const text = await pdfRes.text().catch((e) => { logWarn('Failed to read invoice PDF response body', { module: 'billing', error: String(e) }); return ''; });
       logError('invoice_pdf fetch failed', { status: pdfRes.status, text }, { module: 'billing' });
       throw new BadGatewayError('Failed to fetch invoice PDF');
     }

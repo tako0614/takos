@@ -27,7 +27,7 @@ import { estimateTokens } from './prompt-budget';
 import { withTimeout } from '../../../shared/utils/with-timeout';
 import { logWarn } from '../../../shared/utils/logger';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { D1CheckpointSaver } from './langgraph-checkpointer';
+import { D1CheckpointSaver } from './graph-checkpointer';
 import {
   extractMessageText,
   stringifyToolResult,
@@ -36,7 +36,7 @@ import {
   anySignal,
   throwIfAborted,
   type CreateAgentOptions,
-} from './langgraph-tools';
+} from './graph-tools';
 
 // ── Message limits for Workers memory safety (128MB heap) ───────────────
 
@@ -181,7 +181,7 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
           const exponential = Math.min(baseDelay * Math.pow(2, attempt), LLM_MAX_DELAY);
           // Full jitter (0–100% of exponential) to prevent thundering-herd across concurrent runs
           const delay = Math.floor(Math.random() * exponential);
-          logWarn(`LLM API error (attempt ${attempt + 1}/${LLM_MAX_RETRIES}${is429 ? ', rate-limited' : ''}), retrying in ${delay}ms`, { module: 'services/agent/langgraph-agent' });
+          logWarn(`LLM API error (attempt ${attempt + 1}/${LLM_MAX_RETRIES}${is429 ? ', rate-limited' : ''}), retrying in ${delay}ms`, { module: 'services/agent/graph-agent' });
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -225,7 +225,7 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
     const aiMessage = lastMessage as AIMessage;
     const toolCalls = aiMessage.tool_calls || [];
     if (!Array.isArray(toolCalls)) {
-      logWarn('tool_calls is not an array, skipping tool execution', { module: 'services/agent/langgraph-agent' });
+      logWarn('tool_calls is not an array, skipping tool execution', { module: 'services/agent/graph-agent' });
       return { messages: [], consecutiveErrors: state.consecutiveErrors + 1, consecutiveSameResults: 0 };
     }
 
@@ -241,7 +241,7 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
         : generateToolCallId(toolCallCounter);
 
       if (!toolCallId) {
-        logWarn('Failed to generate tool call ID, skipping this tool call', { module: 'services/agent/langgraph-agent' });
+        logWarn('Failed to generate tool call ID, skipping this tool call', { module: 'services/agent/graph-agent' });
         hasError = true;
         continue;
       }
@@ -293,7 +293,7 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
       if (combinedResultHash === state.lastToolResultHash) {
         newConsecutiveSameResults = state.consecutiveSameResults + 1;
         if (newConsecutiveSameResults >= MAX_CONSECUTIVE_SAME_RESULTS) {
-          logWarn(`Stopping agent: ${MAX_CONSECUTIVE_SAME_RESULTS} consecutive identical tool results detected (stuck loop)`, { module: 'services/agent/langgraph-agent' });
+          logWarn(`Stopping agent: ${MAX_CONSECUTIVE_SAME_RESULTS} consecutive identical tool results detected (stuck loop)`, { module: 'services/agent/graph-agent' });
         }
       } else {
         newConsecutiveSameResults = 0;
@@ -314,12 +314,12 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
     }
 
     if (state.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      logWarn(`Stopping agent: ${MAX_CONSECUTIVE_ERRORS} consecutive tool errors detected`, { module: 'services/agent/langgraph-agent' });
+      logWarn(`Stopping agent: ${MAX_CONSECUTIVE_ERRORS} consecutive tool errors detected`, { module: 'services/agent/graph-agent' });
       return '__end__';
     }
 
     if (state.consecutiveSameResults >= MAX_CONSECUTIVE_SAME_RESULTS) {
-      logWarn(`Stopping agent: ${MAX_CONSECUTIVE_SAME_RESULTS} consecutive identical results (no progress)`, { module: 'services/agent/langgraph-agent' });
+      logWarn(`Stopping agent: ${MAX_CONSECUTIVE_SAME_RESULTS} consecutive identical results (no progress)`, { module: 'services/agent/graph-agent' });
       return '__end__';
     }
 

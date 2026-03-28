@@ -12,12 +12,8 @@ import type { AgentTask, AgentTaskPriority, AgentTaskStatus, Run, Thread } from 
 import { TaskForm } from './work/TaskForm';
 import { TaskCard } from './work/TaskCard';
 import { TaskFilters } from './work/TaskFilters';
-import {
-  type ModelSettings,
-  type TaskFilter,
-  ensureModelOption,
-  getModelsForProvider,
-} from './work/task-work-types';
+import type { ModelSettings, TaskFilter } from './work/task-work-types';
+import { ensureModelOption, getModelsForProvider } from './work/task-work-utils';
 
 interface TaskFormState {
   title: string;

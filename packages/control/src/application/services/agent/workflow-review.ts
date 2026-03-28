@@ -7,7 +7,8 @@
 
 import type { AgentMessage } from './agent-models';
 import type { WorkflowContext, ReviewResult } from './workflow-types';
-import { extractJsonFromLLMResponse, REVIEW_PROMPT } from './workflow-types';
+import { REVIEW_PROMPT } from './workflow-types';
+import { extractJsonFromLLMResponse } from './workflow-utils';
 import { LLMClient } from './llm';
 import { getDb, pullRequests, prReviews } from '../../../infra/db';
 import { eq } from 'drizzle-orm';

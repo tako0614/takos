@@ -26,14 +26,14 @@ export {
   TENANT_R2_PREFIXES,
 } from './constants.ts';
 
-// cli-helpers.ts
-export { print, fail, takeFlag, takeOption, parsePositiveInt } from './cli-helpers.ts';
+// cli-utils.ts
+export { print, fail, takeFlag, takeOption, parsePositiveInt } from './cli-utils.ts';
 
-// sql-helpers.ts
-export { sqlLiteral, sqlNullable, escapeRegExp } from './sql-helpers.ts';
+// sql-utils.ts
+export { sqlLiteral, sqlNullable, escapeRegExp } from './sql-utils.ts';
 
-// common-helpers.ts
-export { nowIso, randomId, appendAuditLog } from './common-helpers.ts';
+// common-utils.ts
+export { nowIso, randomId, appendAuditLog } from './common-utils.ts';
 
 // toml.ts
 export {

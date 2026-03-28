@@ -36,9 +36,9 @@ import type {
 } from './workflow-types';
 import {
   VALID_PLAN_TYPES,
-  extractJsonFromLLMResponse,
   TASK_ANALYSIS_PROMPT,
 } from './workflow-types';
+import { extractJsonFromLLMResponse } from './workflow-utils';
 
 // Re-export submodule functions so existing call-sites keep working
 export { executeReview } from './workflow-review';

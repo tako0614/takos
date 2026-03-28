@@ -12,7 +12,7 @@ import type { Env } from '../../../shared/types';
 import { eq } from 'drizzle-orm';
 import { getUsageEventsFromR2 } from '../offload/usage-events';
 import type { MeterType } from './billing-types';
-import { asMeterType } from './billing-types';
+import { asMeterType } from './billing-utils';
 import { getOrCreateBillingAccount } from './billing-accounts';
 import { recordUsage } from './billing-usage';
 

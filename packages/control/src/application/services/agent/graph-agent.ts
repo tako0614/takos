@@ -5,9 +5,9 @@
  * Implements a ReAct-style agent with tool calling.
  *
  * This file is the backward-compatible facade. Implementation is split into:
- *   - langgraph-tools.ts        : shared helpers, tool creation, public types
- *   - langgraph-graph.ts        : state definition, graph construction, agent factory
- *   - langgraph-checkpointer.ts : D1 checkpoint persistence
+ *   - graph-tools.ts        : shared helpers, tool creation, public types
+ *   - agent-graph.ts        : state definition, graph construction, agent factory
+ *   - graph-checkpointer.ts : D1 checkpoint persistence
  */
 
 import {
@@ -31,19 +31,19 @@ export {
   createLangChainTool,
   type LangGraphEvent,
   type CreateAgentOptions,
-} from './langgraph-tools';
+} from './graph-tools';
 
 export {
   AgentState,
   type AgentStateType,
   createLangGraphAgent,
-} from './langgraph-graph';
+} from './agent-graph';
 
-export { D1CheckpointSaver } from './langgraph-checkpointer';
+export { D1CheckpointSaver } from './graph-checkpointer';
 
 // Import what we need for the functions that remain in this file
-import { extractMessageText, throwIfAborted, type LangGraphEvent } from './langgraph-tools';
-import { createLangGraphAgent, type AgentStateType } from './langgraph-graph';
+import { extractMessageText, throwIfAborted, type LangGraphEvent } from './graph-tools';
+import { createLangGraphAgent, type AgentStateType } from './agent-graph';
 import type { DbMessageOutput } from './message-utils';
 
 // ── Runner ──────────────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
           try {
             const parsed = JSON.parse(msg.tool_calls);
             if (!Array.isArray(parsed)) {
-              logWarn('tool_calls is not an array, skipping', { module: 'services/agent/langgraph-agent' });
+              logWarn('tool_calls is not an array, skipping', { module: 'services/agent/graph-agent' });
             } else {
               aiMsg.tool_calls = parsed.map((tc: SerializedToolCall) => ({
                 id: tc.id || '',
@@ -229,7 +229,7 @@ export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
               }));
             }
           } catch {
-            logWarn('Failed to parse tool_calls JSON', { module: 'services/agent/langgraph-agent' });
+            logWarn('Failed to parse tool_calls JSON', { module: 'services/agent/graph-agent' });
           }
         }
         return aiMsg;

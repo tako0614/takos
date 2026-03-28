@@ -9,7 +9,7 @@
  * graceful 'failed' result rather than throwing.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-helpers.js';
+import { execCommand } from '../cloudflare-utils.js';
 
 export class GCPProvider implements ResourceProvider {
   readonly name = 'gcp';

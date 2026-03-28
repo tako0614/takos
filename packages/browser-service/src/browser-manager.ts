@@ -245,7 +245,7 @@ export class BrowserManager {
     return Promise.all(pages.map(async (page, index) => ({
       index,
       url: page.url(),
-      title: await page.title().catch(() => ''),
+      title: await page.title().catch((e) => { logger.warn('Failed to get page title', { error: String(e) }); return ''; }),
       active: page === this.activePage,
     })));
   }

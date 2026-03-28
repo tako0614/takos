@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { PullRequestStatus, AuthorType } from '../../../shared/types';
 import { generateId } from '../../../shared/utils';
-import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -122,8 +123,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param('repoId');
     const { status: statusRaw, limit: limitRaw, offset: offsetRaw } = c.req.valid('query');
     const status = statusRaw as PullRequestStatus | undefined;
-    const limit = parseLimit(limitRaw, 50, 100);
-    const offset = parseOffset(offsetRaw);
+    const { limit, offset } = parsePagination({ limit: limitRaw, offset: offsetRaw }, { limit: 50, maxLimit: 100 });
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {

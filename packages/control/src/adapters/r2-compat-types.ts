@@ -44,11 +44,3 @@ export interface R2RangeLike {
   length?: number;
 }
 
-/** Build an empty R2Checksums-compatible object. */
-export function emptyChecksums(): R2ChecksumsLike {
-  return {
-    toJSON() {
-      return {};
-    },
-  };
-}

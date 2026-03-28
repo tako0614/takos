@@ -6,6 +6,7 @@ import { checkRepoAccess } from '../../../application/services/source/repos';
 import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes';
 import { BadRequestError, NotFoundError, InternalError, isAppError } from 'takos-common/errors';
 import { logError } from '../../../shared/utils/logger';
+import { requireParam, requireFound } from '../validation-utils';
 import {
   type RepoContext,
   requireBucket,
@@ -15,18 +16,13 @@ import {
 
 async function handleRepoTreeRequest(c: RepoContext) {
   const user = c.get('user');
-  const repoId = c.req.param('repoId');
-  if (!repoId) throw new BadRequestError('Missing repoId');
-  const ref = c.req.param('ref');
-  if (!ref) throw new BadRequestError('Missing ref');
+  const repoId = requireParam(c.req.param('repoId'), 'repoId');
+  const ref = requireParam(c.req.param('ref'), 'ref');
   const wildcardPath = c.req.param('*') || '';
   const queryPath = c.req.query('path') || '';
   const path = (wildcardPath || queryPath).replace(/^\/+/, '');
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
+  requireFound(await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true }), 'Repository');
 
   try {
     const bucket = toGitBucket(requireBucket(c));
@@ -39,10 +35,7 @@ async function handleRepoTreeRequest(c: RepoContext) {
 
     warnDegradedCommit(resolvedCommit, repoId, ref);
 
-    const entries = await gitStore.listDirectory(bucket, commit.tree, path);
-    if (!entries) {
-      throw new NotFoundError('Path');
-    }
+    const entries = requireFound(await gitStore.listDirectory(bucket, commit.tree, path), 'Path');
 
     return c.json({
       path,
@@ -65,10 +58,8 @@ async function handleRepoTreeRequest(c: RepoContext) {
 
 async function handleRepoBlobRequest(c: RepoContext) {
   const user = c.get('user');
-  const repoId = c.req.param('repoId');
-  if (!repoId) throw new BadRequestError('Missing repoId');
-  const ref = c.req.param('ref');
-  if (!ref) throw new BadRequestError('Missing ref');
+  const repoId = requireParam(c.req.param('repoId'), 'repoId');
+  const ref = requireParam(c.req.param('ref'), 'ref');
   const wildcardPath = c.req.param('*') || '';
   const queryPath = c.req.query('path') || '';
   const path = (wildcardPath || queryPath).replace(/^\/+/, '');
@@ -77,10 +68,7 @@ async function handleRepoBlobRequest(c: RepoContext) {
     throw new BadRequestError('File path is required');
   }
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
+  requireFound(await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true }), 'Repository');
 
   try {
     const bucket = toGitBucket(requireBucket(c));
@@ -97,10 +85,7 @@ async function handleRepoBlobRequest(c: RepoContext) {
     if (!entry || entry.type !== 'blob') {
       throw new NotFoundError('File');
     }
-    const blob = await gitStore.getBlob(bucket, entry.sha);
-    if (!blob) {
-      throw new NotFoundError('File');
-    }
+    const blob = requireFound(await gitStore.getBlob(bucket, entry.sha), 'File');
 
     const isBinary = blob.some(byte => byte === 0);
     const mimeType = getContentTypeFromPath(path);
@@ -142,10 +127,7 @@ const gitFiles = new Hono<AuthenticatedRouteEnv>()
 
   const [, base, , head] = match;
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
+  requireFound(await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true }), 'Repository');
 
   try {
     const bucket = toGitBucket(requireBucket(c));

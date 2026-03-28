@@ -18,6 +18,7 @@ import { accounts, accountMemberships } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logWarn } from '../../../shared/utils/logger';
 import { AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
+import { requireFound } from '../validation-utils';
 
 interface MemberWithOwnership {
   id: string;
@@ -97,8 +98,7 @@ export default new Hono<SpaceAccessRouteEnv>()
     if (!body.email || !body.role) throw new BadRequestError('Email and role are required');
     if (body.role === 'owner') throw new BadRequestError('Cannot add owner role');
 
-    const targetUser = await getUserByEmail(c.env.DB, body.email);
-    if (!targetUser) throw new NotFoundError('User');
+    const targetUser = requireFound(await getUserByEmail(c.env.DB, body.email), 'User');
     if (!targetUser.principal_id) throw new InternalError('Target user principal not found');
 
     const existingMember = await getSpaceMember(c.env.DB, access.space.id, targetUser.principal_id);
@@ -126,15 +126,16 @@ export default new Hono<SpaceAccessRouteEnv>()
     const access = c.get('access');
     const targetUsername = c.req.param('username');
     const db = getDb(c.env.DB);
-    const targetUser = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.slug, targetUsername)).limit(1).get();
-    if (!targetUser) throw new NotFoundError('User');
+    const targetUser = requireFound(
+      await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.slug, targetUsername)).limit(1).get(),
+      'User',
+    );
     const targetUserId = targetUser.id;
     const body = c.req.valid('json') as { role: SpaceRole };
     if (!body.role) throw new BadRequestError('Role is required');
     if (body.role === 'owner') throw new BadRequestError('Cannot set owner role');
 
-    const targetMember = await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId);
-    if (!targetMember) throw new NotFoundError('Member');
+    const targetMember = requireFound(await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId), 'Member');
 
     const modifyCheck = validateMemberModification(access.membership.role as SpaceRole, targetMember, 'modify');
     if (modifyCheck) throw modifyCheck;
@@ -159,12 +160,13 @@ export default new Hono<SpaceAccessRouteEnv>()
     const access = c.get('access');
     const targetUsername = c.req.param('username');
     const db = getDb(c.env.DB);
-    const targetUser = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.slug, targetUsername)).limit(1).get();
-    if (!targetUser) throw new NotFoundError('User');
+    const targetUser = requireFound(
+      await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.slug, targetUsername)).limit(1).get(),
+      'User',
+    );
     const targetUserId = targetUser.id;
 
-    const targetMember = await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId);
-    if (!targetMember) throw new NotFoundError('Member');
+    const targetMember = requireFound(await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId), 'Member');
 
     const removeCheck = validateMemberModification(access.membership.role as SpaceRole, targetMember, 'remove');
     if (removeCheck) throw removeCheck;

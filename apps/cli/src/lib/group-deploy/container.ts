@@ -12,7 +12,7 @@ import type {
   ProvisionedResource,
   ServiceDeployResult,
 } from './deploy-models.js';
-import { execCommand } from './cloudflare-helpers.js';
+import { execCommand } from './cloudflare-utils.js';
 
 // ── Container Deploy Helpers ─────────────────────────────────────────────
 

@@ -3,7 +3,8 @@
  *
  * Apply changes from app.yml to the target environment.
  * Computes a diff, displays the plan, optionally prompts for
- * confirmation, then executes create/update/delete operations.
+ * confirmation, then delegates to the Layer 1 entity operations
+ * via the apply coordinator.
  *
  * Usage:
  *   takos apply --env staging
@@ -16,13 +17,13 @@ import readline from 'node:readline';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
-import { readState, writeState, getStateDir, getStateFilePath } from '../lib/state/state-file.js';
+import { readState, getStateDir } from '../lib/state/state-file.js';
 import { computeDiff } from '../lib/state/diff.js';
 import { formatPlan } from '../lib/state/plan.js';
 import type { TakosState } from '../lib/state/state-types.js';
 import type { DiffResult, DiffEntry } from '../lib/state/diff.js';
-import { deployGroup } from '../lib/group-deploy/index.js';
-import type { GroupDeployResult } from '../lib/group-deploy/index.js';
+import { applyDiff } from '../lib/apply/coordinator.js';
+import type { ApplyResult } from '../lib/apply/coordinator.js';
 
 type ApplyCommandOptions = {
   manifest?: string;
@@ -85,99 +86,39 @@ function filterDiffByTargets(diff: DiffResult, targets: string[]): DiffResult {
   };
 }
 
-/** Build worker/service/container filters from --target options for group-deploy */
-function buildDeployFilters(targets: string[]): {
-  workerFilter?: string[];
-  serviceFilter?: string[];
-  containerFilter?: string[];
-} {
-  if (targets.length === 0) return {};
-
-  const workerFilter: string[] = [];
-  const serviceFilter: string[] = [];
-  const containerFilter: string[] = [];
-
-  for (const target of targets) {
-    const parts = target.split('.');
-    if (parts.length === 2) {
-      const [category, name] = parts;
-      if (category === 'workers') workerFilter.push(name);
-      else if (category === 'services') serviceFilter.push(name);
-      else if (category === 'containers') containerFilter.push(name);
-      // resources are handled by the provisioner, not as deploy filters
-    } else {
-      // Bare name -- add to all filters and let group-deploy figure it out
-      workerFilter.push(target);
-      serviceFilter.push(target);
-      containerFilter.push(target);
-    }
-  }
-
-  return {
-    ...(workerFilter.length > 0 ? { workerFilter } : {}),
-    ...(serviceFilter.length > 0 ? { serviceFilter } : {}),
-    ...(containerFilter.length > 0 ? { containerFilter } : {}),
-  };
-}
-
-function printResult(result: GroupDeployResult): void {
+/** Print apply result from the coordinator */
+function printApplyResult(result: ApplyResult, env: string, groupName: string): void {
   console.log('');
-  console.log(chalk.bold(`Apply: ${result.groupName}`));
-  console.log(`  Environment: ${result.env}`);
-  if (result.namespace) {
-    console.log(`  Namespace:   ${result.namespace}`);
-  }
+  console.log(chalk.bold(`Apply: ${groupName}`));
+  console.log(`  Environment: ${env}`);
   console.log('');
 
-  if (result.resources.length > 0) {
-    console.log(chalk.bold('Resources:'));
-    for (const resource of result.resources) {
-      const icon = resource.status === 'provisioned' ? chalk.green('+')
-        : resource.status === 'exists' ? chalk.yellow('~')
-        : chalk.red('!');
-      const idInfo = resource.id ? chalk.dim(` (${resource.id})`) : '';
-      const errorInfo = resource.error ? chalk.red(` -- ${resource.error}`) : '';
-      console.log(`  ${icon} ${resource.name} [${resource.type}]${idInfo}${errorInfo}`);
+  if (result.applied.length > 0) {
+    console.log(chalk.bold('Applied:'));
+    for (const entry of result.applied) {
+      const icon = entry.status === 'success' ? chalk.green('+') : chalk.red('!');
+      const errorInfo = entry.error ? chalk.red(` -- ${entry.error}`) : '';
+      console.log(`  ${icon} ${entry.name} [${entry.category}] ${entry.action}${errorInfo}`);
     }
     console.log('');
   }
 
-  if (result.services.length > 0) {
-    console.log(chalk.bold('Services:'));
-    for (const service of result.services) {
-      const icon = service.status === 'deployed' ? chalk.green('+')
-        : service.status === 'skipped' ? chalk.yellow('~')
-        : chalk.red('!');
-      const scriptInfo = service.scriptName ? chalk.dim(` -> ${service.scriptName}`) : '';
-      const urlInfo = service.url ? chalk.dim(` (${service.url})`) : '';
-      const errorInfo = service.error ? chalk.red(` -- ${service.error}`) : '';
-      console.log(`  ${icon} ${service.name} [${service.type}]${scriptInfo}${urlInfo}${errorInfo}`);
+  if (result.skipped.length > 0) {
+    console.log(chalk.bold('Unchanged:'));
+    for (const name of result.skipped) {
+      console.log(`  ${chalk.dim('=')} ${name}`);
     }
     console.log('');
   }
 
-  if (result.bindings.length > 0) {
-    console.log(chalk.bold('Bindings:'));
-    for (const binding of result.bindings) {
-      const icon = binding.status === 'bound' ? chalk.green('+') : chalk.red('!');
-      const errorInfo = binding.error ? chalk.red(` -- ${binding.error}`) : '';
-      console.log(`  ${icon} ${binding.from} -> ${binding.to} [${binding.type}]${errorInfo}`);
-    }
-    console.log('');
-  }
-
-  const totalServices = result.services.length;
-  const deployedServices = result.services.filter(s => s.status === 'deployed').length;
-  const failedServices = result.services.filter(s => s.status === 'failed').length;
-  const totalResources = result.resources.length;
-  const provisionedResources = result.resources.filter(r => r.status === 'provisioned').length;
-  const failedResources = result.resources.filter(r => r.status === 'failed').length;
+  const succeeded = result.applied.filter(e => e.status === 'success').length;
+  const failed = result.applied.filter(e => e.status === 'failed').length;
 
   console.log(chalk.bold('Summary:'));
-  console.log(`  Services:  ${deployedServices}/${totalServices} deployed, ${failedServices} failed`);
-  console.log(`  Resources: ${provisionedResources}/${totalResources} provisioned, ${failedResources} failed`);
+  console.log(`  Applied:   ${succeeded} succeeded, ${failed} failed`);
+  console.log(`  Unchanged: ${result.skipped.length}`);
 
-  if (failedServices > 0 || failedResources > 0) {
+  if (failed > 0) {
     console.log('');
     console.log(chalk.red('Some steps failed. Review errors above.'));
   } else {
@@ -226,7 +167,6 @@ export function registerApplyCommand(program: Command): void {
 
       // Step 2: Read current state
       const stateDir = getStateDir(process.cwd());
-      const stateFilePath = getStateFilePath(process.cwd());
       let currentState: TakosState | null = null;
       try {
         currentState = await readState(stateDir);
@@ -275,76 +215,28 @@ export function registerApplyCommand(program: Command): void {
         }
       }
 
-      // Step 6: Execute deploy via group-deploy engine
+      // Step 6: Execute via coordinator (Layer 1 entity operations)
       console.log('');
       console.log(chalk.cyan('Applying changes...'));
       console.log('');
 
-      const deployFilters = buildDeployFilters(targets);
+      const groupName = options.group || manifest.metadata.name;
 
-      const result = await deployGroup({
-        manifest: manifest as Parameters<typeof deployGroup>[0]['manifest'],
+      const applyResult = await applyDiff(diff, manifest, {
         env: options.env,
-        namespace: options.namespace,
-        groupName: options.group,
         accountId,
         apiToken,
-        compatibilityDate: options.compatibilityDate,
-        baseDomain: options.baseDomain,
+        groupName,
+        namespace: options.namespace,
         manifestDir: path.dirname(manifestPath),
-        ...deployFilters,
+        baseDomain: options.baseDomain,
+        autoApprove: options.autoApprove,
       });
 
-      // Step 7: Update state file
-      try {
-        const now = new Date().toISOString();
-        const newState: TakosState = {
-          version: 1,
-          provider: 'cloudflare',
-          env: options.env,
-          groupName: options.group || manifest.metadata.name,
-          updatedAt: now,
-          resources: Object.fromEntries(
-            result.resources.map(r => [r.name, {
-              type: r.type,
-              id: r.id ?? '',
-              binding: r.name,
-              createdAt: currentState?.resources?.[r.name]?.createdAt ?? now,
-            }]),
-          ),
-          workers: Object.fromEntries(
-            result.services.filter(s => s.type === 'worker').map(s => [s.name, {
-              scriptName: s.scriptName ?? s.name,
-              deployedAt: now,
-              codeHash: '',
-            }]),
-          ),
-          containers: Object.fromEntries(
-            result.services.filter(s => s.type === 'container').map(s => [s.name, {
-              deployedAt: now,
-              imageHash: '',
-            }]),
-          ),
-          services: Object.fromEntries(
-            result.services.filter(s => s.type === 'service' || s.type === 'http').map(s => [s.name, {
-              deployedAt: now,
-              imageHash: '',
-              ...(s.url ? { ipv4: s.url } : {}),
-            }]),
-          ),
-        };
-        await writeState(stateDir, newState);
-        console.log(chalk.dim(`State saved to ${stateFilePath}`));
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.yellow(`Warning: Failed to save state: ${message}`));
-      }
+      // Step 7: Display results
+      printApplyResult(applyResult, options.env, groupName);
 
-      // Step 8: Display results
-      printResult(result);
-
-      const hasFailures = result.services.some(s => s.status === 'failed')
-        || result.resources.some(r => r.status === 'failed');
+      const hasFailures = applyResult.applied.some(e => e.status === 'failed');
       if (hasFailures) {
         cliExit(1);
       }

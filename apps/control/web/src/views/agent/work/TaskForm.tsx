@@ -6,10 +6,9 @@ import type { AgentTask, AgentTaskPriority, AgentTaskStatus } from '../../../typ
 import {
   STATUS_ORDER,
   PRIORITY_OPTIONS,
-  getAgentTypeOptions,
-  getLocalDateInputMin,
   type ModelSelectOption,
 } from './task-work-types';
+import { getAgentTypeOptions, getLocalDateInputMin } from './task-work-utils';
 
 interface TaskFormProps {
   editingTask: AgentTask | null;

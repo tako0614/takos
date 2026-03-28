@@ -54,7 +54,7 @@ export class BillingQuotaError extends Error {
 
 export async function rpcJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as {
+    const data = await response.json().catch((e) => { console.warn('Failed to parse error response JSON:', e); return {}; }) as {
       error?: string;
       code?: string;
       reason?: string;

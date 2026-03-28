@@ -9,7 +9,7 @@
 import { getDb } from '../../infra/db';
 import { runs, runEvents } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { logError } from '../../shared/utils/logger';
+import { logError, logWarn } from '../../shared/utils/logger';
 import { persistMessage } from '../../application/services/agent/message-persistence';
 import type { AgentMessage } from '../../application/services/agent/agent-models';
 import {
@@ -436,7 +436,7 @@ export async function handleRunEvent(body: Record<string, unknown>, env: Env): P
     );
 
     if (!emitResponse.ok) {
-      const text = await emitResponse.text().catch(() => '');
+      const text = await emitResponse.text().catch((e) => { logWarn('Failed to read run event emit response body', { module: 'executor-host', error: String(e) }); return ''; });
       return err(`Run event emit failed: ${emitResponse.status} ${text}`.trim(), 502);
     }
 

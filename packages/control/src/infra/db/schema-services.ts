@@ -1,5 +1,5 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-helpers';
+import { createdAtColumn, timestamps } from './schema-utils';
 
 const servicesTable = sqliteTable('services', {
   id: text('id').primaryKey(),

@@ -8,7 +8,8 @@ import {
   RUN_TERMINAL_STATUSES,
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
-import { checkSpaceAccess, generateId, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { BadRequestError, NotFoundError, AppError, ErrorCodes } from 'takos-common/errors';
 import { checkRunAccess } from './access';
 import {
@@ -19,7 +20,7 @@ import {
 } from './observation';
 import { registerRunCreateRoutes } from './create';
 import { registerRunListRoutes } from './list';
-import { buildSanitizedDOHeaders } from '../../../runtime/durable-objects/do-header-utils';
+import { buildSanitizedDOHeaders } from '../../../shared/utils/do-header-utils';
 import type { BaseVariables } from '../route-auth';
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };

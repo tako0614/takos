@@ -8,7 +8,7 @@ import { workflowSecrets } from '../../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { encrypt, generateId } from '../../../../shared/utils';
 import { NotFoundError, InternalError } from 'takos-common/errors';
-import { ok } from '../../response-helpers';
+import { ok } from '../../response-utils';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/secrets', async (c) => {

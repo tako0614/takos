@@ -1,7 +1,8 @@
 import { getDb } from '../../../infra/db';
 import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { checkSpaceAccess, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
 import { BadRequestError, AuthorizationError, NotFoundError } from 'takos-common/errors';
 import type {

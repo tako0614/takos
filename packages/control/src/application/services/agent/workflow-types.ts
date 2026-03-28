@@ -72,13 +72,6 @@ export const VALID_PLAN_TYPES: ReadonlySet<string> = new Set([
   'conversation', 'tool_only', 'code_change', 'composite',
 ]);
 
-/** Strip markdown code fences from an LLM response and return the JSON body. */
-export function extractJsonFromLLMResponse(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{')) return trimmed;
-  return trimmed.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-}
-
 /** Response shape returned by the runtime snapshot endpoint. */
 export interface RuntimeSnapshotResponse {
   files: Array<{ path: string; content: string; size: number }>;

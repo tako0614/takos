@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-helpers';
+import { createdAtColumn, timestamps } from './schema-utils';
 
 // 13. AgentTask
 export const agentTasks = sqliteTable('agent_tasks', {

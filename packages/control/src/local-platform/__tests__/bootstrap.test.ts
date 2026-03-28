@@ -13,22 +13,22 @@ import {
   createLocalExecutorHostFetchForTests,
   createLocalRuntimeHostFetchForTests,
   createLocalWebFetchForTests,
-} from './bootstrap';
+} from '../bootstrap';
 import {
   clearNodePlatformDataForTests,
   createNodeWebEnv,
   resetNodePlatformStateForTests,
   LOCAL_DEV_DEFAULTS,
-} from '../node-platform/env-builder';
-import { createLocalTenantWorkerRuntimeRegistry } from './tenant-worker-runtime';
-import type { WorkerBinding } from '../application/services/wfp/index.ts';
-import { RUN_QUEUE_MESSAGE_VERSION } from '../shared/types/index.ts';
-import { accounts, getDb, deployments } from '../infra/db/index.ts';
-import { services } from '../infra/db/schema-services';
-import { encrypt } from '../shared/utils/crypto.ts';
+} from '../../node-platform/env-builder';
+import { createLocalTenantWorkerRuntimeRegistry } from '../tenant-worker-runtime';
+import type { WorkerBinding } from '../../application/services/wfp/index.ts';
+import { RUN_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
+import { accounts, getDb, deployments } from '../../infra/db/index.ts';
+import { services } from '../../infra/db/schema-services';
+import { encrypt } from '../../shared/utils/crypto.ts';
 
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(import.meta.dirname, '../../../..');
+const repoRoot = path.resolve(import.meta.dirname, '../../../../..');
 const localAdapterModuleUrl = pathToFileURL(path.join(
   repoRoot,
   'packages/control/src/node-platform/env-builder.ts',

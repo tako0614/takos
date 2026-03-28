@@ -202,7 +202,7 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       }
 
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
+        const text = await res.text().catch((e) => { logWarn('Failed to read container dispatch response body', { module: 'run_queue', error: String(e) }); return ''; });
         logError(`Container dispatch failed for run ${runId}: ${res.status} ${text}`, undefined, { module: 'run_queue' });
 
         if (res.status >= 400 && res.status < 500) {

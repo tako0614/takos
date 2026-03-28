@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn } from './schema-helpers';
+import { createdAtColumn } from './schema-utils';
 
 // 108. WorkflowArtifact
 export const workflowArtifacts = sqliteTable('workflow_artifacts', {

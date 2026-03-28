@@ -1,4 +1,23 @@
 import YAML from 'yaml';
+import type {
+  AppManifest,
+  AppMetadata,
+  AppRoute,
+  AppMcpServer,
+  AppFileHandler,
+  AppContainer,
+  AppService,
+  AppWorker,
+  AppEnvConfig,
+  HealthCheck,
+  LifecycleHooks,
+  LifecycleHook,
+  UpdateStrategy,
+  ServiceBinding,
+  EnvironmentOverrides,
+  WorkerScaling,
+  Volume,
+} from './app-manifest-types';
 import {
   asRecord,
   asString,
@@ -6,24 +25,7 @@ import {
   asStringArray,
   asStringMap,
   normalizeRepoPath,
-  type AppManifest,
-  type AppMetadata,
-  type AppRoute,
-  type AppMcpServer,
-  type AppFileHandler,
-  type AppContainer,
-  type AppService,
-  type AppWorker,
-  type AppEnvConfig,
-  type HealthCheck,
-  type LifecycleHooks,
-  type LifecycleHook,
-  type UpdateStrategy,
-  type ServiceBinding,
-  type EnvironmentOverrides,
-  type WorkerScaling,
-  type Volume,
-} from './app-manifest-types';
+} from './app-manifest-utils';
 import { parseResources, validateResourceBindings } from './app-manifest-validation';
 import { validateTemplateReferences } from './app-manifest-template';
 

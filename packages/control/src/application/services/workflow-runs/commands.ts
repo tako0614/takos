@@ -15,8 +15,8 @@ import type { Env, WorkflowJobQueueMessage } from '../../../shared/types';
 import * as gitStore from '../git-smart';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
-import { toGitBucket } from '../../../server/routes/repos/routes';
-import type { GitBucket } from '../../../server/routes/repos/routes';
+import { toGitBucket } from '../../../shared/utils/git-bucket';
+import type { GitBucket } from '../../../shared/utils/git-bucket';
 
 type WorkflowLoadResult =
   | { ok: true; workflow: Workflow }

@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { CacheTTL, withCache } from '../../middleware/cache';
-import { parseLimit, type PublicRouteEnv } from '../route-auth';
+import type { PublicRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import {
   findStoreBySlug,
   findStoreRepository,
@@ -376,8 +377,9 @@ activitypubStore.get('/ap/stores/:store/repositories', withCache({
   const origin = getOrigin(c);
   const collectionUrl = `${buildStoreActorId(origin, storeRecord.slug)}/repositories`;
   const page = c.req.query('page');
-  const pageNum = parseLimit(page, 1, 100000);
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
+  const pageNumParsed = Number.parseInt(page ?? '', 10);
+  const pageNum = Number.isFinite(pageNumParsed) && pageNumParsed > 0 ? pageNumParsed : 1;
+  const { limit } = parsePagination(c.req.query());
   const expand = (c.req.query('expand') || '').toLowerCase() === 'object';
 
   if (!page) {
@@ -416,8 +418,9 @@ activitypubStore.get('/ap/stores/:store/search/repositories', withCache({
   const origin = getOrigin(c);
   const collectionUrl = buildSearchCollectionUrl(origin, storeRecord.slug);
   const page = c.req.query('page');
-  const pageNum = parseLimit(page, 1, 100000);
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
+  const pageNumParsed2 = Number.parseInt(page ?? '', 10);
+  const pageNum = Number.isFinite(pageNumParsed2) && pageNumParsed2 > 0 ? pageNumParsed2 : 1;
+  const { limit } = parsePagination(c.req.query());
   const expand = (c.req.query('expand') || '').toLowerCase() === 'object';
 
   if (!page) {
@@ -487,8 +490,9 @@ activitypubStore.get('/ap/stores/:store/outbox', withCache({
   const origin = getOrigin(c);
   const collectionUrl = `${buildStoreActorId(origin, storeRecord.slug)}/outbox`;
   const page = c.req.query('page');
-  const pageNum = parseLimit(page, 1, 100000);
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
+  const pageNumParsed3 = Number.parseInt(page ?? '', 10);
+  const pageNum = Number.isFinite(pageNumParsed3) && pageNumParsed3 > 0 ? pageNumParsed3 : 1;
+  const { limit } = parsePagination(c.req.query());
 
   if (!page) {
     return orderedCollectionResponse(c, collectionUrl, undefined, 1, storeRecord.publicRepoCount, []);

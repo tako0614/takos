@@ -4,8 +4,8 @@
 
 import type { GlobalOptions } from './admin-types.ts';
 import { APPROVAL_ID_PATTERN, TENANT_R2_PREFIXES, TENANT_SQL_TABLE_TOKENS } from './constants.ts';
-import { fail } from './cli-helpers.ts';
-import { escapeRegExp } from './sql-helpers.ts';
+import { fail } from './cli-utils.ts';
+import { escapeRegExp } from './sql-utils.ts';
 
 // ---------------------------------------------------------------------------
 // SQL safety and tenant access policy

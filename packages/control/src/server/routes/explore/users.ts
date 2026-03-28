@@ -4,7 +4,7 @@ import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, or, desc, asc, like, inArray, count } from 'drizzle-orm';
-import { parseLimit, parseOffset } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { NotFoundError } from 'takos-common/errors';
 
 type Variables = {
@@ -21,8 +21,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const { ne } = await import('drizzle-orm');
     const db = getDb(c.env.DB);
     const searchQuery = c.req.query('q')?.trim() || '';
-    const limit = parseLimit(c.req.query('limit'), 20, 100);
-    const offset = parseOffset(c.req.query('offset'));
+    const { limit, offset } = parsePagination(c.req.query());
 
     const conditions = [ne(accounts.slug, '')];
     if (searchQuery) {

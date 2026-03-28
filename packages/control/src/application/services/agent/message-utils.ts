@@ -1,7 +1,7 @@
 /**
  * Agent Message Utilities.
  *
- * Extracted from langgraph-agent.ts to provide reusable message
+ * Extracted from graph-agent.ts to provide reusable message
  * handling functions across agent execution engines.
  */
 
@@ -100,7 +100,7 @@ export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
           try {
             const parsed = JSON.parse(msg.tool_calls);
             if (!Array.isArray(parsed)) {
-              logWarn('tool_calls is not an array, skipping', { module: 'services/agent/langgraph-agent' });
+              logWarn('tool_calls is not an array, skipping', { module: 'services/agent/graph-agent' });
             } else {
               aiMsg.tool_calls = parsed.map((tc: SerializedToolCall) => ({
                 id: tc.id || '',
@@ -110,7 +110,7 @@ export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
               }));
             }
           } catch {
-            logWarn('Failed to parse tool_calls JSON', { module: 'services/agent/langgraph-agent' });
+            logWarn('Failed to parse tool_calls JSON', { module: 'services/agent/graph-agent' });
           }
         }
         return aiMsg;

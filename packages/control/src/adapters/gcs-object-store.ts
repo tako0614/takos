@@ -6,13 +6,13 @@ import type {
   R2Object,
   R2ObjectBody,
 } from '../../shared/types/bindings.ts';
-import {
-  emptyChecksums,
-  type R2Objects,
-  type R2ChecksumsLike,
-  type R2HTTPMetadataLike,
-  type R2RangeLike,
+import type {
+  R2Objects,
+  R2ChecksumsLike,
+  R2HTTPMetadataLike,
+  R2RangeLike,
 } from './r2-compat-types.ts';
+import { emptyChecksums } from './r2-compat-utils.ts';
 
 /** Type guard for GCS SDK errors that carry a numeric `code` property. */
 function isGcsError(err: unknown): err is Error & { code: number } {

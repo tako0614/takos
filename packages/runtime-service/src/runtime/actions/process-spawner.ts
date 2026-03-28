@@ -5,7 +5,10 @@ import { randomUUID } from 'crypto';
 import { pushLog } from '../logging.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
 import { getErrorMessage } from 'takos-common/errors';
+import { createLogger } from 'takos-common/logger';
 import { gracefulKill } from '../../utils/process-kill.js';
+
+const logger = createLogger({ service: 'process-spawner' });
 import type { ExecutorStepResult } from './executor.js';
 
 // ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ export async function applyCommandFiles(
   ctx: SpawnContext
 ): Promise<void> {
   const readFile = (filePath: string): Promise<string> =>
-    fs.readFile(filePath, 'utf-8').catch(() => '');
+    fs.readFile(filePath, 'utf-8').catch((e) => { logger.warn('Failed to read command file', { filePath, error: String(e) }); return ''; });
 
   const [outputContent, envContent, pathContent] = await Promise.all([
     readFile(prepared.files.output),
