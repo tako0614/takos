@@ -1,6 +1,10 @@
 # AWS
 
-Takos を AWS にデプロイする方法。ECS / Fargate 上で Node.js の local-platform adapter を使って動かす。
+Takos を AWS にホストする方法。このページは **takos オペレーター**向け。ECS / Fargate 上で Node.js の local-platform adapter を使って takos を動かす。
+
+::: info アプリ開発者へ
+アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+:::
 
 ## リソースマッピング
 
@@ -173,10 +177,19 @@ aws sqs create-queue --queue-name takos-workflow-jobs --region ap-northeast-1
 aws sqs create-queue --queue-name takos-deployment-jobs --region ap-northeast-1
 ```
 
-## デプロイ
+## takos のデプロイ
+
+takos 自体を AWS にデプロイするには、Terraform / CDK でインフラを構築してから takos を起動する:
 
 ```bash
-takos deploy-group --env production --provider ecs
+# Terraform / CDK でインフラを構築した後
+# ECS タスク定義で takos の Docker イメージを指定して起動する
+```
+
+アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
+
+```bash
+takos deploy-group --env production
 ```
 
 ## Cloudflare 固有機能の代替

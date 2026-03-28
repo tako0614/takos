@@ -1,9 +1,13 @@
 # Kubernetes
 
-Takos を Kubernetes クラスタにデプロイする方法。
+Takos を Kubernetes クラスタにホストする方法。このページは **takos オペレーター**向け。
+
+::: info アプリ開発者へ
+アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+:::
 
 ::: warning experimental
-k8s デプロイは experimental ステータス。デプロイプロバイダ (`k8s`) は実装済みだけど、Helm chart はまだ計画中。現時点では手動で k8s マニフェストを構成する必要がある。
+k8s ホスティングは experimental ステータス。アダプタは実装済みだけど、Helm chart はまだ計画中。現時点では手動で k8s マニフェストを構成する必要がある。
 :::
 
 ## リソースマッピング
@@ -261,10 +265,18 @@ spec:
 
 同様に `control-dispatch`, `control-worker`, `runtime-host` の Deployment を作成する。
 
-## デプロイ
+## takos のデプロイ
+
+takos 自体を k8s にデプロイするには、上記のマニフェストを apply する:
 
 ```bash
-takos deploy-group --env production --provider k8s
+kubectl apply -f takos-deployment.yaml
+```
+
+アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
+
+```bash
+takos deploy-group --env production
 ```
 
 ## バッキングサービスの選択
