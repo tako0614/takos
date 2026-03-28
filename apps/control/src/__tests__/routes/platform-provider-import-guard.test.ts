@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const controlCoreSrcRoot = resolve(import.meta.dirname, '../../../../../packages/control/core/src');
-const routesRoot = resolve(controlCoreSrcRoot, '../../src/server/routes');
+const controlSrcRoot = resolve(import.meta.dirname, '../../../../../packages/control/src');
+const routesRoot = resolve(controlSrcRoot, 'server/routes');
 const forbiddenImportPatterns = [
   /application\/services\/wfp(?=['"])/,
   /application\/services\/cloudflare\//,

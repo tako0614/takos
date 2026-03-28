@@ -13,7 +13,7 @@
     { "path": "./packages/common" },
     { "path": "./packages/actions-engine" },
     { "path": "./packages/agent-core" },
-    { "path": "./packages/control/core" },
+    { "path": "./packages/control" },
     { "path": "./packages/control/local-platform" },
     { "path": "./packages/runtime-service" },
     { "path": "./packages/executor-service" },
