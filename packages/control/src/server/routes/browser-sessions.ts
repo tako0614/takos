@@ -2,11 +2,13 @@
  * Edge API routes for browser sessions.
  *
  * Each route authenticates the user, verifies session ownership,
- * and forwards to the BROWSER_HOST service binding.
+ * and forwards to the BROWSER_HOST service binding (if configured).
+ * Returns 503 when the binding is not available.
  */
 
 import { Hono } from 'hono';
 import type { Env, User } from '../../shared/types';
+import { bytesToHex } from '../../shared/utils/encoding-utils';
 
 type BrowserSessionVariables = {
   user?: User;
@@ -21,17 +23,14 @@ const browserSessions = new Hono<{
 // Helpers
 // ---------------------------------------------------------------------------
 
-function requireBrowserHost(env: Env): { fetch(request: Request): Promise<Response> } {
-  if (!env.BROWSER_HOST) {
-    throw new Error('BROWSER_HOST service binding not configured');
-  }
-  return env.BROWSER_HOST;
+function getBrowserHost(env: Env): { fetch(request: Request): Promise<Response> } | null {
+  return env.BROWSER_HOST ?? null;
 }
 
 function generateSessionId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(bytes);
 }
 
 async function forwardToBrowserHost(
@@ -57,7 +56,9 @@ browserSessions.post('/spaces/:spaceId/browser-sessions', async (c) => {
   const body = await c.req.json<{ url?: string; viewport?: { width: number; height: number } }>();
   const sessionId = generateSessionId();
 
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
+
   const response = await forwardToBrowserHost(browserHost, '/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -85,7 +86,8 @@ browserSessions.get('/browser-sessions/:id', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const sessionId = c.req.param('id');
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(browserHost, `/session/${sessionId}`);
   if (!response.ok) {
@@ -108,7 +110,8 @@ browserSessions.post('/browser-sessions/:id/goto', async (c) => {
 
   const sessionId = c.req.param('id');
   const body = await c.req.json();
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -130,7 +133,8 @@ browserSessions.post('/browser-sessions/:id/action', async (c) => {
 
   const sessionId = c.req.param('id');
   const body = await c.req.json();
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -152,7 +156,8 @@ browserSessions.post('/browser-sessions/:id/extract', async (c) => {
 
   const sessionId = c.req.param('id');
   const body = await c.req.json();
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -173,7 +178,8 @@ browserSessions.get('/browser-sessions/:id/html', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const sessionId = c.req.param('id');
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -189,7 +195,8 @@ browserSessions.get('/browser-sessions/:id/screenshot', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const sessionId = c.req.param('id');
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -210,7 +217,8 @@ browserSessions.post('/browser-sessions/:id/pdf', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const sessionId = c.req.param('id');
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,
@@ -235,7 +243,8 @@ browserSessions.delete('/browser-sessions/:id', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const sessionId = c.req.param('id');
-  const browserHost = requireBrowserHost(c.env);
+  const browserHost = getBrowserHost(c.env);
+  if (!browserHost) return c.json({ error: 'Browser service not available' }, 503);
 
   const response = await forwardToBrowserHost(
     browserHost,

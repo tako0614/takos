@@ -141,10 +141,12 @@ export async function runLocalWorkerIteration(
 
 export async function createLocalWorkerEnv(): Promise<WorkerEnv> {
   const baseEnv = await createNodeWebEnv();
+  const executorHostUrl = process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL;
+  const runtimeHostUrl = process.env.TAKOS_LOCAL_RUNTIME_HOST_URL;
   return {
     ...baseEnv,
-    EXECUTOR_HOST: createForwardingBinding(process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL ?? 'http://127.0.0.1:8790/'),
-    RUNTIME_HOST: createForwardingBinding(process.env.TAKOS_LOCAL_RUNTIME_HOST_URL ?? 'http://127.0.0.1:8789/'),
+    ...(executorHostUrl ? { EXECUTOR_HOST: createForwardingBinding(executorHostUrl) } : {}),
+    ...(runtimeHostUrl ? { RUNTIME_HOST: createForwardingBinding(runtimeHostUrl) } : {}),
   };
 }
 

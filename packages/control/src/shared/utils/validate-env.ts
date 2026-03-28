@@ -44,7 +44,7 @@ const REQUIRED_KEYS = {
     'PLATFORM_PRIVATE_KEY',
     'PLATFORM_PUBLIC_KEY',
   ],
-  'takos-runner': ['DB', 'RUN_QUEUE', 'RUN_NOTIFIER', 'EXECUTOR_HOST'],
+  'takos-runner': ['DB', 'RUN_QUEUE', 'RUN_NOTIFIER'],
   'takos-workflow-runner': ['DB'],
   'takos-indexer': ['DB'],
   'takos-runtime-host': ['RUNTIME_CONTAINER'],

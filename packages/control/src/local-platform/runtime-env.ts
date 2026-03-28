@@ -45,8 +45,8 @@ export async function createRuntimeHostEnv() {
 }
 
 export async function createExecutorHostEnvForTests(deps: {
-  runtimeFetch: LocalFetch;
-  browserFetch: LocalFetch;
+  runtimeFetch?: LocalFetch;
+  browserFetch?: LocalFetch;
 }) {
   const baseEnv = await createNodeWebEnv();
   const stub = createLocalExecutorGatewayStub(
@@ -59,8 +59,8 @@ export async function createExecutorHostEnvForTests(deps: {
     ...baseEnv,
     EXECUTOR_CONTAINER: executorNamespace,
     TAKOS_EGRESS: { fetch: async (request: Request) => globalThis.fetch(request) },
-    RUNTIME_HOST: { fetch: async (request: Request) => deps.runtimeFetch(request) },
-    BROWSER_HOST: { fetch: async (request: Request) => deps.browserFetch(request) },
+    ...(deps.runtimeFetch ? { RUNTIME_HOST: { fetch: async (request: Request) => deps.runtimeFetch!(request) } } : {}),
+    ...(deps.browserFetch ? { BROWSER_HOST: { fetch: async (request: Request) => deps.browserFetch!(request) } } : {}),
     CONTROL_RPC_BASE_URL: process.env.CONTROL_RPC_BASE_URL
       ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
     PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? 'http://executor-host.local',
