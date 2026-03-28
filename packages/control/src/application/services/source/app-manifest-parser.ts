@@ -20,6 +20,9 @@ import {
   type LifecycleHook,
   type UpdateStrategy,
   type ServiceBinding,
+  type EnvironmentOverrides,
+  type WorkerScaling,
+  type Volume,
 } from './app-manifest-types';
 import { parseResources, validateResourceBindings } from './app-manifest-validation';
 import { validateTemplateReferences } from './app-manifest-template';
@@ -43,8 +46,15 @@ function validateSemver(version: string): void {
 function parseHealthCheck(raw: unknown, prefix: string): HealthCheck | undefined {
   if (!raw) return undefined;
   const record = asRecord(raw);
+  const type = asString(record.type, `${prefix}.healthCheck.type`);
+  if (type && !['http', 'tcp', 'exec'].includes(type)) {
+    throw new Error(`${prefix}.healthCheck.type must be http, tcp, or exec`);
+  }
   return {
-    path: asRequiredString(record.path, `${prefix}.healthCheck.path`),
+    ...(type ? { type: type as 'http' | 'tcp' | 'exec' } : {}),
+    ...(record.path ? { path: String(record.path) } : {}),
+    ...(record.port != null ? { port: Number(record.port) } : {}),
+    ...(record.command ? { command: String(record.command) } : {}),
     ...(record.intervalSeconds != null ? { intervalSeconds: Number(record.intervalSeconds) } : {}),
     ...(record.timeoutSeconds != null ? { timeoutSeconds: Number(record.timeoutSeconds) } : {}),
     ...(record.unhealthyThreshold != null ? { unhealthyThreshold: Number(record.unhealthyThreshold) } : {}),
@@ -65,6 +75,7 @@ function parseLifecycle(specRecord: Record<string, unknown>): LifecycleHooks | u
     return {
       command: asRequiredString(hook.command, `spec.lifecycle.${name}.command`),
       ...(hook.timeoutSeconds != null ? { timeoutSeconds: Number(hook.timeoutSeconds) } : {}),
+      ...(hook.sandbox != null ? { sandbox: Boolean(hook.sandbox) } : {}),
     };
   };
   return {
@@ -82,8 +93,8 @@ function parseUpdateStrategy(specRecord: Record<string, unknown>): UpdateStrateg
   if (!raw) return undefined;
   const record = asRecord(raw);
   const strategy = asString(record.strategy, 'spec.update.strategy');
-  if (strategy && !['rolling', 'canary', 'blue-green'].includes(strategy)) {
-    throw new Error('spec.update.strategy must be rolling, canary, or blue-green');
+  if (strategy && !['rolling', 'canary', 'blue-green', 'recreate'].includes(strategy)) {
+    throw new Error('spec.update.strategy must be rolling, canary, blue-green, or recreate');
   }
   return {
     ...(strategy ? { strategy: strategy as UpdateStrategy['strategy'] } : {}),
@@ -92,6 +103,165 @@ function parseUpdateStrategy(specRecord: Record<string, unknown>): UpdateStrateg
     ...(record.rollbackOnFailure != null ? { rollbackOnFailure: Boolean(record.rollbackOnFailure) } : {}),
     ...(record.timeoutSeconds != null ? { timeoutSeconds: Number(record.timeoutSeconds) } : {}),
   };
+}
+
+// ============================================================
+// Volume parser
+// ============================================================
+
+function parseVolumes(raw: unknown, prefix: string): Volume[] | undefined {
+  if (!raw || !Array.isArray(raw)) return undefined;
+  return raw.map((entry, i) => {
+    const v = asRecord(entry);
+    return {
+      name: asRequiredString(v.name, `${prefix}.volumes[${i}].name`),
+      mountPath: asRequiredString(v.mountPath, `${prefix}.volumes[${i}].mountPath`),
+      size: asRequiredString(v.size, `${prefix}.volumes[${i}].size`),
+    };
+  });
+}
+
+// ============================================================
+// Worker scaling parser
+// ============================================================
+
+function parseScaling(raw: unknown, _prefix: string): WorkerScaling | undefined {
+  if (!raw) return undefined;
+  const record = asRecord(raw);
+  return {
+    ...(record.minInstances != null ? { minInstances: Number(record.minInstances) } : {}),
+    ...(record.maxConcurrency != null ? { maxConcurrency: Number(record.maxConcurrency) } : {}),
+  };
+}
+
+// ============================================================
+// Service bindings list parser (services only)
+// ============================================================
+
+function parseServiceBindingsList(raw: unknown, prefix: string): ServiceBinding[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix} must be an array`);
+  }
+  return raw.map((entry, i) => {
+    if (typeof entry === 'string') return entry;
+    const obj = asRecord(entry);
+    return {
+      name: asRequiredString(obj.name, `${prefix}[${i}].name`),
+      ...(obj.version ? { version: String(obj.version) } : {}),
+    };
+  });
+}
+
+// ============================================================
+// Service triggers parser (schedules only)
+// ============================================================
+
+function parseServiceTriggers(name: string, serviceSpec: Record<string, unknown>): { triggers: AppService['triggers'] } | undefined {
+  const raw = serviceSpec.triggers;
+  if (!raw) return undefined;
+  const triggersRecord = asRecord(raw);
+  const schedulesRaw = triggersRecord.schedules;
+  const schedules = schedulesRaw == null ? undefined : (() => {
+    if (!Array.isArray(schedulesRaw)) {
+      throw new Error(`spec.services.${name}.triggers.schedules must be an array`);
+    }
+    return schedulesRaw.map((entry, index) => {
+      const record = asRecord(entry);
+      return {
+        cron: asRequiredString(record.cron, `spec.services.${name}.triggers.schedules[${index}].cron`),
+        export: asRequiredString(record.export, `spec.services.${name}.triggers.schedules[${index}].export`),
+      };
+    });
+  })();
+  if (!schedules) return undefined;
+  return {
+    triggers: {
+      ...(schedules ? { schedules } : {}),
+    },
+  };
+}
+
+// ============================================================
+// Environment overrides parser
+// ============================================================
+
+function parsePartialContainers(raw: unknown): Record<string, Partial<AppContainer>> {
+  const containersRecord = asRecord(raw);
+  const result: Record<string, Partial<AppContainer>> = {};
+  for (const [name, value] of Object.entries(containersRecord)) {
+    const c = asRecord(value);
+    result[name] = {
+      ...(c.dockerfile ? { dockerfile: normalizeRepoPath(String(c.dockerfile)) } : {}),
+      ...(c.port != null ? { port: Number(c.port) } : {}),
+      ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
+      ...(c.maxInstances != null ? { maxInstances: Number(c.maxInstances) } : {}),
+      ...(((): { env?: Record<string, string> } => { const v = asStringMap(c.env, `overrides.containers.${name}.env`); return v ? { env: v } : {}; })()),
+    };
+  }
+  return result;
+}
+
+function parsePartialWorkers(raw: unknown): Record<string, Partial<AppWorker>> {
+  const workersRecord = asRecord(raw);
+  const result: Record<string, Partial<AppWorker>> = {};
+  for (const [name, value] of Object.entries(workersRecord)) {
+    const w = asRecord(value);
+    result[name] = {
+      ...(((): { env?: Record<string, string> } => { const v = asStringMap(w.env, `overrides.workers.${name}.env`); return v ? { env: v } : {}; })()),
+    };
+  }
+  return result;
+}
+
+function parsePartialServices(raw: unknown): Record<string, Partial<AppService>> {
+  const servicesRecord = asRecord(raw);
+  const result: Record<string, Partial<AppService>> = {};
+  for (const [name, value] of Object.entries(servicesRecord)) {
+    const s = asRecord(value);
+    result[name] = {
+      ...(s.dockerfile ? { dockerfile: normalizeRepoPath(String(s.dockerfile)) } : {}),
+      ...(s.port != null ? { port: Number(s.port) } : {}),
+      ...(s.instanceType ? { instanceType: String(s.instanceType) } : {}),
+      ...(s.maxInstances != null ? { maxInstances: Number(s.maxInstances) } : {}),
+      ...(s.ipv4 === true ? { ipv4: true } : {}),
+      ...(((): { env?: Record<string, string> } => { const v = asStringMap(s.env, `overrides.services.${name}.env`); return v ? { env: v } : {}; })()),
+    };
+  }
+  return result;
+}
+
+function parseOverrides(specRecord: Record<string, unknown>): EnvironmentOverrides | undefined {
+  const raw = specRecord.overrides;
+  if (!raw) return undefined;
+  const record = asRecord(raw);
+  const result: EnvironmentOverrides = {};
+  for (const [envName, envOverrides] of Object.entries(record)) {
+    const envRecord = asRecord(envOverrides);
+    result[envName] = {
+      ...(envRecord.containers ? { containers: parsePartialContainers(envRecord.containers) } : {}),
+      ...(envRecord.workers ? { workers: parsePartialWorkers(envRecord.workers) } : {}),
+      ...(envRecord.services ? { services: parsePartialServices(envRecord.services) } : {}),
+    };
+  }
+  return result;
+}
+
+// ============================================================
+// dependsOn validation helper
+// ============================================================
+
+function validateDependsOn(
+  dependsOn: string[] | undefined,
+  prefix: string,
+  allNames: Set<string>,
+): void {
+  if (!dependsOn) return;
+  for (const dep of dependsOn) {
+    if (!allNames.has(dep)) {
+      throw new Error(`${prefix}.dependsOn references unknown target: ${dep}`);
+    }
+  }
 }
 
 export function parseAppManifestYaml(raw: string): AppManifest {
@@ -131,6 +301,23 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const routes = parseRoutes(specRecord, workers, containers, services);
   const lifecycle = parseLifecycle(specRecord);
   const update = parseUpdateStrategy(specRecord);
+  const overrides = parseOverrides(specRecord);
+
+  // Validate dependsOn references across all component types
+  const allComponentNames = new Set([
+    ...Object.keys(containers),
+    ...Object.keys(services),
+    ...Object.keys(workers),
+  ]);
+  for (const [name, container] of Object.entries(containers)) {
+    validateDependsOn(container.dependsOn, `spec.containers.${name}`, allComponentNames);
+  }
+  for (const [name, service] of Object.entries(services)) {
+    validateDependsOn(service.dependsOn, `spec.services.${name}`, allComponentNames);
+  }
+  for (const [name, worker] of Object.entries(workers)) {
+    validateDependsOn(worker.dependsOn, `spec.workers.${name}`, allComponentNames);
+  }
 
   // Resources — pass a synthesised services map for validation
   const syntheticServices = buildSyntheticServicesFromWorkers(workers);
@@ -193,6 +380,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
       ...(update ? { update } : {}),
       ...(mcpServers ? { mcpServers } : {}),
       ...(fileHandlers ? { fileHandlers } : {}),
+      ...(overrides ? { overrides } : {}),
     },
   };
 }
@@ -212,12 +400,16 @@ export function parseContainers(specRecord: Record<string, unknown>): Record<str
     if (!Number.isFinite(port) || port <= 0) {
       throw new Error(`spec.containers.${name}.port must be a positive number`);
     }
+    const containerVolumes = parseVolumes(c.volumes, `spec.containers.${name}`);
+    const containerDependsOn = asStringArray(c.dependsOn, `spec.containers.${name}.dependsOn`);
     containers[name] = {
       dockerfile: normalizeRepoPath(asRequiredString(c.dockerfile, `spec.containers.${name}.dockerfile`)),
       port,
       ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
       ...(c.maxInstances ? { maxInstances: Number(c.maxInstances) } : {}),
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(c.env, `spec.containers.${name}.env`); return v ? { env: v } : {}; })()),
+      ...(containerVolumes ? { volumes: containerVolumes } : {}),
+      ...(containerDependsOn ? { dependsOn: containerDependsOn } : {}),
     };
   }
   return containers;
@@ -233,6 +425,20 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       throw new Error(`spec.services.${name}.port must be a positive number`);
     }
     const serviceHealthCheck = parseHealthCheck(s.healthCheck, `spec.services.${name}`);
+    const serviceVolumes = parseVolumes(s.volumes, `spec.services.${name}`);
+    const serviceDependsOn = asStringArray(s.dependsOn, `spec.services.${name}.dependsOn`);
+    const serviceTriggers = parseServiceTriggers(name, s);
+
+    // Parse service bindings (services only)
+    let serviceBindings: AppService['bindings'] | undefined;
+    if (s.bindings) {
+      const bindingsRecord = asRecord(s.bindings);
+      const svcBindings = parseServiceBindingsList(bindingsRecord.services, `spec.services.${name}.bindings.services`);
+      if (svcBindings) {
+        serviceBindings = { services: svcBindings };
+      }
+    }
+
     services[name] = {
       dockerfile: normalizeRepoPath(asRequiredString(s.dockerfile, `spec.services.${name}.dockerfile`)),
       port,
@@ -241,6 +447,10 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       ...(s.ipv4 === true ? { ipv4: true } : {}),
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(s.env, `spec.services.${name}.env`); return v ? { env: v } : {}; })()),
       ...(serviceHealthCheck ? { healthCheck: serviceHealthCheck } : {}),
+      ...(serviceBindings ? { bindings: serviceBindings } : {}),
+      ...(serviceTriggers ? serviceTriggers : {}),
+      ...(serviceVolumes ? { volumes: serviceVolumes } : {}),
+      ...(serviceDependsOn ? { dependsOn: serviceDependsOn } : {}),
     };
   }
   return services;
@@ -278,6 +488,8 @@ export function parseWorkers(
     }
 
     const workerHealthCheck = parseHealthCheck(workerSpec.healthCheck, `spec.workers.${workerName}`);
+    const workerScaling = parseScaling(workerSpec.scaling, `spec.workers.${workerName}`);
+    const workerDependsOn = asStringArray(workerSpec.dependsOn, `spec.workers.${workerName}.dependsOn`);
     workers[workerName] = {
       ...(containerRefs && containerRefs.length > 0 ? { containers: containerRefs } : {}),
       build,
@@ -285,6 +497,8 @@ export function parseWorkers(
       ...(workerSpec.bindings ? parseWorkerBindings(workerName, workerSpec) : {}),
       ...(workerSpec.triggers ? parseWorkerTriggers(workerName, workerSpec) : {}),
       ...(workerHealthCheck ? { healthCheck: workerHealthCheck } : {}),
+      ...(workerScaling ? { scaling: workerScaling } : {}),
+      ...(workerDependsOn ? { dependsOn: workerDependsOn } : {}),
     };
   }
 
@@ -340,10 +554,22 @@ function parseRoutes(
     }
 
     const routePath = asString(route.path, `spec.routes[${index}].path`);
+
+    // Parse route method constraints
+    const methods = asStringArray(route.methods, `spec.routes[${index}].methods`);
+    if (methods) {
+      for (const method of methods) {
+        if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+          throw new Error(`spec.routes[${index}].methods contains invalid method: ${method}`);
+        }
+      }
+    }
+
     return {
       name,
       target,
       ...(routePath ? { path: routePath } : {}),
+      ...(methods ? { methods } : {}),
       ...(ingress ? { ingress } : {}),
       ...(route.timeoutMs != null ? { timeoutMs: Number(route.timeoutMs) } : {}),
     };

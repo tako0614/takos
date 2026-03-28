@@ -2,6 +2,7 @@
 export type {
   AppManifest,
   AppContainer,
+  AppService,
   AppWorker,
   AppEnvConfig,
   AppRoute,
@@ -12,6 +13,10 @@ export type {
   LifecycleHooks,
   UpdateStrategy,
   ServiceBinding,
+  EnvironmentOverrides,
+  Volume,
+  WorkerScaling,
+  ResourceLimits,
 } from './app-manifest-types';
 
 // Re-export parsing

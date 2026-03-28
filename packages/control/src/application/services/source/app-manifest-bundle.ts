@@ -40,7 +40,24 @@ interface ManifestService {
   maxInstances?: number;
   ipv4?: boolean;
   env?: Record<string, string>;
-  healthCheck?: { path: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
+  healthCheck?: { path?: string; type?: string; port?: number; command?: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
+  volumes?: Array<{ name: string; mountPath: string; size: string }>;
+  dependsOn?: string[];
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    vectorize?: string[];
+    queues?: string[];
+    analytics?: string[];
+    workflows?: string[];
+    durableObjects?: string[];
+    services?: Array<string | { name: string; version?: string }>;
+  };
+  triggers?: {
+    schedules?: Array<{ cron: string; export: string }>;
+    queues?: Array<{ queue: string; export: string }>;
+  };
 }
 
 /** Worker definition in the new `spec.workers` section */
@@ -70,7 +87,9 @@ interface ManifestWorker {
     queues?: Array<{ queue: string; export: string }>;
   };
   containers?: string[];
-  healthCheck?: { path: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
+  healthCheck?: { path?: string; type?: string; port?: number; command?: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
+  scaling?: { minInstances?: number; maxInstances?: number; maxConcurrency?: number };
+  dependsOn?: string[];
 }
 
 interface ManifestRoute {
@@ -79,6 +98,7 @@ interface ManifestRoute {
   path?: string;
   ingress?: string;
   timeoutMs?: number;
+  methods?: string[];
 }
 
 // ── New-format bundle generation ─────────────────────────────────────────────
@@ -139,6 +159,10 @@ function emitNewFormatDocs(
         },
         ...(service.env ? { env: service.env } : {}),
         ...(service.healthCheck ? { healthCheck: service.healthCheck } : {}),
+        ...(service.volumes ? { volumes: service.volumes } : {}),
+        ...(service.dependsOn ? { dependsOn: service.dependsOn } : {}),
+        ...(service.bindings ? { bindings: service.bindings } : {}),
+        ...(service.triggers ? { triggers: service.triggers } : {}),
       },
     });
   }
@@ -188,6 +212,8 @@ function emitNewFormatDocs(
             : {}),
         },
         ...(worker.healthCheck ? { healthCheck: worker.healthCheck } : {}),
+        ...(worker.scaling ? { scaling: worker.scaling } : {}),
+        ...(worker.dependsOn ? { dependsOn: worker.dependsOn } : {}),
       },
     });
 
@@ -272,6 +298,7 @@ function emitNewFormatDocs(
         ...(route.ingress ? { ingressRef: route.ingress } : {}),
         ...(route.path ? { path: route.path } : {}),
         ...(route.timeoutMs != null ? { timeoutMs: route.timeoutMs } : {}),
+        ...(route.methods ? { methods: route.methods } : {}),
       },
     });
   }
@@ -313,6 +340,7 @@ export function appManifestToBundleDocs(
       ...(manifest.spec.lifecycle ? { lifecycle: manifest.spec.lifecycle } : {}),
       ...(manifest.spec.update ? { update: manifest.spec.update } : {}),
       ...(manifest.spec.fileHandlers ? { fileHandlers: manifest.spec.fileHandlers } : {}),
+      ...(manifest.spec.overrides ? { overrides: manifest.spec.overrides } : {}),
     },
   });
 
@@ -336,6 +364,7 @@ export function appManifestToBundleDocs(
             ? { migrations: resource.migrations }
             : { migrations: resource.migrations.up, rollbackMigrations: resource.migrations.down }
           : {}),
+        ...(resource.limits ? { limits: resource.limits } : {}),
       },
     });
   }

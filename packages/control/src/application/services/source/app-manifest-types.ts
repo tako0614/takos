@@ -5,6 +5,14 @@ export type AppMetadata = {
   appId?: string;
 };
 
+// --- Resource limits ---
+
+export type ResourceLimits = {
+  maxSizeMb?: number;
+  maxRows?: number;
+  maxKeys?: number;
+};
+
 export type AppResource = {
   type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize' | 'queue' | 'analyticsEngine' | 'workflow' | 'durableObject';
   binding?: string;
@@ -32,6 +40,7 @@ export type AppResource = {
     className: string;
     scriptName?: string;
   };
+  limits?: ResourceLimits;
 };
 
 export type WorkflowArtifactBuild = {
@@ -46,7 +55,10 @@ export type WorkflowArtifactBuild = {
 // --- Health check ---
 
 export type HealthCheck = {
-  path: string;
+  type?: 'http' | 'tcp' | 'exec';  // default: 'http'
+  path?: string;           // http: GET パス
+  port?: number;           // tcp: ポート
+  command?: string;        // exec: コマンド
   intervalSeconds?: number;
   timeoutSeconds?: number;
   unhealthyThreshold?: number;
@@ -57,6 +69,7 @@ export type HealthCheck = {
 export type LifecycleHook = {
   command: string;
   timeoutSeconds?: number;
+  sandbox?: boolean;     // true: 隔離コンテナで実行。Store インストール時は必須
 };
 
 export type LifecycleHooks = {
@@ -67,7 +80,7 @@ export type LifecycleHooks = {
 // --- Update / rollback strategy ---
 
 export type UpdateStrategy = {
-  strategy?: 'rolling' | 'canary' | 'blue-green';
+  strategy?: 'rolling' | 'canary' | 'blue-green' | 'recreate';
   canaryWeight?: number;
   healthCheck?: string;
   rollbackOnFailure?: boolean;
@@ -78,6 +91,21 @@ export type UpdateStrategy = {
 
 export type ServiceBinding = string | { name: string; version?: string };
 
+// --- Volume ---
+
+export type Volume = {
+  name: string;
+  mountPath: string;
+  size: string;  // "10Gi", "500Mi" etc
+};
+
+// --- Worker scaling ---
+
+export type WorkerScaling = {
+  minInstances?: number;
+  maxConcurrency?: number;
+};
+
 // --- Container & Worker types ---
 
 /** Container definition (CF Containers — worker に紐づけて使う) */
@@ -87,6 +115,8 @@ export type AppContainer = {
   instanceType?: string;
   maxInstances?: number;
   env?: Record<string, string>;
+  volumes?: Volume[];
+  dependsOn?: string[];
 };
 
 /** Service definition (常設コンテナ — VPS/独立稼働) */
@@ -98,6 +128,14 @@ export type AppService = {
   ipv4?: boolean;
   env?: Record<string, string>;
   healthCheck?: HealthCheck;
+  bindings?: {
+    services?: ServiceBinding[];  // 他の service/worker を参照
+  };
+  triggers?: {
+    schedules?: Array<{ cron: string; export: string }>;
+  };
+  volumes?: Volume[];
+  dependsOn?: string[];
 };
 
 /** Worker definition (CF Workers) */
@@ -121,6 +159,8 @@ export type AppWorker = {
     queues?: Array<{ queue: string; export: string }>;
   };
   healthCheck?: HealthCheck;
+  scaling?: WorkerScaling;
+  dependsOn?: string[];
 };
 
 /** Env configuration with template injection support */
@@ -135,6 +175,7 @@ export type AppRoute = {
   name: string;
   target: string;
   path?: string;
+  methods?: string[];    // ['GET', 'POST'] etc
   ingress?: string;
   timeoutMs?: number;
 };
@@ -153,6 +194,14 @@ export type AppFileHandler = {
   extensions?: string[];
   openPath: string;
 };
+
+// --- Environment overrides ---
+
+export type EnvironmentOverrides = Record<string, {
+  containers?: Record<string, Partial<AppContainer>>;
+  workers?: Record<string, Partial<AppWorker>>;
+  services?: Record<string, Partial<AppService>>;
+}>;
 
 export type AppManifest = {
   apiVersion: 'takos.dev/v1alpha1';
@@ -186,6 +235,7 @@ export type AppManifest = {
     update?: UpdateStrategy;
     mcpServers?: AppMcpServer[];
     fileHandlers?: AppFileHandler[];
+    overrides?: EnvironmentOverrides;
   };
 };
 
