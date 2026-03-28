@@ -266,29 +266,6 @@ services:
       timeout: 5s
       retries: 10
 
-  executor:
-    build:
-      context: .
-      dockerfile: packages/executor-service/Dockerfile
-    depends_on:
-      executor-host:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: 8080
-      PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
-      CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
-      TAKOS_ALLOW_NO_LLM: ${TAKOS_ALLOW_NO_LLM:-1}
-    ports:
-      - "${TAKOS_EXECUTOR_PORT}:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
   browser:
     build:
       context: .

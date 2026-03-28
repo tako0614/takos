@@ -251,7 +251,7 @@ spec:
       instanceType: standard-2
       maxInstances: 25
     executor:
-      dockerfile: packages/executor-service/Dockerfile
+      dockerfile: apps/executor/Dockerfile
       port: 8080
       instanceType: basic
       maxInstances: 100

@@ -9,7 +9,7 @@ import { getUserByUsername, getUserPrivacySettings, getUserStats, isMutedBy } fr
 import { getDb } from '../../../infra/db';
 import { accountFollows, accountFollowRequests, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
-import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-helpers';
+import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-utils';
 import type { FollowUserResponse, FollowRequestResponse } from './dto';
 
 const followListQuerySchema = z.object({

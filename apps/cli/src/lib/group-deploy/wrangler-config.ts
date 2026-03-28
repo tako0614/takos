@@ -109,6 +109,26 @@ export function generateWranglerConfig(
     });
   }
 
+  if (service.bindings?.queues && service.bindings.queues.length > 0) {
+    config.queues_producers = service.bindings.queues.map((resourceName: string) => {
+      const p = options.resources.get(resourceName);
+      return {
+        queue: p?.name || resourceName,
+        binding: p?.binding || toBinding(resourceName),
+      };
+    });
+  }
+
+  if (service.bindings?.vectorize && service.bindings.vectorize.length > 0) {
+    config.vectorize_indexes = service.bindings.vectorize.map((resourceName: string) => {
+      const p = options.resources.get(resourceName);
+      return {
+        index_name: p?.name || resourceName,
+        binding: p?.binding || toBinding(resourceName),
+      };
+    });
+  }
+
   if (options.namespace) {
     config.dispatch_namespace = options.namespace;
   }
@@ -169,6 +189,24 @@ export function serializeWranglerToml(config: WranglerConfig): string {
       lines.push('[[services]]');
       lines.push(`binding = ${JSON.stringify(svc.binding)}`);
       lines.push(`service = ${JSON.stringify(svc.service)}`);
+    }
+  }
+
+  if (config.queues_producers) {
+    for (const qp of config.queues_producers) {
+      lines.push('');
+      lines.push('[[queues.producers]]');
+      lines.push(`queue = ${JSON.stringify(qp.queue)}`);
+      lines.push(`binding = ${JSON.stringify(qp.binding)}`);
+    }
+  }
+
+  if (config.vectorize_indexes) {
+    for (const vi of config.vectorize_indexes) {
+      lines.push('');
+      lines.push('[[vectorize.indexes]]');
+      lines.push(`index_name = ${JSON.stringify(vi.index_name)}`);
+      lines.push(`binding = ${JSON.stringify(vi.binding)}`);
     }
   }
 

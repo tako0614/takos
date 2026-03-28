@@ -13,12 +13,12 @@ const mockDeleteWorkspaceCommonEnv = vi.fn();
 const mockReconcileWorkersForEnvKey = vi.fn();
 
 vi.mock('@/services/common-env', () => ({
-  createCommonEnvService: () => ({
-    listWorkspaceCommonEnv: mockListWorkspaceCommonEnv,
-    upsertWorkspaceCommonEnv: mockUpsertWorkspaceCommonEnv,
-    deleteWorkspaceCommonEnv: mockDeleteWorkspaceCommonEnv,
+  CommonEnvService: vi.fn(() => ({
+    listSpaceCommonEnv: mockListWorkspaceCommonEnv,
+    upsertSpaceCommonEnv: mockUpsertWorkspaceCommonEnv,
+    deleteSpaceCommonEnv: mockDeleteWorkspaceCommonEnv,
     reconcileWorkersForEnvKey: mockReconcileWorkersForEnvKey,
-  }),
+  })),
 }));
 
 import {

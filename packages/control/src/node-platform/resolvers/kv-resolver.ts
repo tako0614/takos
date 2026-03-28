@@ -2,7 +2,7 @@
  * KV resolver — selects DynamoDB/Firestore/persistent/in-memory.
  */
 import path from 'node:path';
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 import {
   createInMemoryKVNamespace,
 } from '../../local-platform/in-memory-bindings.ts';

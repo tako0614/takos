@@ -6,11 +6,10 @@ import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
-  createWorkerDesiredStateService: vi.fn(),
   getServiceForUser: vi.fn(),
   getServiceForUserWithRole: vi.fn(),
-  createServiceDesiredStateService: vi.fn(),
-  createCommonEnvService: vi.fn(),
+  ServiceDesiredStateService: vi.fn(),
+  CommonEnvService: vi.fn(),
   buildCommonEnvActor: vi.fn(),
 }));
 
@@ -24,15 +23,14 @@ vi.mock('@/services/platform/workers', () => ({
 }));
 
 vi.mock('@/services/platform/worker-desired-state', () => ({
-  createWorkerDesiredStateService: mocks.createWorkerDesiredStateService,
-  createServiceDesiredStateService: mocks.createServiceDesiredStateService,
+  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
 }));
 
 vi.mock('@/services/common-env', async () => {
   const actual = await vi.importActual<typeof import('@/services/common-env')>('@/services/common-env');
   return {
     ...actual,
-    createCommonEnvService: mocks.createCommonEnvService,
+    CommonEnvService: mocks.CommonEnvService,
   };
 });
 
@@ -46,7 +44,7 @@ vi.mock('@/routes/common-env/handlers', async () => {
 
 import workersSettings from '@/routes/workers/settings';
 
-function createCommonEnvServiceMock(overrides: Record<string, unknown> = {}) {
+function CommonEnvServiceMock(overrides: Record<string, unknown> = {}) {
   return {
     listWorkerCommonEnvLinks: vi.fn().mockResolvedValue([]),
     listWorkerBuiltins: vi.fn().mockResolvedValue({}),
@@ -163,7 +161,7 @@ describe('services settings bindings workspace scope', () => {
       ]),
     };
     mocks.getDb.mockReturnValue(drizzleDb);
-    mocks.createServiceDesiredStateService.mockReturnValue(desiredState);
+    mocks.ServiceDesiredStateService.mockReturnValue(desiredState);
     mocks.getServiceForUser.mockResolvedValue({
       id: 'worker-1',
       space_id: 'ws-1',
@@ -193,7 +191,7 @@ describe('services settings bindings workspace scope', () => {
     const desiredState = {
       replaceResourceBindings: vi.fn().mockResolvedValue(undefined),
     };
-    mocks.createServiceDesiredStateService.mockReturnValue(desiredState);
+    mocks.ServiceDesiredStateService.mockReturnValue(desiredState);
     mocks.getDb.mockReturnValue(drizzleDb);
     mocks.getServiceForUserWithRole.mockResolvedValue({
       id: 'worker-1',
@@ -235,7 +233,7 @@ describe('services settings bindings workspace scope', () => {
   });
 
   it('returns builtins alongside service common env links', async () => {
-    const commonEnvService = createCommonEnvServiceMock({
+    const commonEnvService = CommonEnvServiceMock({
       listWorkerCommonEnvLinks: vi.fn().mockResolvedValue([
         {
           name: 'TAKOS_API_URL',
@@ -254,7 +252,7 @@ describe('services settings bindings workspace scope', () => {
         },
       }),
     });
-    mocks.createCommonEnvService.mockReturnValue(commonEnvService);
+    mocks.CommonEnvService.mockReturnValue(commonEnvService);
     mocks.getServiceForUser.mockResolvedValue({
       id: 'worker-1',
       space_id: 'ws-1',
@@ -293,8 +291,8 @@ describe('services settings bindings workspace scope', () => {
   });
 
   it('requires owner or admin to configure TAKOS_ACCESS_TOKEN builtins', async () => {
-    const commonEnvService = createCommonEnvServiceMock();
-    mocks.createCommonEnvService.mockReturnValue(commonEnvService);
+    const commonEnvService = CommonEnvServiceMock();
+    mocks.CommonEnvService.mockReturnValue(commonEnvService);
     mocks.getServiceForUserWithRole
       .mockResolvedValueOnce({
         id: 'worker-1',
@@ -332,10 +330,10 @@ describe('services settings bindings workspace scope', () => {
   });
 
   it('requires scopes when TAKOS_ACCESS_TOKEN is first linked', async () => {
-    const commonEnvService = createCommonEnvServiceMock({
+    const commonEnvService = CommonEnvServiceMock({
       listWorkerBuiltins: vi.fn().mockResolvedValue({}),
     });
-    mocks.createCommonEnvService.mockReturnValue(commonEnvService);
+    mocks.CommonEnvService.mockReturnValue(commonEnvService);
     mocks.getServiceForUserWithRole.mockResolvedValue({
       id: 'worker-1',
       space_id: 'ws-1',
@@ -367,7 +365,7 @@ describe('services settings bindings workspace scope', () => {
   });
 
   it('stores TAKOS_ACCESS_TOKEN scopes when linked explicitly', async () => {
-    const commonEnvService = createCommonEnvServiceMock({
+    const commonEnvService = CommonEnvServiceMock({
       listWorkerBuiltins: vi.fn()
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({
@@ -391,7 +389,7 @@ describe('services settings bindings workspace scope', () => {
         },
       ]),
     });
-    mocks.createCommonEnvService.mockReturnValue(commonEnvService);
+    mocks.CommonEnvService.mockReturnValue(commonEnvService);
     mocks.getServiceForUserWithRole.mockResolvedValue({
       id: 'worker-1',
       space_id: 'ws-1',

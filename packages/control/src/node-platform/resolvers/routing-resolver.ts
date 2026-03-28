@@ -2,7 +2,7 @@
  * Routing store resolver + routing seed logic for local/dev setups.
  */
 import path from 'node:path';
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 import { createInMemoryRoutingStore, createPersistentRoutingStore } from '../../local-platform/routing-store.ts';
 import { createRedisRoutingStore } from '../../local-platform/redis-bindings.ts';
 

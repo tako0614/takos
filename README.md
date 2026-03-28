@@ -9,8 +9,8 @@ packages.
 ## What Is In This Repo
 
 - `packages/control/*`: control-plane, host, and local-platform package trees
-- `packages/runtime-service`, `packages/executor-service`, `packages/browser-service`: service packages (executor-service and browser-service are self-contained deployable services; runtime-service is used by the apps/runtime wrapper)
-- `packages/common`, `packages/actions-engine`, `packages/agent-core`, `packages/cloudflare-compat`: shared libraries
+- `packages/runtime-service`, `packages/browser-service`: service packages (browser-service is a self-contained deployable service; runtime-service is used by the apps/runtime wrapper)
+- `packages/common`, `packages/actions-engine`, `packages/cloudflare-compat`: shared libraries
 - `apps/control`: Cloudflare worker composition, frontend build, and deployment templates
 - `apps/runtime`: thin Node/container wrapper over runtime-service
 - `apps/cli`: public CLI
@@ -67,7 +67,6 @@ Cloudflare deployment templates live under `apps/control/`.
 
 - `wrangler*.toml`
 - `.env.example`
-- `.env.self-host.example`
 - `SECRETS.md`
 
 Local stack configuration lives in `.env.local.example`. Helm/self-host

@@ -1,5 +1,5 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';

@@ -151,6 +151,24 @@ export async function provisionResources(
           results.push({ name, type: 'secretRef', status: 'provisioned', id: '(generated)' });
           break;
         }
+        case 'queue':
+        case 'vectorize': {
+          // Queue and vectorize are provisioned via wrangler CLI, not the API client.
+          // Mark as skipped here; the CLI provisioner handles them.
+          provisioned.set(name, { name: cfName, type: resource.type, id: cfName, binding });
+          results.push({ name, type: resource.type, status: 'skipped',
+            error: `${resource.type} provisioning requires wrangler CLI` });
+          break;
+        }
+        case 'analyticsEngine':
+        case 'durableObject':
+        case 'workflow': {
+          // These are auto-configured during wrangler deploy
+          provisioned.set(name, { name: cfName, type: resource.type, id: name, binding });
+          results.push({ name, type: resource.type, status: 'skipped',
+            error: `${resource.type} は wrangler deploy 時に自動設定されます` });
+          break;
+        }
         default: {
           results.push({
             name,

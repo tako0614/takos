@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/common-env/service', () => ({
-  createCommonEnvService: vi.fn(() => ({
+  CommonEnvService: vi.fn(() => ({
     processReconcileJobs: mocks.processReconcileJobs,
     enqueuePeriodicDriftSweep: mocks.enqueuePeriodicDriftSweep,
   })),

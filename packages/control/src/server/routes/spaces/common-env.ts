@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../shared/route-auth';
-import { createCommonEnvService } from '../../../application/services/common-env';
+import { CommonEnvService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env/handlers';
 import { logError } from '../../../shared/utils/logger';
 import { AppError, BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
@@ -10,7 +10,7 @@ export default new Hono<SpaceAccessRouteEnv>()
     const { space } = c.get('access');
 
     try {
-      const service = createCommonEnvService(c.env);
+      const service = new CommonEnvService(c.env);
       const env = await service.listSpaceCommonEnv(space.id);
       return c.json({ env });
     } catch (error) {
@@ -40,7 +40,7 @@ export default new Hono<SpaceAccessRouteEnv>()
     }
 
     try {
-      const service = createCommonEnvService(c.env);
+      const service = new CommonEnvService(c.env);
       const actor = await buildCommonEnvActor(c, user.id);
       await service.upsertSpaceCommonEnv({
         spaceId: space.id,
@@ -66,7 +66,7 @@ export default new Hono<SpaceAccessRouteEnv>()
     const envName = c.req.param('name');
 
     try {
-      const service = createCommonEnvService(c.env);
+      const service = new CommonEnvService(c.env);
       const actor = await buildCommonEnvActor(c, user.id);
       const deleted = await service.deleteSpaceCommonEnv(space.id, envName, actor);
       if (!deleted) {

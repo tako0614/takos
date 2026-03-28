@@ -94,7 +94,7 @@ browserSessions.get('/browser-sessions/:id', async (c) => {
     return c.json({ error: 'Session not found' }, 404);
   }
 
-  const state = await response.json<{ userId: string }>();
+  const state = await response.json() as { userId: string };
   // Ownership check
   if (state.userId !== user.id) {
     return c.json({ error: 'Forbidden' }, 403);

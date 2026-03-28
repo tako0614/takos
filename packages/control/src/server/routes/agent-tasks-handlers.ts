@@ -1,5 +1,5 @@
 import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../shared/types';
-import type { SelectOf } from '../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../shared/types/drizzle-utils';
 import { toIsoString } from '../../shared/utils';
 import { normalizeModelId } from '../../application/services/agent';
 import { getDb } from '../../infra/db';

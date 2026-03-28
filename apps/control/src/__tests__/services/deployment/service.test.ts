@@ -44,8 +44,7 @@ const mocks = vi.hoisted(() => ({
   serializeDeploymentTarget: vi.fn(),
 
   // platform
-  createWorkerDesiredStateService: vi.fn(),
-  createServiceDesiredStateService: vi.fn(),
+  ServiceDesiredStateService: vi.fn(),
   reconcileManagedWorkerMcpServer: vi.fn(),
 
   // shared utils
@@ -113,8 +112,7 @@ vi.mock('@/services/deployment/provider', () => ({
 }));
 
 vi.mock('@/services/platform/worker-desired-state', () => ({
-  createWorkerDesiredStateService: mocks.createWorkerDesiredStateService,
-  createServiceDesiredStateService: mocks.createWorkerDesiredStateService,
+  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
 }));
 
 vi.mock('@/services/platform/mcp', () => ({
@@ -416,7 +414,7 @@ describe('DeploymentService.createDeployment', () => {
     mocks.logDeploymentEvent.mockResolvedValue(undefined);
     mocks.encryptEnvVars.mockResolvedValue('encrypted-env-vars');
     mocks.encrypt.mockResolvedValue({ ciphertext: 'ct', iv: 'iv' });
-    mocks.createWorkerDesiredStateService.mockReturnValue({
+    mocks.ServiceDesiredStateService.mockReturnValue({
       resolveDeploymentState: vi.fn().mockResolvedValue({
         envVars: {},
         bindings: [],
@@ -512,7 +510,7 @@ describe('DeploymentService.createDeployment', () => {
       deployment: createdDeployment,
       version: 1,
     });
-    mocks.createWorkerDesiredStateService.mockReturnValue({
+    mocks.ServiceDesiredStateService.mockReturnValue({
       resolveDeploymentState: vi.fn().mockResolvedValue({
         envVars: { SECRET: 'value' },
         bindings: [],
@@ -546,7 +544,7 @@ describe('DeploymentService.createDeployment', () => {
       deployment: createdDeployment,
       version: 1,
     });
-    mocks.createWorkerDesiredStateService.mockReturnValue({
+    mocks.ServiceDesiredStateService.mockReturnValue({
       resolveDeploymentState: vi.fn().mockResolvedValue({
         envVars: {},
         bindings: [{ type: 'kv_namespace', name: 'MY_KV', id: 'ns-1' }],
@@ -620,7 +618,7 @@ describe('DeploymentService.createDeployment', () => {
     });
 
     const resolveDeploymentState = vi.fn();
-    mocks.createWorkerDesiredStateService.mockReturnValue({ resolveDeploymentState });
+    mocks.ServiceDesiredStateService.mockReturnValue({ resolveDeploymentState });
 
     const { service } = makeService();
     await service.createDeployment({

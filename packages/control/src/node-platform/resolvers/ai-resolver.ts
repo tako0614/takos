@@ -1,7 +1,7 @@
 /**
  * AI / Vectorize resolver — sets up OpenAI embeddings and pgvector.
  */
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 
 export async function resolveAiBinding() {
   const openAiKey = optionalEnv('OPENAI_API_KEY');

@@ -5,7 +5,7 @@
  */
 
 import type { Env } from '../../../../shared/types';
-import type { SelectOf } from '../../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../../shared/types/drizzle-utils';
 import type { mcpServers } from '../../../../infra/db';
 
 // ---------------------------------------------------------------------------

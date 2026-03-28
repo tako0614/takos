@@ -18,7 +18,7 @@ vi.mock('@/shared/utils', async (importOriginal) => ({
   now: mocks.now,
 }));
 
-import { GitService, createGitService } from '@/services/source/git';
+import { GitService } from '@/services/source/git';
 
 function createDrizzleMock() {
   const getMock = vi.fn();
@@ -56,9 +56,9 @@ function createBucketMock() {
   } as unknown as R2Bucket;
 }
 
-describe('createGitService', () => {
+describe('GitService construction', () => {
   it('creates a GitService instance', () => {
-    const service = createGitService({} as D1Database, {} as R2Bucket);
+    const service = new GitService({} as D1Database, {} as R2Bucket);
     expect(service).toBeInstanceOf(GitService);
   });
 });
@@ -73,7 +73,7 @@ describe('GitService.log', () => {
     drizzle._.all.mockResolvedValueOnce([]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1');
 
     expect(result).toEqual([]);
@@ -98,7 +98,7 @@ describe('GitService.log', () => {
     ]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1');
 
     expect(result).toHaveLength(1);
@@ -134,7 +134,7 @@ describe('GitService.log', () => {
       ]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1', { path: 'src/main.ts' });
 
     expect(result).toHaveLength(1);
@@ -146,7 +146,7 @@ describe('GitService.log', () => {
     drizzle._.all.mockResolvedValueOnce([]); // no matching changes
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1', { path: 'nonexistent.ts' });
 
     expect(result).toEqual([]);
@@ -163,7 +163,7 @@ describe('GitService.getCommit', () => {
     drizzle._.get.mockResolvedValueOnce(undefined);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommit('nonexistent');
 
     expect(result).toBeNull();
@@ -186,7 +186,7 @@ describe('GitService.getCommit', () => {
     });
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommit('c1');
 
     expect(result).not.toBeNull();
@@ -204,7 +204,7 @@ describe('GitService.getCommitChanges', () => {
     drizzle._.all.mockResolvedValueOnce([]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommitChanges('c1');
 
     expect(result).toEqual([]);
@@ -228,7 +228,7 @@ describe('GitService.getCommitChanges', () => {
     ]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommitChanges('c1');
 
     expect(result).toHaveLength(1);
@@ -251,7 +251,7 @@ describe('GitService.restore', () => {
     drizzle._.get.mockResolvedValueOnce(undefined);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.restore('ws-1', 'c1', 'missing.ts');
 
     expect(result.success).toBe(false);
@@ -263,7 +263,7 @@ describe('GitService.restore', () => {
     drizzle._.get.mockResolvedValueOnce({ changeType: 'deleted' });
     mocks.getDb.mockReturnValue(drizzle);
 
-    const service = createGitService({} as D1Database, createBucketMock());
+    const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.restore('ws-1', 'c1', 'deleted.ts');
 
     expect(result.success).toBe(false);
@@ -278,7 +278,7 @@ describe('GitService.restore', () => {
     const bucket = createBucketMock();
     (bucket.get as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-    const service = createGitService({} as D1Database, bucket);
+    const service = new GitService({} as D1Database, bucket);
     const result = await service.restore('ws-1', 'c1', 'src/main.ts');
 
     expect(result.success).toBe(false);

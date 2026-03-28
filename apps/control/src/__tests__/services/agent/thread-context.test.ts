@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
-  createMultiModelClient: vi.fn(),
+  LLMClient: vi.fn(),
   getProviderFromModel: vi.fn(),
   logWarn: vi.fn(),
 }));
@@ -38,7 +38,7 @@ vi.mock('drizzle-orm', () => ({
 }));
 
 vi.mock('@/services/agent/llm', () => ({
-  createMultiModelClient: mocks.createMultiModelClient,
+  LLMClient: mocks.LLMClient,
   getProviderFromModel: mocks.getProviderFromModel,
 }));
 

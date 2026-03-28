@@ -1,7 +1,7 @@
 /**
  * Dispatch env helpers — service registry, forwarding targets, tenant worker runtime.
  */
-import { optionalEnv } from './env-helpers.ts';
+import { optionalEnv } from './env-utils.ts';
 import type { DispatchEnv } from '../../dispatch.ts';
 import type { D1Database, R2Bucket, ServiceBindingFetcher } from '../../shared/types/bindings.ts';
 import {

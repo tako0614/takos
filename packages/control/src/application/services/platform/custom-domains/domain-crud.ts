@@ -4,7 +4,7 @@ import { eq, and, count } from 'drizzle-orm';
 import { isDomainReserved, generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domain-validation';
 import { now } from '../../../../shared/utils';
 import { deleteHostnameRouting } from '../../routing/service';
-import { createServiceDesiredStateService } from '../worker-desired-state';
+import { ServiceDesiredStateService } from '../worker-desired-state';
 import { logError } from '../../../../shared/utils/logger';
 import {
   MAX_CUSTOM_DOMAINS_PER_SERVICE,
@@ -54,7 +54,7 @@ export async function addCustomDomain(
   const db = getDb(env.DB);
 
   const service = await requireServiceWriteAccess(env, serviceId, userId);
-  const desiredState = createServiceDesiredStateService(env);
+  const desiredState = new ServiceDesiredStateService(env);
   const activeRoutingTarget = await desiredState.getRoutingTarget(serviceId);
 
   if (!activeRoutingTarget) {

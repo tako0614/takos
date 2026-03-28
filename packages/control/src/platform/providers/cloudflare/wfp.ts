@@ -13,10 +13,6 @@ export type {
 };
 export { WFPService };
 
-export function createCloudflareWfpProvider(env: WfpEnv): WFPService {
-  return new WFPService(env);
-}
-
 export function createOptionalCloudflareWfpProvider(env: WfpEnv): WFPService | null {
   return createWfpService(env);
 }

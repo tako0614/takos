@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createLLMClient: vi.fn(),
+  LLMClient: vi.fn(),
   getDb: vi.fn(),
   generateId: vi.fn(),
   now: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/agent/llm', () => ({
-  createLLMClient: mocks.createLLMClient,
+  LLMClient: mocks.LLMClient,
 }));
 
 vi.mock('@/db', () => ({
@@ -133,7 +133,7 @@ describe('analyzeTask', () => {
       }),
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const plan = await analyzeTask('Fix the login bug', {
       spaceId: 'ws-1',
@@ -153,7 +153,7 @@ describe('analyzeTask', () => {
       content: 'This is not valid JSON',
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const plan = await analyzeTask('Do something', {
       spaceId: 'ws-1',
@@ -171,7 +171,7 @@ describe('analyzeTask', () => {
       content: JSON.stringify({ type: 'invalid_type' }),
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const plan = await analyzeTask('Something', {
       spaceId: 'ws-1',
@@ -188,7 +188,7 @@ describe('analyzeTask', () => {
       content: '```json\n{"type":"tool_only","tools":["web_search"]}\n```',
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const plan = await analyzeTask('Search for something', {
       spaceId: 'ws-1',
@@ -205,7 +205,7 @@ describe('analyzeTask', () => {
       content: JSON.stringify({ type: 'conversation' }),
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const plan = await analyzeTask('Chat with me', {
       spaceId: 'ws-1',
@@ -342,7 +342,7 @@ describe('orchestrateWorkflow', () => {
       content: JSON.stringify({ type: 'conversation' }),
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const result = await orchestrateWorkflow('Tell me a joke', {
       env: {} as any,
@@ -364,7 +364,7 @@ describe('orchestrateWorkflow', () => {
       content: JSON.stringify({ type: 'tool_only', tools: ['web_search', 'file_read'] }),
       usage: { inputTokens: 10, outputTokens: 20 },
     }));
-    mocks.createLLMClient.mockReturnValue({ chat: mockChat });
+    mocks.LLMClient.mockImplementation(() => ({ chat: mockChat }));
 
     const result = await orchestrateWorkflow('Search and read', {
       env: {} as any,

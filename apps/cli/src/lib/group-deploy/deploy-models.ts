@@ -27,6 +27,8 @@ export type {
   WranglerR2Binding,
   WranglerKVBinding,
   WranglerServiceBinding,
+  WranglerQueueProducer,
+  WranglerVectorizeIndex,
   WranglerVars,
 } from 'takos-control/deployment/group-deploy-types';
 
@@ -62,6 +64,8 @@ export interface ManifestWorkerDef {
     r2?: string[];
     kv?: string[];
     services?: string[];
+    queues?: string[];
+    vectorize?: string[];
   };
   containers?: string[];
 }
@@ -98,7 +102,13 @@ export interface GroupDeployOptions {
     metadata: { name: string; appId?: string };
     spec: {
       version: string;
-      resources?: Record<string, { type: 'd1' | 'r2' | 'kv' | 'secretRef'; binding?: string }>;
+      resources?: Record<string, {
+        type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'queue' | 'vectorize' | 'analyticsEngine' | 'workflow' | 'durableObject';
+        binding?: string;
+        generate?: boolean;
+        vectorize?: { dimensions: number; metric: string };
+        queue?: { maxRetries?: number; deadLetterQueue?: string };
+      }>;
       workers?: Record<string, ManifestWorkerDef>;
       containers?: Record<string, ManifestContainerDef>;
       services?: Record<string, ManifestServiceDef>;
@@ -160,6 +170,6 @@ export interface WorkerServiceDef {
   type: 'worker';
   build?: { fromWorkflow: { path: string; job: string; artifact: string; artifactPath: string } };
   env?: Record<string, string>;
-  bindings?: { d1?: string[]; r2?: string[]; kv?: string[]; services?: string[] };
+  bindings?: { d1?: string[]; r2?: string[]; kv?: string[]; services?: string[]; queues?: string[]; vectorize?: string[] };
   containers?: WorkerContainerSpec[];
 }

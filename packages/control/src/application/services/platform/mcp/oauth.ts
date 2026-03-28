@@ -6,7 +6,7 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { InsertOf } from '../../../../shared/types/drizzle-helpers';
+import type { InsertOf } from '../../../../shared/types/drizzle-utils';
 import { getDb, mcpServers, mcpOauthPending } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { generateId } from '../../../../shared/utils';

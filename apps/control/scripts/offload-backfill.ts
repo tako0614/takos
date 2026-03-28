@@ -129,7 +129,7 @@ function d1Execute(sql: string): void {
   runWranglerInherit(withRemoteEnv(['d1', 'execute', D1_TARGET, remoteFlag, '--command', sql]));
 }
 
-function r2ListPrefix(prefix: string): any[] {
+function r2ListPrefix(prefix: string): unknown[] {
   // `wrangler r2 object list` supports `--prefix` and `--json`.
   const args = ['r2', 'object', 'list', getOffloadBucket(), '--prefix', prefix, '--json'];
   if (r2Flag) args.splice(4, 0, r2Flag);

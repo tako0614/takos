@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
-import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
 import { getDb, threads, messages, runs } from '../../../infra/db';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
@@ -212,6 +212,19 @@ export async function updateThreadStatus(
 
   await db.update(threads)
     .set({ status, updatedAt: timestamp })
+    .where(eq(threads.id, threadId));
+}
+
+export async function deleteThread(
+  _env: Env,
+  dbBinding: D1Database,
+  threadId: string
+): Promise<void> {
+  const db = getDb(dbBinding);
+  const timestamp = now();
+
+  await db.update(threads)
+    .set({ status: 'deleted', updatedAt: timestamp })
     .where(eq(threads.id, threadId));
 }
 

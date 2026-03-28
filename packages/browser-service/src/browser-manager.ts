@@ -123,7 +123,7 @@ function dispatchAction(page: Page, action: BrowserAction): Promise<string> {
     page: Page,
     action: BrowserAction,
   ) => Promise<string>;
-  if (!handler) throw new Error(`Unknown action type: ${(action as any).type}`);
+  if (!handler) throw new Error(`Unknown action type: ${(action as Record<string, unknown>).type}`);
   return handler(page, action);
 }
 

@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Env, Repository, RepositoryVisibility, SpaceRole } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb, accounts, repositories } from '../../../infra/db';
 import { and, desc, eq } from 'drizzle-orm';

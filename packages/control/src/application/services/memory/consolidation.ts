@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { MemoryType } from '../../../shared/types';
-import { type LLMClient, createLLMClient } from '../agent';
+import { LLMClient } from '../agent';
 import { getDb, memories } from '../../../infra/db';
 import { eq, and, or, lt, isNull, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { chatAndParseJsonArray } from './llm-parser';
@@ -56,7 +56,7 @@ export class MemoryConsolidator {
   constructor(dbBinding: D1Database, apiKey?: string) {
     this.dbBinding = dbBinding;
     if (apiKey) {
-      this.llmClient = createLLMClient(apiKey);
+      this.llmClient = new LLMClient({ apiKey });
     }
   }
 
@@ -358,8 +358,4 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
 
     return { decayed, merged, summarized, limited };
   }
-}
-
-export function createMemoryConsolidator(db: D1Database, apiKey?: string): MemoryConsolidator {
-  return new MemoryConsolidator(db, apiKey);
 }

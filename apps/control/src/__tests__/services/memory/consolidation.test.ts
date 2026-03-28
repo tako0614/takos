@@ -10,21 +10,21 @@ vi.mock('@/db', async (importOriginal) => ({
 }));
 
 vi.mock('@/services/agent', () => ({
-  createLLMClient: vi.fn(() => ({
+  LLMClient: vi.fn(() => ({
     chat: vi.fn().mockResolvedValue({ content: '[]' }),
   })),
 }));
 
-import { MemoryConsolidator, createMemoryConsolidator } from '@/services/memory/consolidation';
+import { MemoryConsolidator } from '@/services/memory/consolidation';
 
-describe('createMemoryConsolidator', () => {
-  it('creates a consolidator instance', () => {
-    const consolidator = createMemoryConsolidator({} as any);
+describe('MemoryConsolidator', () => {
+  it('creates a consolidator instance via direct construction', () => {
+    const consolidator = new MemoryConsolidator({} as any);
     expect(consolidator).toBeInstanceOf(MemoryConsolidator);
   });
 });
 
-describe('MemoryConsolidator', () => {
+describe('MemoryConsolidator methods', () => {
   function createDrizzleMock() {
     const allMock = vi.fn();
     const getMock = vi.fn();

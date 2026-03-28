@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
@@ -26,7 +26,7 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     const settings = await desiredState.getRuntimeConfig(worker.space_id, worker.id);
 
     return c.json({
@@ -65,7 +65,7 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     const settings = await desiredState.saveRuntimeConfig({
       spaceId: worker.space_id,
       workerId: worker.id,

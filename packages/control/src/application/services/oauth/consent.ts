@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { oauthConsents, oauthClients } from '../../../infra/db';
 import type { OAuthConsent } from '../../../shared/types/oauth';
 import { generateId } from './pkce';

@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
 import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
-import { createGitService } from '../../application/services/source/git';
+import { GitService } from '../../application/services/source/git';
+import type { R2Bucket } from '../../shared/types/bindings.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger';
 
@@ -11,9 +12,9 @@ const git = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 function resolveGitService(c: Context<{ Bindings: Env; Variables: BaseVariables }>) {
   const tenantSource = requireTenantSource(c);
 
-  return createGitService(
+  return new GitService(
     c.env.DB,
-    tenantSource as unknown as Parameters<typeof createGitService>[1],
+    tenantSource as unknown as R2Bucket,
   );
 }
 

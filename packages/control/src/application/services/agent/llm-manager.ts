@@ -5,7 +5,7 @@
  */
 
 import type { Env } from '../../../shared/types';
-import { LLMClient, createMultiModelClient, getProviderFromModel, type ModelProvider } from './llm';
+import { LLMClient, getProviderFromModel, type ModelProvider } from './llm';
 
 export interface LLMManagerConfig {
   apiKey: string | undefined;
@@ -39,7 +39,7 @@ export function createLLMState(config: LLMManagerConfig): LLMState {
   const providerKey = providerKeyMap[modelProvider];
 
   const client = providerKey
-    ? createMultiModelClient({
+    ? new LLMClient({
         apiKey: providerKey,
         model: config.aiModel,
         anthropicApiKey: anthropicKey,

@@ -550,7 +550,3 @@ export class GitService {
     return hunks;
   }
 }
-
-export function createGitService(db: D1Database, storage: R2Bucket): GitService {
-  return new GitService(db, storage);
-}

@@ -1,7 +1,7 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { createCommonEnvService } from '../../../services/common-env';
+import { CommonEnvService } from '../../../services/common-env';
 import { DeploymentService } from '../../../services/deployment/index';
-import { createServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
 import { normalizeCommonEnvName } from '../../../services/common-env/crypto';
 import { getDb, resources, resourceAccess, serviceDeployments } from '../../../../infra/db';
 import { eq, and, or } from 'drizzle-orm';
@@ -271,7 +271,7 @@ export const workerEnvGetHandler: ToolHandler = async (args, context) => {
   const ref = await resolveWorkerRef(workerIdentifier, context);
 
   if (ref.kind === 'worker') {
-    const desiredState = createServiceDesiredStateService(context.env);
+    const desiredState = new ServiceDesiredStateService(context.env);
     const envVars = await desiredState.listLocalEnvVarSummaries(ref.spaceId, ref.workerId);
     return describeLocalEnv(envVars, workerIdentifier);
   }
@@ -299,7 +299,7 @@ export const workerEnvSetHandler: ToolHandler = async (args, context) => {
     throw new Error(MUTATION_ERROR);
   }
 
-  const desiredState = createServiceDesiredStateService(context.env);
+  const desiredState = new ServiceDesiredStateService(context.env);
   await desiredState.replaceLocalEnvVars({
     spaceId: ref.spaceId,
     workerId: ref.workerId,
@@ -310,7 +310,7 @@ export const workerEnvSetHandler: ToolHandler = async (args, context) => {
     })),
   });
 
-  const commonEnvService = createCommonEnvService(context.env);
+  const commonEnvService = new CommonEnvService(context.env);
   await commonEnvService.reconcileWorkerCommonEnv(ref.spaceId, ref.workerId, {
     trigger: 'worker_env_patch',
   });
@@ -323,7 +323,7 @@ export const workerBindingsGetHandler: ToolHandler = async (args, context) => {
   const ref = await resolveWorkerRef(workerIdentifier, context);
 
   if (ref.kind === 'worker') {
-    const desiredState = createServiceDesiredStateService(context.env);
+    const desiredState = new ServiceDesiredStateService(context.env);
     const bindings = await desiredState.listResourceBindings(ref.workerId);
     return describeBindings(bindings, workerIdentifier);
   }
@@ -396,7 +396,7 @@ export const workerBindingsSetHandler: ToolHandler = async (args, context) => {
     });
   }
 
-  const desiredState = createServiceDesiredStateService(context.env);
+  const desiredState = new ServiceDesiredStateService(context.env);
   await desiredState.replaceResourceBindings({
     workerId: ref.workerId,
     bindings: nextBindings,
@@ -410,7 +410,7 @@ export const workerRuntimeGetHandler: ToolHandler = async (args, context) => {
   const ref = await resolveWorkerRef(workerIdentifier, context);
 
   if (ref.kind === 'worker') {
-    const desiredState = createServiceDesiredStateService(context.env);
+    const desiredState = new ServiceDesiredStateService(context.env);
     const runtimeConfig = await desiredState.getRuntimeConfig(ref.spaceId, ref.workerId);
     return describeRuntimeConfig(runtimeConfig, workerIdentifier);
   }
@@ -451,7 +451,7 @@ export const workerRuntimeSetHandler: ToolHandler = async (args, context) => {
     throw new Error(MUTATION_ERROR);
   }
 
-  const desiredState = createServiceDesiredStateService(context.env);
+  const desiredState = new ServiceDesiredStateService(context.env);
   await desiredState.saveRuntimeConfig({
     spaceId: ref.spaceId,
     workerId: ref.workerId,

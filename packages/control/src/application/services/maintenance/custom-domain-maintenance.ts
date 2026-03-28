@@ -5,7 +5,7 @@ import { now } from '../../../shared/utils';
 import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
 import type { RoutingTarget } from '../routing/types';
-import { createServiceDesiredStateService } from '../platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../platform/worker-desired-state';
 import { listServiceRouteRecordsByIds } from '../platform/workers';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
@@ -84,7 +84,7 @@ export async function runCustomDomainReverification(
   options?: { batchSize?: number }
 ): Promise<CustomDomainReverificationSummary> {
   const db = getDb(env.DB);
-  const desiredState = createServiceDesiredStateService(env);
+  const desiredState = new ServiceDesiredStateService(env);
   const batchSize = options?.batchSize ?? 200;
   const platformDomain = env.TENANT_BASE_DOMAIN;
 

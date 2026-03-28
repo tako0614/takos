@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-helpers';
+import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';

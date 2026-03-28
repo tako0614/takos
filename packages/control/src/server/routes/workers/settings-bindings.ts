@@ -7,7 +7,7 @@ import { getServiceForUser, getServiceForUserWithRole } from '../../../applicati
 import { getDb } from '../../../infra/db';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import { resources, resourceAccess } from '../../../infra/db/schema';
-import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
@@ -53,7 +53,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
       cf_name: r.cfName,
     }));
 
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     const bindings = await desiredState.listResourceBindings(worker.id);
 
     return c.json({
@@ -162,7 +162,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
       });
     }
 
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     await desiredState.replaceResourceBindings({
       workerId: worker.id,
       bindings: nextBindings,

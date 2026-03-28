@@ -4,10 +4,10 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { createCommonEnvService } from '../../../application/services/common-env';
+import { CommonEnvService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env/handlers';
 import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
-import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
@@ -24,7 +24,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     const envVars = await desiredState.listLocalEnvVarSummaries(worker.space_id, worker.id);
 
     return c.json({
@@ -61,7 +61,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const desiredState = createServiceDesiredStateService(c.env);
+    const desiredState = new ServiceDesiredStateService(c.env);
     const normalizedVariables = body.variables.map((v) => ({
       name: normalizeCommonEnvName(v.name) ?? v.name,
       value: v.value,
@@ -73,7 +73,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
       variables: normalizedVariables,
     });
 
-    const commonEnvService = createCommonEnvService(c.env);
+    const commonEnvService = new CommonEnvService(c.env);
     const actor = await buildCommonEnvActor(c, user.id);
     const linkedKeyCandidates = normalizedVariables
       .map((v) => normalizeCommonEnvName(v.name))

@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { now } from '../../../../shared/utils';
 import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service';
 import type { RoutingTarget } from '../../routing/routing-models';
-import { createServiceDesiredStateService } from '../worker-desired-state';
+import { ServiceDesiredStateService } from '../worker-desired-state';
 import { logError } from '../../../../shared/utils/logger';
 import {
   SSL_TERMINAL_FAILURE_STATUSES,
@@ -24,7 +24,7 @@ export async function verifyCustomDomain(
   const db = getDb(env.DB);
 
   const service = await requireServiceWriteAccess(env, serviceId, userId);
-  const desiredState = createServiceDesiredStateService(env);
+  const desiredState = new ServiceDesiredStateService(env);
 
   const customDomain = await db.select().from(serviceCustomDomains)
     .where(and(
