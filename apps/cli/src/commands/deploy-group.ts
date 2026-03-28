@@ -10,6 +10,7 @@
  *   takos deploy-group --manifest .takos/app.yml --env production --dry-run
  */
 import { Command } from 'commander';
+import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
@@ -260,6 +261,7 @@ export function registerDeployGroupCommand(program: Command): void {
         dryRun: options.dryRun,
         compatibilityDate: options.compatibilityDate,
         serviceFilter: options.service,
+        manifestDir: path.dirname(manifestPath),
       });
 
       if (options.json) {

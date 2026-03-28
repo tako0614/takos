@@ -630,3 +630,262 @@ describe('group-deploy lib', () => {
     expect(result.resources).toHaveLength(2);
   });
 });
+
+describe('container deploy', () => {
+  const containerManifest = {
+    apiVersion: 'takos.dev/v1alpha1',
+    kind: 'App',
+    metadata: { name: 'test-app' },
+    spec: {
+      version: '1.0.0',
+      services: {
+        api: {
+          type: 'worker' as const,
+          build: {
+            fromWorkflow: {
+              path: '.takos/workflows/build.yml',
+              job: 'build',
+              artifact: 'api-worker',
+              artifactPath: 'dist/index.js',
+            },
+          },
+        },
+        browser: {
+          type: 'container' as const,
+          container: {
+            dockerfile: 'packages/browser-service/Dockerfile',
+            port: 8080,
+            instanceType: 'standard-2',
+            maxInstances: 25,
+          },
+        },
+      },
+    },
+  };
+
+  it('deploys container service in dry-run (not skipped)', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const result = await deployGroup({
+      manifest: containerManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      namespace: 'takos-staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    const containerService = result.services.find(s => s.name === 'browser');
+    expect(containerService).toBeDefined();
+    expect(containerService!.type).toBe('container');
+    expect(containerService!.status).toBe('deployed');
+    expect(containerService!.scriptName).toBe('test-app-browser');
+    expect(containerService!.error).toContain('[dry-run]');
+    expect(containerService!.error).toContain('Dockerfile: packages/browser-service/Dockerfile');
+    expect(containerService!.error).toContain('Port: 8080');
+    expect(containerService!.error).toContain('Instance Type: standard-2');
+    expect(containerService!.error).toContain('Max Instances: 25');
+  });
+
+  it('generates correct container wrangler config', async () => {
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const config = generateContainerWranglerConfig(
+      'browser',
+      containerManifest.spec.services.browser,
+      {
+        manifest: containerManifest,
+        env: 'staging',
+        namespace: 'takos-staging',
+        accountId: 'acct-1',
+        apiToken: 'token-1',
+      } as Parameters<typeof generateContainerWranglerConfig>[2],
+    );
+
+    expect(config.name).toBe('test-app-browser');
+    expect(config.main).toBe('index.js');
+    expect(config.compatibility_flags).toEqual(['nodejs_compat']);
+    expect(config.durable_objects.bindings).toEqual([{
+      name: 'BROWSER_CONTAINER',
+      class_name: 'BrowserContainer',
+    }]);
+    expect(config.containers).toEqual([{
+      class_name: 'BrowserContainer',
+      image: 'packages/browser-service/Dockerfile',
+      image_build_context: '.',
+      instance_type: 'standard-2',
+      max_instances: 25,
+    }]);
+    expect(config.migrations).toEqual([{
+      tag: 'v1',
+      new_classes: ['BrowserContainer'],
+    }]);
+    expect(config.dispatch_namespace).toBe('takos-staging');
+  });
+
+  it('generates correct container wrangler config without namespace', async () => {
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const config = generateContainerWranglerConfig(
+      'browser',
+      containerManifest.spec.services.browser,
+      {
+        manifest: containerManifest,
+        env: 'staging',
+        accountId: 'acct-1',
+        apiToken: 'token-1',
+      } as Parameters<typeof generateContainerWranglerConfig>[2],
+    );
+
+    expect(config.name).toBe('browser');
+    expect(config.dispatch_namespace).toBeUndefined();
+  });
+
+  it('generates correct container host entry', async () => {
+    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const entry = generateContainerHostEntry('browser', containerManifest.spec.services.browser);
+
+    expect(entry).toContain("import { Container } from '@cloudflare/containers'");
+    expect(entry).toContain('export class BrowserContainer extends Container');
+    expect(entry).toContain('defaultPort = 8080');
+    expect(entry).toContain("sleepAfter = '5 minutes'");
+    expect(entry).toContain('env.BROWSER_CONTAINER.idFromName');
+    expect(entry).toContain('env.BROWSER_CONTAINER.get(id)');
+  });
+
+  it('generates correct host entry for hyphenated service name', async () => {
+    const { generateContainerHostEntry } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const service = {
+      type: 'container' as const,
+      container: {
+        dockerfile: 'Dockerfile',
+        port: 3000,
+      },
+    };
+
+    const entry = generateContainerHostEntry('my-cool-service', service);
+
+    expect(entry).toContain('export class MyCoolServiceContainer extends Container');
+    expect(entry).toContain('defaultPort = 3000');
+    expect(entry).toContain('env.MY_COOL_SERVICE_CONTAINER.idFromName');
+  });
+
+  it('serializes container wrangler TOML correctly', async () => {
+    const { serializeContainerWranglerToml } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const toml = serializeContainerWranglerToml({
+      name: 'test-app-browser',
+      main: 'index.js',
+      compatibility_date: '2025-01-01',
+      compatibility_flags: ['nodejs_compat'],
+      durable_objects: {
+        bindings: [{ name: 'BROWSER_CONTAINER', class_name: 'BrowserContainer' }],
+      },
+      containers: [{
+        class_name: 'BrowserContainer',
+        image: './Dockerfile',
+        image_build_context: '.',
+        instance_type: 'standard-2',
+        max_instances: 25,
+      }],
+      migrations: [{
+        tag: 'v1',
+        new_classes: ['BrowserContainer'],
+      }],
+      dispatch_namespace: 'takos-staging',
+    });
+
+    expect(toml).toContain('name = "test-app-browser"');
+    expect(toml).toContain('main = "index.js"');
+    expect(toml).toContain('compatibility_date = "2025-01-01"');
+    expect(toml).toContain('compatibility_flags = ["nodejs_compat"]');
+    expect(toml).toContain('dispatch_namespace = "takos-staging"');
+    expect(toml).toContain('[[durable_objects.bindings]]');
+    expect(toml).toContain('name = "BROWSER_CONTAINER"');
+    expect(toml).toContain('class_name = "BrowserContainer"');
+    expect(toml).toContain('[[containers]]');
+    expect(toml).toContain('image = "./Dockerfile"');
+    expect(toml).toContain('image_build_context = "."');
+    expect(toml).toContain('instance_type = "standard-2"');
+    expect(toml).toContain('max_instances = 25');
+    expect(toml).toContain('[[migrations]]');
+    expect(toml).toContain('tag = "v1"');
+    expect(toml).toContain('new_classes = ["BrowserContainer"]');
+  });
+
+  it('uses default values for optional container fields', async () => {
+    const { generateContainerWranglerConfig } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const minimalService = {
+      type: 'container' as const,
+      container: {
+        dockerfile: 'Dockerfile',
+      },
+    };
+
+    const config = generateContainerWranglerConfig(
+      'worker-box',
+      minimalService,
+      {
+        manifest: { ...containerManifest, metadata: { name: 'my-app' } },
+        env: 'production',
+        accountId: 'acct-1',
+        apiToken: 'token-1',
+      } as Parameters<typeof generateContainerWranglerConfig>[2],
+    );
+
+    expect(config.containers[0].instance_type).toBe('basic');
+    expect(config.containers[0].max_instances).toBe(10);
+  });
+
+  it('toPascalCase converts various formats correctly', async () => {
+    const { toPascalCase } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    expect(toPascalCase('browser')).toBe('Browser');
+    expect(toPascalCase('browser-host')).toBe('BrowserHost');
+    expect(toPascalCase('my-cool-service')).toBe('MyCoolService');
+    expect(toPascalCase('some_snake_case')).toBe('SomeSnakeCase');
+  });
+
+  it('dry-run container shows info but does not skip', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const containerOnlyManifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'container-app' },
+      spec: {
+        version: '1.0.0',
+        services: {
+          runner: {
+            type: 'container' as const,
+            container: {
+              dockerfile: 'Dockerfile',
+              port: 9090,
+              instanceType: 'basic',
+              maxInstances: 5,
+            },
+          },
+        },
+      },
+    };
+
+    const result = await deployGroup({
+      manifest: containerOnlyManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    expect(result.services).toHaveLength(1);
+    const svc = result.services[0];
+    expect(svc.name).toBe('runner');
+    expect(svc.type).toBe('container');
+    expect(svc.status).not.toBe('skipped');
+    expect(svc.status).toBe('deployed');
+    expect(svc.scriptName).toBe('runner');
+  });
+});
