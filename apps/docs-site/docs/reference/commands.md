@@ -1,68 +1,114 @@
-# CLI command reference
+# CLI Commands
 
 <!-- docs:cli-top-level login,whoami,logout,deploy,endpoint -->
 <!-- docs:cli-domains me,setup,workspace,project,thread,run,artifact,task,repo,worker,app,resource,git,capability,context,shortcut,notification,public-share,auth,discover -->
 
-::: tip Status
-このページは current public CLI contract を正本にしつつ、binary registry に残る compatibility-only entry も明示します。Takos CLI は task-oriented で、`takos api ...` や HTTP verb style subcommand は current surface ではありません。
-:::
+## はじめに
 
-## このリファレンスで依存してよい範囲
+Takos CLI は `takos <command>` で操作します。
 
-- top-level command の current surface
-- task domain と共通 verb の考え方
-- representative usage
+```bash
+takos login              # ログイン
+takos --help             # ヘルプ
+```
 
-## このリファレンスで依存してはいけない範囲
+すべての操作は `takos <domain> <task>` の形式で統一されています。
+domain は対象リソース、task は操作意図を表します。
 
-- hidden legacy command を current CLI だとみなすこと
-- task domain の存在だけで全 API family の wire contract を推定すること
-- internal/debug command をここにないまま採用すること
+---
 
-## Top-level commands
+## はじめての人向け
 
-### auth
+### 1. ログイン
 
 ```bash
 takos login
-takos whoami
-takos logout
+# → ブラウザが開く → 承認 → 完了
 ```
 
-### endpoint
+ログインできたか確認するには:
 
 ```bash
-takos endpoint use test
-takos endpoint use prod
-takos endpoint use https://api.takos.dev
-takos endpoint show
+takos whoami
 ```
 
-### deploy
+### 2. 接続先を確認・切り替え
+
+```bash
+takos endpoint show              # 現在の接続先を表示
+takos endpoint use prod          # production に切り替え
+takos endpoint use test          # test に切り替え
+```
+
+### 3. Workspace を確認
+
+```bash
+takos workspace list
+```
+
+### 4. リポジトリを確認
+
+```bash
+takos repo list
+```
+
+ここまでできれば準備完了です。
+
+---
+
+## やりたいこと別ガイド
+
+### アプリをデプロイしたい
+
+#### Store 経由（CI/CD 向け）
+
+リポジトリと ref を指定して、Store に登録済みの workflow artifact からデプロイします。
 
 ```bash
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
+```
+
+デプロイ前に設定を検証:
+
+```bash
 takos deploy validate
+```
+
+デプロイ状態を確認:
+
+```bash
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
+```
+
+問題があればロールバック:
+
+```bash
 takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 ```
 
-`takos deploy` は repo-local `.takos/app.yml` と、指定 repo/ref に紐づく workflow artifact を使って app deployment を作成する current surface です。
-
-## `takos deploy-group`
+#### ローカルから直接（開発向け）
 
 `.takos/app.yml` で定義されたアプリグループを Cloudflare に直接デプロイします。
 
-### 基本使用法
+```bash
+takos deploy-group --env staging \
+  --account-id $CF_ACCOUNT_ID \
+  --api-token $CF_API_TOKEN
+```
+
+#### deploy と deploy-group の使い分け
+
+| 観点 | `deploy` | `deploy-group` |
+|---|---|---|
+| 用途 | Store 経由の正式デプロイ | ローカルから直接デプロイ |
+| 対象 | repo/ref に紐づく artifact | `.takos/app.yml` のグループ定義 |
+| 認証 | Takos の認証 | Cloudflare API トークン |
+| 主な利用場面 | CI/CD パイプライン | 開発・検証環境 |
+
+#### 特定サービスだけデプロイしたい
 
 ```bash
-# 全サービスをデプロイ
-takos deploy-group --env staging --account-id $CF_ACCOUNT_ID --api-token $CF_API_TOKEN
-
-# ドライラン
-takos deploy-group --env staging --dry-run
-
 # 特定の worker のみ
 takos deploy-group --env staging --worker browser-host
 
@@ -71,31 +117,112 @@ takos deploy-group --env staging --container my-api
 
 # dispatch namespace にデプロイ
 takos deploy-group --env staging --namespace takos-staging-tenants
-
-# wrangler.toml を直接デプロイ（app.yml なし）
-takos deploy-group --env staging --wrangler-config wrangler.worker.toml
-
-# JSON 出力
-takos deploy-group --env staging --json
 ```
 
-### オプション
+#### ドライラン（実際にはデプロイしない）
+
+```bash
+takos deploy-group --env staging --dry-run
+```
+
+#### wrangler.toml を直接デプロイしたい
+
+`app.yml` なしで、wrangler.toml から直接デプロイできます。
+
+```bash
+takos deploy-group --env staging --wrangler-config wrangler.worker.toml
+```
+
+---
+
+### Agent を実行したい
+
+#### スレッドを作成してメッセージを送る
+
+```bash
+takos thread create /spaces/SPACE_ID/threads --body '{"title":"debug"}'
+```
+
+#### Run を開始する
+
+```bash
+takos run start --body '{"prompt":"..."}'
+```
+
+#### Run の進行をリアルタイムで追う
+
+```bash
+takos run follow RUN_ID --transport sse
+```
+
+---
+
+### リソースを管理したい
+
+#### Workspace を作成
+
+```bash
+takos workspace create --body '{"name":"my-workspace"}'
+```
+
+#### リソースの CRUD
+
+```bash
+takos resource list
+takos resource view RESOURCE_ID
+takos resource create --body '{"type":"d1","name":"my-db"}'
+takos resource remove RESOURCE_ID
+```
+
+---
+
+### スキルやツールを確認したい
+
+```bash
+takos capability list /spaces/SPACE_ID/skills
+```
+
+### メモリ・リマインダーを管理したい
+
+```bash
+takos context list /spaces/SPACE_ID/memories
+```
+
+### 通知をリアルタイムで受け取りたい
+
+```bash
+takos notification watch /sse --transport sse
+```
+
+### スレッドを外部に共有したい
+
+```bash
+takos public-share create --body '{"threadId":"THREAD_ID"}'
+```
+
+---
+
+## `takos deploy-group` 完全リファレンス
+
+### オプション一覧
 
 | オプション | 必須 | 説明 |
 |---|---|---|
 | `--env <name>` | yes | デプロイ先環境（staging, production） |
-| `--manifest <path>` | no | マニフェストパス（デフォルト: .takos/app.yml） |
+| `--manifest <path>` | no | マニフェストパス（デフォルト: `.takos/app.yml`） |
 | `--worker <name...>` | no | 特定 worker のみデプロイ（複数指定可） |
 | `--container <name...>` | no | 特定 container のみデプロイ（複数指定可） |
 | `--namespace <name>` | no | dispatch namespace にデプロイ |
-| `--group <name>` | no | グループ名（デフォルト: metadata.name） |
-| `--wrangler-config <path>` | no | wrangler.toml を直接デプロイ（--manifest/--worker/--container と排他） |
+| `--group <name>` | no | グループ名（デフォルト: `metadata.name`） |
+| `--wrangler-config <path>` | no | wrangler.toml を直接デプロイ（`--manifest`/`--worker`/`--container` と排他） |
 | `--base-domain <domain>` | no | テンプレート変数のベースドメイン |
-| `--account-id <id>` | yes* | Cloudflare アカウント ID（環境変数 CLOUDFLARE_ACCOUNT_ID でも可） |
-| `--api-token <token>` | yes* | Cloudflare API トークン（環境変数 CLOUDFLARE_API_TOKEN でも可） |
-| `--compatibility-date <date>` | no | Worker の compatibility date（デフォルト: 2025-01-01） |
+| `--account-id <id>` | yes* | Cloudflare アカウント ID（環境変数 `CLOUDFLARE_ACCOUNT_ID` でも可） |
+| `--api-token <token>` | yes* | Cloudflare API トークン（環境変数 `CLOUDFLARE_API_TOKEN` でも可） |
+| `--compatibility-date <date>` | no | Worker の compatibility date（デフォルト: `2025-01-01`） |
 | `--dry-run` | no | デプロイせずに内容を表示 |
 | `--json` | no | JSON 形式で出力 |
+
+\* 環境変数で指定する場合はフラグ不要。
 
 ### 処理フロー
 
@@ -103,117 +230,100 @@ takos deploy-group --env staging --json
 2. Worker サービスをデプロイ（CF Containers 含む）
 3. Container サービスをデプロイ（常設コンテナ）
 4. Secrets を設定
-5. テンプレート変数（env.inject）を解決して注入
+5. テンプレート変数（`env.inject`）を解決して注入
 
-## task-oriented model
+---
 
-Takos CLI の中心は `takos <domain> <task>` です。
-domain は対象リソースを、task は操作意図を表します。
+## 共通 task verb
 
-### Shared task verbs
+すべての domain は以下の task verb を共通で持ちます。
 
-すべての task domain は共通して次を持ちます。
+| verb | 操作 |
+|---|---|
+| `list` | 一覧取得 |
+| `view` | 詳細表示 |
+| `create` | 新規作成 |
+| `replace` | 全体置換 |
+| `update` | 部分更新 |
+| `remove` | 削除 |
+| `probe` | 存在確認 |
+| `describe` | メタ情報 |
 
-- `list`
-- `view`
-- `create`
-- `replace`
-- `update`
-- `remove`
-- `probe`
-- `describe`
+stream 系 domain は追加で `watch`・`follow` を持ちます。
 
-stream 系 domain は追加で次を持ちます。
+---
 
-- `watch`
-- `follow`
+## 全コマンド一覧
 
-## Task domains
+### Top-level commands
 
-Takos CLI binary の registry には 20 domain ありますが、current public contract の主説明面に置くのは次の 18 domain です。
+| コマンド | 説明 |
+|---|---|
+| `takos login` | ログイン（ブラウザ OAuth） |
+| `takos whoami` | ログイン中のユーザーを表示 |
+| `takos logout` | ログアウト |
+| `takos deploy` | Store 経由のアプリデプロイ |
+| `takos deploy-group` | ローカルからの直接デプロイ |
+| `takos endpoint` | 接続先の確認・切り替え |
+
+### Task domains
 
 | domain | aliases | 主な責務 |
-| --- | --- | --- |
-| `me` | - | current user / settings |
+|---|---|---|
+| `me` | - | ログインユーザー情報・設定 |
 | `setup` | - | 初期セットアップ |
-| `workspace` | `ws` | `/api/spaces` 系 |
-| `thread` | - | thread / message |
-| `run` | - | run 実行と stream |
-| `artifact` | - | artifact 操作 |
-| `task` | - | agent task orchestration |
-| `repo` | - | repo / pulls / actions |
-| `app` | - | app listing / metadata |
-| `resource` | - | resource CRUD |
-| `git` | - | git 操作 |
-| `capability` | `cap` | skills / tools 系 |
-| `context` | `ctx` | memories / reminders 系 |
-| `shortcut` | - | shortcut 管理 |
-| `notification` | - | notification list / stream |
-| `public-share` | - | public thread share |
-| `auth` | - | auth / OAuth 関連 |
-| `discover` | - | search / install 系 |
+| `workspace` | `ws` | Workspace（Space）管理 |
+| `thread` | - | スレッド・メッセージ |
+| `run` | - | Run 実行とストリーム |
+| `artifact` | - | Artifact 操作 |
+| `task` | - | Agent タスクオーケストレーション |
+| `repo` | - | リポジトリ・PR・Actions |
+| `app` | - | アプリ一覧・メタデータ |
+| `resource` | - | リソース CRUD |
+| `git` | - | Git 操作 |
+| `capability` | `cap` | スキル・ツール |
+| `context` | `ctx` | メモリ・リマインダー |
+| `shortcut` | - | ショートカット管理 |
+| `notification` | - | 通知の一覧・ストリーム |
+| `public-share` | - | スレッドの外部共有 |
+| `auth` | - | 認証・OAuth |
+| `discover` | - | 検索・インストール |
 
-### Compatibility-only registry entries
+### 互換性のために残っている domain
 
-次の 2 domain は binary registry に残りますが、current public contract の主説明面には置きません。
+| domain | 説明 |
+|---|---|
+| `project` | 旧 `/api/projects` 対応。current API family の正本には含まない |
+| `worker` | 旧 worker 名残。正本は `/api/services` |
 
-| domain | 状態 | 説明 |
-| --- | --- | --- |
-| `project` | compatibility-only | `/api/projects` に対応する current API family は docs 上の正本に含めない |
-| `worker` | compatibility-only | public API family の正本は `/api/services`。`worker` という語は manifest type と UI/internal 名残として残る |
+---
 
-## Representative examples
+## 廃止されたコマンド
 
-```bash
-takos workspace list
-takos workspace create --body '{"name":"my-workspace"}'
-
-takos thread create /spaces/SPACE_ID/threads --body '{"title":"debug"}'
-takos run follow RUN_ID --transport sse
-takos repo follow REPO_ID RUN_ID --transport ws
-
-takos capability list /spaces/SPACE_ID/skills
-takos context list /spaces/SPACE_ID/memories
-takos notification watch /sse --transport sse
-```
-
-## implementation note
-
-CLI registry 自体には compatibility-only entry (`project`, `worker`) が残ります。
-public/current API family との対応を読むときは [API リファレンス](/reference/api) を優先し、service runtime surface は `/api/services` を正本として読みます。
-ただし `deploy` domain が触る app deployment surface の end-to-end availability は [Deploy System](/specs/deploy-system) の implementation note を優先してください。
-
-## Removed legacy surface
-
-次は current CLI surface ではありません。
+以下は current CLI surface ではありません。
 
 - `takos api ...`
-- `takos build`
-- `takos publish`
-- `takos promote`
-- `takos rollback` as a top-level command
-- `takos mcp`
-- `takos pat`
-- `takos pr`
-- `takos actions`
-- `takos memory`
-- `takos reminder`
-- `takos skill`
-- `takos tool`
+- `takos build` / `takos publish` / `takos promote`
+- `takos rollback`（top-level）
+- `takos mcp` / `takos pat`
+- `takos pr` / `takos actions`
+- `takos memory` / `takos reminder`
+- `takos skill` / `takos tool`
 - `takos oauth`
-- `takos search`
-- `takos install`
+- `takos search` / `takos install`
 - `takos <domain> get/post/patch/delete/...`
 
-merge 済み domain の対応は次です。
+旧コマンドと現在の対応:
 
-| old | current |
-| --- | --- |
+| 旧 | 現在 |
+|---|---|
 | `pr`, `actions` | `repo` |
 | `memory`, `reminder` | `context` |
 | `skill`, `tool` | `capability` |
 | `oauth` | `auth` |
 | `search`, `install` | `discover` |
+
+---
 
 ## 次に読むページ
 
