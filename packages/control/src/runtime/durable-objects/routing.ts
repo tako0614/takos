@@ -1,4 +1,4 @@
-import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/types';
+import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/routing-models';
 
 import { jsonResponse } from './do-header-utils';
 

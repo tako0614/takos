@@ -154,6 +154,82 @@ export async function findAppManifestFile(dir: string): Promise<string | null> {
   return null;
 }
 
+function parseMigrations(
+  raw: unknown,
+  fieldPrefix: string,
+): string | { up: string; down: string } | undefined {
+  if (typeof raw === 'string') {
+    return asString(raw, `${fieldPrefix}.migrations`);
+  }
+  const migrationSpec = asRecord(raw);
+  return {
+    up: asString(migrationSpec.up, `${fieldPrefix}.migrations.up`, true)!,
+    down: asString(migrationSpec.down, `${fieldPrefix}.migrations.down`, true)!,
+  };
+}
+
+function parseRoutes(
+  routesRaw: unknown,
+  workers: Record<string, WorkerService>,
+): AppRoute[] {
+  if (!Array.isArray(routesRaw)) {
+    throw new Error('spec.routes must be an array');
+  }
+  return routesRaw.map((entry, index) => {
+    const route = asRecord(entry);
+    const target = asString(route.target, `spec.routes[${index}].target`, true)!;
+    const ingress = asString(route.ingress, `spec.routes[${index}].ingress`);
+    if (!workers[target]) {
+      throw new Error(`spec.routes[${index}].target references unknown worker: ${target}`);
+    }
+    if (ingress && !workers[ingress]) {
+      throw new Error(`spec.routes[${index}].ingress must reference a worker`);
+    }
+    return {
+      ...optionalProp('name', asString(route.name, `spec.routes[${index}].name`)),
+      target,
+      ...optionalProp('path', asString(route.path, `spec.routes[${index}].path`)),
+      ...(ingress ? { ingress } : {}),
+      ...(route.timeoutMs != null ? { timeoutMs: Number(route.timeoutMs) } : {}),
+    };
+  });
+}
+
+function parseMcpServers(mcpServersRaw: unknown): AppMcpServer[] {
+  if (!Array.isArray(mcpServersRaw)) {
+    throw new Error('spec.mcpServers must be an array');
+  }
+  return mcpServersRaw.map((entry, index) => {
+    const mcp = asRecord(entry);
+    const endpoint = asString(mcp.endpoint, `spec.mcpServers[${index}].endpoint`);
+    const route = asString(mcp.route, `spec.mcpServers[${index}].route`);
+    if (!endpoint && !route) {
+      throw new Error(`spec.mcpServers[${index}].endpoint or spec.mcpServers[${index}].route is required`);
+    }
+    return {
+      name: asString(mcp.name, `spec.mcpServers[${index}].name`, true)!,
+      ...(endpoint ? { endpoint } : {}),
+      ...(route ? { route } : {}),
+      ...optionalProp('transport', asString(mcp.transport, `spec.mcpServers[${index}].transport`) as 'streamable-http' | undefined),
+    };
+  });
+}
+
+function parseFileHandlers(fileHandlersRaw: unknown): AppFileHandler[] {
+  if (!Array.isArray(fileHandlersRaw)) {
+    throw new Error('spec.fileHandlers must be an array');
+  }
+  return fileHandlersRaw.map((entry, index) => {
+    const handler = asRecord(entry);
+    return {
+      name: asString(handler.name, `spec.fileHandlers[${index}].name`, true)!,
+      ...optionalProp('mimeTypes', asStringArray(handler.mimeTypes, `spec.fileHandlers[${index}].mimeTypes`)),
+      ...optionalProp('extensions', asStringArray(handler.extensions, `spec.fileHandlers[${index}].extensions`)),
+      openPath: asString(handler.openPath, `spec.fileHandlers[${index}].openPath`, true)!,
+    };
+  });
+}
+
 export async function loadAppManifest(manifestPath: string): Promise<AppManifest> {
   const absolutePath = path.resolve(manifestPath);
   const raw = await fs.readFile(absolutePath, 'utf8');
@@ -239,83 +315,19 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
       type: type as AppResource['type'],
       ...optionalProp('binding', asString(resource.binding, `spec.resources.${resourceName}.binding`)),
       ...(resource.migrations
-        ? {
-            migrations: (() => {
-              if (typeof resource.migrations === 'string') {
-                return asString(resource.migrations, `spec.resources.${resourceName}.migrations`);
-              }
-              const migrationSpec = asRecord(resource.migrations);
-              return {
-                up: asString(migrationSpec.up, `spec.resources.${resourceName}.migrations.up`, true)!,
-                down: asString(migrationSpec.down, `spec.resources.${resourceName}.migrations.down`, true)!,
-              };
-            })(),
-          }
+        ? { migrations: parseMigrations(resource.migrations, `spec.resources.${resourceName}`) }
         : {}),
     };
   }
 
   const routesRaw = specRecord.routes;
-  const routes: AppRoute[] | undefined = routesRaw == null ? undefined : (() => {
-    if (!Array.isArray(routesRaw)) {
-      throw new Error('spec.routes must be an array');
-    }
-    return routesRaw.map((entry, index) => {
-      const route = asRecord(entry);
-      const target = asString(route.target, `spec.routes[${index}].target`, true)!;
-      const ingress = asString(route.ingress, `spec.routes[${index}].ingress`);
-      if (!workers[target]) {
-        throw new Error(`spec.routes[${index}].target references unknown worker: ${target}`);
-      }
-      if (ingress && !workers[ingress]) {
-        throw new Error(`spec.routes[${index}].ingress must reference a worker`);
-      }
-      return {
-        ...optionalProp('name', asString(route.name, `spec.routes[${index}].name`)),
-        target,
-        ...optionalProp('path', asString(route.path, `spec.routes[${index}].path`)),
-        ...(ingress ? { ingress } : {}),
-        ...(route.timeoutMs != null ? { timeoutMs: Number(route.timeoutMs) } : {}),
-      };
-    });
-  })();
+  const routes: AppRoute[] | undefined = routesRaw == null ? undefined : parseRoutes(routesRaw, workers);
 
   const mcpServersRaw = specRecord.mcpServers;
-  const mcpServers: AppMcpServer[] | undefined = mcpServersRaw == null ? undefined : (() => {
-    if (!Array.isArray(mcpServersRaw)) {
-      throw new Error('spec.mcpServers must be an array');
-    }
-    return mcpServersRaw.map((entry, index) => {
-      const mcp = asRecord(entry);
-      const endpoint = asString(mcp.endpoint, `spec.mcpServers[${index}].endpoint`);
-      const route = asString(mcp.route, `spec.mcpServers[${index}].route`);
-      if (!endpoint && !route) {
-        throw new Error(`spec.mcpServers[${index}].endpoint or spec.mcpServers[${index}].route is required`);
-      }
-      return {
-        name: asString(mcp.name, `spec.mcpServers[${index}].name`, true)!,
-        ...(endpoint ? { endpoint } : {}),
-        ...(route ? { route } : {}),
-        ...optionalProp('transport', asString(mcp.transport, `spec.mcpServers[${index}].transport`) as 'streamable-http' | undefined),
-      };
-    });
-  })();
+  const mcpServers: AppMcpServer[] | undefined = mcpServersRaw == null ? undefined : parseMcpServers(mcpServersRaw);
 
   const fileHandlersRaw = specRecord.fileHandlers;
-  const fileHandlers: AppFileHandler[] | undefined = fileHandlersRaw == null ? undefined : (() => {
-    if (!Array.isArray(fileHandlersRaw)) {
-      throw new Error('spec.fileHandlers must be an array');
-    }
-    return fileHandlersRaw.map((entry, index) => {
-      const handler = asRecord(entry);
-      return {
-        name: asString(handler.name, `spec.fileHandlers[${index}].name`, true)!,
-        ...optionalProp('mimeTypes', asStringArray(handler.mimeTypes, `spec.fileHandlers[${index}].mimeTypes`)),
-        ...optionalProp('extensions', asStringArray(handler.extensions, `spec.fileHandlers[${index}].extensions`)),
-        openPath: asString(handler.openPath, `spec.fileHandlers[${index}].openPath`, true)!,
-      };
-    });
-  })();
+  const fileHandlers: AppFileHandler[] | undefined = fileHandlersRaw == null ? undefined : parseFileHandlers(fileHandlersRaw);
 
   return {
     apiVersion: 'takos.dev/v1alpha1',

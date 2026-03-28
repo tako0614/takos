@@ -3,8 +3,8 @@
  * account IDs from wrangler.toml, and resolving global CLI options.
  */
 
-import type { DeployEnvironment, GlobalOptions, ResolvedConfig } from './types.ts';
-import { fail, takeFlag, takeOption } from './utils.ts';
+import type { DeployEnvironment, GlobalOptions, ResolvedConfig } from './admin-types.ts';
+import { fail, takeFlag, takeOption } from './cli-helpers.ts';
 import { parseTomlPrimitive, readTomlArraySections, readTomlSection, readWranglerToml } from './toml.ts';
 import { normalizePrefix } from './validation.ts';
 

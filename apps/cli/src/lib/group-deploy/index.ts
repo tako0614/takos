@@ -29,7 +29,7 @@ export type {
   GroupDeployOptions,
   WranglerDirectDeployOptions,
   WranglerDirectDeployResult,
-} from './types.js';
+} from './deploy-models.js';
 
 // Re-export container helpers (exported in original)
 export { toPascalCase, generateContainerWranglerConfig, serializeContainerWranglerToml, generateContainerHostEntry } from './container.js';

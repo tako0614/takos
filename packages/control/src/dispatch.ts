@@ -1,7 +1,7 @@
 // Canonical entrypoint for the takos-dispatch worker.
 // Owns tenant-domain fetch wiring; shared routing logic lives outside this path.
 import { selectHttpEndpointFromHttpEndpointSet } from './application/services/routing/service.ts';
-import type { RoutingStore } from './application/services/routing/types';
+import type { RoutingStore } from './application/services/routing/routing-models';
 import type {
   DurableNamespaceBinding,
   KvStoreBinding,
@@ -11,7 +11,7 @@ import { validateDispatchEnv, createEnvGuard } from './shared/utils/validate-env
 import { logError } from './shared/utils/logger';
 import { jsonResponse, errorJsonResponse } from './shared/utils/http-response';
 import { buildWorkersDispatchPlatform } from './platform/adapters/workers.ts';
-import type { ControlPlatform } from './platform/types.ts';
+import type { ControlPlatform } from './platform/platform-config.ts';
 
 type ServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;

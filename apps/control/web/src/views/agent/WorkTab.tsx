@@ -17,7 +17,7 @@ import {
   type TaskFilter,
   ensureModelOption,
   getModelsForProvider,
-} from './work/types';
+} from './work/task-work-types';
 
 interface TaskFormState {
   title: string;

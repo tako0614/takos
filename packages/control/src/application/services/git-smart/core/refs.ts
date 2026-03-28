@@ -5,8 +5,8 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { GitBranch, GitTag, RefUpdateResult } from '../types';
-import { SHA1_PATTERN } from '../types';
+import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects';
+import { SHA1_PATTERN } from '../git-objects';
 import { getDb, branches, tags } from '../../../../infra/db';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { generateId, now, toIsoString } from '../../../../shared/utils';

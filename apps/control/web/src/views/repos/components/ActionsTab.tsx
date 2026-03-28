@@ -8,7 +8,7 @@ import {
   type WorkflowRunDetail,
   type JobLogState,
   LOG_CHUNK_BYTES,
-} from './actions/types';
+} from './actions/actions-types';
 import { DispatchWorkflowForm } from './actions/DispatchWorkflowForm';
 import { RunsList } from './actions/RunsList';
 import { RunDetail } from './actions/RunDetail';

@@ -11,7 +11,7 @@ export type {
   RuntimeExecResponse,
   DeployRequest,
   DeployResponse,
-} from './types';
+} from './tool-definitions';
 
 export {
   BUILTIN_TOOLS,

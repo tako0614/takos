@@ -10,7 +10,7 @@ import { getDb } from '../../../infra/db';
 import { accountFollows, accountFollowRequests, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
 import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-helpers';
-import type { FollowUserResponse, FollowRequestResponse } from './types';
+import type { FollowUserResponse, FollowRequestResponse } from './dto';
 
 const followListQuerySchema = z.object({
   limit: z.string().optional(),

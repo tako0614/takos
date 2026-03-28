@@ -16,8 +16,8 @@ import type {
   McpOAuthPendingParams,
   McpEndpointUrlOptions,
   TokenResponse,
-} from './types';
-import { STRICT_MCP_ENDPOINT_URL_OPTIONS } from './types';
+} from './mcp-models';
+import { STRICT_MCP_ENDPOINT_URL_OPTIONS } from './mcp-models';
 import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation';
 import {
   generateCodeVerifier,

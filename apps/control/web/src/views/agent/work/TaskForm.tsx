@@ -9,7 +9,7 @@ import {
   getAgentTypeOptions,
   getLocalDateInputMin,
   type ModelSelectOption,
-} from './types';
+} from './task-work-types';
 
 interface TaskFormProps {
   editingTask: AgentTask | null;

@@ -1,6 +1,6 @@
 import { getDb, runEvents } from '../../../infra/db';
 import type { Env } from '../../../shared/types';
-import type { PlatformServices } from '../../../platform/types.ts';
+import type { PlatformServices } from '../../../platform/platform-config.ts';
 import { now } from '../../../shared/utils';
 import {
   buildRunNotifierEmitPayload,

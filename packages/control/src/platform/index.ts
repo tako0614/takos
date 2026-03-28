@@ -40,4 +40,4 @@ export type {
   PlatformObjects,
   PlatformServices,
   ControlPlatform,
-} from './types.ts';
+} from './platform-config.ts';

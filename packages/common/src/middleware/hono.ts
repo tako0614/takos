@@ -274,7 +274,7 @@ function buildErrorBody(
  */
 export function badRequest(
   c: Context,
-  message: string,
+  message = 'Bad request',
   details?: unknown
 ) {
   return c.json(buildErrorBody(message, ErrorCodes.BAD_REQUEST, details), 400);

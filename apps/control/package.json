@@ -1,5 +1,5 @@
 {
-  "name": "@takos/control",
+  "name": "@takos/control-app",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -54,7 +54,7 @@
     "@takos/actions-engine": "workspace:*",
     "@cloudflare/workers-types": "^4.20260118.0",
     "@takos/common": "workspace:*",
-    "@takos/control-shared": "workspace:*",
+    "@takos/control": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "fflate": "^0.8.2",
     "hono": "^4.11.10",

@@ -9,6 +9,7 @@ import {
   checkThreadAccess,
   createMessage,
   createThread,
+  deleteThread,
   listThreads,
   updateThread,
   updateThreadStatus,
@@ -259,7 +260,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     throw new NotFoundError('Thread');
   }
 
-  await updateThreadStatus(c.env.DB, threadId, 'deleted');
+  await deleteThread(c.env, c.env.DB, threadId);
 
   return c.json({ success: true });
 })

@@ -20,7 +20,7 @@ import {
 } from '../../runtime/actions/job-manager.js';
 import type { ActiveJob } from '../../runtime/actions/job-manager.js';
 import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.js';
-import type { StartJobRequest } from './shared.js';
+import type { StartJobRequest } from './action-types.js';
 import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
 import { ErrorCodes } from '@takos/common/errors';
 

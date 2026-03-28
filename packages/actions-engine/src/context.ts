@@ -6,7 +6,7 @@ import type {
   GitHubContext,
   RunnerContext,
   InputsContext,
-} from './types.js';
+} from './workflow-models.js';
 
 // ---------------------------------------------------------------------------
 // Base context

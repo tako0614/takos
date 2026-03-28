@@ -6,7 +6,7 @@
  * wire format expected by the Cloudflare API.
  */
 
-import type { WorkerBinding, CloudflareBindingRecord } from './types';
+import type { WorkerBinding, CloudflareBindingRecord } from './wfp-contracts';
 import { BadRequestError } from '@takos/common/errors';
 
 /**

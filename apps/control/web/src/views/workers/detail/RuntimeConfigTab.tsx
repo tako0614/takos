@@ -1,5 +1,5 @@
 import { useI18n } from '../../../store/i18n';
-import type { RuntimeConfig } from '../types';
+import type { RuntimeConfig } from '../worker-models';
 
 interface RuntimeConfigTabProps {
   runtimeConfig: RuntimeConfig;

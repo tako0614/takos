@@ -347,5 +347,4 @@ async function uploadSpaceFiles(
   return uploadCount;
 }
 
-/** @internal Exposed for unit tests only. */
-export const _testInternals = { downloadSpaceFiles, uploadSpaceFiles, downloadWorkspaceFiles: downloadSpaceFiles, uploadWorkspaceFiles: uploadSpaceFiles };
+export { downloadSpaceFiles, uploadSpaceFiles };

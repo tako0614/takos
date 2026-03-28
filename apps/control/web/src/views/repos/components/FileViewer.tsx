@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { Icons } from '../../../lib/Icons';
+import { detectLanguage } from '../../../lib/languageMap';
 import { useI18n } from '../../../store/i18n';
 import type { FileContent } from '../../../types';
 import { formatDateTime } from '../../../lib/format';
@@ -27,38 +28,74 @@ interface BlobResponse {
   mime_type?: string;
 }
 
-const languageMap: Record<string, string> = {
-  ts: 'typescript',
-  tsx: 'typescript',
-  js: 'javascript',
-  jsx: 'javascript',
-  py: 'python',
-  rb: 'ruby',
-  go: 'go',
-  rs: 'rust',
-  java: 'java',
-  kt: 'kotlin',
-  swift: 'swift',
-  c: 'c',
-  cpp: 'cpp',
-  h: 'c',
-  hpp: 'cpp',
-  css: 'css',
-  scss: 'scss',
-  less: 'less',
-  html: 'html',
-  xml: 'xml',
-  json: 'json',
-  yaml: 'yaml',
-  yml: 'yaml',
-  md: 'markdown',
-  sql: 'sql',
-  sh: 'bash',
-  bash: 'bash',
-  zsh: 'bash',
-  dockerfile: 'dockerfile',
-  toml: 'toml',
-};
+/* ── Blame state ─────────────────────────────────────────────── */
+
+interface BlameState {
+  enabled: boolean;
+  loading: boolean;
+  error: string | null;
+  data: BlameResponse | null;
+}
+
+type BlameAction =
+  | { type: 'toggle' }
+  | { type: 'fetch_start' }
+  | { type: 'fetch_ok'; data: BlameResponse }
+  | { type: 'fetch_fail'; error: string }
+  | { type: 'reset' };
+
+function blameReducer(state: BlameState, action: BlameAction): BlameState {
+  switch (action.type) {
+    case 'toggle':
+      return { ...state, enabled: !state.enabled };
+    case 'fetch_start':
+      return { ...state, loading: true, error: null };
+    case 'fetch_ok':
+      return { ...state, loading: false, data: action.data };
+    case 'fetch_fail':
+      return { ...state, loading: false, error: action.error, data: null };
+    case 'reset':
+      return { enabled: false, loading: false, error: null, data: null };
+  }
+}
+
+const blameInit: BlameState = { enabled: false, loading: false, error: null, data: null };
+
+/* ── History state ───────────────────────────────────────────── */
+
+interface HistoryState {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  data: FileHistoryResponse | null;
+}
+
+type HistoryAction =
+  | { type: 'open' }
+  | { type: 'close' }
+  | { type: 'fetch_start' }
+  | { type: 'fetch_ok'; data: FileHistoryResponse }
+  | { type: 'fetch_fail'; error: string }
+  | { type: 'reset' };
+
+function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
+  switch (action.type) {
+    case 'open':
+      return { ...state, open: true };
+    case 'close':
+      return { ...state, open: false };
+    case 'fetch_start':
+      return { ...state, loading: true, error: null };
+    case 'fetch_ok':
+      return { ...state, loading: false, data: action.data };
+    case 'fetch_fail':
+      return { ...state, loading: false, error: action.error, data: null };
+    case 'reset':
+      return { open: false, loading: false, error: null, data: null };
+  }
+}
+
+const historyInit: HistoryState = { open: false, loading: false, error: null, data: null };
 
 export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: FileViewerProps) {
   const { t } = useI18n();
@@ -66,15 +103,8 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [blameEnabled, setBlameEnabled] = useState(false);
-  const [blameLoading, setBlameLoading] = useState(false);
-  const [blameError, setBlameError] = useState<string | null>(null);
-  const [blameData, setBlameData] = useState<BlameResponse | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyData, setHistoryData] = useState<FileHistoryResponse | null>(null);
-  const [copyResetTimer, setCopyResetTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [blame, blameDispatch] = useReducer(blameReducer, blameInit);
+  const [history, historyDispatch] = useReducer(historyReducer, historyInit);
 
   useEffect(() => {
     fetchFile();
@@ -104,8 +134,7 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
 
   const language = useMemo(() => {
     if (!file) return 'text';
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    return languageMap[ext] || 'text';
+    return detectLanguage(file.name);
   }, [file]);
 
   const decodedContent = useMemo(() => {
@@ -163,12 +192,8 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
 
   useEffect(() => {
     if (canShowTextTools) return;
-    setBlameEnabled(false);
-    setBlameError(null);
-    setBlameData(null);
-    setHistoryOpen(false);
-    setHistoryError(null);
-    setHistoryData(null);
+    blameDispatch({ type: 'reset' });
+    historyDispatch({ type: 'reset' });
   }, [canShowTextTools, repoId, branch, filePath]);
 
   const handleDownload = () => {
@@ -193,33 +218,35 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-    } catch (_err) {
-      // download failed silently
+    } catch (err) {
+      console.warn('File download failed:', err);
+      setError(err instanceof Error ? err.message : t('unknownError'));
     }
   };
 
-  const handleCopy = async () => {
+  const copyTimerRef = useMemo(() => ({ current: null as ReturnType<typeof setTimeout> | null }), []);
+
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(decodedContent);
       setCopied(true);
-      if (copyResetTimer) {
-        clearTimeout(copyResetTimer);
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
       }
-      const timer = setTimeout(() => {
+      copyTimerRef.current = setTimeout(() => {
         setCopied(false);
-        setCopyResetTimer(null);
+        copyTimerRef.current = null;
       }, 2000);
-      setCopyResetTimer(timer);
-    } catch (_err) {
-      // copy failed silently
+    } catch (err) {
+      console.warn('Clipboard copy failed:', err);
     }
-  };
+  }, [decodedContent, copyTimerRef]);
 
   useEffect(() => () => {
-    if (copyResetTimer) {
-      clearTimeout(copyResetTimer);
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
     }
-  }, [copyResetTimer]);
+  }, [copyTimerRef]);
 
   useEffect(() => {
     if (!initialLine) return;
@@ -238,64 +265,52 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
   }, [initialLine, loading, error, file, filePath, decodedContent, isBinary, isImage, isPdf, isAudio, isVideo]);
 
   useEffect(() => {
-    if (!blameEnabled) return;
+    if (!blame.enabled) return;
     if (!canShowTextTools) return;
 
     const controller = new AbortController();
     void (async () => {
       try {
-        setBlameLoading(true);
-        setBlameError(null);
+        blameDispatch({ type: 'fetch_start' });
 
         const url = `/api/repos/${encodeURIComponent(repoId)}/blame/${encodeURIComponent(branch)}?path=${encodeURIComponent(filePath)}`;
         const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
         const data = await rpcJson<BlameResponse>(res);
-        setBlameData(data);
+        blameDispatch({ type: 'fetch_ok', data });
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        setBlameError(err instanceof Error ? err.message : t('failedToLoadBlame'));
-        setBlameData(null);
-      } finally {
-        if (!controller.signal.aborted) {
-          setBlameLoading(false);
-        }
+        blameDispatch({ type: 'fetch_fail', error: err instanceof Error ? err.message : t('failedToLoadBlame') });
       }
     })();
 
     return () => {
       controller.abort();
     };
-  }, [blameEnabled, canShowTextTools, repoId, branch, filePath]);
+  }, [blame.enabled, canShowTextTools, repoId, branch, filePath]);
 
   useEffect(() => {
-    if (!historyOpen) return;
+    if (!history.open) return;
     if (!canShowTextTools) return;
 
     const controller = new AbortController();
     void (async () => {
       try {
-        setHistoryLoading(true);
-        setHistoryError(null);
+        historyDispatch({ type: 'fetch_start' });
 
         const url = `/api/repos/${encodeURIComponent(repoId)}/log/${encodeURIComponent(branch)}?path=${encodeURIComponent(filePath)}&limit=50`;
         const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
         const data = await rpcJson<FileHistoryResponse>(res);
-        setHistoryData(data);
+        historyDispatch({ type: 'fetch_ok', data });
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
-        setHistoryError(err instanceof Error ? err.message : t('failedToLoadHistory'));
-        setHistoryData(null);
-      } finally {
-        if (!controller.signal.aborted) {
-          setHistoryLoading(false);
-        }
+        historyDispatch({ type: 'fetch_fail', error: err instanceof Error ? err.message : t('failedToLoadHistory') });
       }
     })();
 
     return () => {
       controller.abort();
     };
-  }, [historyOpen, canShowTextTools, repoId, branch, filePath]);
+  }, [history.open, canShowTextTools, repoId, branch, filePath]);
 
   if (loading) {
     return (
@@ -325,9 +340,9 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
     <div className="flex flex-col h-full bg-white dark:bg-zinc-900">
       <FileViewerToolbar
         filePath={filePath} fileSize={file.size} canShowTextTools={canShowTextTools}
-        blameEnabled={blameEnabled} blameLoading={blameLoading} copied={copied}
-        onBack={onBack} onToggleBlame={() => setBlameEnabled(v => !v)}
-        onOpenHistory={() => setHistoryOpen(true)} onCopy={handleCopy} onDownload={handleDownload}
+        blameEnabled={blame.enabled} blameLoading={blame.loading} copied={copied}
+        onBack={onBack} onToggleBlame={() => blameDispatch({ type: 'toggle' })}
+        onOpenHistory={() => historyDispatch({ type: 'open' })} onCopy={handleCopy} onDownload={handleDownload}
       />
 
       {file.last_commit && (
@@ -348,18 +363,18 @@ export function FileViewer({ repoId, branch, filePath, initialLine, onBack }: Fi
           fileName={file.name} fileContent={file.content} fileSize={file.size}
           mimeType={mimeType} isImage={isImage} isPdf={isPdf} isAudio={isAudio} isVideo={isVideo} isBinary={isBinary}
           lines={lines} language={language} initialLine={initialLine}
-          blameEnabled={blameEnabled} blameError={blameError} blameData={blameData}
+          blameEnabled={blame.enabled} blameError={blame.error} blameData={blame.data}
         />
       </div>
 
       <FileHistoryModal
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
+        isOpen={history.open}
+        onClose={() => historyDispatch({ type: 'close' })}
         filePath={filePath}
         branch={branch}
-        loading={historyLoading}
-        error={historyError}
-        data={historyData}
+        loading={history.loading}
+        error={history.error}
+        data={history.data}
       />
     </div>
   );

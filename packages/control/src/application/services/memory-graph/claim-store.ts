@@ -8,7 +8,7 @@ import type {
   ClaimEdgeInsert,
   ClaimPath,
   ClaimStatus,
-} from './types';
+} from './graph-models';
 
 function claimBindParams(claim: ClaimInsert, now: string) {
   return [

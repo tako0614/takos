@@ -11,7 +11,7 @@ import {
   MAX_FROM_JSON_SIZE,
   MAX_PARSE_ACCESS_DEPTH,
 } from '../constants.js';
-import type { ExecutionContext } from '../types.js';
+import type { ExecutionContext } from '../workflow-models.js';
 import { ExpressionError } from './tokenizer.js';
 import type { Token, TokenType } from './tokenizer.js';
 

@@ -5,7 +5,7 @@
  * guard logic that the executor needs at call boundaries.
  */
 
-import type { ToolResult } from './types';
+import type { ToolResult } from './tool-definitions';
 import { CircuitBreaker, type CircuitStats } from './circuit-breaker';
 import { classifyError } from './tool-error-classifier';
 

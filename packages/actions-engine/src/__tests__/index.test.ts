@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { JobScheduler } from '../scheduler/job.js';
 import { createBaseContext } from '../context.js';
-import type { Workflow } from '../types.js';
+import type { Workflow } from '../workflow-models.js';
 
 describe('JobScheduler', () => {
   it('resets scheduler state across repeated runs and preserves listeners', async () => {

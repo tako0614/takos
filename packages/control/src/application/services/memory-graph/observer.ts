@@ -1,4 +1,4 @@
-import type { ToolObserver, ToolObservation, Claim, Evidence } from './types';
+import type { ToolObserver, ToolObservation, Claim, Evidence } from './graph-models';
 import { RunOverlay } from './overlay';
 import { bytesToHex } from '../../../shared/utils/encoding-utils';
 

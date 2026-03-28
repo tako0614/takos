@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { execCommand } from './helpers.js';
+import { execCommand } from './cloudflare-helpers.js';
 
 // ── Worker Deploy via Wrangler ───────────────────────────────────────────────
 

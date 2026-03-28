@@ -2,7 +2,7 @@
  * High-level git operations (init, fork, sync, commit).
  */
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { GitCommit, GitSignature, GitBranch } from './types';
+import type { GitCommit, GitSignature, GitBranch } from './git-objects';
 import { createBranch, getBranch, getDefaultBranch, updateBranch } from './core/refs';
 import { createCommit, countCommitsBetween } from './core/commit-index';
 import { createEmptyTree, applyTreeChanges } from './core/tree-ops';

@@ -1,5 +1,5 @@
 import { type WorkerBinding, WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { PlatformDeployProviderConfig } from '../../../platform/types.ts';
+import type { PlatformDeployProviderConfig } from '../../../platform/platform-config.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
 import type {
   ArtifactKind,
@@ -9,7 +9,7 @@ import type {
   DeploymentTarget,
   DeploymentTargetArtifact,
   DeploymentTargetEndpoint,
-} from './types';
+} from './models';
 
 export type DeploymentProviderDeployResult = {
   resolvedEndpoint?: { kind: 'http-url'; base_url: string };

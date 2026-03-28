@@ -8,7 +8,7 @@
  */
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
-import type { Deployment, DeploymentEnv, RollbackInput } from './types';
+import type { Deployment, DeploymentEnv, RollbackInput } from './models';
 import {
   createDeploymentProvider,
   parseDeploymentTargetConfig,

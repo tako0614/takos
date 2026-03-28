@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Parameterized deploy script for @takos/control services.
+// Parameterized deploy script for @takos/control-app services.
 // Usage: node scripts/deploy.mjs <service> <environment> [--debug]
 //
 // Services: web, dispatch, worker, runtime-host, executor-host, browser-host

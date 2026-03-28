@@ -2,14 +2,14 @@ import type { DbEnv } from '../../../shared/types';
 import { deployments, getDb, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, ne, inArray } from 'drizzle-orm';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
-import type { RoutingBindings, RoutingTarget } from '../routing/types';
+import type { RoutingBindings, RoutingTarget } from '../routing/routing-models';
 import { parseDeploymentTargetConfig } from './provider';
 import {
   getDeploymentRoutingServiceRecord,
   type DeploymentRoutingServiceRecord,
   updateServiceDeploymentPointers,
 } from './store';
-import type { DeploymentTarget } from './types';
+import type { DeploymentTarget } from './models';
 
 type DeploymentRoutingEnv = DbEnv & RoutingBindings;
 

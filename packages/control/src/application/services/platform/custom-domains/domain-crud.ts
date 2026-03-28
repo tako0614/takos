@@ -10,8 +10,8 @@ import { logError } from '../../../../shared/utils/logger';
 import {
   MAX_CUSTOM_DOMAINS_PER_SERVICE,
   CustomDomainError,
-} from './types';
-import type { DnsInstruction, AddCustomDomainResult } from './types';
+} from './domain-models';
+import type { DnsInstruction, AddCustomDomainResult } from './domain-models';
 import { getServiceForUser, requireServiceWriteAccess } from './access';
 import { deleteCloudflareCustomHostname } from './cloudflare';
 

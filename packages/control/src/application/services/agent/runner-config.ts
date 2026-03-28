@@ -1,4 +1,4 @@
-import type { AgentConfig } from './types';
+import type { AgentConfig } from './agent-models';
 import type { Env } from '../../../shared/types';
 import { BUILTIN_TOOLS } from '../../tools/builtin';
 import { SYSTEM_PROMPTS } from './prompt-builder';

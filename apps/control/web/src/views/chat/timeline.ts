@@ -1,6 +1,6 @@
 import type { Run } from '../../types';
 import type { TranslationKey } from '../../i18n';
-import type { ChatTimelineEventType } from './types';
+import type { ChatTimelineEventType } from './chat-types';
 
 export type WebSocketEventPayload = {
   run?: Partial<Run>;

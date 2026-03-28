@@ -10,7 +10,7 @@ import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-helpers';
-import type { UserProfileResponse, ProfileRepoResponse } from './types';
+import type { UserProfileResponse, ProfileRepoResponse } from './dto';
 
 export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
 

@@ -5,7 +5,7 @@
  * Phase controls which data sources (KV, DO, L1 cache) are primary.
  */
 
-import type { RoutingBindings } from './types';
+import type { RoutingBindings } from './routing-models';
 
 const DEFAULT_PHASE = 1;
 const MIN_PHASE = 1;

@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import type { AgentContext } from '../agent/types';
-import type { ActivationResult, Claim, Evidence, ToolObserver } from './types';
+import type { AgentContext } from '../agent/agent-models';
+import type { ActivationResult, Claim, Evidence, ToolObserver } from './graph-models';
 import { RunOverlay } from './overlay';
 import {
   getActiveClaims,

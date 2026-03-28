@@ -70,7 +70,7 @@ vi.mock('redis', () => ({
 }));
 
 import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder';
-import type { RoutingTarget } from '../../application/services/routing/types.ts';
+import type { RoutingTarget } from '../../application/services/routing/routing-models.ts';
 
 describe('local redis-backed bindings', () => {
   const originalEnv = {

@@ -5,8 +5,8 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitCommit, GitSignature, CreateCommitParams } from '../types';
-import { isValidSha } from '../types';
+import type { GitCommit, GitSignature, CreateCommitParams } from '../git-objects';
+import { isValidSha } from '../git-objects';
 import { putCommit, getCommitData } from './object-store';
 import { getDb, commits } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';

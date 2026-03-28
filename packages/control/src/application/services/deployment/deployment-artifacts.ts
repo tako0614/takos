@@ -13,7 +13,7 @@ import type {
   DeploymentEnv,
   CreateDeploymentInput,
   DeploymentTarget,
-} from './types';
+} from './models';
 import {
   type DeploymentProviderRegistryLike,
   parseDeploymentTargetConfig,

@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 function normalizeHostname(hostname: string): string {
   const stripped = hostname
     .trim()

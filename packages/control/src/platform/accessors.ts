@@ -1,4 +1,4 @@
-import type { ControlPlatform, PlatformConfig, PlatformServices, PlatformServiceBinding } from './types.ts';
+import type { ControlPlatform, PlatformConfig, PlatformServices, PlatformServiceBinding } from './platform-config.ts';
 import type { Context } from 'hono';
 import type {
   DurableNamespaceBinding,

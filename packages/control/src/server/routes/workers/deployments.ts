@@ -6,7 +6,7 @@ import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import { createDeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
-import type { ArtifactKind, DeploymentProviderName } from '../../../application/services/deployment/types.ts';
+import type { ArtifactKind, DeploymentProviderName } from '../../../application/services/deployment/models.ts';
 import { DEPLOYMENT_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';

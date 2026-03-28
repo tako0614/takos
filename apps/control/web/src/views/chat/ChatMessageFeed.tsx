@@ -2,7 +2,7 @@ import { useMemo, type RefObject } from 'react';
 import { useI18n } from '../../store/i18n';
 import type { Message, SessionDiff } from '../../types';
 import { Icons } from '../../lib/Icons';
-import type { ChatStreamingState } from './types';
+import type { ChatStreamingState } from './chat-types';
 import { MessageBubble } from './MessageBubble';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { SessionDiffPanel } from './SessionDiffPanel';

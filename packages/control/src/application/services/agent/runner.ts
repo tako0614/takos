@@ -20,7 +20,7 @@
 import type { RunStatus, Env } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage, ToolCall } from './types';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage, ToolCall } from './agent-models';
 import type { ToolExecutorLike } from '../../tools/executor';
 import { RunCancelledError } from './run-lifecycle';
 import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';

@@ -8,7 +8,7 @@
  */
 
 import { sha1, concatBytes, hexToBytes, hexFromBuffer } from './sha1';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../types';
+import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects';
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();

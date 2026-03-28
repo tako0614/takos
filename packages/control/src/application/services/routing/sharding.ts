@@ -2,7 +2,7 @@ import type {
   DurableObjectNamespace,
   DurableObjectStubBinding,
 } from '../../../shared/types/bindings.ts';
-import type { RoutingBindings } from './types';
+import type { RoutingBindings } from './routing-models';
 
 export const ROUTING_DO_SHARD_COUNT = 16;
 

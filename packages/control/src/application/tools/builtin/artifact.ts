@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import type { ArtifactType } from '../../../shared/types';
 import { getDb, artifacts, files } from '../../../infra/db';
 import { eq, and, ne, like, desc, asc } from 'drizzle-orm';

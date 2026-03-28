@@ -1,9 +1,18 @@
-import { basename } from 'path';
 import chalk from 'chalk';
-import { readFileSync, writeFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { cliExit } from '../lib/command-exit.js';
 import { getApiRequestTimeoutMs, getConfig } from '../lib/config.js';
 import { createAuthHeaders } from '../lib/api.js';
+import { parseKeyValue } from './api-request-body.js';
+import { prepareBody } from './api-request-body.js';
+import { parseBodyByContentType, printSuccess } from './api-request-output.js';
+
+// Re-export everything from sub-modules for backward compatibility
+export { parseKeyValue, prepareBody } from './api-request-body.js';
+export type { BodyPreparation } from './api-request-body.js';
+export { parseSseEventBlock } from './api-request-sse.js';
+export type { ParsedSseEvent } from './api-request-sse.js';
+export { tryParseJson } from './api-request-output.js';
 
 export type ApiCommandOptions = {
   query?: string[];
@@ -36,129 +45,11 @@ export type WatchTaskOptions = StreamCommandOptions & {
   transport?: string;
 };
 
-export interface ParsedSseEvent {
-  event: string;
-  id?: string;
-  retry?: number;
-  data: string | null;
-}
-
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
 function isKnownHttpMethod(value: string): value is HttpMethod {
   return HTTP_METHODS.includes(value.toUpperCase() as HttpMethod);
-}
-
-export function parseKeyValue(value: string): { key: string; value: string } {
-  const separatorIndex = value.indexOf('=');
-  if (separatorIndex <= 0) {
-    throw new Error(`Invalid key=value option: ${value}`);
-  }
-
-  const key = value.slice(0, separatorIndex).trim();
-  const parsedValue = value.slice(separatorIndex + 1);
-  if (!key) {
-    throw new Error(`Invalid key=value option: ${value}`);
-  }
-
-  return { key, value: parsedValue };
-}
-
-export type BodyPreparation = {
-  body: unknown;
-  contentType: string | null;
-};
-
-type BodyOptions = {
-  body?: string;
-  bodyFile?: string;
-  rawBody?: string;
-  rawBodyFile?: string;
-  form?: string[];
-  formFile?: string[];
-  contentType?: string;
-};
-
-function prepareJsonBody(options: BodyOptions): BodyPreparation {
-  const raw = options.body !== undefined ? options.body : readFileSync(options.bodyFile!, 'utf8');
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      body: JSON.stringify(parsed),
-      contentType: 'application/json',
-    };
-  } catch (error) {
-    throw new Error(`Invalid JSON body: ${String(error)}`);
-  }
-}
-
-function prepareRawBody(options: BodyOptions): BodyPreparation {
-  if (options.rawBody !== undefined) {
-    return {
-      body: options.rawBody,
-      contentType: options.contentType ?? 'text/plain; charset=utf-8',
-    };
-  }
-
-  const buffer = readFileSync(options.rawBodyFile!);
-  return {
-    body: buffer,
-    contentType: options.contentType ?? 'application/octet-stream',
-  };
-}
-
-function prepareFormBody(options: BodyOptions): BodyPreparation {
-  const formData = new FormData();
-
-  for (const pair of options.form ?? []) {
-    const { key, value } = parseKeyValue(pair);
-    formData.append(key, value);
-  }
-
-  for (const pair of options.formFile ?? []) {
-    const { key, value } = parseKeyValue(pair);
-    const fileContent = readFileSync(value);
-    formData.append(key, new Blob([fileContent]), basename(value));
-  }
-
-  return {
-    body: formData,
-    contentType: null,
-  };
-}
-
-export function prepareBody(options: BodyOptions): BodyPreparation {
-  const hasJsonInline = options.body !== undefined;
-  const hasJsonFile = options.bodyFile !== undefined;
-  const hasRawInline = options.rawBody !== undefined;
-  const hasRawFile = options.rawBodyFile !== undefined;
-  const hasForm = (options.form?.length ?? 0) > 0 || (options.formFile?.length ?? 0) > 0;
-
-  const jsonMode = hasJsonInline || hasJsonFile;
-  const rawMode = hasRawInline || hasRawFile;
-
-  const activeModes = [jsonMode, rawMode, hasForm].filter(Boolean).length;
-  if (activeModes > 1) {
-    throw new Error('Only one body mode can be used at a time (json, raw, or form)');
-  }
-
-  if (jsonMode) {
-    return prepareJsonBody(options);
-  }
-
-  if (rawMode) {
-    return prepareRawBody(options);
-  }
-
-  if (hasForm) {
-    return prepareFormBody(options);
-  }
-
-  return {
-    body: undefined,
-    contentType: null,
-  };
 }
 
 function normalizeApiPath(path: string): string {
@@ -221,60 +112,6 @@ export function buildActionsWatchPath(repoId: string, runId: string): string {
   return `/api/repos/${encodedRepoId}/actions/runs/${encodedRunId}/ws`;
 }
 
-export function parseSseEventBlock(block: string): ParsedSseEvent | null {
-  if (!block.trim()) {
-    return null;
-  }
-
-  const event: ParsedSseEvent = {
-    event: 'message',
-    data: null,
-  };
-
-  const dataLines: string[] = [];
-  for (const line of block.split('\n')) {
-    if (!line || line.startsWith(':')) {
-      continue;
-    }
-
-    const separator = line.indexOf(':');
-    if (separator === -1) {
-      continue;
-    }
-
-    const field = line.slice(0, separator);
-    const value = line.slice(separator + 1).trimStart();
-
-    if (field === 'event') {
-      event.event = value || 'message';
-      continue;
-    }
-
-    if (field === 'id') {
-      event.id = value;
-      continue;
-    }
-
-    if (field === 'retry') {
-      const retryMs = Number(value);
-      if (Number.isInteger(retryMs) && retryMs >= 0) {
-        event.retry = retryMs;
-      }
-      continue;
-    }
-
-    if (field === 'data') {
-      dataLines.push(value);
-    }
-  }
-
-  if (dataLines.length > 0) {
-    event.data = dataLines.join('\n');
-  }
-
-  return event;
-}
-
 function prepareHeaders(options: { header?: string[] }): Record<string, string> {
   const headers: Record<string, string> = {};
 
@@ -305,57 +142,6 @@ export function createAuthorizedRequest(path: string, options: RequestScopeOptio
   const headers = createAuthHeaders({ headers: customHeaders, spaceId: options.workspace });
 
   return { url, headers };
-}
-
-export function tryParseJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-function parseBodyByContentType(contentType: string | null, bodyBuffer: Buffer): unknown {
-  if (bodyBuffer.length === 0) {
-    return null;
-  }
-
-  if (contentType?.includes('application/json')) {
-    try {
-      return JSON.parse(bodyBuffer.toString('utf8'));
-    } catch {
-      return bodyBuffer.toString('utf8');
-    }
-  }
-
-  if (contentType?.startsWith('text/') || contentType?.includes('application/xml')) {
-    return bodyBuffer.toString('utf8');
-  }
-
-  return {
-    encoding: 'base64',
-    size: bodyBuffer.length,
-    data: bodyBuffer.toString('base64'),
-  };
-}
-
-function printSuccess(parsedBody: unknown, jsonOutput: boolean): void {
-  if (parsedBody === null || parsedBody === undefined) {
-    console.log(chalk.green('OK'));
-    return;
-  }
-
-  if (typeof parsedBody === 'string') {
-    console.log(parsedBody);
-    return;
-  }
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(parsedBody));
-    return;
-  }
-
-  console.log(JSON.stringify(parsedBody, null, 2));
 }
 
 export async function executeApiRequest(methodInput: string, path: string, options: ApiCommandOptions): Promise<void> {

@@ -4,7 +4,7 @@
 
 import { CF_API_BASE } from './client';
 import { InternalError } from '@takos/common/errors';
-import type { WfpContext } from './types';
+import type { WfpContext } from './wfp-contracts';
 
 // ---------------------------------------------------------------------------
 // R2 CRUD

@@ -5,7 +5,7 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitCommit } from '../types';
+import type { GitCommit } from '../git-objects';
 import { resolveRef } from './refs';
 import { getCommit, getCommitLog } from './commit-index';
 import { getTree } from './tree-ops';

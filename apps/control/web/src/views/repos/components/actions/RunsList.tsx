@@ -1,8 +1,8 @@
 import { Icons } from '../../../../lib/Icons';
 import { formatDetailedRelativeDate } from '../../../../lib/format';
 import { useI18n } from '../../../../store/i18n';
-import type { WorkflowRunSummary } from './types';
-import { statusBadge } from './types';
+import type { WorkflowRunSummary } from './actions-types';
+import { statusBadge } from './actions-types';
 
 interface RunsListProps {
   runs: WorkflowRunSummary[];

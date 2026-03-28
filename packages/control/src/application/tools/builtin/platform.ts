@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { WORKER_SETTINGS_TOOLS, WORKER_SETTINGS_HANDLERS } from './platform/worker-settings';
 import { DOMAIN_TOOLS, DOMAIN_HANDLERS } from './platform/domains';
 import { DEPLOYMENT_TOOLS, DEPLOYMENT_HANDLERS } from './platform/deployments';

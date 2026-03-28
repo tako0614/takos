@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import type {
   SourceItem,
   SourceItemInstallation,
@@ -16,18 +17,21 @@ export interface UseSourceFetchOptions {
   filter: string;
   onNavigateToRepo: (username: string, repoName: string) => void;
   onRequireLogin: () => void;
-  // Pagination state setters
-  setItems: React.Dispatch<React.SetStateAction<SourceItem[]>>;
-  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setHasMore: React.Dispatch<React.SetStateAction<boolean>>;
-  setTotal: React.Dispatch<React.SetStateAction<number>>;
-  setSelectedItem: React.Dispatch<React.SetStateAction<SourceItem | null>>;
-  setInstallingId: React.Dispatch<React.SetStateAction<string | null>>;
-  requestSeqRef: React.MutableRefObject<number>;
-  appendInFlightRef: React.MutableRefObject<boolean>;
 }
 
 export interface UseSourceFetchResult {
+  // Owned state
+  items: SourceItem[];
+  setItems: React.Dispatch<React.SetStateAction<SourceItem[]>>;
+  loading: boolean;
+  hasMore: boolean;
+  total: number;
+  selectedItem: SourceItem | null;
+  setSelectedItem: React.Dispatch<React.SetStateAction<SourceItem | null>>;
+  installingId: string | null;
+  requestSeqRef: React.MutableRefObject<number>;
+  appendInFlightRef: React.MutableRefObject<boolean>;
+  // Actions
   fetchInstallations: () => Promise<Map<string, SourceItemInstallation>>;
   fetchAll: (offset?: number, append?: boolean, requestId?: number) => Promise<void>;
   fetchMine: (requestId?: number) => Promise<void>;
@@ -51,15 +55,17 @@ export function useSourceFetch({
   filter,
   onNavigateToRepo,
   onRequireLogin,
-  setItems,
-  setLoading,
-  setHasMore,
-  setTotal,
-  setSelectedItem,
-  setInstallingId,
-  requestSeqRef,
-  appendInFlightRef,
 }: UseSourceFetchOptions): UseSourceFetchResult {
+  // Own the state that was previously passed in
+  const [items, setItems] = useState<SourceItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [selectedItem, setSelectedItem] = useState<SourceItem | null>(null);
+  const [installingId, setInstallingId] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
+  const appendInFlightRef = useRef(false);
+
   const queries = useSourceFetchQueries({
     isAuthenticated,
     effectiveSpaceId,
@@ -90,6 +96,18 @@ export function useSourceFetch({
   });
 
   return {
+    // Owned state
+    items,
+    setItems,
+    loading,
+    hasMore,
+    total,
+    selectedItem,
+    setSelectedItem,
+    installingId,
+    requestSeqRef,
+    appendInFlightRef,
+    // Actions
     ...queries,
     ...actions,
   };

@@ -3,7 +3,7 @@ import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 import { Button } from '../../components/ui';
 import { OAuthSettingsModal } from '../../components/modals/OAuthSettingsModal';
-import { Section } from './settings-shared';
+import { Section } from './SettingsShared';
 
 export function SettingsOAuth() {
   const { t } = useI18n();

@@ -63,10 +63,10 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
   // --- Filtering sub-hook ---
   const filtering = useSourceFiltering({ spaces, isAuthenticated });
 
-  // --- Pagination sub-hook ---
+  // --- Pagination sub-hook (now only owns showCreateModal + loadMore logic) ---
   const pagination = useSourcePagination();
 
-  // --- Fetch sub-hook ---
+  // --- Fetch sub-hook (now owns items, loading, hasMore, total, selectedItem, installingId, refs) ---
   const fetching = useSourceFetch({
     isAuthenticated,
     effectiveSpaceId: filtering.effectiveSpaceId,
@@ -77,23 +77,16 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     filter: filtering.filter,
     onNavigateToRepo,
     onRequireLogin,
-    setItems: pagination.setItems,
-    setLoading: pagination.setLoading,
-    setHasMore: pagination.setHasMore,
-    setTotal: pagination.setTotal,
-    setSelectedItem: pagination.setSelectedItem,
-    setInstallingId: pagination.setInstallingId,
-    requestSeqRef: pagination.requestSeqRef,
-    appendInFlightRef: pagination.appendInFlightRef,
   });
 
   // Refetch whenever filter/sort/category/officialOnly/query/space changes
   useEffect(() => {
-    pagination.appendInFlightRef.current = false;
-    const requestId = pagination.requestSeqRef.current + 1;
-    pagination.requestSeqRef.current = requestId;
-    pagination.setItems([]);
-    pagination.setSelectedItem(null);
+    fetching.appendInFlightRef.current = false;
+    const requestId = fetching.requestSeqRef.current + 1;
+    fetching.requestSeqRef.current = requestId;
+    fetching.setItems([]);
+    fetching.setSelectedItem(null);
+    pagination.resetOffset();
     if (filtering.filter === 'all') {
       void fetching.fetchAll(0, false, requestId);
     } else if (filtering.filter === 'mine') {
@@ -106,8 +99,10 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
   const loadMore = () => {
     pagination.loadMore(
       filtering.filter,
-      pagination.loading,
-      pagination.hasMore,
+      fetching.loading,
+      fetching.hasMore,
+      fetching.appendInFlightRef,
+      fetching.requestSeqRef,
       fetching.fetchAll,
       fetching.fetchStarred,
     );
@@ -136,14 +131,14 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     setSelectedSpaceId: filtering.setSelectedSpaceId,
     spaces,
 
-    items: pagination.items,
-    loading: pagination.loading,
-    hasMore: pagination.hasMore,
-    total: pagination.total,
+    items: fetching.items,
+    loading: fetching.loading,
+    hasMore: fetching.hasMore,
+    total: fetching.total,
 
-    selectedItem: pagination.selectedItem,
-    setSelectedItem: pagination.setSelectedItem,
-    installingId: pagination.installingId,
+    selectedItem: fetching.selectedItem,
+    setSelectedItem: fetching.setSelectedItem,
+    installingId: fetching.installingId,
 
     searchFocused: filtering.searchFocused,
     setSearchFocused: filtering.setSearchFocused,

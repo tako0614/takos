@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { StepResult } from '../../types.js';
 import {
   buildStepsContext,
-} from '../../scheduler/job.js';
+} from '../../scheduler/job-policy.js';
 
 function createStepResult(overrides: Partial<StepResult> = {}): StepResult {
   return {

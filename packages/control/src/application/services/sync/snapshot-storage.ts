@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import type { SnapshotTree } from './types';
+import type { SnapshotTree } from './models';
 import { SnapshotCompressor } from './snapshot-compressor';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { logError } from '../../../shared/utils/logger';

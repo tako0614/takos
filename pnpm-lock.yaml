@@ -54,12 +54,6 @@ importers:
       conf:
         specifier: ^13.0.1
         version: 13.1.0
-      form-data:
-        specifier: ^4.0.0
-        version: 4.0.5
-      node-fetch:
-        specifier: ^3.3.2
-        version: 3.3.2
       open:
         specifier: ^10.1.0
         version: 10.2.0
@@ -94,6 +88,9 @@ importers:
       '@cloudflare/puppeteer':
         specifier: ^1.0.4
         version: 1.0.4
+      '@cloudflare/workers-types':
+        specifier: ^4.20260118.0
+        version: 4.20260118.0
       '@langchain/core':
         specifier: ^1.1.8
         version: 1.1.15(@opentelemetry/api@1.9.0)(openai@6.16.0(ws@8.19.0)(zod@3.25.76))
@@ -115,15 +112,12 @@ importers:
       '@takos/actions-engine':
         specifier: workspace:*
         version: link:../../packages/actions-engine
-      '@takos/cloudflare-compat':
-        specifier: workspace:*
-        version: link:../../packages/cloudflare-compat
       '@takos/common':
         specifier: workspace:*
         version: link:../../packages/common
-      '@takos/control-shared':
+      '@takos/control':
         specifier: workspace:*
-        version: link:../../packages/control/shared
+        version: link:../../packages/control
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20260118.0)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0)(@opentelemetry/api@1.9.0)(@prisma/client@7.3.0(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.9.3))
@@ -139,9 +133,6 @@ importers:
       jotai:
         specifier: ^2.18.1
         version: 2.18.1(@babel/core@7.28.6)(@babel/template@7.28.6)(@types/react@18.3.27)(react@18.2.0)
-      jszip:
-        specifier: ^3.10.1
-        version: 3.10.1
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
@@ -154,15 +145,9 @@ importers:
       react-dom:
         specifier: 18.2.0
         version: 18.2.0(react@18.2.0)
-      react-router-dom:
-        specifier: ^7.1.0
-        version: 7.12.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       redis:
         specifier: ^5.11.0
         version: 5.11.0
-      rollup-plugin-node-polyfills:
-        specifier: ^0.2.1
-        version: 0.2.1
       tailwindcss:
         specifier: ^4.1.18
         version: 4.1.18
@@ -172,13 +157,7 @@ importers:
       zod:
         specifier: ^3.25.32
         version: 3.25.76
-      zustand:
-        specifier: ^5.0.0
-        version: 5.0.12(@types/react@18.3.27)(react@18.2.0)
     devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20260118.0
-        version: 4.20260118.0
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
@@ -230,27 +209,9 @@ importers:
 
   apps/runtime:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.700.0
-        version: 3.971.0
-      '@hono/node-server':
-        specifier: ^1.13.0
-        version: 1.19.9(hono@4.12.8)
-      '@takos/actions-engine':
-        specifier: workspace:*
-        version: link:../../packages/actions-engine
-      '@takos/common':
-        specifier: workspace:*
-        version: link:../../packages/common
       '@takos/runtime-service':
         specifier: workspace:*
         version: link:../../packages/runtime-service
-      hono:
-        specifier: '>=4.12.4'
-        version: 4.12.8
-      yaml:
-        specifier: ^2.8.2
-        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -324,22 +285,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.7)(lightningcss@1.30.2)
 
-  packages/cloudflare-compat:
-    dependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20260118.0
-        version: 4.20260118.0
-      hono:
-        specifier: '>=4.12.4'
-        version: 4.12.8
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.19.7)(lightningcss@1.30.2)
-
   packages/common:
     dependencies:
       hono:
@@ -356,13 +301,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.7)(lightningcss@1.30.2)
 
-  packages/control/agent:
-    dependencies:
-      '@takos/control-core':
-        specifier: workspace:*
-        version: link:../core
-
-  packages/control/bindings:
+  packages/control:
     dependencies:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.700.0
@@ -373,37 +312,9 @@ importers:
       '@aws-sdk/client-sqs':
         specifier: ^3.700.0
         version: 3.1016.0
-      '@google-cloud/firestore':
-        specifier: ^7.11.0
-        version: 7.11.6
-      '@google-cloud/pubsub':
-        specifier: ^4.9.0
-        version: 4.11.0
-      '@google-cloud/storage':
-        specifier: ^7.14.0
-        version: 7.19.0
-      pg:
-        specifier: ^8.20.0
-        version: 8.20.0
-      redis:
-        specifier: ^5.11.0
-        version: 5.11.0
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-
-  packages/control/core:
-    dependencies:
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3.700.0
-        version: 3.1016.0
-      '@aws-sdk/client-s3':
-        specifier: ^3.700.0
-        version: 3.971.0
-      '@aws-sdk/client-sqs':
-        specifier: ^3.700.0
-        version: 3.1016.0
+      '@cloudflare/workers-types':
+        specifier: ^4.20260118.0
+        version: 4.20260118.0
       '@google-cloud/firestore':
         specifier: ^7.11.0
         version: 7.11.6
@@ -433,13 +344,10 @@ importers:
         version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@takos/actions-engine':
         specifier: workspace:*
-        version: link:../../actions-engine
-      '@takos/cloudflare-compat':
-        specifier: workspace:*
-        version: link:../../cloudflare-compat
+        version: link:../actions-engine
       '@takos/common':
         specifier: workspace:*
-        version: link:../../common
+        version: link:../common
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@cloudflare/workers-types@4.20260118.0)(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.0)(@opentelemetry/api@1.9.0)(@prisma/client@7.3.0(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.3.0(@types/react@18.3.27)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))
@@ -468,12 +376,6 @@ importers:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
-
-  packages/control/git:
-    dependencies:
-      '@takos/control-core':
-        specifier: workspace:*
-        version: link:../core
 
   packages/control/infra-pkg: {}
 
@@ -508,14 +410,6 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
-  packages/control/platform: {}
-
-  packages/control/runtime: {}
-
-  packages/control/server: {}
-
-  packages/control/shared: {}
-
   packages/executor-service:
     dependencies:
       '@hono/node-server':
@@ -530,12 +424,9 @@ importers:
       '@takos/common':
         specifier: workspace:*
         version: link:../common
-      '@takos/control-agent':
+      '@takos/control':
         specifier: workspace:*
-        version: link:../control/agent
-      '@takos/control-core':
-        specifier: workspace:*
-        version: link:../control/core
+        version: link:../control
       hono:
         specifier: '>=4.12.4'
         version: 4.12.8
@@ -570,9 +461,6 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.12.8)
-      '@takos/actions-engine':
-        specifier: workspace:*
-        version: link:../actions-engine
       '@takos/common':
         specifier: workspace:*
         version: link:../common
@@ -3562,9 +3450,6 @@ packages:
     resolution: {integrity: sha512-MMdARuVEQziNTeJD8DgMqmhwR11BRQ/cBP+pLtYdSTnf3MIO8fFeiINEbX36ZdNlfU/7A9f3gUw49B3oQsvwBA==}
     engines: {node: '>=4.0'}
 
-  estree-walker@0.6.1:
-    resolution: {integrity: sha512-SqmZANLWS0mnatqbSfRP5g8OXZC12Fgg1IwNtLsyHDzJizORW4khDfjPqJZsemPWBB2uqykUah5YpQ6epsqC/w==}
-
   estree-walker@2.0.2:
     resolution: {integrity: sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w==}
 
@@ -3709,10 +3594,6 @@ packages:
   form-data@2.5.5:
     resolution: {integrity: sha512-jqdObeR2rxZZbPSGL+3VckHMYtu+f9//KXBsVny6JSX/pa38Fy+bGjuG8eW/H6USNQWhLi8Num++cU2yOCNz4A==}
     engines: {node: '>= 0.12'}
-
-  form-data@4.0.5:
-    resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
-    engines: {node: '>= 6'}
 
   formdata-polyfill@4.0.10:
     resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
@@ -4273,9 +4154,6 @@ packages:
     resolution: {integrity: sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
 
-  magic-string@0.25.9:
-    resolution: {integrity: sha512-RmF0AsMzgt25qzqqLc1+MbHmhdx0ojF2Fvs4XnOqz2ZOBXzzkEwc/dJQZCYHAn7v1jbVOjAZfK8msRn4BxO4VQ==}
-
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -4827,23 +4705,6 @@ packages:
     resolution: {integrity: sha512-QgT5//D3jfjJb6Gsjxv0Slpj23ip+HtOpnNgnb2S5zU3CB26G/IDPGoy4RJB42wzFE46DRsstbW6tKHoKbhAxw==}
     engines: {node: '>=0.10.0'}
 
-  react-router-dom@7.12.0:
-    resolution: {integrity: sha512-pfO9fiBcpEfX4Tx+iTYKDtPbrSLLCbwJ5EqP+SPYQu1VYCXdy79GSj0wttR0U4cikVdlImZuEZ/9ZNCgoaxwBA==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      react: '>=18'
-      react-dom: '>=18'
-
-  react-router@7.12.0:
-    resolution: {integrity: sha512-kTPDYPFzDVGIIGNLS5VJykK0HfHLY5MF3b+xj0/tTyNYL1gF1qs7u67Z9jEhQk2sQ98SUaHxlG31g1JtF7IfVw==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      react: '>=18'
-      react-dom: '>=18'
-    peerDependenciesMeta:
-      react-dom:
-        optional: true
-
   react@18.2.0:
     resolution: {integrity: sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==}
     engines: {node: '>=0.10.0'}
@@ -4920,16 +4781,6 @@ packages:
   rfdc@1.4.1:
     resolution: {integrity: sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==}
 
-  rollup-plugin-inject@3.0.2:
-    resolution: {integrity: sha512-ptg9PQwzs3orn4jkgXJ74bfs5vYz1NCZlSQMBUA0wKcGp5i5pA1AO3fOUEte8enhGUC+iapTCzEWw2jEFFUO/w==}
-    deprecated: This package has been deprecated and is no longer maintained. Please use @rollup/plugin-inject.
-
-  rollup-plugin-node-polyfills@0.2.1:
-    resolution: {integrity: sha512-4kCrKPTJ6sK4/gLL/U5QzVT8cxJcofO0OU74tnB19F40cmuAKSzH5/siithxlofFEjwvw1YAhPmbvGNA6jEroA==}
-
-  rollup-pluginutils@2.8.2:
-    resolution: {integrity: sha512-EEp9NhnUkwY8aif6bxgovPHMoMoNr2FulJziTndpt5H9RdwC47GSGuII9XxpSdzVGM0GWrNPHV6ie1LTNJPaLQ==}
-
   rollup@4.59.0:
     resolution: {integrity: sha512-2oMpl67a3zCH9H79LeMcbDhXW/UmWG/y2zuqnF2jQq5uq9TbM9TVyXvA4+t+ne2IIkBdrLpAaRQAvo7YI/Yyeg==}
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
@@ -4977,9 +4828,6 @@ packages:
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
     engines: {node: '>= 18'}
-
-  set-cookie-parser@2.7.2:
-    resolution: {integrity: sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==}
 
   setimmediate@1.0.5:
     resolution: {integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==}
@@ -5063,10 +4911,6 @@ packages:
   source-map@0.7.6:
     resolution: {integrity: sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ==}
     engines: {node: '>= 12'}
-
-  sourcemap-codec@1.4.8:
-    resolution: {integrity: sha512-9NykojV5Uih4lgo5So5dtw+f0JgJX30KCNI8gwhz2J9A15wD0Ml6tjHKwf6fTSa6fAdVBdZeNOs9eJ71qCk8vA==}
-    deprecated: Please use @jridgewell/sourcemap-codec instead
 
   space-separated-tokens@2.0.2:
     resolution: {integrity: sha512-PEGlAwrG8yXGXRjW32fGbg66JAlOAwbObuqVoJpv/mRgoWDQfgH1wDPvtzWyUSNAXBGSk8h755YDbbcEy3SH2Q==}
@@ -5677,24 +5521,6 @@ packages:
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
-  zustand@5.0.12:
-    resolution: {integrity: sha512-i77ae3aZq4dhMlRhJVCYgMLKuSiZAaUPAct2AksxQ+gOtimhGMdXljRT21P5BNpeT4kXlLIckvkPM029OljD7g==}
-    engines: {node: '>=12.20.0'}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      immer: '>=9.0.6'
-      react: '>=18.0.0'
-      use-sync-external-store: '>=1.2.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      immer:
-        optional: true
-      react:
-        optional: true
-      use-sync-external-store:
-        optional: true
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -9533,8 +9359,6 @@ snapshots:
 
   estraverse@5.3.0: {}
 
-  estree-walker@0.6.1: {}
-
   estree-walker@2.0.2: {}
 
   estree-walker@3.0.3:
@@ -9714,14 +9538,6 @@ snapshots:
       hasown: 2.0.2
       mime-types: 2.1.35
       safe-buffer: 5.2.1
-
-  form-data@4.0.5:
-    dependencies:
-      asynckit: 0.4.0
-      combined-stream: 1.0.8
-      es-set-tostringtag: 2.1.0
-      hasown: 2.0.2
-      mime-types: 2.1.35
 
   formdata-polyfill@4.0.10:
     dependencies:
@@ -10266,10 +10082,6 @@ snapshots:
 
   lru.min@1.1.4:
     optional: true
-
-  magic-string@0.25.9:
-    dependencies:
-      sourcemap-codec: 1.4.8
 
   magic-string@0.30.21:
     dependencies:
@@ -10860,20 +10672,6 @@ snapshots:
 
   react-refresh@0.18.0: {}
 
-  react-router-dom@7.12.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
-    dependencies:
-      react: 18.2.0
-      react-dom: 18.2.0(react@18.2.0)
-      react-router: 7.12.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
-
-  react-router@7.12.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
-    dependencies:
-      cookie: 1.1.1
-      react: 18.2.0
-      set-cookie-parser: 2.7.2
-    optionalDependencies:
-      react-dom: 18.2.0(react@18.2.0)
-
   react@18.2.0:
     dependencies:
       loose-envify: 1.4.0
@@ -10957,20 +10755,6 @@ snapshots:
   retry@0.13.1: {}
 
   rfdc@1.4.1: {}
-
-  rollup-plugin-inject@3.0.2:
-    dependencies:
-      estree-walker: 0.6.1
-      magic-string: 0.25.9
-      rollup-pluginutils: 2.8.2
-
-  rollup-plugin-node-polyfills@0.2.1:
-    dependencies:
-      rollup-plugin-inject: 3.0.2
-
-  rollup-pluginutils@2.8.2:
-    dependencies:
-      estree-walker: 0.6.1
 
   rollup@4.59.0:
     dependencies:
@@ -11058,8 +10842,6 @@ snapshots:
       send: 1.2.1
     transitivePeerDependencies:
       - supports-color
-
-  set-cookie-parser@2.7.2: {}
 
   setimmediate@1.0.5: {}
 
@@ -11185,8 +10967,6 @@ snapshots:
   source-map@0.6.1: {}
 
   source-map@0.7.6: {}
-
-  sourcemap-codec@1.4.8: {}
 
   space-separated-tokens@2.0.2: {}
 
@@ -11831,10 +11611,5 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
-
-  zustand@5.0.12(@types/react@18.3.27)(react@18.2.0):
-    optionalDependencies:
-      '@types/react': 18.3.27
-      react: 18.2.0
 
   zwitch@2.0.4: {}

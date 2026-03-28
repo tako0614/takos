@@ -7,20 +7,20 @@ import type {
   AgentTaskBase,
   AgentTaskRunSummary,
   AgentTaskResumeTarget,
-} from '@takos/control-shared/types';
+} from '@takos/control/shared/types';
 
-export type { ToolExecution } from '@takos/control-shared/types';
-export type { AgentTaskStatus } from '@takos/control-shared/types';
-export type { AgentTaskPriority } from '@takos/control-shared/types';
-export type { AgentTaskBase } from '@takos/control-shared/types';
-export type { AgentTaskRunSummary } from '@takos/control-shared/types';
-export type { AgentTaskResumeTarget } from '@takos/control-shared/types';
-export type { ThreadHistoryArtifactSummary } from '@takos/control-shared/types';
-export type { ThreadHistoryEvent } from '@takos/control-shared/types';
-export type { ThreadHistoryChildRunSummary } from '@takos/control-shared/types';
-export type { ThreadHistoryRunNode } from '@takos/control-shared/types';
-export type { ThreadHistoryFocus } from '@takos/control-shared/types';
-export type { ThreadHistoryTaskContext } from '@takos/control-shared/types';
+export type { ToolExecution } from '@takos/control/shared/types';
+export type { AgentTaskStatus } from '@takos/control/shared/types';
+export type { AgentTaskPriority } from '@takos/control/shared/types';
+export type { AgentTaskBase } from '@takos/control/shared/types';
+export type { AgentTaskRunSummary } from '@takos/control/shared/types';
+export type { AgentTaskResumeTarget } from '@takos/control/shared/types';
+export type { ThreadHistoryArtifactSummary } from '@takos/control/shared/types';
+export type { ThreadHistoryEvent } from '@takos/control/shared/types';
+export type { ThreadHistoryChildRunSummary } from '@takos/control/shared/types';
+export type { ThreadHistoryRunNode } from '@takos/control/shared/types';
+export type { ThreadHistoryFocus } from '@takos/control/shared/types';
+export type { ThreadHistoryTaskContext } from '@takos/control/shared/types';
 
 /**
  * Frontend Thread: narrows `title` to non-null string and `status` to exclude

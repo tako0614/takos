@@ -3,8 +3,8 @@ import { getDb, accounts, accountMemberships } from '../../../../infra/db';
 import { services } from '../../../../infra/db/schema-services';
 import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../identity/principals';
-import { CUSTOM_DOMAIN_WRITE_ROLES, CustomDomainError } from './types';
-import type { ServiceInfo } from './types';
+import { CUSTOM_DOMAIN_WRITE_ROLES, CustomDomainError } from './domain-models';
+import type { ServiceInfo } from './domain-models';
 
 export async function getServiceForUser(
   env: Env,

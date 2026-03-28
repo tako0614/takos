@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useReducer, useState, useEffect } from 'react';
 import { useI18n } from '../../../store/i18n';
 
 interface ConflictFile {
@@ -24,6 +24,80 @@ interface Resolution {
   source: 'ours' | 'theirs' | 'manual';
 }
 
+// --- Reducer for conflict resolution state ---
+
+interface ResolverState {
+  conflicts: ConflictFile[];
+  resolutions: Map<string, Resolution>;
+  selectedFile: string | null;
+  editContent: string;
+}
+
+type ResolverAction =
+  | { type: 'LOAD_CONFLICTS'; conflicts: ConflictFile[] }
+  | { type: 'SELECT_FILE'; path: string }
+  | { type: 'SELECT_VERSION'; path: string; source: 'ours' | 'theirs' | 'delete' }
+  | { type: 'SET_MANUAL_CONTENT'; path: string; content: string }
+  | { type: 'SET_EDIT_CONTENT'; content: string };
+
+const initialResolverState: ResolverState = {
+  conflicts: [],
+  resolutions: new Map(),
+  selectedFile: null,
+  editContent: '',
+};
+
+function resolverReducer(state: ResolverState, action: ResolverAction): ResolverState {
+  switch (action.type) {
+    case 'LOAD_CONFLICTS': {
+      const first = action.conflicts[0] ?? null;
+      return {
+        ...state,
+        conflicts: action.conflicts,
+        resolutions: new Map(),
+        selectedFile: first?.path ?? null,
+        editContent: first ? (first.ours || first.theirs || '') : '',
+      };
+    }
+    case 'SELECT_FILE': {
+      const res = state.resolutions.get(action.path);
+      const conflict = state.conflicts.find(c => c.path === action.path);
+      return {
+        ...state,
+        selectedFile: action.path,
+        editContent: res?.content || conflict?.ours || conflict?.theirs || '',
+      };
+    }
+    case 'SELECT_VERSION': {
+      const conflict = state.conflicts.find(c => c.path === action.path);
+      if (!conflict) return state;
+      const newResolutions = new Map(state.resolutions);
+      if (action.source === 'delete') {
+        newResolutions.set(action.path, { path: action.path, content: '', delete: true, source: 'ours' });
+      } else {
+        const content = action.source === 'ours' ? (conflict.ours || '') : (conflict.theirs || '');
+        newResolutions.set(action.path, { path: action.path, content, source: action.source });
+      }
+      return { ...state, resolutions: newResolutions };
+    }
+    case 'SET_MANUAL_CONTENT': {
+      const newResolutions = new Map(state.resolutions);
+      newResolutions.set(action.path, { path: action.path, content: action.content, source: 'manual' });
+      return { ...state, resolutions: newResolutions };
+    }
+    case 'SET_EDIT_CONTENT':
+      return { ...state, editContent: action.content };
+  }
+}
+
+// --- Async operation state ---
+
+interface AsyncState {
+  loading: boolean;
+  submitting: boolean;
+  error: string | null;
+}
+
 interface ConflictResolverProps {
   repoId: string;
   prNumber: number;
@@ -41,67 +115,47 @@ export function ConflictResolver({
   onResolved,
   onCancel,
 }: ConflictResolverProps) {
-  const [conflicts, setConflicts] = useState<ConflictFile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [resolutions, setResolutions] = useState<Map<string, Resolution>>(new Map());
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [state, dispatch] = useReducer(resolverReducer, initialResolverState);
+  const [async_, setAsync] = useState<AsyncState>({ loading: true, submitting: false, error: null });
   const { t } = useI18n();
+
+  const { conflicts, resolutions, selectedFile, editContent } = state;
+  const { loading, submitting, error } = async_;
 
   useEffect(() => {
     fetchConflicts();
   }, [repoId, prNumber]);
 
   const fetchConflicts = async () => {
-    setLoading(true);
-    setError(null);
+    setAsync(prev => ({ ...prev, loading: true, error: null }));
     try {
       const res = await fetch(`/api/repos/${repoId}/pulls/${prNumber}/conflicts`);
       const data: ConflictsResponse = await res.json();
       if (data.is_mergeable) {
-        setError(t('noConflictsToResolve'));
+        setAsync(prev => ({ ...prev, error: t('noConflictsToResolve') }));
         return;
       }
-      setConflicts(data.conflicts);
-      if (data.conflicts.length > 0) {
-        setSelectedFile(data.conflicts[0].path);
-        setEditContent(data.conflicts[0].ours || data.conflicts[0].theirs || '');
-      }
+      dispatch({ type: 'LOAD_CONFLICTS', conflicts: data.conflicts });
     } catch (err) {
-      setError(t('failedToLoadConflicts'));
+      setAsync(prev => ({ ...prev, error: t('failedToLoadConflicts') }));
     } finally {
-      setLoading(false);
+      setAsync(prev => ({ ...prev, loading: false }));
     }
   };
 
   const selectVersion = (path: string, source: 'ours' | 'theirs' | 'delete') => {
-    const conflict = conflicts.find(c => c.path === path);
-    if (!conflict) return;
-
-    const newResolutions = new Map(resolutions);
-    if (source === 'delete') {
-      newResolutions.set(path, { path, content: '', delete: true, source: 'ours' });
-    } else {
-      const content = source === 'ours' ? (conflict.ours || '') : (conflict.theirs || '');
-      newResolutions.set(path, { path, content, source });
-    }
-    setResolutions(newResolutions);
+    dispatch({ type: 'SELECT_VERSION', path, source });
   };
 
   const setManualContent = (path: string, content: string) => {
-    const newResolutions = new Map(resolutions);
-    newResolutions.set(path, { path, content, source: 'manual' });
-    setResolutions(newResolutions);
+    dispatch({ type: 'SET_MANUAL_CONTENT', path, content });
   };
 
   const allResolved = conflicts.length > 0 && conflicts.every(c => resolutions.has(c.path));
 
   const handleSubmit = async () => {
     if (!allResolved || submitting) return;
-    setSubmitting(true);
-    setError(null);
+    setAsync(prev => ({ ...prev, submitting: true, error: null }));
 
     try {
       const res = await fetch(`/api/repos/${repoId}/pulls/${prNumber}/resolve`, {
@@ -118,15 +172,15 @@ export function ConflictResolver({
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || t('failedToSubmitResolutions'));
+        setAsync(prev => ({ ...prev, error: data.error || t('failedToSubmitResolutions') }));
         return;
       }
 
       onResolved();
     } catch (err) {
-      setError(t('failedToSubmitResolutions'));
+      setAsync(prev => ({ ...prev, error: t('failedToSubmitResolutions') }));
     } finally {
-      setSubmitting(false);
+      setAsync(prev => ({ ...prev, submitting: false }));
     }
   };
 
@@ -193,11 +247,7 @@ export function ConflictResolver({
             return (
               <div
                 key={conflict.path}
-                onClick={() => {
-                  setSelectedFile(conflict.path);
-                  const res = resolutions.get(conflict.path);
-                  setEditContent(res?.content || conflict.ours || conflict.theirs || '');
-                }}
+                onClick={() => dispatch({ type: 'SELECT_FILE', path: conflict.path })}
                 style={{
                   padding: '0.5rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem',
                   backgroundColor: isSelected ? 'var(--color-bg-tertiary)' : 'transparent',
@@ -302,7 +352,7 @@ export function ConflictResolver({
               </div>
               <textarea
                 value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
+                onChange={(e) => dispatch({ type: 'SET_EDIT_CONTENT', content: e.target.value })}
                 style={{
                   width: '100%', minHeight: '120px', padding: '0.5rem', fontSize: '0.75rem',
                   fontFamily: 'monospace', border: '1px solid var(--color-border)', borderTop: 'none',

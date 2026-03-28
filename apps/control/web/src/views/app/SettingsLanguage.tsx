@@ -1,6 +1,6 @@
 import { useI18n } from '../../store/i18n';
 import { Button } from '../../components/ui';
-import { Section } from './settings-shared';
+import { Section } from './SettingsShared';
 
 export function SettingsLanguage() {
   const { t, lang, setLang } = useI18n();

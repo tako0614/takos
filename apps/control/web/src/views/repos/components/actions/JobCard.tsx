@@ -1,8 +1,8 @@
 import { Icons } from '../../../../lib/Icons';
 import { formatDetailedRelativeDate } from '../../../../lib/format';
 import { useI18n } from '../../../../store/i18n';
-import type { WorkflowJob, JobLogState } from './types';
-import { statusBadge } from './types';
+import type { WorkflowJob, JobLogState } from './actions-types';
+import { statusBadge } from './actions-types';
 
 interface JobCardProps {
   job: WorkflowJob;

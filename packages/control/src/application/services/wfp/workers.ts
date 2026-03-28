@@ -19,7 +19,7 @@ import type {
   WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './types';
+} from './wfp-contracts';
 import { buildWorkerMetadata } from './worker-metadata';
 
 // ---------------------------------------------------------------------------

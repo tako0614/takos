@@ -5,7 +5,7 @@ import {
   buildRuntimeStartPayload,
   createExecutorApp,
   hasControlRpcConfiguration,
-} from '../executor-app.js';
+} from '../executor-config.js';
 
 const ORIGINAL_ENV = {
   PROXY_BASE_URL: process.env.PROXY_BASE_URL,
@@ -73,6 +73,21 @@ describe.sequential('executor startup assumptions', () => {
       controlRpcBaseUrl: undefined,
       shutdownSignal: undefined,
     });
+  });
+
+  it('overrides caller-supplied controlRpcBaseUrl with runtime config and omits proxyBaseUrl', () => {
+    const payload = buildRuntimeStartPayload({
+      runId: 'run-1',
+      workerId: 'worker-1',
+      controlRpcToken: 'control-token',
+      controlRpcBaseUrl: 'https://caller-supplied.example.internal',
+    }, buildExecutorRuntimeConfig({
+      CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
+      PROXY_BASE_URL: 'https://executor-proxy.example.internal',
+    }));
+
+    expect(payload.controlRpcBaseUrl).toBe('https://control-rpc.example.internal');
+    expect(payload).not.toHaveProperty('proxyBaseUrl');
   });
 
   it('rejects /start when neither CONTROL_RPC_BASE_URL nor PROXY_BASE_URL is configured', async () => {

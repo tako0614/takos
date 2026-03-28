@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { createCommonEnvService } from '../../services/common-env';
 
 export const WORKSPACE_ENV_LIST: ToolDefinition = {

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { Resource, Worker } from '../../../types';
 import { WorkerDetail } from '../WorkerDetail';
-import type { WorkerDetailTab } from '../types';
+import type { WorkerDetailTab } from '../worker-models';
 import { useWorkerSettings } from '../../../hooks/useWorkerSettings';
 
 export interface WorkerDetailContainerProps {

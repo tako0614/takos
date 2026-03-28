@@ -9,7 +9,7 @@ import type {
   WorkerDomain,
   WorkerSettingsTab,
   VerificationInfo,
-} from '../types';
+} from '../worker-models';
 import { GeneralTab } from './GeneralTab';
 import { DomainsTab } from './DomainsTab';
 import { EnvironmentTab } from './EnvironmentTab';

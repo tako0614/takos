@@ -5,16 +5,7 @@ import { randomUUID } from 'crypto';
 import { pushLog } from '../logging.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
 import { getErrorMessage } from '@takos/common/errors';
-
-function gracefulKill(child: ChildProcess): NodeJS.Timeout {
-  child.kill('SIGTERM');
-  return setTimeout(() => {
-    const stillRunning = child.exitCode === null && child.signalCode === null;
-    if (stillRunning) {
-      child.kill('SIGKILL');
-    }
-  }, 5000);
-}
+import { gracefulKill } from '../../utils/process-kill.js';
 import type { ExecutorStepResult } from './executor.js';
 
 // ---------------------------------------------------------------------------

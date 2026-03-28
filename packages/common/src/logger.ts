@@ -36,7 +36,7 @@ export interface Logger {
   child(fields: Record<string, unknown>): Logger;
 }
 
-function normalizeError(value: unknown): Record<string, unknown> {
+function serializeError(value: unknown): Record<string, unknown> {
   if (value instanceof Error) {
     return {
       name: value.name,
@@ -52,7 +52,7 @@ function formatData(data?: Record<string, unknown>): Record<string, unknown> | u
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (value instanceof Error) {
-      result[key] = normalizeError(value);
+      result[key] = serializeError(value);
     } else {
       result[key] = value;
     }

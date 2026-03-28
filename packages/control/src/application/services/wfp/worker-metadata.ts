@@ -3,7 +3,7 @@
  */
 
 import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
-import type { D1QueryResult } from './types';
+import type { D1QueryResult } from './wfp-contracts';
 
 /**
  * Sanitize a SQL table name to prevent injection.

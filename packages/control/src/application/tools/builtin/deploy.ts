@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { deployFrontendFromWorkspace } from '../../services/source/apps';
 
 export const DEPLOY_FRONTEND: ToolDefinition = {

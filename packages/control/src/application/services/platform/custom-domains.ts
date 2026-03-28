@@ -1,6 +1,6 @@
 // Barrel re-export — keeps the original import path working for all consumers.
 
-export { CustomDomainError } from './custom-domains/types';
+export { CustomDomainError } from './custom-domains/domain-models';
 export type {
   DomainStatus,
   DnsInstruction,
@@ -10,7 +10,7 @@ export type {
   VerifyDomainErrorBody,
   VerifyCustomDomainResult,
   ServiceInfo,
-} from './custom-domains/types';
+} from './custom-domains/domain-models';
 
 export { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './custom-domains/cloudflare';
 

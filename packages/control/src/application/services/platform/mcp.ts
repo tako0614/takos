@@ -5,7 +5,7 @@
  * Tokens are stored AES-256-GCM encrypted using the workspace's ENCRYPTION_KEY.
  *
  * This is the barrel re-export entry point. Implementation is split across:
- *   - mcp/types.ts       - Type definitions and shared constants
+ *   - mcp/mcp-models.ts  - Type definitions and shared constants
  *   - mcp/validation.ts  - Endpoint URL validation
  *   - mcp/crypto.ts      - PKCE and token encryption helpers
  *   - mcp/oauth.ts       - OAuth discovery, pending state, token exchange/refresh
@@ -20,7 +20,7 @@ export type {
   McpServerRecord,
   RegisterExternalMcpServerResult,
   McpEndpointUrlOptions,
-} from './mcp/types';
+} from './mcp/mcp-models';
 
 // Validation
 export {

@@ -1,7 +1,7 @@
 /**
  * Dependency resolution using DAG (Directed Acyclic Graph)
  */
-import type { Workflow } from '../types.js';
+import type { Workflow } from '../workflow-models.js';
 import { normalizeNeedsInput } from './job.js';
 
 /**

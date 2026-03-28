@@ -3,7 +3,7 @@
  */
 
 import { InternalError } from '@takos/common/errors';
-import type { WfpContext } from './types';
+import type { WfpContext } from './wfp-contracts';
 
 // ---------------------------------------------------------------------------
 // KV CRUD

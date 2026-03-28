@@ -9,13 +9,13 @@ import type {
   ResolvedRouting,
   RoutingBindings,
   RoutingTarget,
-} from './types';
+} from './routing-models';
 import type { PlatformExecutionContext } from '../../../shared/types/bindings.ts';
 
 import { logWarn } from '../../../shared/utils/logger';
 
 // Re-export public APIs from resolver and cache so existing consumers keep working.
-export type { RoutingBindings } from './types';
+export type { RoutingBindings } from './routing-models';
 
 export {
   selectRouteRefFromRoutingTarget,

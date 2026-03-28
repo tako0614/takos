@@ -3,14 +3,14 @@ import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { now } from '../../../../shared/utils';
 import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service';
-import type { RoutingTarget } from '../../routing/types';
+import type { RoutingTarget } from '../../routing/routing-models';
 import { createServiceDesiredStateService } from '../worker-desired-state';
 import { logError } from '../../../../shared/utils/logger';
 import {
   SSL_TERMINAL_FAILURE_STATUSES,
   CustomDomainError,
-} from './types';
-import type { DomainStatus, VerifyCustomDomainResult } from './types';
+} from './domain-models';
+import type { DomainStatus, VerifyCustomDomainResult } from './domain-models';
 import { getServiceForUser, requireServiceWriteAccess } from './access';
 import { verifyDNS } from './dns';
 import { createCloudflareCustomHostname, deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './cloudflare';

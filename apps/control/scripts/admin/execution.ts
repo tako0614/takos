@@ -4,9 +4,9 @@
 
 import { CloudflareApiClient } from '../../../../packages/control/src/application/services/cloudflare/api-client.ts';
 
-import type { D1Statement, ResolvedConfig } from './types.ts';
+import type { D1Statement, ResolvedConfig } from './admin-types.ts';
 import { VALID_USER_ID_PATTERN } from './constants.ts';
-import { fail } from './utils.ts';
+import { fail } from './cli-helpers.ts';
 
 // ---------------------------------------------------------------------------
 // D1 execution helpers

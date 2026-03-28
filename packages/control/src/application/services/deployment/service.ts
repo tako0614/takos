@@ -17,7 +17,7 @@ import type {
   DeploymentEnv,
   CreateDeploymentInput,
   RollbackInput,
-} from './types';
+} from './models';
 import {
   parseDeploymentTargetConfig,
   serializeDeploymentTarget,
@@ -45,7 +45,7 @@ import {
 } from './deployment-artifacts';
 // Re-export for backward compatibility — external code imports buildDeploymentArtifactRef / DeploymentEnv from here.
 export { buildDeploymentArtifactRef } from './deployment-artifacts';
-export type { DeploymentEnv } from './types';
+export type { DeploymentEnv } from './models';
 import { buildDeploymentArtifactRef } from './deployment-artifacts';
 import { executeDeploymentPipeline } from './execute';
 import { executeRollback } from './rollback-orchestrator';

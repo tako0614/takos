@@ -8,8 +8,8 @@
  */
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../types';
-import { isValidSha } from '../types';
+import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects';
+import { isValidSha } from '../git-objects';
 import { sha1, concatBytes } from './sha1';
 import {
   encodeBlob,
