@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asRunRow, runRowToApi, type RunRow } from '@/services/runs/shared';
+import { asRunRow, runRowToApi, type RunRow } from '@/services/runs/run-serialization';
 
 function makeRunRow(overrides: Partial<RunRow> = {}): RunRow {
   return {

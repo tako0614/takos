@@ -7,7 +7,6 @@ import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
 import { isValidSessionId, validateGitRef, validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.js';
 import { sessionStore } from './storage.js';
 import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId } from './session-utils.js';
-import { getErrorMessage } from '@takos/common/errors';
 import { OwnerBindingError } from '../../shared/errors.js';
 import { badRequest, forbidden, notFound, internalError } from '@takos/common/middleware/hono';
 

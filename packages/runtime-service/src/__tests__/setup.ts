@@ -41,7 +41,7 @@ vi.mock('../runtime/actions/executor.js', async () => {
       command: string,
       timeoutMs?: number,
       options?: { shell?: string; workingDirectory?: string },
-    ): Promise<import('../runtime/actions/executor.js').StepResult> {
+    ): Promise<import('../runtime/actions/executor.js').ExecutorStepResult> {
       if (command.trim() === 'pwd') {
         return {
           exitCode: 0,

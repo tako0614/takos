@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { AuthenticationError } from '@takos/common/errors';

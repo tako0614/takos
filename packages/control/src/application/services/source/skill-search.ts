@@ -36,7 +36,7 @@ export interface SkillSearchResponse {
   total: number;
 }
 
-const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
 const CATEGORY_ORDER: SkillCategory[] = ['research', 'writing', 'planning', 'slides', 'software', 'custom'];
 

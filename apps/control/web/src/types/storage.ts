@@ -1,3 +1,7 @@
+// Re-export types from backend shared models to avoid duplication.
+import type { SpaceStorageFile, SpaceStorageFileType } from '@takos/control-shared/types';
+
+/** Frontend-only: directory listing entry used by the storage browser. */
 export interface DirectoryEntry {
   name: string;
   type: 'file' | 'directory';
@@ -6,19 +10,10 @@ export interface DirectoryEntry {
   updated_at?: string;
 }
 
-export type StorageFileType = 'file' | 'folder';
+export type StorageFileType = SpaceStorageFileType;
 
-export interface StorageFile {
-  id: string;
-  space_id: string;
-  parent_id: string | null;
-  name: string;
-  path: string;
-  type: StorageFileType;
-  size: number;
-  mime_type: string | null;
-  sha256: string | null;
-  uploaded_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Frontend StorageFile: omits the internal `r2_key` field from the backend
+ * SpaceStorageFile since it's not exposed via the API.
+ */
+export type StorageFile = Omit<SpaceStorageFile, 'r2_key'>;

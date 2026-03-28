@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // Mock claim-store

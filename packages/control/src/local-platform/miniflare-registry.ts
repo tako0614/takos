@@ -551,7 +551,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
                 'Set POSTGRES_URL and PGVECTOR_ENABLED=true.',
               );
             }
-            const { createPgVectorStore } = await import('../bindings/pgvector-store.ts');
+            const { createPgVectorStore } = await import('../adapters/pgvector-store.ts');
             const vectorStore = createPgVectorStore({
               pool: options.pgPool,
               tableName: `vector_${binding.index_name ?? binding.name}`.replace(/[^a-z0-9_]/gi, '_'),
@@ -570,7 +570,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
               : (binding.queue_name || binding.name);
             break;
           case 'analytics_engine': {
-            const { createAnalyticsEngineBinding } = await import('../bindings/analytics-engine-binding.ts');
+            const { createAnalyticsEngineBinding } = await import('../adapters/analytics-engine-binding.ts');
             const analyticsBinding = createAnalyticsEngineBinding({
               dataset: binding.dataset ?? binding.name,
               otelEndpoint: options.otelEndpoint,
@@ -581,7 +581,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
             break;
           }
           case 'workflow': {
-            const { createWorkflowBinding } = await import('../bindings/workflow-binding.ts');
+            const { createWorkflowBinding } = await import('../adapters/workflow-binding.ts');
             const workflowBinding = createWorkflowBinding({
               db: options.db,
               serviceId: deployment.serviceId,
@@ -616,7 +616,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
 
       // -- Inject AI binding if OPENAI_API_KEY is available --
       if (options.openAiApiKey) {
-        const { createOpenAiAiBinding } = await import('../bindings/openai-ai-binding.ts');
+        const { createOpenAiAiBinding } = await import('../adapters/openai-binding.ts');
         const aiBinding = createOpenAiAiBinding({
           apiKey: options.openAiApiKey,
           baseUrl: options.openAiBaseUrl,

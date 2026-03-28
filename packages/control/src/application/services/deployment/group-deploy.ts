@@ -198,31 +198,9 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
 
   // ── Step 2: Deploy each service ──────────────────────────────────────────
 
-  for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
-    if (service.type === 'http') {
-      // HTTP services are external — no deployment needed
-      result.services.push({
-        name: serviceName,
-        type: 'http',
-        status: 'skipped',
-        url: service.baseUrl,
-      });
-      continue;
-    }
-
-    if (service.type === 'container') {
-      // Container services — not yet implemented
-      result.services.push({
-        name: serviceName,
-        type: 'container',
-        status: 'skipped',
-        error: 'Container deployment not yet implemented in group deploy',
-      });
-      continue;
-    }
-
+  for (const [workerName, worker] of Object.entries(manifest.spec.workers)) {
     // Worker service
-    const wranglerConfig = generateWranglerConfig(service, serviceName, {
+    const wranglerConfig = generateWranglerConfig(worker, workerName, {
       groupName,
       env,
       namespace,
@@ -231,43 +209,43 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     });
 
     if (dryRun) {
-      result.services.push(buildDryRunServiceResult(serviceName, service, wranglerConfig.name));
+      result.services.push(buildDryRunServiceResult(workerName, worker, wranglerConfig.name));
 
       // Report bindings that would be created
-      if (service.bindings?.d1) {
-        for (const resourceName of service.bindings.d1) {
+      if (worker.bindings?.d1) {
+        for (const resourceName of worker.bindings.d1) {
           result.bindings.push({
-            from: serviceName,
+            from: workerName,
             to: resourceName,
             type: 'd1',
             status: 'bound',
           });
         }
       }
-      if (service.bindings?.r2) {
-        for (const resourceName of service.bindings.r2) {
+      if (worker.bindings?.r2) {
+        for (const resourceName of worker.bindings.r2) {
           result.bindings.push({
-            from: serviceName,
+            from: workerName,
             to: resourceName,
             type: 'r2',
             status: 'bound',
           });
         }
       }
-      if (service.bindings?.kv) {
-        for (const resourceName of service.bindings.kv) {
+      if (worker.bindings?.kv) {
+        for (const resourceName of worker.bindings.kv) {
           result.bindings.push({
-            from: serviceName,
+            from: workerName,
             to: resourceName,
             type: 'kv',
             status: 'bound',
           });
         }
       }
-      if (service.bindings?.services) {
-        for (const targetService of service.bindings.services) {
+      if (worker.bindings?.services) {
+        for (const targetService of worker.bindings.services) {
           result.bindings.push({
-            from: serviceName,
+            from: workerName,
             to: targetService,
             type: 'service',
             status: 'bound',
@@ -287,7 +265,7 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
       }
     }
     if (serviceSecrets.size > 0) {
-      secretsByService.set(serviceName, serviceSecrets);
+      secretsByService.set(workerName, serviceSecrets);
     }
 
     const toml = serializeWranglerToml(wranglerConfig);
@@ -303,31 +281,31 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
 
       if (deployResult.success) {
         result.services.push({
-          name: serviceName,
+          name: workerName,
           type: 'worker',
           status: 'deployed',
           scriptName: wranglerConfig.name,
         });
 
         // Record bindings as successful
-        const bindingResults = collectBindingResults(serviceName, service, 'bound');
+        const bindingResults = collectBindingResults(workerName, worker, 'bound');
         result.bindings.push(...bindingResults);
       } else {
         result.services.push({
-          name: serviceName,
+          name: workerName,
           type: 'worker',
           status: 'failed',
           scriptName: wranglerConfig.name,
           error: deployResult.error,
         });
 
-        const bindingResults = collectBindingResults(serviceName, service, 'failed');
+        const bindingResults = collectBindingResults(workerName, worker, 'failed');
         result.bindings.push(...bindingResults);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.services.push({
-        name: serviceName,
+        name: workerName,
         type: 'worker',
         status: 'failed',
         scriptName: wranglerConfig.name,

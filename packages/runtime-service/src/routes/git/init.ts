@@ -1,14 +1,9 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { randomBytes } from 'crypto';
 import { badRequest, forbidden, internalError } from '@takos/common/middleware/hono';
 import { getRepoPath } from '../../runtime/paths.js';
-
-function generateTempSuffix(): string {
-  const id = randomBytes(6).toString('base64').replace(/[+/=]/g, '').slice(0, 8);
-  return `${Date.now()}-${id}`;
-}
+import { generateTempSuffix } from '../../shared/temp-id.js';
 import { runGitCommand } from '../../runtime/git.js';
 import { validateNameParam } from '../../runtime/validation.js';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';

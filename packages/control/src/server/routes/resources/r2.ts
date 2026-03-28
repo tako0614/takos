@@ -85,7 +85,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const result = await wfp.listR2Objects(resource.cf_name, {
+    const result = await wfp.r2.listR2Objects(resource.cf_name, {
       prefix,
       cursor,
       limit,
@@ -131,7 +131,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const stats = await wfp.getR2BucketStats(resource.cf_name);
+    const stats = await wfp.r2.getR2BucketStats(resource.cf_name);
 
     return c.json({ stats });
   } catch (err) {
@@ -170,7 +170,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    await wfp.deleteR2Object(resource.cf_name, key);
+    await wfp.r2.deleteR2Object(resource.cf_name, key);
     return c.json({ success: true });
   } catch (err) {
     logError('Failed to delete R2 object', err, { module: 'routes/resources/r2' });

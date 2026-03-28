@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { useRouter } from '../../hooks/useRouter';
 import { useConfirmDialog } from '../../store/confirm-dialog';
 import { rpc, rpcJson } from '../../lib/rpc';
@@ -19,6 +19,26 @@ import {
   getModelsForProvider,
 } from './work/types';
 
+interface TaskFormState {
+  title: string;
+  description: string;
+  status: AgentTaskStatus;
+  priority: AgentTaskPriority;
+  agentType: string;
+  model: string;
+  dueAt: string;
+}
+
+const INITIAL_FORM_STATE: TaskFormState = {
+  title: '',
+  description: '',
+  status: 'planned',
+  priority: 'medium',
+  agentType: 'default',
+  model: '',
+  dueAt: '',
+};
+
 export function WorkTab({ spaceId }: { spaceId: string }) {
   const { t, tOr, lang } = useI18n();
   const { showToast } = useToast();
@@ -36,13 +56,12 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<AgentTaskStatus>('planned');
-  const [priority, setPriority] = useState<AgentTaskPriority>('medium');
-  const [agentType, setAgentType] = useState('default');
-  const [model, setModel] = useState('');
-  const [dueAt, setDueAt] = useState('');
+  const [form, setForm] = useState<TaskFormState>(INITIAL_FORM_STATE);
+  const updateForm = useCallback(
+    <K extends keyof TaskFormState>(field: K, value: TaskFormState[K]) =>
+      setForm((prev) => ({ ...prev, [field]: value })),
+    [],
+  );
 
   useEffect(() => {
     void fetchTasks();
@@ -68,8 +87,8 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         ai_model: resolvedModel,
         ai_provider: resolvedProvider,
       });
-      if (!model) {
-        setModel(modelIds.includes(resolvedModel) ? resolvedModel : fallbackModel);
+      if (!form.model) {
+        updateForm('model', modelIds.includes(resolvedModel) ? resolvedModel : fallbackModel);
       }
     } catch (err) {
       console.error('Failed to fetch model settings:', err);
@@ -93,13 +112,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   };
 
   const resetForm = () => {
-    setTitle('');
-    setDescription('');
-    setStatus('planned');
-    setPriority('medium');
-    setAgentType('default');
-    setModel(modelSettings?.ai_model || DEFAULT_MODEL_ID);
-    setDueAt('');
+    setForm({ ...INITIAL_FORM_STATE, model: modelSettings?.ai_model || DEFAULT_MODEL_ID });
     setError(null);
   };
 
@@ -110,13 +123,15 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   };
 
   const openEditForm = (task: AgentTask) => {
-    setTitle(task.title);
-    setDescription(task.description || '');
-    setStatus(task.status);
-    setPriority(task.priority);
-    setAgentType(task.agent_type || 'default');
-    setModel(task.model || modelSettings?.ai_model || DEFAULT_MODEL_ID);
-    setDueAt(task.due_at ? new Date(task.due_at).toISOString().slice(0, 10) : '');
+    setForm({
+      title: task.title,
+      description: task.description || '',
+      status: task.status,
+      priority: task.priority,
+      agentType: task.agent_type || 'default',
+      model: task.model || modelSettings?.ai_model || DEFAULT_MODEL_ID,
+      dueAt: task.due_at ? new Date(task.due_at).toISOString().slice(0, 10) : '',
+    });
     setError(null);
     setEditingTask(task);
     setIsCreating(true);
@@ -130,19 +145,19 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!form.title.trim()) return;
 
     setSaving(true);
     setError(null);
 
     const payload = {
-      title: title.trim(),
-      description: description.trim() || undefined,
-      status,
-      priority,
-      agent_type: agentType,
-      model: model || undefined,
-      due_at: dueAt ? new Date(`${dueAt}T00:00:00.000Z`).toISOString() : undefined,
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      status: form.status,
+      priority: form.priority,
+      agent_type: form.agentType,
+      model: form.model || undefined,
+      due_at: form.dueAt ? new Date(`${form.dueAt}T00:00:00.000Z`).toISOString() : undefined,
     };
 
     try {
@@ -300,8 +315,8 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   const availableModels = useMemo(() => {
     const models = getModelsForProvider(modelSettings, modelSettings?.ai_provider || 'openai');
     const resolved = models.length > 0 ? models : [...FALLBACK_MODELS];
-    return ensureModelOption(resolved, model);
-  }, [model, modelSettings]);
+    return ensureModelOption(resolved, form.model);
+  }, [form.model, modelSettings]);
 
   if (loading) {
     return (
@@ -346,20 +361,20 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
           <TaskForm
             editingTask={editingTask}
-            title={title}
-            setTitle={setTitle}
-            description={description}
-            setDescription={setDescription}
-            status={status}
-            setStatus={setStatus}
-            priority={priority}
-            setPriority={setPriority}
-            agentType={agentType}
-            setAgentType={setAgentType}
-            model={model}
-            setModel={setModel}
-            dueAt={dueAt}
-            setDueAt={setDueAt}
+            title={form.title}
+            setTitle={(v) => updateForm('title', v)}
+            description={form.description}
+            setDescription={(v) => updateForm('description', v)}
+            status={form.status}
+            setStatus={(v) => updateForm('status', v)}
+            priority={form.priority}
+            setPriority={(v) => updateForm('priority', v)}
+            agentType={form.agentType}
+            setAgentType={(v) => updateForm('agentType', v)}
+            model={form.model}
+            setModel={(v) => updateForm('model', v)}
+            dueAt={form.dueAt}
+            setDueAt={(v) => updateForm('dueAt', v)}
             availableModels={availableModels}
             saving={saving}
             error={error}

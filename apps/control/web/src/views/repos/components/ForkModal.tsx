@@ -5,7 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import type { Repository, Space } from '../../../types';
 import { rpc, rpcJson } from '../../../lib/rpc';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { Icons } from '../../../lib/Icons';
 import { useAuth } from '../../../hooks/useAuth';
 

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useI18n } from '../store/i18n';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 import type { User, Space, UserSettings } from '../types';
 import {
   authStateAtom,

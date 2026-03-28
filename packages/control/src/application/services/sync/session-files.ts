@@ -368,13 +368,3 @@ export class SessionFilesManager {
     return result;
   }
 }
-
-/** Create a SessionFilesManager for the given context. */
-export function createSessionFilesManager(
-  db: D1Database,
-  storage: R2Bucket | undefined,
-  spaceId: string,
-  sessionId: string
-): SessionFilesManager {
-  return new SessionFilesManager(db, storage, spaceId, sessionId);
-}

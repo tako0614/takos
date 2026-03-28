@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { D1Database, R2Bucket } from '@takos/cloudflare-compat';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -34,11 +34,11 @@ import {
   checkRepoAccess,
   getRepositoryById,
   listRepositoriesBySpace,
-  sanitizeRepositoryName,
   createRepository,
   toApiRepositoryFromDb,
   RepositoryCreationError,
 } from '@/services/source/repos';
+import { sanitizeRepoName as sanitizeRepositoryName } from '@/utils';
 
 function createDrizzleMock() {
   const getMock = vi.fn();

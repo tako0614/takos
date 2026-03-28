@@ -1,4 +1,4 @@
-import pullRequestsBase from './base';
+import pullRequestsBase from './routes';
 import pullRequestsReviews from './reviews';
 import pullRequestsComments from './comments';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';

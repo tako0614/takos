@@ -8,9 +8,8 @@
  * (workers.ts, d1.ts, r2.ts, kv.ts, queues.ts, vectorize.ts, orchestrator.ts).
  * Binding formatting lives in bindings.ts.
  *
- * Each resource group is also accessible via a bound namespace property
+ * Each resource group is accessible via a bound namespace property
  * (e.g. `wfp.workers.createWorker(...)`, `wfp.d1.createD1Database(...)`).
- * The flat methods are kept for backward compatibility.
  */
 
 import type { WfpEnv } from './client';
@@ -309,104 +308,6 @@ export class WFPService {
   }
 
   // ---------------------------------------------------------------------------
-  // Flat methods -- kept for backward compatibility; delegate to namespace properties
-  // ---------------------------------------------------------------------------
-
-  /** @see workers.createWorker */
-  createWorker(options: CreateWorkerOptions): Promise<void> { return this.workers.createWorker(options); }
-  /** @see workers.createAssetsUploadSession */
-  createAssetsUploadSession(workerName: string, manifest: Record<string, AssetManifestEntry>): Promise<AssetsUploadSession> { return this.workers.createAssetsUploadSession(workerName, manifest); }
-  /** @see workers.uploadAssets */
-  uploadAssets(sessionJwt: string, files: Record<string, AssetUploadFile>): Promise<string> { return this.workers.uploadAssets(sessionJwt, files); }
-  /** @see workers.uploadAllAssets */
-  uploadAllAssets(workerName: string, files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>): Promise<string> { return this.workers.uploadAllAssets(workerName, files); }
-  /** @see workers.deleteWorker */
-  deleteWorker(workerName: string): Promise<void> { return this.workers.deleteWorker(workerName); }
-  /** @see workers.getWorker */
-  getWorker(workerName: string): Promise<unknown> { return this.workers.getWorker(workerName); }
-  /** @see workers.workerExists */
-  workerExists(workerName: string): Promise<boolean> { return this.workers.workerExists(workerName); }
-  /** @see workers.listWorkers */
-  listWorkers(): Promise<Array<{ id: string; script: string; created_on: string; modified_on: string }>> { return this.workers.listWorkers(); }
-  /** @see workers.updateWorkerSettings */
-  updateWorkerSettings(options: {
-    workerName: string;
-    bindings?: Array<WorkerBinding | CloudflareBindingRecord | Record<string, unknown>>;
-    compatibility_date?: string;
-    compatibility_flags?: string[];
-    limits?: { cpu_ms?: number; subrequests?: number };
-  }): Promise<void> { return this.workers.updateWorkerSettings(options); }
-  /** @see workers.getWorkerSettings */
-  getWorkerSettings(workerName: string): Promise<{
-    bindings: CloudflareBindingRecord[];
-    compatibility_date?: string;
-    compatibility_flags?: string[];
-    limits?: { cpu_ms?: number; subrequests?: number };
-  }> { return this.workers.getWorkerSettings(workerName); }
-  /** @see workers.createWorkerWithWasm */
-  createWorkerWithWasm(
-    workerName: string, workerScript: string, wasmContent: ArrayBuffer | null,
-    options: {
-      bindings: Array<{ type: string; name: string; id?: string; bucket_name?: string; namespace_id?: string; queue_name?: string; delivery_delay?: number; dataset?: string; workflow_name?: string; class_name?: string; script_name?: string; index_name?: string; text?: string; }>;
-      compatibility_date?: string; compatibility_flags?: string[]; limits?: { cpu_ms?: number; subrequests?: number }; assetsJwt?: string;
-    }
-  ): Promise<void> { return this.workers.createWorkerWithWasm(workerName, workerScript, wasmContent, options); }
-
-  // D1 flat methods  @see d1.ts
-  /** @see d1.createD1Database */
-  createD1Database(name: string): Promise<string> { return this.d1.createD1Database(name); }
-  /** @see d1.deleteD1Database */
-  deleteD1Database(databaseId: string): Promise<void> { return this.d1.deleteD1Database(databaseId); }
-  /** @see d1.runD1SQL */
-  runD1SQL(databaseId: string, sql: string): Promise<unknown> { return this.d1.runD1SQL(databaseId, sql); }
-  /** @see d1.listD1Tables */
-  listD1Tables(databaseId: string): Promise<Array<{ name: string }>> { return this.d1.listD1Tables(databaseId); }
-  /** @see d1.getD1TableInfo */
-  getD1TableInfo(databaseId: string, tableName: string): Promise<Array<{ cid: number; name: string; type: string; notnull: number; dflt_value: string | null; pk: number; }>> { return this.d1.getD1TableInfo(databaseId, tableName); }
-  /** @see d1.getD1TableCount */
-  getD1TableCount(databaseId: string, tableName: string): Promise<number> { return this.d1.getD1TableCount(databaseId, tableName); }
-  /** @see d1.executeD1Query */
-  executeD1Query(databaseId: string, sql: string): Promise<unknown> { return this.d1.executeD1Query(databaseId, sql); }
-  /** @see d1.queryD1 */
-  queryD1<T>(databaseId: string, sql: string): Promise<T[]> { return this.d1.queryD1<T>(databaseId, sql); }
-
-  // R2 flat methods  @see r2.ts
-  /** @see r2.createR2Bucket */
-  createR2Bucket(name: string): Promise<void> { return this.r2.createR2Bucket(name); }
-  /** @see r2.deleteR2Bucket */
-  deleteR2Bucket(name: string): Promise<void> { return this.r2.deleteR2Bucket(name); }
-  /** @see r2.listR2Objects */
-  listR2Objects(bucketName: string, options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{ objects: Array<{ key: string; size: number; uploaded: string; etag: string }>; truncated: boolean; cursor?: string }> { return this.r2.listR2Objects(bucketName, options); }
-  /** @see r2.uploadToR2 */
-  uploadToR2(bucketName: string, key: string, body: ReadableStream<Uint8Array> | ArrayBuffer | string, options?: { contentType?: string }): Promise<void> { return this.r2.uploadToR2(bucketName, key, body, options); }
-  /** @see r2.deleteR2Object */
-  deleteR2Object(bucketName: string, key: string): Promise<void> { return this.r2.deleteR2Object(bucketName, key); }
-  /** @see r2.getR2BucketStats */
-  getR2BucketStats(bucketName: string): Promise<{ objectCount: number; payloadSize: number; metadataSize: number }> { return this.r2.getR2BucketStats(bucketName); }
-
-  // KV flat methods  @see kv.ts
-  /** @see kv.createKVNamespace */
-  createKVNamespace(title: string): Promise<string> { return this.kv.createKVNamespace(title); }
-  /** @see kv.deleteKVNamespace */
-  deleteKVNamespace(namespaceId: string): Promise<void> { return this.kv.deleteKVNamespace(namespaceId); }
-
-  // Queue flat methods  @see queues.ts
-  /** @see queues.createQueue */
-  createQueue(queueName: string, options?: { deliveryDelaySeconds?: number }): Promise<{ id: string; name: string }> { return this.queues.createQueue(queueName, options); }
-  /** @see queues.listQueues */
-  listQueues(): Promise<Array<{ id: string; name: string }>> { return this.queues.listQueues(); }
-  /** @see queues.deleteQueue */
-  deleteQueue(queueId: string): Promise<void> { return this.queues.deleteQueue(queueId); }
-  /** @see queues.deleteQueueByName */
-  deleteQueueByName(queueName: string): Promise<void> { return this.queues.deleteQueueByName(queueName); }
-
-  // Vectorize flat methods  @see vectorize.ts
-  /** @see vectorize.createVectorizeIndex */
-  createVectorizeIndex(name: string, config: { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' }): Promise<string> { return this.vectorize.createVectorizeIndex(name, config); }
-  /** @see vectorize.deleteVectorizeIndex */
-  deleteVectorizeIndex(name: string): Promise<void> { return this.vectorize.deleteVectorizeIndex(name); }
-
-  // ---------------------------------------------------------------------------
   // Deployment orchestration  (delegated to orchestrator.ts)
   // ---------------------------------------------------------------------------
 
@@ -427,7 +328,7 @@ export class WFPService {
   ): Promise<void> {
     return orchestratorOps.deployWorkerWithBindings(
       this.ctx,
-      (opts) => this.createWorker(opts),
+      (opts) => this.workers.createWorker(opts),
       workerName,
       options
     );

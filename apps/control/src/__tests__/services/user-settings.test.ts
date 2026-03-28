@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 
 /**
  * Minimal mock for the Drizzle DB object returned by getDb().

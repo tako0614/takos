@@ -25,19 +25,12 @@ import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 // ── Event emission helpers ──────────────────────────────────────────
 
 const MAX_EVENT_EMISSION_ERRORS = MAX_EMISSION_ERRORS;
+const EVENT_EMISSION_MAX_BACKOFF_MS = 4_000;
 
 export interface EventEmitterState {
   eventSequence: number;
   pendingEventEmissions: number;
   eventEmissionErrors: EventEmissionError[];
-}
-
-export function createEventEmitterState(): EventEmitterState {
-  return {
-    eventSequence: 0,
-    pendingEventEmissions: 0,
-    eventEmissionErrors: [],
-  };
 }
 
 export function buildTerminalEventPayloadImpl(
@@ -136,7 +129,7 @@ export async function emitEventImpl(
       if (isTerminal) {
         const TERMINAL_MAX_RETRIES = 3;
         for (let attempt = 1; attempt <= TERMINAL_MAX_RETRIES; attempt++) {
-          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), EVENT_EMISSION_MAX_BACKOFF_MS);
           await new Promise(resolve => setTimeout(resolve, backoffMs));
           try {
             await doEmit();

@@ -25,7 +25,6 @@ vi.mock('@/shared/utils', async (importOriginal) => ({
 
 import {
   SessionFilesManager,
-  createSessionFilesManager,
 } from '@/services/sync/session-files';
 
 function makeChain(overrides: Record<string, unknown> = {}) {
@@ -80,7 +79,7 @@ describe('SessionFilesManager', () => {
       const drizzle = makeDrizzle();
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.readFile('nonexistent.ts');
       expect(result).toBeNull();
     });
@@ -92,7 +91,7 @@ describe('SessionFilesManager', () => {
       drizzle.select = vi.fn().mockReturnValue(selectChain);
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.readFile('deleted.ts');
       expect(result).toBeNull();
     });
@@ -106,7 +105,7 @@ describe('SessionFilesManager', () => {
 
       await storage.put(`blobs/${spaceId}/hash-abc`, 'hello');
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.readFile('src/a.ts');
 
       expect(result).not.toBeNull();
@@ -132,7 +131,7 @@ describe('SessionFilesManager', () => {
 
       await storage.put(`spaces/${spaceId}/files/file-1`, 'workspace content');
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.readFile('readme.md');
 
       expect(result).not.toBeNull();
@@ -151,7 +150,7 @@ describe('SessionFilesManager', () => {
       });
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.writeFile('src/new.ts', 'new content');
 
       expect(result.hash).toBe('sha256-mock');
@@ -177,7 +176,7 @@ describe('SessionFilesManager', () => {
       });
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       await mgr.writeFile('existing.ts', 'updated');
 
       // Insert is called (it's a new session_file for an existing workspace file)
@@ -195,7 +194,7 @@ describe('SessionFilesManager', () => {
       });
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       await mgr.writeFile('src/a.ts', 'updated');
 
       // Update should be called instead of insert
@@ -208,7 +207,7 @@ describe('SessionFilesManager', () => {
       const drizzle = makeDrizzle();
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const result = await mgr.deleteFile('nonexistent.ts');
       expect(result).toBe(false);
     });
@@ -241,7 +240,7 @@ describe('SessionFilesManager', () => {
       });
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const files = await mgr.listFiles();
 
       const fileMap = new Map(files.map(f => [f.path, f.size]));
@@ -268,7 +267,7 @@ describe('SessionFilesManager', () => {
       });
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const files = await mgr.listFiles('src');
 
       expect(files).toHaveLength(1);
@@ -288,7 +287,7 @@ describe('SessionFilesManager', () => {
       drizzle.select = vi.fn().mockReturnValue(selectChain);
       mocks.getDb.mockReturnValue(drizzle);
 
-      const mgr = createSessionFilesManager({} as never, storage as never, spaceId, sessionId);
+      const mgr = new SessionFilesManager({} as never, storage as never, spaceId, sessionId);
       const changes = await mgr.getChanges();
 
       expect(changes).toHaveLength(2);
@@ -298,9 +297,9 @@ describe('SessionFilesManager', () => {
   });
 });
 
-describe('createSessionFilesManager', () => {
+describe('SessionFilesManager constructor', () => {
   it('creates a SessionFilesManager instance', () => {
-    const mgr = createSessionFilesManager({} as never, new MockR2Bucket() as never, 'sp', 'sess');
+    const mgr = new SessionFilesManager({} as never, new MockR2Bucket() as never, 'sp', 'sess');
     expect(mgr).toBeInstanceOf(SessionFilesManager);
   });
 });

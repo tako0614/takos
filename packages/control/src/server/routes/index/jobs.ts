@@ -1,12 +1,12 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { SpaceFile } from '../../../shared/types';
 import { getDb } from '../../../infra/db';
-import { indexJobs, files, chunks, nodes, edges } from '../../../infra/db/schema';
+import { indexJobs, files, chunks, nodes } from '../../../infra/db/schema';
 import { eq, and, ne, inArray, asc } from 'drizzle-orm';
 import type { EmbeddingsService } from '../../../application/services/execution/embeddings';
 import { generateId, now } from '../../../shared/utils';
 import { extractAndCreateEdges } from './graph';
-import { chunkContent, getR2Key } from './shared';
+import { chunkContent, getR2Key } from './index-context';
 import { logWarn } from '../../../shared/utils/logger';
 
 export async function runIndexJob(

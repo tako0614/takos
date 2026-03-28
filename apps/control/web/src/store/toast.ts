@@ -4,7 +4,14 @@ import type { Toast } from '../types';
 
 export const toastsAtom = atom<Toast[]>([]);
 
-/** Write-only atom that adds a toast and auto-dismisses after 4 seconds */
+/**
+ * Write-only atom that adds a toast and auto-dismisses after 4 seconds.
+ *
+ * The setTimeout side effect is intentional here. Jotai write atoms are the
+ * idiomatic place for side effects (the `set` function in the write callback
+ * is designed to be called asynchronously). This avoids the need for a
+ * dedicated cleanup hook in every component that shows toasts.
+ */
 export const showToastAtom = atom(
   null,
   (get, set, { type, message }: { type: Toast['type']; message: string }) => {

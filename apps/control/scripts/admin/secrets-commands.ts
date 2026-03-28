@@ -400,14 +400,9 @@ export async function cmdSecretsPrune(_config: ResolvedConfig, options: GlobalOp
 
 export async function cmdSecretsGenerateJwt(_config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
   const env = options.environment;
-  const prefix = takeOption(args, '--prefix') || 'service';
+  const prefix = takeOption(args, '--prefix') || 'platform';
   const outputDir = takeOption(args, '--output-dir') || resolveSecretsDir(env);
   const upload = takeFlag(args, '--upload');
-
-  const validPrefixes = ['platform'];
-  if (!validPrefixes.includes(prefix)) {
-    fail(`Invalid prefix: ${prefix}. Use: ${validPrefixes.join(', ')} (service JWT keys are no longer used)`);
-  }
 
   const { generateKeyPairSync } = await import('crypto');
   const { privateKey, publicKey } = generateKeyPairSync('rsa', {

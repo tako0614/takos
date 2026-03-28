@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ResourceType } from '../../../shared/types';
 import { generateId, now } from '../../../shared/utils';
+import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { BadRequestError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
@@ -240,7 +241,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
           config: body.config || {},
           recordFailure: true,
           ...(body.type === 'vectorize'
-            ? { vectorize: { dimensions: 1536, metric: 'cosine' as const } }
+            ? { vectorize: { dimensions: VECTORIZE_DEFAULT_DIMENSIONS, metric: 'cosine' as const } }
             : {}),
         });
         return c.json({ resource: await getResourceById(dbBinding, id) }, 201);

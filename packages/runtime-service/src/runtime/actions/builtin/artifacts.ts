@@ -3,7 +3,7 @@ import * as path from 'path';
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { type ActionContext } from '../executor.js';
 import { pushLog } from '../../logging.js';
-import { resolvePathWithin } from '../../paths.js';
+import { resolvePathWithin, isPathWithinBase } from '../../paths.js';
 import { s3Client, isR2Configured } from '../../../storage/r2.js';
 import { R2_BUCKET } from '../../../shared/config.js';
 import { getErrorMessage } from '@takos/common/errors';
@@ -241,6 +241,13 @@ export async function downloadArtifact(
       const relativePath = obj.Key.slice(r2ArtifactPrefix.length);
       if (!relativePath) continue;
 
+      // Security: reject relative paths containing ".." segments or absolute
+      // paths to prevent path traversal when writing downloaded artifacts.
+      if (relativePath.includes('..') || path.isAbsolute(relativePath)) {
+        pushLog(context.logs, `Warning: Skipping unsafe artifact path: ${relativePath}`);
+        continue;
+      }
+
       try {
         const getResult = await s3Client.send(
           new GetObjectCommand({
@@ -252,6 +259,15 @@ export async function downloadArtifact(
         if (getResult.Body) {
           const content = await getResult.Body.transformToByteArray();
           const localPath = path.join(downloadPath, relativePath);
+
+          // Security: verify the resolved path is still within downloadPath
+          // after path.join() normalisation (defense-in-depth).
+          const resolvedDownload = path.resolve(downloadPath);
+          const resolvedLocal = path.resolve(localPath);
+          if (!isPathWithinBase(resolvedDownload, resolvedLocal, { allowBase: false })) {
+            pushLog(context.logs, `Warning: Skipping artifact that escapes download directory: ${relativePath}`);
+            continue;
+          }
 
           await fs.mkdir(path.dirname(localPath), { recursive: true });
           await fs.writeFile(localPath, content);

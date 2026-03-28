@@ -46,18 +46,20 @@ describe('InMemoryRateLimiter', () => {
   });
 
   it('cleanup removes expired entries', () => {
-    const limiter = new InMemoryRateLimiter({ maxRequests: 5, windowMs: 1 });
-    limiter.hit('user-1');
+    vi.useFakeTimers();
+    try {
+      const limiter = new InMemoryRateLimiter({ maxRequests: 5, windowMs: 1 });
+      limiter.hit('user-1');
 
-    // Wait a tiny bit for entries to expire (windowMs is 1ms)
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        limiter.cleanup();
-        const info = limiter.check('user-1');
-        expect(info.remaining).toBe(5);
-        resolve();
-      }, 10);
-    });
+      // Advance time past the 1ms window so entries expire
+      vi.advanceTimersByTime(10);
+
+      limiter.cleanup();
+      const info = limiter.check('user-1');
+      expect(info.remaining).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   describe('checkKeyLimit / MAX_KEYS behavior', () => {

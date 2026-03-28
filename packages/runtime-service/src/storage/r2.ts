@@ -12,13 +12,8 @@ import {
 } from '../shared/config.js';
 import { pushLog } from '../runtime/logging.js';
 import { isPathWithinBase } from '../runtime/paths.js';
-import { randomBytes } from 'crypto';
 import { createLogger } from '@takos/common/logger';
-
-function generateTempSuffix(): string {
-  const id = randomBytes(6).toString('base64').replace(/[+/=]/g, '').slice(0, 8);
-  return `${Date.now()}-${id}`;
-}
+import { generateTempSuffix } from '../shared/temp-id.js';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

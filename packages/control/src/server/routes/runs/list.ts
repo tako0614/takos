@@ -11,7 +11,7 @@ import { zValidator } from '../zod-validator';
 import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
-import { asRunRow, runRowToApi } from '../../../application/services/runs/shared';
+import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization';
 import { toIsoString } from '../../../shared/utils';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';

@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { Message, ToolExecution } from '../../types';
 import { Icons } from '../../lib/Icons';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { PersistedToolCalls } from './Tooling';
 import { useI18n } from '../../store/i18n';
 import { parseChatMessageMetadata } from './messageMetadata';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 
 interface MessageBubbleProps {
   message: Message;
@@ -66,24 +67,7 @@ export const MessageBubble = memo(function MessageBubble({
   spaceId,
 }: MessageBubbleProps) {
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copy = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setCopyFailed(false);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => { setCopied(false); copyTimerRef.current = null; }, 2000);
-    } catch (err) {
-      console.debug('Failed to copy to clipboard:', err);
-      setCopyFailed(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => { setCopyFailed(false); copyTimerRef.current = null; }, 2000);
-    }
-  }, []);
-  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
+  const { copied, copyFailed, copy } = useCopyToClipboard();
 
   if (message.role === 'tool') return null;
   if (message.role === 'assistant' && !message.content && message.tool_calls) return null;

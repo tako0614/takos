@@ -1,5 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import { CloudflareApiClient } from '../cloudflare/api-client';
+import { sha256Hex } from '../../../shared/utils/encoding-utils';
 
 type BackupEnv = {
   DB: D1Database;
@@ -100,14 +101,6 @@ function parseInventoryCreatedAtMs(key: string): number | null {
 function isUnsupportedDbDumpError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return message.includes('DB.dump() is not implemented');
-}
-
-async function sha256Hex(input: ArrayBuffer): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', input);
-  const bytes = new Uint8Array(buf);
-  let out = '';
-  for (const b of bytes) out += b.toString(16).padStart(2, '0');
-  return out;
 }
 
 type D1DatabaseListing = {

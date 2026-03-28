@@ -4,7 +4,7 @@ import { getDb, files as filesTable } from '../../../infra/db';
 import { eq, and, ne, isNull, inArray, desc } from 'drizzle-orm';
 import { flattenTree, getBlob } from '../git-smart';
 
-const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 const MAX_CHUNK_SIZE = 512;
 
 export interface EmbeddingResult {

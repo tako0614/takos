@@ -90,6 +90,7 @@ export const agent = {
     saveModelSettings: 'Save Model Settings',
     modelSettingsSaved: 'Model settings saved',
     modelSettingsFailed: 'Failed to save model settings',
+    tokenLimitLabel: 'History token budget',
 
     // Skills / Agent tabs
     skills: 'Skills',

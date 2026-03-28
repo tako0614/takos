@@ -2,6 +2,9 @@
   "name": "@takos/control-runtime",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     "./worker": "../src/runtime/worker/index.ts",
     "./worker/env": "../src/runtime/worker/env.ts",

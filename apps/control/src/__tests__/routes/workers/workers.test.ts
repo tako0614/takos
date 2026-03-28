@@ -16,21 +16,13 @@ const mocks = vi.hoisted(() => {
 
   return {
     listWorkersForUser,
-    listServicesForUser: listWorkersForUser,
     listWorkersForWorkspace,
-    listServicesForWorkspace: listWorkersForWorkspace,
     createWorker,
-    createService: createWorker,
     countWorkersInWorkspace,
-    countServicesInWorkspace: countWorkersInWorkspace,
     deleteWorker,
-    deleteService: deleteWorker,
     getWorkerForUser,
-    getServiceForUser: getWorkerForUser,
     getWorkerForUserWithRole,
-    getServiceForUserWithRole: getWorkerForUserWithRole,
     slugifyWorkerName,
-    slugifyServiceName: slugifyWorkerName,
     WORKSPACE_WORKER_LIMITS: { maxWorkers: 20 },
     WORKSPACE_SERVICE_LIMITS: { maxServices: 20 },
     requireSpaceAccess: vi.fn(),
@@ -47,22 +39,14 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/services/platform/workers', () => ({
-  listWorkersForUser: mocks.listWorkersForUser,
-  listServicesForUser: mocks.listServicesForUser,
-  listWorkersForWorkspace: mocks.listWorkersForWorkspace,
-  listServicesForWorkspace: mocks.listServicesForWorkspace,
-  createWorker: mocks.createWorker,
-  createService: mocks.createService,
-  countWorkersInWorkspace: mocks.countWorkersInWorkspace,
-  countServicesInWorkspace: mocks.countServicesInWorkspace,
-  deleteWorker: mocks.deleteWorker,
-  deleteService: mocks.deleteService,
-  getWorkerForUser: mocks.getWorkerForUser,
-  getServiceForUser: mocks.getServiceForUser,
-  getWorkerForUserWithRole: mocks.getWorkerForUserWithRole,
-  getServiceForUserWithRole: mocks.getServiceForUserWithRole,
-  slugifyWorkerName: mocks.slugifyWorkerName,
-  slugifyServiceName: mocks.slugifyServiceName,
+  listServicesForUser: mocks.listWorkersForUser,
+  listServicesForSpace: mocks.listWorkersForWorkspace,
+  createService: mocks.createWorker,
+  countServicesInSpace: mocks.countWorkersInWorkspace,
+  deleteService: mocks.deleteWorker,
+  getServiceForUser: mocks.getWorkerForUser,
+  getServiceForUserWithRole: mocks.getWorkerForUserWithRole,
+  slugifyServiceName: mocks.slugifyWorkerName,
   WORKSPACE_WORKER_LIMITS: mocks.WORKSPACE_WORKER_LIMITS,
   WORKSPACE_SERVICE_LIMITS: mocks.WORKSPACE_SERVICE_LIMITS,
 }));
@@ -107,7 +91,7 @@ vi.mock('@/db', async (importOriginal) => ({
   getDb: mocks.getDb,
 }));
 
-import workersBase from '@/routes/workers/base';
+import workersBase from '@/routes/workers/routes';
 import workersSlug from '@/routes/workers/slug';
 
 function createUser(): User {

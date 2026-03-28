@@ -17,8 +17,8 @@ import type {
   SkillLocale,
   SkillSource,
 } from './skill-contracts';
-import { cloneExecutionContract } from './skills-scoring';
-import { selectRelevantSkills } from './skills-scoring';
+import { cloneExecutionContract } from './skill-scoring';
+import { selectRelevantSkills } from './skill-scoring';
 import { logWarn } from '../../../shared/utils/logger';
 import { sanitizeSkillContent } from './security/injection-detector';
 

@@ -70,6 +70,9 @@ controlWorker:
   pollIntervalMs: 250
   scheduledIntervalMs: 60000
   heartbeatTtlMs: 120000
+  cronJob:
+    enabled: false
+    schedule: "*/15 * * * *"
   resources:
     requests:
       cpu: 500m
@@ -126,6 +129,13 @@ browserHost:
 ociOrchestrator:
   replicaCount: 1
   port: 9002
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   persistence:
     enabled: true
     size: 1Gi
@@ -253,7 +263,8 @@ postgresql:
   enabled: true
   auth:
     username: takos
-    password: takos
+    ## MUST be overridden in production (e.g. via --set or a secrets operator)
+    password: ""
     database: takos
   primary:
     persistence:
@@ -277,7 +288,8 @@ minio:
   enabled: true
   auth:
     rootUser: takos
-    rootPassword: takos-dev-secret
+    ## MUST be overridden in production (e.g. via --set or a secrets operator)
+    rootPassword: ""
   defaultBuckets: "takos-tenant-source"
   persistence:
     size: 10Gi

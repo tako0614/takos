@@ -1,10 +1,11 @@
 import type { ToolObserver, ToolObservation, Claim, Evidence } from './types';
 import { RunOverlay } from './overlay';
+import { bytesToHex } from '../../../shared/utils/encoding-utils';
 
 function randomHexId(): string {
   const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(bytes);
 }
 
 export function createToolObserver(

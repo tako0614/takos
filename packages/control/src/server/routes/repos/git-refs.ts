@@ -5,10 +5,10 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { toGitBucket } from './base';
+import { toGitBucket } from './routes';
 import { BadRequestError, NotFoundError, AuthorizationError, ConflictError, InternalError, isAppError } from '@takos/common/errors';
 import { logError } from '../../../shared/utils/logger';
-import { type RepoContext, WRITE_ROLES, sigTimestampToIso, getCommitSha } from './git-shared';
+import { WRITE_ROLES, sigTimestampToIso, getCommitSha } from './git-shared';
 
 const gitRefs = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/branches', zValidator('query', z.object({

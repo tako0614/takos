@@ -298,7 +298,12 @@ export interface Workflow {
 // =============================================================================
 
 /**
- * Run status
+ * GitHub Actions workflow run status.
+ *
+ * This is the *Actions* domain status — intentionally different from the *Agent* RunStatus
+ * ('pending'|'queued'|'running'|'completed'|'failed'|'cancelled') in packages/control/src/shared/types/models.ts.
+ * The web UI (apps/control/web/src/views/repos/components/actions/types.ts) extends this
+ * with an additional 'waiting' value for UI display of concurrency-blocked runs.
  */
 export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'cancelled';
 

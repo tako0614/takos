@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { useMcpServers } from '../../hooks/useMcpServers';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';

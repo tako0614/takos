@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
 import { getErrorMessage } from '@takos/common/errors';
 import { useConfirmDialog } from '../store/confirm-dialog';

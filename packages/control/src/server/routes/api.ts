@@ -5,7 +5,7 @@ import { generalApiBodyLimit, searchBodyLimit } from '../middleware/body-size';
 import { billingGate, type BillingVariables } from '../middleware/billing';
 import { requireWeeklyRuntimeLimitForAgent } from '../middleware/plan-gates';
 import { validateApiOpaqueRouteParams } from '../middleware/param-validation';
-import spacesBase from './spaces/base';
+import spacesBase from './spaces/routes';
 import spacesMembers from './spaces/members';
 import spacesRepos from './spaces/repositories';
 import spacesStorage from './spaces/storage';
@@ -14,7 +14,7 @@ import spacesStores from './spaces/stores';
 import spacesStoreRegistry from './spaces/store-registry';
 import seedRepositories from './seed-repositories';
 import threads from './threads';
-import runs from './runs/runs-routes';
+import runs from './runs/routes';
 import search from './search';
 import indexRoutes from './index';
 import memories from './memories';
@@ -25,7 +25,6 @@ import resources from './resources';
 import sessions from './sessions';
 import git from './git';
 import repos from './repos';
-// git-store routes removed — migrated to Smart HTTP + repos/git.ts
 import pullRequests from './pull-requests';
 import notifications from './notifications';
 import explore from './explore';
@@ -36,7 +35,7 @@ import me from './me';
 import setup from './setup';
 import agentTasks from './agent-tasks';
 import authApi from './auth-api';
-import billingRoutes, { billingWebhookHandler } from './billing/billing-routes';
+import billingRoutes, { billingWebhookHandler } from './billing/routes';
 import publicShare from './public-share';
 import mcpRoutes from './mcp';
 import appDeployments from './app-deployments';
@@ -362,7 +361,6 @@ export function createApiRouter({
   apiRouter.route('/', agentTasks); // Agent task routes
   apiRouter.route('/', notifications); // Notifications routes at /api/notifications
   apiRouter.route('/notifications', createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
-  // gitStoreRoutes removed — migrated to Smart HTTP + repos/git.ts
   apiRouter.route('/', pullRequests); // Pull request routes for code review
   apiRouter.route('/', appDeployments); // App deployment routes at /api/spaces/:id/app-deployments
   apiRouter.route('/', browserSessions); // Browser session routes at /api/browser-sessions/:id

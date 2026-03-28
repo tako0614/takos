@@ -58,7 +58,7 @@ vi.mock('@/services/billing/stripe', () => ({
   sendInvoice: stripeMocks.sendInvoice,
 }));
 
-import billingRoutes from '@/routes/billing';
+import billingRoutes from '@/routes/billing/routes';
 
 const TEST_TIMESTAMP = '2026-02-11T00:00:00.000Z';
 

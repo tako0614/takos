@@ -129,17 +129,21 @@ export interface CreateDeploymentInput {
   snapshotOverride?: {
     envVars: Record<string, string>;
     bindings: WorkerBinding[];
-    runtimeConfig?: {
-      compatibility_date?: string;
-      compatibility_flags?: string[];
-      limits?: { cpu_ms?: number; subrequests?: number };
-      mcp_server?: {
-        enabled: boolean;
-        name: string;
-        path: string;
-      };
-    };
+    runtimeConfig?: RuntimeConfig;
   };
+}
+
+export interface McpServerConfig {
+  enabled: boolean;
+  name: string;
+  path: string;
+}
+
+export interface RuntimeConfig {
+  compatibility_date?: string;
+  compatibility_flags?: string[];
+  limits?: { cpu_ms?: number; subrequests?: number };
+  mcp_server?: McpServerConfig;
 }
 
 export interface RollbackInput {

@@ -2,9 +2,9 @@
  * Skill System - Barrel Module.
  *
  * Re-exports all public APIs from the split skill modules:
- *   - skills-scoring.ts    : tokenization, matching, scoring, selection
- *   - skills-resolution.ts : types, availability, activation, prompt building, plan resolution
- *   - skills-loader.ts     : runtime loading, context building, event emission
+ *   - skill-scoring.ts    : tokenization, matching, scoring, selection
+ *   - skill-resolution.ts : types, availability, activation, prompt building, plan resolution
+ *   - skill-loader.ts     : runtime loading, context building, event emission
  */
 
 // ── Scoring ─────────────────────────────────────────────────────────────
@@ -20,10 +20,10 @@ export {
   getOutputModeKeywords,
   scoreSkill,
   selectRelevantSkills,
-} from './skills-scoring';
+} from './skill-scoring';
 
 // ── Resolution ──────────────────────────────────────────────────────────
-export type { SkillSource, SkillCategory } from './skills-resolution';
+export type { SkillSource, SkillCategory } from './skill-resolution';
 export type {
   SkillAvailabilityStatus,
   SkillAvailabilityContext,
@@ -32,7 +32,7 @@ export type {
   SkillSelection,
   SkillResolutionContext,
   ResolvedSkillPlan,
-} from './skills-resolution';
+} from './skill-resolution';
 export {
   toSkillCatalogEntry,
   evaluateSkillAvailability,
@@ -42,13 +42,13 @@ export {
   formatContractList,
   buildSkillEnhancedPrompt,
   resolveSkillPlan,
-} from './skills-resolution';
+} from './skill-resolution';
 
 // ── Loader ──────────────────────────────────────────────────────────────
-export type { SkillLoadResult } from './skills-loader';
+export type { SkillLoadResult } from './skill-loader';
 export {
   loadEquippedSkills,
   buildSkillResolutionContext,
   resolveSkillPlanForRun,
   emitSkillLoadOutcome,
-} from './skills-loader';
+} from './skill-loader';

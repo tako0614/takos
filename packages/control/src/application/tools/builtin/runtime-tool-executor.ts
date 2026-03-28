@@ -5,6 +5,9 @@ import { emitRunUsageEvent } from '../../services/offload/usage-client';
 import { callRuntimeRequest } from '../../services/execution/runtime-request-handler';
 import { buildContainerUnavailableMessage } from './container/availability';
 
+const DEFAULT_TOOL_TIMEOUT_SECONDS = 300;
+const MAX_TOOL_TIMEOUT_SECONDS = 1800;
+
 function requireContainer(context: ToolContext): void {
   if (!context.sessionId) {
     throw new Error(buildContainerUnavailableMessage(context, 'using runtime_exec'));
@@ -117,7 +120,7 @@ export const runtimeExecHandler: ToolHandler = async (args, context) => {
   validateCommands(commands);
   const workingDir = validateWorkingDir((args.working_dir as string) || '.');
 
-  const timeout = Math.min((args.timeout as number) || 300, 1800);
+  const timeout = Math.min((args.timeout as number) || DEFAULT_TOOL_TIMEOUT_SECONDS, MAX_TOOL_TIMEOUT_SECONDS);
   const userEnvVars = args.env as Record<string, string> | undefined;
 
   const { env, db } = context;
@@ -141,7 +144,9 @@ export const runtimeExecHandler: ToolHandler = async (args, context) => {
     }
   }
 
-  envVars.TAKOS_API_URL = 'http://localhost:8080/cli-proxy';
+  envVars.TAKOS_API_URL = env.ADMIN_DOMAIN
+    ? `https://${env.ADMIN_DOMAIN}`
+    : 'http://localhost:8080/cli-proxy';
 
   if (!env.RUNTIME_HOST) {
     throw new Error('RUNTIME_HOST binding is required for runtime_exec');

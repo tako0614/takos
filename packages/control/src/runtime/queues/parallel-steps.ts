@@ -10,8 +10,8 @@
  * by calling {@link executeStepLoopParallel} instead.
  */
 
-import type { StepResult } from '../../application/services/execution/workflow-engine';
-import type { JobExecutionState, JobContext } from './workflow-types';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
+import type { JobExecutionState, JobQueueContext } from './workflow-types';
 import {
   runtimeDelete,
   getRunStatus,
@@ -27,7 +27,7 @@ import { logInfo, logWarn } from '../../shared/utils/logger';
 // Step type — mirrors the inline type from WorkflowJobDefinition.steps
 // ---------------------------------------------------------------------------
 
-type JobStep = JobContext['message']['jobDefinition']['steps'][number];
+type JobStep = JobQueueContext['message']['jobDefinition']['steps'][number];
 
 // ---------------------------------------------------------------------------
 // Dependency graph
@@ -201,7 +201,7 @@ export class StepDependencyGraph {
  * @returns `'cancelled'` if the run was cancelled, `undefined` otherwise.
  */
 export async function executeStepLoopParallel(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState,
 ): Promise<'cancelled' | void> {
   const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
@@ -294,7 +294,7 @@ export async function executeStepLoopParallel(
           ? outcome.reason.message
           : String(outcome.reason);
 
-        const failResult: StepResult = {
+        const failResult: WorkflowStepResult = {
           stepNumber,
           name: stepName,
           status: 'completed',
@@ -332,7 +332,7 @@ export async function executeStepLoopParallel(
  * logic, step status updates, and result recording.
  */
 async function executeSingleStep(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState,
   stepIndex: number,
 ): Promise<void> {
@@ -359,7 +359,7 @@ async function executeSingleStep(
   }
 
   if (!shouldRun) {
-    const skippedResult: StepResult = {
+    const skippedResult: WorkflowStepResult = {
       stepNumber,
       name: stepName,
       status: 'skipped',
@@ -388,7 +388,7 @@ async function executeSingleStep(
 
   const stepCompletedAt = new Date().toISOString();
 
-  const stepResult: StepResult = {
+  const stepResult: WorkflowStepResult = {
     stepNumber,
     name: stepName,
     status: 'completed',

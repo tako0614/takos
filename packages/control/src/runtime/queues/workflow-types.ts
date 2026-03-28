@@ -1,7 +1,8 @@
 import type { D1Database, R2Bucket, DurableObjectNamespace, Queue } from '../../shared/types/bindings.ts';
 import type { Conclusion } from '@takos/actions-engine';
-import type { StepResult } from '../../application/services/execution/workflow-engine';
-import type { DbEnv, WorkflowJobQueueMessage } from '../../shared/types';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
+import type { DbEnv, WorkflowJobQueueMessage, WorkflowShell } from '../../shared/types';
+import type { WorkflowBucket } from '../../application/services/execution/workflow-engine-types';
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -17,9 +18,7 @@ export type WorkflowQueueEnv = DbEnv & {
   PARALLEL_WORKFLOW_STEPS?: string;
 };
 
-export type WorkflowEngineBucket = Parameters<
-  typeof import('../../application/services/execution/workflow-engine').createWorkflowEngine
->[0]['bucket'];
+export type WorkflowEngineBucket = WorkflowBucket;
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -73,11 +72,11 @@ export interface JobExecutionState {
   runtimeSpaceId: string | null;
   completionConclusion: Conclusion | null;
   logs: string[];
-  stepResults: StepResult[];
+  stepResults: WorkflowStepResult[];
   stepOutputs: Record<string, Record<string, string>>;
 }
 
-export interface JobContext {
+export interface JobQueueContext {
   env: WorkflowQueueEnv;
   engine: import('../../application/services/execution/workflow-engine').WorkflowEngine;
   message: WorkflowJobQueueMessage;
@@ -105,7 +104,7 @@ export function createInitialState(): JobExecutionState {
 // Step execution types
 // ---------------------------------------------------------------------------
 
-export type WorkflowShell = import('../../shared/types').WorkflowShell;
+export type { WorkflowShell };
 
 export interface StepExecutionContext {
   env: WorkflowQueueEnv;

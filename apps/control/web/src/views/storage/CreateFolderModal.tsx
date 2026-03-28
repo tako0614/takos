@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';

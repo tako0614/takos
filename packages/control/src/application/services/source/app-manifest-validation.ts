@@ -1,4 +1,5 @@
 import { parseWorkflow, validateWorkflow, type Workflow } from '@takos/actions-engine';
+import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import {
   asRecord,
   asString,
@@ -78,7 +79,7 @@ export function parseResources(
       ...(type === 'vectorize'
         ? {
             vectorize: {
-              dimensions: Number(asRecord(resource.vectorize).dimensions ?? 1536),
+              dimensions: Number(asRecord(resource.vectorize).dimensions ?? VECTORIZE_DEFAULT_DIMENSIONS),
               metric: ((() => {
                 const metric = String(asRecord(resource.vectorize).metric ?? 'cosine').trim();
                 if (!['cosine', 'euclidean', 'dot-product'].includes(metric)) {

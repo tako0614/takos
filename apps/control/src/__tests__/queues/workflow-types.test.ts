@@ -10,7 +10,7 @@ import {
   type RuntimeStepResponse,
   type RunContext,
   type WorkflowQueueEnv,
-  type JobContext,
+  type JobQueueContext,
   type JobCompletedEventData,
   type JobStartedEventData,
   type QueueBatchMessage,

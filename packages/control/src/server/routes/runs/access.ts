@@ -4,7 +4,7 @@ import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { asRunRow, runRowToApi } from '../../../application/services/runs/shared';
+import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization';
 
 export type RunAccessResult = {
   run: Run;

@@ -18,7 +18,7 @@ vi.mock('@/utils', async (importOriginal) => ({
   checkWorkspaceAccess: mocks.checkWorkspaceAccess,
 }));
 
-import runs from '@/routes/runs';
+import runs from '@/routes/runs/routes';
 
 type Vars = { user: User };
 type HonoEnv = { Bindings: Env; Variables: Vars };

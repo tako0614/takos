@@ -1,30 +1,18 @@
-export interface Memory {
-  id: string;
-  space_id: string;
-  type: 'episode' | 'semantic' | 'procedural';
-  category: string | null;
-  content: string;
-  summary: string | null;
-  importance: number;
-  tags: string | null;
-  occurred_at: string | null;
-  expires_at: string | null;
-  last_accessed_at: string | null;
-  access_count: number;
-  created_at: string;
-  updated_at: string;
-}
+// Re-export types from backend shared models to avoid duplication.
+// Frontend variants omit user-scoping fields not used in the UI.
+import type {
+  Memory as BackendMemory,
+  Reminder as BackendReminder,
+} from '@takos/control-shared/types';
 
-export interface Reminder {
-  id: string;
-  space_id: string;
-  content: string;
-  context: string | null;
-  trigger_type: 'time' | 'condition' | 'context';
-  trigger_value: string | null;
-  status: 'pending' | 'triggered' | 'completed' | 'dismissed';
-  triggered_at?: string | null;
-  priority: 'low' | 'normal' | 'high' | 'critical';
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Frontend Memory: omits `user_id` and `thread_id` since the UI always
+ * operates within an authenticated user/space context.
+ */
+export type Memory = Omit<BackendMemory, 'user_id' | 'thread_id'>;
+
+/**
+ * Frontend Reminder: omits `user_id` since the UI always operates within
+ * an authenticated user context.
+ */
+export type Reminder = Omit<BackendReminder, 'user_id'>;

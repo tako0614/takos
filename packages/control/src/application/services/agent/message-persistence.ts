@@ -1,7 +1,7 @@
 import type { Env, MessageRole } from '../../../shared/types';
 import type { AgentMessage } from './types';
 import { getDb, messages } from '../../../infra/db';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { generateId } from '../../../shared/utils';
 import { makeMessagePreview, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages';
 import { logError, logWarn } from '../../../shared/utils/logger';

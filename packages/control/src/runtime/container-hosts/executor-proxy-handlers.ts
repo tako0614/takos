@@ -6,12 +6,13 @@ import type { IndexJobQueueMessage } from '../../shared/types';
 import type { D1RawOptions } from './d1-raw';
 import { executeD1RawStatement } from './d1-raw';
 import { validateD1ProxySql } from '../../application/services/execution/sql-validation';
-import { buildSanitizedDOHeaders } from '../durable-objects/shared';
+import { buildSanitizedDOHeaders } from '../durable-objects/do-header-utils';
 import { getDb } from '../../infra/db';
 import { runs } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
 import { ok, err, classifyProxyError, type AgentExecutorEnv } from './executor-utils';
+import { decodeBase64ToBytes } from '../../shared/utils/encoding-utils';
 
 type Env = AgentExecutorEnv;
 
@@ -23,15 +24,6 @@ const MAX_PROXY_PUT_BYTES = 100 * 1024 * 1024; // 100MB
 
 function headersToRecord(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries());
-}
-
-function decodeBase64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function requireSql(sql: unknown, endpoint: string): Response | null {

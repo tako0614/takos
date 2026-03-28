@@ -1,6 +1,6 @@
 import { useI18n } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 import type {
   SourceItem,
   SourceItemInstallation,

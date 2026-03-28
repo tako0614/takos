@@ -7,9 +7,6 @@ import type { LLMClient, ModelProvider } from './llm';
 import {
   buildSkillEnhancedPrompt,
   type ResolvedSkillPlan,
-  type SkillCatalogEntry,
-  type SkillSelection,
-  type SkillContext,
 } from './skills';
 import {
   createLangGraphAgent,
@@ -23,6 +20,7 @@ import { RunCancelledError } from './run-lifecycle';
 import { withTimeout } from '../../../shared/utils/with-timeout';
 import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
+import { throwIfAborted } from '@takos/common/abort';
 import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
 
 type ToolExecutionRecord = {
@@ -57,20 +55,6 @@ type LangGraphRunOptions = {
   abortSignal?: AbortSignal;
   memoryRuntime?: AgentMemoryRuntime;
 };
-
-function throwIfAborted(signal: AbortSignal | undefined, context: string): void {
-  if (!signal?.aborted) {
-    return;
-  }
-
-  const reason = signal.reason;
-  const message = reason instanceof Error
-    ? reason.message
-    : typeof reason === 'string'
-      ? reason
-      : 'Run aborted';
-  throw new Error(`${message} (${context})`);
-}
 
 export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<void> {
   throwIfAborted(options.abortSignal, 'langgraph-start');

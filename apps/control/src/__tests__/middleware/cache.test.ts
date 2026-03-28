@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
-import type { ExecutionContext } from '@takos/cloudflare-compat';
+import type { ExecutionContext } from 'hono';
 import { withCache, CacheTTL } from '@/middleware/cache';
 import { SESSION_COOKIE_NAME } from '@/services/identity/session';
 

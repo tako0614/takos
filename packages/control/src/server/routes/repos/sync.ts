@@ -5,7 +5,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess, toApiRepositoryFromDb } from '../../../application/services/source/repos';
-import { getTreeFlattenLimitError } from './base';
+import { getTreeFlattenLimitError } from './routes';
 import { getDb } from '../../../infra/db';
 import { repositories } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';

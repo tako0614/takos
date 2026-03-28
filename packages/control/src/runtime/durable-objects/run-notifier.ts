@@ -20,7 +20,7 @@ import {
   safeClose,
   RECONNECT_CLOSE_CODE,
   RECONNECT_CLOSE_REASON,
-} from './shared';
+} from './do-header-utils';
 
 const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 const CONNECTION_TIMEOUT_MS = 5 * 60 * 1000;

@@ -6,8 +6,6 @@ import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
-  getWorkerForUser: vi.fn(),
-  getWorkerForUserWithRole: vi.fn(),
   createWorkerDesiredStateService: vi.fn(),
   getServiceForUser: vi.fn(),
   getServiceForUserWithRole: vi.fn(),
@@ -21,8 +19,6 @@ vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof imp
 }));
 
 vi.mock('@/services/platform/workers', () => ({
-  getWorkerForUser: mocks.getWorkerForUser,
-  getWorkerForUserWithRole: mocks.getWorkerForUserWithRole,
   getServiceForUser: mocks.getServiceForUser,
   getServiceForUserWithRole: mocks.getServiceForUserWithRole,
 }));
@@ -40,8 +36,8 @@ vi.mock('@/services/common-env', async () => {
   };
 });
 
-vi.mock('@/routes/common-env/helpers', async () => {
-  const actual = await vi.importActual<typeof import('@/routes/common-env/helpers')>('@/routes/common-env/helpers');
+vi.mock('@/routes/common-env/handlers', async () => {
+  const actual = await vi.importActual<typeof import('@/routes/common-env/handlers')>('@/routes/common-env/handlers');
   return {
     ...actual,
     buildCommonEnvActor: mocks.buildCommonEnvActor,

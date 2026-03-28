@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { useConfirmDialog } from '../../store/confirm-dialog';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { getErrorMessage } from '../../lib/errors';

@@ -87,7 +87,7 @@ export const createD1Handler: ToolHandler = async (args, context) => {
   }
 
   const cfName = `takos-d1-${generateId()}`;
-  const databaseId = await wfp.createD1Database(cfName);
+  const databaseId = await wfp.d1.createD1Database(cfName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);
@@ -111,10 +111,11 @@ export const createD1Handler: ToolHandler = async (args, context) => {
 
   if (schema) {
     try {
-      await wfp.runD1SQL(databaseId, schema);
+      await wfp.d1.runD1SQL(databaseId, schema);
       output += `\nSchema applied successfully.`;
     } catch (error) {
-      output += `\nWarning: Schema failed to apply: ${error}`;
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      output += `\nWarning: Schema failed to apply: ${errorMsg}`;
     }
   }
 
@@ -134,7 +135,7 @@ export const createKVHandler: ToolHandler = async (args, context) => {
   }
 
   const cfName = `takos-kv-${generateId()}`;
-  const namespaceId = await wfp.createKVNamespace(cfName);
+  const namespaceId = await wfp.kv.createKVNamespace(cfName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);
@@ -174,7 +175,7 @@ export const createR2Handler: ToolHandler = async (args, context) => {
   }
 
   const cfName = `takos-r2-${generateId()}`;
-  await wfp.createR2Bucket(cfName);
+  await wfp.r2.createR2Bucket(cfName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);

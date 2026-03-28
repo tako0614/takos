@@ -20,7 +20,7 @@ vi.mock('@/shared/utils/logger', () => ({
 }));
 
 import { exportThread } from '@/services/threads/thread-export';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 
 type MockDb = D1Database;
 

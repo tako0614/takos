@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useI18n } from '../store/i18n';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 
 export type ThreadShare = {
   id: string;

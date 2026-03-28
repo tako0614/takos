@@ -11,7 +11,8 @@
  * (no masking, no JSON-parse helpers).  Merging would either strip security
  * features from control or bloat the shared package.
  */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import type { LogLevel } from '@takos/common';
+export type { LogLevel };
 
 export interface LogContext {
   requestId?: string;

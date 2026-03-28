@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { D1Database } from '@takos/cloudflare-compat';
+import type { D1Database } from '@cloudflare/workers-types';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -25,14 +25,14 @@ vi.mock('@/services/identity/principals', () => ({
 
 import {
   slugifyWorkerName,
-  countWorkersInWorkspace,
-  listWorkersForWorkspace,
-  getWorkerById,
-  createWorker,
-  deleteWorker,
-  listWorkersForUser,
-  getWorkerForUser,
-  resolveWorkerReferenceRecord,
+  countServicesInSpace,
+  listServicesForSpace,
+  getServiceById,
+  createService,
+  deleteService,
+  listServicesForUser,
+  getServiceForUser,
+  resolveServiceReferenceRecord,
   WORKSPACE_WORKER_LIMITS,
 } from '@/services/platform/workers';
 
@@ -101,7 +101,7 @@ describe('WORKSPACE_WORKER_LIMITS', () => {
   });
 });
 
-describe('countWorkersInWorkspace', () => {
+describe('countServicesInSpace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -111,7 +111,7 @@ describe('countWorkersInWorkspace', () => {
     drizzle._.get.mockResolvedValueOnce({ count: 5 });
     mocks.getDb.mockReturnValue(drizzle);
 
-    const count = await countWorkersInWorkspace({} as D1Database, 'ws-1');
+    const count = await countServicesInSpace({} as D1Database, 'ws-1');
     expect(count).toBe(5);
   });
 
@@ -120,12 +120,12 @@ describe('countWorkersInWorkspace', () => {
     drizzle._.get.mockResolvedValueOnce(undefined);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const count = await countWorkersInWorkspace({} as D1Database, 'ws-1');
+    const count = await countServicesInSpace({} as D1Database, 'ws-1');
     expect(count).toBe(0);
   });
 });
 
-describe('listWorkersForWorkspace', () => {
+describe('listServicesForSpace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -135,7 +135,7 @@ describe('listWorkersForWorkspace', () => {
     drizzle._.all.mockResolvedValueOnce([]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const workers = await listWorkersForWorkspace({} as D1Database, 'ws-1');
+    const workers = await listServicesForSpace({} as D1Database, 'ws-1');
     expect(workers).toEqual([]);
   });
 
@@ -144,7 +144,7 @@ describe('listWorkersForWorkspace', () => {
     drizzle._.all.mockResolvedValueOnce([makeServiceRow()]);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const workers = await listWorkersForWorkspace({} as D1Database, 'ws-1');
+    const workers = await listServicesForSpace({} as D1Database, 'ws-1');
     expect(workers).toHaveLength(1);
     expect(workers[0].id).toBe('w1');
     expect(workers[0].space_id).toBe('ws-1');
@@ -154,7 +154,7 @@ describe('listWorkersForWorkspace', () => {
   });
 });
 
-describe('getWorkerById', () => {
+describe('getServiceById', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -164,7 +164,7 @@ describe('getWorkerById', () => {
     drizzle._.get.mockResolvedValueOnce(undefined);
     mocks.getDb.mockReturnValue(drizzle);
 
-    const worker = await getWorkerById({} as D1Database, 'nonexistent');
+    const worker = await getServiceById({} as D1Database, 'nonexistent');
     expect(worker).toBeNull();
   });
 
@@ -173,7 +173,7 @@ describe('getWorkerById', () => {
     drizzle._.get.mockResolvedValueOnce(makeServiceRow());
     mocks.getDb.mockReturnValue(drizzle);
 
-    const worker = await getWorkerById({} as D1Database, 'w1');
+    const worker = await getServiceById({} as D1Database, 'w1');
     expect(worker).not.toBeNull();
     expect(worker!.id).toBe('w1');
     expect(worker!.hostname).toBe('my-app.takos.dev');
@@ -181,7 +181,7 @@ describe('getWorkerById', () => {
   });
 });
 
-describe('createWorker', () => {
+describe('createService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -191,7 +191,7 @@ describe('createWorker', () => {
     drizzle._.get.mockResolvedValueOnce(makeServiceRow({ id: 'worker-new' }));
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await createWorker({} as D1Database, {
+    const result = await createService({} as D1Database, {
       spaceId: 'ws-1',
       workerType: 'app',
       slug: 'my-app',
@@ -209,7 +209,7 @@ describe('createWorker', () => {
     drizzle._.get.mockResolvedValueOnce(makeServiceRow({ id: 'worker-new' }));
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await createWorker({} as D1Database, {
+    const result = await createService({} as D1Database, {
       spaceId: 'ws-1',
       workerType: 'service',
       platformDomain: 'takos.dev',
@@ -219,7 +219,7 @@ describe('createWorker', () => {
   });
 });
 
-describe('deleteWorker', () => {
+describe('deleteService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -228,12 +228,12 @@ describe('deleteWorker', () => {
     const drizzle = createDrizzleMock();
     mocks.getDb.mockReturnValue(drizzle);
 
-    await deleteWorker({} as D1Database, 'w1');
+    await deleteService({} as D1Database, 'w1');
     expect(drizzle.delete).toHaveBeenCalled();
   });
 });
 
-describe('listWorkersForUser', () => {
+describe('listServicesForUser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -241,7 +241,7 @@ describe('listWorkersForUser', () => {
   it('returns empty when principal not found', async () => {
     mocks.resolveActorPrincipalId.mockResolvedValueOnce(null);
 
-    const result = await listWorkersForUser({} as D1Database, 'user-1');
+    const result = await listServicesForUser({} as D1Database, 'user-1');
     expect(result).toEqual([]);
   });
 
@@ -251,23 +251,23 @@ describe('listWorkersForUser', () => {
     drizzle._.all.mockResolvedValueOnce([]); // memberships
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await listWorkersForUser({} as D1Database, 'user-1');
+    const result = await listServicesForUser({} as D1Database, 'user-1');
     expect(result).toEqual([]);
   });
 });
 
-describe('resolveWorkerReferenceRecord', () => {
+describe('resolveServiceReferenceRecord', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('returns null for empty reference', async () => {
-    const result = await resolveWorkerReferenceRecord({} as D1Database, 'ws-1', '');
+    const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '');
     expect(result).toBeNull();
   });
 
   it('returns null for whitespace-only reference', async () => {
-    const result = await resolveWorkerReferenceRecord({} as D1Database, 'ws-1', '   ');
+    const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '   ');
     expect(result).toBeNull();
   });
 
@@ -284,7 +284,7 @@ describe('resolveWorkerReferenceRecord', () => {
     });
     mocks.getDb.mockReturnValue(drizzle);
 
-    const result = await resolveWorkerReferenceRecord({} as D1Database, 'ws-1', 'my-app');
+    const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', 'my-app');
     expect(result).not.toBeNull();
     expect(result!.id).toBe('w1');
   });

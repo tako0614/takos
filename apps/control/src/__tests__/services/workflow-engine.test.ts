@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { D1Database, Queue, R2Bucket } from '@takos/cloudflare-compat';
+import type { D1Database, Queue, R2Bucket } from '@cloudflare/workers-types';
 import type { Workflow } from '@takos/actions-engine';
 
 const mocks = vi.hoisted(() => ({

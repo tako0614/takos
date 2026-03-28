@@ -139,6 +139,23 @@ export async function listCatalogItems(
     return { items: [], total: 0, has_more: false };
   }
 
+  // Official-only: return only hardcoded official packages
+  if (options.type === 'official') {
+    const officialItems = filterOfficialPackages({
+      searchQuery: options.searchQuery,
+      category: options.category,
+      type: options.type,
+      tagsRaw: options.tagsRaw,
+      certifiedOnly: options.certifiedOnly,
+    });
+    const pagedItems = officialItems.slice(options.offset, options.offset + options.limit);
+    return {
+      items: pagedItems,
+      total: officialItems.length,
+      has_more: options.offset + pagedItems.length < officialItems.length,
+    };
+  }
+
   const conditions = buildBaseConditions({
     category: options.category,
     language: options.language,

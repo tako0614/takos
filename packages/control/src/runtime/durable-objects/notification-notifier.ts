@@ -12,7 +12,7 @@ import {
   safeClose,
   RECONNECT_CLOSE_CODE,
   RECONNECT_CLOSE_REASON,
-} from './shared';
+} from './do-header-utils';
 
 /** User-scoped notification streaming (WebSocket + ring buffer replay). */
 export class NotificationNotifierDO implements DurableObject {

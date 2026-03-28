@@ -1,6 +1,6 @@
 import type { CodeChallengeMethod } from '../../../shared/types/oauth';
 import { constantTimeEqual } from '../../../shared/utils/hash';
-import { base64UrlEncode } from '../../../shared/utils';
+import { base64UrlEncode, bytesToHex } from '../../../shared/utils';
 
 export function generateCodeVerifier(): string {
   const bytes = new Uint8Array(32);
@@ -45,7 +45,6 @@ export function isValidCodeChallenge(challenge: string): boolean {
   return /^[A-Za-z0-9\-_]+$/.test(challenge);
 }
 
-export { base64UrlEncode, base64UrlDecode } from '../../../shared/utils';
 
 export function generateRandomString(length: number): string {
   const bytes = new Uint8Array(length);
@@ -56,8 +55,6 @@ export function generateRandomString(length: number): string {
 export function generateId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  const hex = bytesToHex(bytes);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

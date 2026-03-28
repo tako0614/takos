@@ -26,8 +26,8 @@ import type {
   SkillContext,
   SkillResolutionContext,
   SkillSelection,
-} from './skills-resolution';
-import { resolveSkillPlan } from './skills-resolution';
+} from './skill-resolution';
+import { resolveSkillPlan } from './skill-resolution';
 
 // ── Constants ───────────────────────────────────────────────────────────
 

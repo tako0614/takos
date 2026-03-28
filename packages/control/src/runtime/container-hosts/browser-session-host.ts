@@ -23,6 +23,7 @@ import type {
   CreateSessionPayload,
   BrowserSessionState,
 } from './browser-session-types';
+import { getErrorMessage } from '@takos/common/errors';
 
 // ---------------------------------------------------------------------------
 // Environment types
@@ -171,8 +172,7 @@ app.post('/create', async (c) => {
     const result = await stub.createSession(payload);
     return c.json(result, 201);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ error: message }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -202,7 +202,7 @@ app.post('/session/:id/goto', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -219,7 +219,7 @@ app.post('/session/:id/action', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -236,7 +236,7 @@ app.post('/session/:id/extract', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -248,7 +248,7 @@ app.get('/session/:id/html', async (c) => {
     const response = await stub.forwardToContainer('/internal/html');
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -260,7 +260,7 @@ app.get('/session/:id/screenshot', async (c) => {
     const response = await stub.forwardToContainer('/internal/screenshot');
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -275,7 +275,7 @@ app.post('/session/:id/pdf', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -287,7 +287,7 @@ app.get('/session/:id/tabs', async (c) => {
     const response = await stub.forwardToContainer('/internal/tabs');
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -304,7 +304,7 @@ app.post('/session/:id/tab/new', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -321,7 +321,7 @@ app.post('/session/:id/tab/close', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -338,7 +338,7 @@ app.post('/session/:id/tab/switch', async (c) => {
     });
     return new Response(response.body, { status: response.status, headers: response.headers });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 
@@ -350,8 +350,7 @@ app.delete('/session/:id', async (c) => {
     await stub.destroySession();
     return c.json({ ok: true, message: 'Session destroyed' });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return c.json({ error: message }, 500);
+    return c.json({ error: getErrorMessage(err, 'Unknown error') }, 500);
   }
 });
 

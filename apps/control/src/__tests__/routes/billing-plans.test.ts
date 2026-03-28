@@ -70,7 +70,7 @@ import billingRoutes, {
   billingWebhookHandler,
   getConfiguredProTopupPacks,
   resolveConfiguredProTopupPack,
-} from '@/routes/billing';
+} from '@/routes/billing/routes';
 
 const TEST_TIMESTAMP = '2026-02-11T00:00:00.000Z';
 

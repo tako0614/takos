@@ -12,7 +12,6 @@ import type { Env, User } from '../../shared/types';
 import { getDb, accounts, authIdentities } from '../../infra/db';
 import {
   deleteAuthSession,
-  auditLog,
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
 import { now, extractBearerToken } from '../../shared/utils';

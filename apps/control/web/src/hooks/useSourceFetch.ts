@@ -12,7 +12,7 @@ export interface UseSourceFetchOptions {
   debouncedQuery: string;
   sort: string;
   category: string;
-  installableOnly: boolean;
+  officialOnly: boolean;
   filter: string;
   onNavigateToRepo: (username: string, repoName: string) => void;
   onRequireLogin: () => void;
@@ -47,7 +47,7 @@ export function useSourceFetch({
   debouncedQuery,
   sort,
   category,
-  installableOnly,
+  officialOnly,
   filter,
   onNavigateToRepo,
   onRequireLogin,
@@ -66,7 +66,7 @@ export function useSourceFetch({
     debouncedQuery,
     sort,
     category,
-    installableOnly,
+    officialOnly,
     setItems,
     setLoading,
     setHasMore,

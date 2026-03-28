@@ -13,7 +13,7 @@ import type {
   WorkflowJobQueueMessage,
   DeploymentQueueMessage,
 } from './queue-messages';
-import type { RoutingStore } from '../../application/services/routing/types';
+import type { RoutingStore } from './routing';
 
 // ---------------------------------------------------------------------------
 // Env fragments — each groups related bindings by concern.
@@ -51,12 +51,16 @@ export interface AgentConfigEnv {
   AGENT_TOTAL_TIMEOUT?: string;
   TOOL_EXECUTION_TIMEOUT?: string;
   LANGGRAPH_TIMEOUT?: string;
+  /** JSON object mapping model IDs to context window sizes, e.g. {"gpt-5.4":200} */
+  MODEL_CONTEXT_WINDOWS?: string;
 }
 
+export type FetchBinding = { fetch(request: Request): Promise<Response> };
+
 export interface ContainerHostEnv {
-  RUNTIME_HOST?: { fetch(request: Request): Promise<Response> };
-  EXECUTOR_HOST?: { fetch(request: Request): Promise<Response> };
-  BROWSER_HOST?: { fetch(request: Request): Promise<Response> };
+  RUNTIME_HOST?: FetchBinding;
+  EXECUTOR_HOST?: FetchBinding;
+  BROWSER_HOST?: FetchBinding;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +69,7 @@ export interface ContainerHostEnv {
 // ---------------------------------------------------------------------------
 
 export type RunnerEnv = DbEnv & {
-  EXECUTOR_HOST?: { fetch(request: Request): Promise<Response> };
+  EXECUTOR_HOST?: FetchBinding;
   RUN_QUEUE: QueueBinding<RunQueueMessage>;
   RUN_NOTIFIER: DurableNamespaceBinding;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
@@ -127,7 +131,7 @@ export interface Env extends
     get(name: string): { fetch(request: Request): Promise<Response> };
   };
   // Assets & Browser
-  ASSETS?: { fetch(request: Request): Promise<Response> };
+  ASSETS?: FetchBinding;
   BROWSER?: {
     connect(): Promise<{ webSocketDebuggerUrl: string }>;
   };

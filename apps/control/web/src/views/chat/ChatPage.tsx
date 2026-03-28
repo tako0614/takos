@@ -4,17 +4,16 @@ import { ChatHeader } from './ChatHeader';
 import { ModelSwitcher } from './ModelSwitcher';
 import { ChatSearchModal } from './ChatSearchModal';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { useMobileHeader } from '../../store/mobile-header';
 import { rpc, rpcJson } from '../../lib/rpc';
-import { DEFAULT_MODEL_ID, getTierFromModel } from '../../lib/modelCatalog';
+import { DEFAULT_MODEL_ID } from '../../lib/modelCatalog';
 import { getPersonalSpace, getSpaceIdentifier, findSpaceByIdentifier } from '../../lib/spaces';
-import type { Thread, UserSettings, Space } from '../../types';
+import type { Thread, Space } from '../../types';
 import { WelcomeView } from '../app/space/WelcomeView';
 
 interface ChatPageProps {
   spaces: Space[];
-  userSettings: UserSettings | null;
   initialSpaceId?: string;
   initialThreadId?: string;
   initialRunId?: string;
@@ -27,7 +26,6 @@ interface ChatPageProps {
 
 export function ChatPage({
   spaces,
-  userSettings,
   initialSpaceId,
   initialThreadId,
   initialRunId,
@@ -99,13 +97,13 @@ export function ChatPage({
       <ModelSwitcher
         selectedModel={selectedModel}
         isLoading={false}
-        onTierChange={async (model) => {
+        onModelChange={async (model) => {
           setSelectedModel(model);
           if (selectedSpaceId) {
             try {
               const res = await rpc.spaces[':spaceId'].model.$patch({
                 param: { spaceId: selectedSpaceId },
-                json: { tier: getTierFromModel(model) } as Record<string, string>,
+                json: { model } as Record<string, string>,
               });
               await rpcJson(res);
             } catch {
@@ -185,7 +183,6 @@ export function ChatPage({
           <ChatView
             thread={selectedThread}
             spaceId={getSpaceIdentifier(selectedSpace)}
-            userSettings={userSettings}
             jumpToMessageId={jumpToMessageId}
             jumpToMessageSequence={jumpToMessageSequence}
             focusRunId={focusRunId}
@@ -212,13 +209,13 @@ export function ChatPage({
             <ChatHeader
               selectedModel={selectedModel}
               isLoading={false}
-              onTierChange={async (model) => {
+              onModelChange={async (model) => {
                 setSelectedModel(model);
                 if (selectedSpaceId) {
                   try {
                     const res = await rpc.spaces[':spaceId'].model.$patch({
                       param: { spaceId: selectedSpaceId },
-                      json: { tier: getTierFromModel(model) } as Record<string, string>,
+                      json: { model } as Record<string, string>,
                     });
                     await rpcJson(res);
                   } catch {

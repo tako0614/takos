@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useI18n } from '../store/i18n';
-import { useToast } from './useToast';
+import { useToast } from '../store/toast';
 
 interface UseFileUploadParams {
   uploadFile: (file: File) => Promise<unknown>;

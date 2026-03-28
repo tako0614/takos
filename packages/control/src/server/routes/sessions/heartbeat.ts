@@ -2,12 +2,12 @@ import { getDb } from '../../../infra/db';
 import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { checkSpaceAccess, now, toIsoString } from '../../../shared/utils';
-import { ERR, HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
+import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
 import { BadRequestError, AuthorizationError, NotFoundError } from '@takos/common/errors';
 import type {
   JwtHeartbeatPayload,
   SessionContext,
-} from './shared';
+} from './session-mappers';
 
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 

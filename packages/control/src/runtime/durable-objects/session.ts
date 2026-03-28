@@ -1,6 +1,6 @@
 import type { Session, OIDCState } from '../../shared/types';
 
-import { jsonResponse } from './shared';
+import { jsonResponse } from './do-header-utils';
 
 interface PersistedData {
   sessions: Record<string, Session>;

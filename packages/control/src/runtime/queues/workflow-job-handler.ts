@@ -8,7 +8,7 @@ import type {
   WorkflowQueueEnv,
   WorkflowEngineBucket,
   RunContext,
-  JobContext,
+  JobQueueContext,
 } from './workflow-types';
 import { createInitialState } from './workflow-types';
 import {
@@ -109,7 +109,7 @@ export async function handleWorkflowJob(
     logWarn(`Failed to load run context for ${runId}`, { module: 'queues/workflow-jobs', detail: err });
   }
 
-  const ctx: JobContext = {
+  const ctx: JobQueueContext = {
     env,
     engine,
     message,

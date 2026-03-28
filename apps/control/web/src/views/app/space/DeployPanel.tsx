@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../hooks/useToast';
+import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { rpc, rpcJson } from '../../../lib/rpc';
@@ -20,7 +20,6 @@ interface DeployPanelProps {
   activeSection: DeploySection;
   onSectionChange?: (section: DeploySection) => void;
   onClose?: () => void;
-  onNavigateToRepo?: (username: string, repoName: string) => void;
   user: User | null;
   userSettings: UserSettings | null;
   onSettingsChange?: (settings: UserSettings) => void;
@@ -46,7 +45,6 @@ export function DeployPanel({
   activeSection,
   onSectionChange,
   onClose,
-  onNavigateToRepo: _onNavigateToRepo,
   user,
   userSettings,
   onSettingsChange,

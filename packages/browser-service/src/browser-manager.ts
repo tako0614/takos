@@ -10,6 +10,8 @@ const logger = createLogger({ service: 'browserd' });
 
 const PROFILE_DIR = '/tmp/browser-profile';
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
+const PAGE_LOAD_TIMEOUT_MS = 30_000;
+const DEFAULT_ACTION_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Action types
@@ -159,7 +161,7 @@ export class BrowserManager {
     this.activePage = pages[0] ?? await this.context.newPage();
 
     if (payload.url) {
-      await this.activePage.goto(payload.url, { waitUntil: 'load', timeout: 30000 });
+      await this.activePage.goto(payload.url, { waitUntil: 'load', timeout: PAGE_LOAD_TIMEOUT_MS });
     }
 
     const url = this.activePage.url();
@@ -173,7 +175,7 @@ export class BrowserManager {
     const page = this.requirePage();
     const response = await page.goto(payload.url, {
       waitUntil: payload.waitUntil ?? 'load',
-      timeout: payload.timeout ?? 30000,
+      timeout: payload.timeout ?? DEFAULT_ACTION_TIMEOUT_MS,
     });
 
     const url = page.url();
@@ -252,7 +254,7 @@ export class BrowserManager {
     const ctx = this.requireContext();
     const page = await ctx.newPage();
     if (url) {
-      await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+      await page.goto(url, { waitUntil: 'load', timeout: PAGE_LOAD_TIMEOUT_MS });
     }
     this.activePage = page;
     const pages = ctx.pages();

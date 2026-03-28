@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../../store/i18n';
-import { useToast } from '../../hooks/useToast';
+import { useToast } from '../../store/toast';
 import { rpc, rpcJson } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
-import { TIER_CONFIG, getTierFromModel, type AgentTier } from '../../lib/modelCatalog';
+import { MODEL_OPTIONS, type ModelSelectOption } from '../../lib/modelCatalog';
 
 export function ModelTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<AgentTier>('takos-lite');
+  const [selectedModel, setSelectedModel] = useState(MODEL_OPTIONS[0].id);
+  const [tokenLimit, setContextWindow] = useState<number | null>(null);
 
   useEffect(() => {
     fetchModelSettings();
@@ -25,13 +26,14 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
       const data = await rpcJson<{
         ai_model?: string;
         model?: string;
-        tier?: AgentTier;
+        token_limit?: number;
       }>(res);
-      if (data.tier) {
-        setSelectedTier(data.tier);
-      } else {
-        const model = data.ai_model || data.model || '';
-        setSelectedTier(getTierFromModel(model));
+      const model = data.ai_model || data.model || '';
+      if (MODEL_OPTIONS.some((opt) => opt.id === model)) {
+        setSelectedModel(model);
+      }
+      if (typeof data.token_limit === 'number') {
+        setContextWindow(data.token_limit);
       }
     } catch (err) {
       console.error('Failed to fetch model settings:', err);
@@ -45,9 +47,12 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
     try {
       const res = await rpc.spaces[':spaceId'].model.$patch({
         param: { spaceId },
-        json: { tier: selectedTier } as Record<string, string>,
+        json: { model: selectedModel } as Record<string, string>,
       });
-      await rpcJson(res);
+      const data = await rpcJson<{ token_limit?: number }>(res);
+      if (typeof data.token_limit === 'number') {
+        setContextWindow(data.token_limit);
+      }
       showToast('success', t('modelSettingsSaved'));
     } catch {
       showToast('error', t('modelSettingsFailed'));
@@ -65,29 +70,32 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
     );
   }
 
-  const tiers = Object.entries(TIER_CONFIG) as [AgentTier, typeof TIER_CONFIG[AgentTier]][];
-
   return (
     <div className="flex flex-col gap-6">
       <div className="bg-zinc-100 dark:bg-zinc-800 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
         <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">{t('modelProvider')}</h4>
-        <div className="grid grid-cols-2 gap-3">
-          {tiers.map(([tier, cfg]) => (
+        <div className="grid grid-cols-3 gap-3">
+          {MODEL_OPTIONS.map((opt) => (
             <button
-              key={tier}
+              key={opt.id}
               className={`flex flex-col items-start gap-1 p-4 rounded-lg border transition-colors text-left ${
-                selectedTier === tier
+                selectedModel === opt.id
                   ? 'border-zinc-900 dark:border-zinc-100 bg-white/10 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
                   : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-900/50 dark:hover:border-zinc-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
-              onClick={() => setSelectedTier(tier)}
+              onClick={() => setSelectedModel(opt.id)}
               disabled={saving}
             >
-              <span className="text-base font-semibold">{cfg.label}</span>
-              <span className="text-xs opacity-70">{cfg.description}</span>
+              <span className="text-base font-semibold">{opt.label}</span>
+              {opt.description && <span className="text-xs opacity-70">{opt.description}</span>}
             </button>
           ))}
         </div>
+        {tokenLimit !== null && (
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            {t('tokenLimitLabel')}: {(tokenLimit / 1000).toFixed(0)}k tokens
+          </p>
+        )}
       </div>
 
       <button

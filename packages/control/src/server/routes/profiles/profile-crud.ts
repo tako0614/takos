@@ -5,11 +5,11 @@ import { fetchProfileActivity } from '../../../application/services/identity/pro
 import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import { NotFoundError, AuthorizationError, BadRequestError } from '@takos/common/errors';
-import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './shared';
+import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
-import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './helpers';
+import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-helpers';
 import type { UserProfileResponse, ProfileRepoResponse } from './types';
 
 export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()

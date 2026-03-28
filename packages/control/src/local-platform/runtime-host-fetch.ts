@@ -7,6 +7,7 @@ import type {
 } from './runtime-types.ts';
 import type { DurableNamespaceBinding } from '../shared/types/bindings.ts';
 import { jsonResponse } from './runtime-http.ts';
+import { getErrorMessage } from '@takos/common/errors';
 
 function getLocalRuntimeGatewayStub(env: { RUNTIME_CONTAINER: unknown }): LocalRuntimeGatewayStub {
   const namespace = env.RUNTIME_CONTAINER as DurableNamespaceBinding;
@@ -106,7 +107,7 @@ export async function buildLocalBrowserHostFetch(
         const stub = getLocalBrowserGatewayStub(env, payload.sessionId);
         return jsonResponse(await stub.createSession(payload), 201);
       } catch (err) {
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+        return jsonResponse({ error: getErrorMessage(err, 'Unknown error') }, 500);
       }
     }
 
@@ -126,7 +127,7 @@ export async function buildLocalBrowserHostFetch(
         await stub.destroySession();
         return jsonResponse({ ok: true, message: `Session ${sessionMatch[1]} destroyed` });
       } catch (err) {
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+        return jsonResponse({ error: getErrorMessage(err, 'Unknown error') }, 500);
       }
     }
 
@@ -144,7 +145,7 @@ export async function buildLocalBrowserHostFetch(
         const response = await stub.forwardToContainer(forward.containerPath, init);
         return new Response(response.body, { status: response.status, headers: response.headers });
       } catch (err) {
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+        return jsonResponse({ error: getErrorMessage(err, 'Unknown error') }, 500);
       }
     }
 

@@ -1,5 +1,5 @@
 import type { ToolHandler } from '../../../types';
-import { createRuntimeSessionManager } from '../../../../services/sync';
+import { RuntimeSessionManager } from '../../../../services/sync';
 import { getDb, sessions, sessionRepos, repositories, accounts } from '../../../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
 import {
@@ -97,7 +97,7 @@ export const containerCommitHandler: ToolHandler = async (args, context) => {
     }
   }
 
-  const runtimeManager = createRuntimeSessionManager(
+  const runtimeManager = new RuntimeSessionManager(
     context.env,
     context.db,
     context.storage,

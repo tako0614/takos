@@ -13,6 +13,7 @@ import {
 } from './process-spawner.js';
 import {
   executeCompositeAction,
+  isPathWithin,
   type ActionRuns,
   type ActionOutputDefinition,
 } from './composite-executor.js';
@@ -28,7 +29,7 @@ import {
   buildInputEnv,
 } from './action-registry.js';
 
-export interface StepResult {
+export interface ExecutorStepResult {
   exitCode: number;
   stdout: string;
   stderr: string;
@@ -49,21 +50,6 @@ const ACTION_SCRIPT_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 type NodeActionPhase = 'pre' | 'main' | 'post';
 
 // ---------------------------------------------------------------------------
-// Path utilities
-// ---------------------------------------------------------------------------
-
-function isPathWithin(targetPath: string, basePath: string): boolean {
-  const normalizedBase = process.platform === 'win32'
-    ? path.resolve(basePath).toLowerCase()
-    : path.resolve(basePath);
-  const normalizedTarget = process.platform === 'win32'
-    ? path.resolve(targetPath).toLowerCase()
-    : path.resolve(targetPath);
-  const relativePath = path.relative(normalizedBase, normalizedTarget);
-  return relativePath === '' || relativePath === '.' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
-}
-
-// ---------------------------------------------------------------------------
 // StepExecutor
 // ---------------------------------------------------------------------------
 
@@ -82,7 +68,7 @@ export class StepExecutor {
     command: string,
     timeoutMs?: number,
     options?: { shell?: string; workingDirectory?: string }
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     this.outputs = {};
     this.logs = [];
 
@@ -111,7 +97,7 @@ export class StepExecutor {
     inputs: Record<string, unknown>,
     timeoutMs?: number,
     options?: { basePath?: string }
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     const timeout = timeoutMs || SANDBOX_LIMITS.maxExecutionTime;
     this.outputs = {};
     this.logs = [];
@@ -232,7 +218,7 @@ export class StepExecutor {
     inputs: Record<string, unknown>,
     context: ActionContext,
     _timeout: number
-  ): Promise<StepResult | null> {
+  ): Promise<ExecutorStepResult | null> {
     const handler = StepExecutor.BUILTIN_ACTIONS[actionName];
     if (!handler) return null;
 
@@ -263,7 +249,7 @@ export class StepExecutor {
     context: ActionContext,
     timeout: number,
     basePath: string
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     const fullActionPath = resolvePathWithin(basePath, actionPath, 'action path', true);
 
     try {
@@ -290,7 +276,7 @@ export class StepExecutor {
     inputs: Record<string, unknown>,
     context: ActionContext,
     timeout: number
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     validateActionComponent(actionRef.owner, 'owner');
     validateActionComponent(actionRef.repo, 'repo');
 
@@ -312,7 +298,7 @@ export class StepExecutor {
     context: ActionContext,
     timeout: number,
     actionRef?: ActionRefInfo
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     const metadata = await loadActionMetadata(actionDir);
     const runs = metadata.runs;
     if (!runs || !runs.using) {
@@ -361,12 +347,12 @@ export class StepExecutor {
     runs: ActionRuns,
     actionDir: string,
     timeout: number
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     if (!runs.main) {
       return failureResult('JavaScript action missing "main" entry point');
     }
 
-    const runScript = async (phase: NodeActionPhase, relativePath: string): Promise<StepResult> => {
+    const runScript = async (phase: NodeActionPhase, relativePath: string): Promise<ExecutorStepResult> => {
       let scriptPath: string;
       try {
         scriptPath = await this.resolveNodeActionScriptPath(actionDir, relativePath, phase);
@@ -526,7 +512,7 @@ export class StepExecutor {
     inputs: Record<string, string>,
     timeout: number,
     outputs?: Record<string, ActionOutputDefinition>
-  ): Promise<StepResult> {
+  ): Promise<ExecutorStepResult> {
     const delegate = {
       executeRun: (cmd: string, t?: number, opts?: { shell?: string; workingDirectory?: string }) => this.executeRun(cmd, t, opts),
       executeAction: (act: string, inp: Record<string, unknown>, t?: number, opts?: { basePath?: string }) => this.executeAction(act, inp, t, opts),

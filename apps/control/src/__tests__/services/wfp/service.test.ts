@@ -63,7 +63,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.createWorker({
+      await svc.workers.createWorker({
         workerName: 'my-worker',
         workerScript: 'export default { fetch() { return new Response("ok"); } }',
         bindings: [
@@ -82,7 +82,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.createWorker({
+      await svc.workers.createWorker({
         workerName: 'vector-worker',
         workerScript: 'export default { fetch() { return new Response("ok"); } }',
         bindings: [
@@ -105,7 +105,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.createWorker({
+      await svc.workers.createWorker({
         workerName: 'resource-worker',
         workerScript: 'export default { fetch() { return new Response("ok"); } }',
         bindings: [
@@ -128,7 +128,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.createWorker({
+      await svc.workers.createWorker({
         workerName: 'workflow-worker',
         workerScript: 'export default { fetch() { return new Response("ok"); } }',
         bindings: [
@@ -154,7 +154,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.deleteWorker('worker-to-delete');
+      await svc.workers.deleteWorker('worker-to-delete');
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/scripts/worker-to-delete');
@@ -168,7 +168,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.deleteQueue('queue-id-123');
+      await svc.queues.deleteQueue('queue-id-123');
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/queues/queue-id-123');
@@ -184,7 +184,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const result = await svc.getWorker('worker-1');
+      const result = await svc.workers.getWorker('worker-1');
       expect(result).toEqual({ id: 'worker-1', script: 'test' });
     });
   });
@@ -195,7 +195,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const exists = await svc.workerExists('existing-worker');
+      const exists = await svc.workers.workerExists('existing-worker');
       expect(exists).toBe(true);
     });
 
@@ -206,7 +206,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const exists = await svc.workerExists('missing-worker');
+      const exists = await svc.workers.workerExists('missing-worker');
       expect(exists).toBe(false);
     });
   });
@@ -220,7 +220,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const result = await svc.listWorkers();
+      const result = await svc.workers.listWorkers();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('w1');
     });
@@ -234,7 +234,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const uuid = await svc.createD1Database('my-db');
+      const uuid = await svc.d1.createD1Database('my-db');
       expect(uuid).toBe('db-uuid-123');
     });
 
@@ -243,7 +243,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await expect(svc.createD1Database('my-db')).rejects.toThrow('no UUID');
+      await expect(svc.d1.createD1Database('my-db')).rejects.toThrow('no UUID');
     });
   });
 
@@ -253,7 +253,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.createR2Bucket('my-bucket');
+      await svc.r2.createR2Bucket('my-bucket');
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/r2/buckets');
@@ -269,7 +269,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const queue = await svc.createQueue('my-queue');
+      const queue = await svc.queues.createQueue('my-queue');
       expect(queue.id).toBe('queue-id-123');
       expect(queue.name).toBe('my-queue');
     });
@@ -279,7 +279,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await expect(svc.createQueue('my-queue')).rejects.toThrow(/no ID returned from API/i);
+      await expect(svc.queues.createQueue('my-queue')).rejects.toThrow(/no ID returned from API/i);
     });
   });
 
@@ -291,7 +291,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const id = await svc.createKVNamespace('my-kv');
+      const id = await svc.kv.createKVNamespace('my-kv');
       expect(id).toBe('kv-ns-id');
     });
 
@@ -300,7 +300,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await expect(svc.createKVNamespace('kv')).rejects.toThrow('no ID');
+      await expect(svc.kv.createKVNamespace('kv')).rejects.toThrow('no ID');
     });
   });
 
@@ -312,7 +312,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const name = await svc.createVectorizeIndex('my-index', {
+      const name = await svc.vectorize.createVectorizeIndex('my-index', {
         dimensions: 1536,
         metric: 'cosine',
       });
@@ -328,7 +328,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const result = await svc.runD1SQL('db-id', 'SELECT COUNT(*) as count FROM users');
+      const result = await svc.d1.runD1SQL('db-id', 'SELECT COUNT(*) as count FROM users');
       expect(result).toEqual([{ results: [{ count: 42 }] }]);
     });
   });
@@ -341,7 +341,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      const tables = await svc.listD1Tables('db-id');
+      const tables = await svc.d1.listD1Tables('db-id');
       expect(tables).toEqual([{ name: 'users' }, { name: 'posts' }]);
     });
   });
@@ -352,7 +352,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.updateWorkerSettings({
+      await svc.workers.updateWorkerSettings({
         workerName: 'w1',
         bindings: [{ type: 'plain_text', name: 'ENV', text: 'prod' }],
       });
@@ -369,7 +369,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await svc.uploadToR2('my-bucket', 'path/to/file.txt', 'file content', {
+      await svc.r2.uploadToR2('my-bucket', 'path/to/file.txt', 'file content', {
         contentType: 'text/plain',
       });
 
@@ -386,7 +386,7 @@ describe('WFPService', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const svc = new WFPService(config);
-      await expect(svc.uploadToR2('bucket', 'key', 'body')).rejects.toThrow('Failed to upload');
+      await expect(svc.r2.uploadToR2('bucket', 'key', 'body')).rejects.toThrow('Failed to upload');
     });
   });
 

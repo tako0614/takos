@@ -1,4 +1,4 @@
-import { jsonResponse } from './shared';
+import { jsonResponse } from './do-header-utils';
 import { logWarn } from '../../shared/utils/logger.ts';
 
 // 5-minute lease is sized for the 90MB packfile upload limit: even worst-case

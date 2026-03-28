@@ -7,7 +7,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, getTreeFlattenLimitError } from './base';
+import { readableCommitErrorResponse, getTreeFlattenLimitError } from './routes';
 import { validatePath } from '../../../shared/utils/path-validation';
 import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
 import { decodeBlobContent } from '../../../shared/utils/unified-diff';

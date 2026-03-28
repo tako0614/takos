@@ -2,7 +2,6 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { requireSpaceAccess, type BaseVariables } from './shared/route-auth';
-import { zValidator } from './zod-validator';
 import {
   createSkill,
   deleteSkillByName,

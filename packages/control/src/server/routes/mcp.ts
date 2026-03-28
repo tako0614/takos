@@ -120,7 +120,7 @@ mcpRoutes.get('/oauth/callback', async (c) => {
     });
   } catch (err) {
     logError('completeMcpOAuthFlow error', err, { module: 'mcp-oauth' });
-    return c.html(errorPage(`Failed to exchange OAuth code: ${String(err)}`), 500);
+    return c.html(errorPage('Failed to complete OAuth authorization. Please try again.'), 500);
   }
 
   return c.html(successPage(pending.serverName));
@@ -280,11 +280,12 @@ mcpRoutes.get('/servers/:id/tools', async (c) => {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to connect to MCP server';
-    if (message.includes('timeout') || message.includes('Timeout')) {
-      throw new GatewayTimeoutError(message);
+    const detail = err instanceof Error ? err.message : String(err);
+    logError('MCP tool listing failed', err, { module: 'mcp', serverId });
+    if (detail.includes('timeout') || detail.includes('Timeout')) {
+      throw new GatewayTimeoutError('MCP server connection timed out');
     }
-    throw new BadGatewayError(message);
+    throw new BadGatewayError('Failed to connect to MCP server');
   } finally {
     // Best-effort cleanup; errors closing the client are non-fatal
     await client.close().catch((e) => {

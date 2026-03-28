@@ -4,8 +4,8 @@ import { eq, and, or, inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceFile } from '../../../shared/types';
 import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
-import type { IndexContext } from './shared';
-import { resolvePath } from './shared';
+import type { IndexContext } from './index-context';
+import { resolvePath } from './index-context';
 import { BadRequestError, NotFoundError } from '@takos/common/errors';
 
 export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {

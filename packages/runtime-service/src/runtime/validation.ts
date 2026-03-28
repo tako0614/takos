@@ -213,8 +213,6 @@ export function validateSpaceId(spaceId: string): string {
   return spaceId;
 }
 
-/** @deprecated Use {@link validateSpaceId} instead. */
-export const validateWorkspaceId = validateSpaceId;
 
 /**
  * Validates a name parameter (space_id, repo_name, etc.) using SAFE_NAME_PATTERN.

@@ -54,10 +54,13 @@ export function generateWranglerConfig(
   if (service.bindings?.d1 && service.bindings.d1.length > 0) {
     config.d1_databases = service.bindings.d1.map((resourceName): WranglerD1Binding => {
       const provisioned = options.resources.get(resourceName);
+      if (!provisioned?.id) {
+        throw new Error(`Resource '${resourceName}' not provisioned: missing database_id`);
+      }
       return {
-        binding: provisioned?.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-        database_name: provisioned?.name || resourceName,
-        database_id: provisioned?.id || 'TODO',
+        binding: provisioned.binding || resourceName.toUpperCase().replace(/-/g, '_'),
+        database_name: provisioned.name || resourceName,
+        database_id: provisioned.id,
       };
     });
   }
@@ -77,9 +80,12 @@ export function generateWranglerConfig(
   if (service.bindings?.kv && service.bindings.kv.length > 0) {
     config.kv_namespaces = service.bindings.kv.map((resourceName): WranglerKVBinding => {
       const provisioned = options.resources.get(resourceName);
+      if (!provisioned?.id) {
+        throw new Error(`Resource '${resourceName}' not provisioned: missing KV namespace id`);
+      }
       return {
-        binding: provisioned?.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-        id: provisioned?.id || 'TODO',
+        binding: provisioned.binding || resourceName.toUpperCase().replace(/-/g, '_'),
+        id: provisioned.id,
       };
     });
   }

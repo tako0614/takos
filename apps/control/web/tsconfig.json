@@ -15,7 +15,8 @@
     "jsxImportSource": "react",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@takos/control-shared/types": ["../../../packages/control/src/shared/types/index.ts"]
     }
   },
   "include": ["src/**/*", "*.ts"],

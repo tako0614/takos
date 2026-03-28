@@ -9,10 +9,11 @@ import type { RunStatus, Env } from '../../../shared/types';
 import type { AgentMessage, ToolCall } from './types';
 import { getDb, runs, threads, messages } from '../../../infra/db';
 import { and, eq, sql, desc } from 'drizzle-orm';
-import { getContextWindowForModel } from './model-catalog';
+import { resolveHistoryTokenBudget } from './model-catalog';
+import { estimateTokens } from './prompt-budget';
 import { readMessageFromR2 } from '../offload/messages';
 import { buildThreadContextSystemMessage, queryRelevantThreadMessages } from './thread-context';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
+import { logInfo, logWarn } from '../../../shared/utils/logger';
 import {
   THREAD_RETRIEVAL_TOP_K,
   THREAD_RETRIEVAL_MIN_SCORE,
@@ -178,7 +179,6 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
 
   let threadSummary: string | null = null;
   let threadKeyPointsJson = '[]';
-  const contextWindow = getContextWindowForModel(aiModel);
 
   const thread = await db.select({
     summary: threads.summary,
@@ -190,6 +190,10 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     threadKeyPointsJson = thread.keyPoints || '[]';
   }
 
+  const tokenBudget = resolveHistoryTokenBudget(aiModel, env.MODEL_CONTEXT_WINDOWS);
+
+  // Fetch recent messages (generous upper bound; trimmed by token budget below)
+  const MAX_FETCH = 500;
   const rows = await db.select({
     id: messages.id,
     role: messages.role,
@@ -201,7 +205,7 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     sequence: messages.sequence,
   }).from(messages).where(eq(messages.threadId, threadId))
     .orderBy(desc(messages.sequence))
-    .limit(contextWindow)
+    .limit(MAX_FETCH)
     .all();
 
   rows.reverse(); // chronological
@@ -230,10 +234,11 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
   }
 
   const excludeSequences = new Set<number>();
-  const oldestRecentSequence = rows.length > 0 ? rows[0].sequence : undefined;
   let lastUserQuery = '';
 
-  const agentMessages: AgentMessage[] = [];
+  // Build all candidate messages (newest first in rows, but rows is already reversed to chronological)
+  interface CandidateMessage { msg: AgentMessage; sequence: number; tokens: number }
+  const candidates: CandidateMessage[] = [];
 
   for (const msg of rows) {
     excludeSequences.add(msg.sequence);
@@ -252,7 +257,6 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     if (msg.toolCalls) {
       try {
         const parsed = JSON.parse(msg.toolCalls);
-        // Type guard: validate tool_calls structure before use
         if (isValidToolCallsArray(parsed)) {
           agentMsg.tool_calls = parsed;
         } else {
@@ -260,7 +264,6 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
         }
       } catch (parseError) {
         logWarn('Failed to parse tool_calls from message', { module: 'services/agent/conversation-history', error: parseError instanceof Error ? parseError.message : String(parseError) });
-        // Skip malformed tool_calls rather than crash
       }
     }
 
@@ -268,8 +271,24 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
       agentMsg.tool_call_id = msg.toolCallId;
     }
 
-    agentMessages.push(agentMsg);
+    const tokens = estimateTokens(agentMsg.content || '')
+      + (agentMsg.tool_calls ? estimateTokens(JSON.stringify(agentMsg.tool_calls)) : 0);
+    candidates.push({ msg: agentMsg, sequence: msg.sequence, tokens });
   }
+
+  // Trim from the front (oldest) to fit within token budget, keeping most recent messages
+  let totalTokens = 0;
+  for (const c of candidates) totalTokens += c.tokens;
+
+  let trimIndex = 0;
+  while (trimIndex < candidates.length - 1 && totalTokens > tokenBudget) {
+    totalTokens -= candidates[trimIndex].tokens;
+    trimIndex++;
+  }
+
+  const trimmed = candidates.slice(trimIndex);
+  const agentMessages = trimmed.map(c => c.msg);
+  const oldestRecentSequence = trimmed.length > 0 ? trimmed[0].sequence : undefined;
 
   let retrieved: Awaited<ReturnType<typeof queryRelevantThreadMessages>> = [];
   try {
@@ -339,8 +358,8 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     }
     const estTokens = Math.ceil(chars / 4);
     const elapsedMs = Date.now() - startedAt;
-    logInfo(`built thread=${threadId} window=${contextWindow} ` +
-      `recent=${rows.length} retrieved=${retrieved.length} estTokens=${estTokens} ms=${elapsedMs}`, { module: 'thread_context' });
+    logInfo(`built thread=${threadId} model=${aiModel} budget=${tokenBudget} ` +
+      `fetched=${rows.length} used=${trimmed.length} retrieved=${retrieved.length} estTokens=${estTokens} ms=${elapsedMs}`, { module: 'thread_context' });
   } catch {
     // ignore
   }

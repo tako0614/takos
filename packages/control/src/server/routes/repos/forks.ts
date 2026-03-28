@@ -8,7 +8,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { BadRequestError, ConflictError, InternalError, NotFoundError } from '@takos/common/errors';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
-import { sanitizeRepoName } from './base';
+import { sanitizeRepoName } from './routes';
 import { getDb } from '../../../infra/db';
 import { repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql } from 'drizzle-orm';

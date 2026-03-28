@@ -8,7 +8,7 @@ import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { badRequest, internalError, notFound } from '@takos/common/middleware/hono';
 import { REPOS_BASE_DIR } from '../../shared/config.js';
-import { isPathWithinBase } from '../../runtime/paths.js';
+import { isPathWithinBase, verifyPathWithinAfterAccess } from '../../runtime/paths.js';
 import { validateGitName } from '../../runtime/validation.js';
 import { runGitHttpBackend } from '../../runtime/git-http-backend.js';
 import { enforceSpaceScopeMiddleware } from '../../middleware/space-scope.js';
@@ -425,6 +425,17 @@ app.put('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
 
       await pipeline(nodeStream, sizeLimiter, fs.createWriteStream(tempPath, { flags: 'wx' }));
       await fsPromises.rename(tempPath, objectPath);
+
+      // Security: after rename(), verify the final path still resolves within
+      // the repository directory (TOCTOU — a symlink could have been planted
+      // between the initial validation and the rename).
+      try {
+        await verifyPathWithinAfterAccess(REPOS_BASE_DIR, objectPath, 'LFS upload target');
+      } catch {
+        // The file escaped the repo tree — remove it and reject.
+        await fsPromises.rm(objectPath, { force: true }).catch(() => undefined);
+        return badRequest(c, 'Invalid LFS object path');
+      }
     } catch (err) {
       await fsPromises.rm(tempPath, { force: true }).catch(() => undefined);
       const errMessage = err instanceof Error ? err.message : undefined;
@@ -463,6 +474,14 @@ app.get('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
         return notFound(c, 'LFS object not found');
       }
       throw err;
+    }
+
+    // Security: after stat() resolves symlinks, verify the real path is still
+    // within the repository directory to prevent symlink-based path traversal.
+    try {
+      await verifyPathWithinAfterAccess(REPOS_BASE_DIR, objectPath, 'LFS object');
+    } catch {
+      return notFound(c, 'LFS object not found');
     }
 
     // Read the file and return as binary response

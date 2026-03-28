@@ -4,6 +4,7 @@ import { generateId, now, toIsoString } from '../../../shared/utils';
 import { accountMemberships, accounts, getDb, services } from '../../../infra/db';
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../identity/principals';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
 
 const MAX_SERVICES = 100;
 
@@ -31,9 +32,6 @@ export interface ServiceRow {
 export interface ServiceWithSpaceName extends ServiceRow {
   workspace_name: string;
 }
-
-/** @deprecated Use {@link ServiceWithSpaceName} instead. */
-export type ServiceWithWorkspaceName = ServiceWithSpaceName;
 
 export type ServiceRouteRecord = {
   id: string;
@@ -110,10 +108,10 @@ export async function listServicesForUser(d1: D1Database, userId: string) {
   if (!principalId) return [];
 
   const db = getDb(d1);
-  const memberships = await db.select({ accountId: accountMemberships.accountId }).from(accountMemberships).where(eq(accountMemberships.memberId, principalId)).all();
-  if (memberships.length === 0) return [];
-
-  const accountIds = memberships.map((membership) => membership.accountId);
+  const allAccountIds = await resolveAccessibleAccountIds(d1, principalId);
+  // Exclude the user's own account — only workspace memberships matter here
+  const accountIds = allAccountIds.filter((id) => id !== principalId);
+  if (accountIds.length === 0) return [];
   const serviceRows = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -426,31 +424,3 @@ export async function deleteService(d1: D1Database, serviceId: string) {
   await db.delete(services).where(eq(services.id, serviceId));
 }
 
-// --- Deprecated aliases (Workspace -> Space rename) ---
-export const countServicesInWorkspace = countServicesInSpace;
-export const listServicesForWorkspace = listServicesForSpace;
-export const getServiceRouteRecordForWorkspace = getServiceRouteRecordForSpace;
-export const resolveServiceRouteSummaryForWorkspace = resolveServiceRouteSummaryForSpace;
-export const findServiceRouteSummaryInWorkspace = findServiceRouteSummaryInSpace;
-export const listWorkspaceServiceRouteCleanupRecords = listSpaceServiceRouteCleanupRecords;
-export const listServiceRouteCleanupRecordsForWorkspace = listServiceRouteCleanupRecordsForSpace;
-
-// --- Worker-prefixed aliases ---
-export const countWorkersInWorkspace = countServicesInSpace;
-export const listWorkersForUser = listServicesForUser;
-export const listWorkersForWorkspace = listServicesForSpace;
-export const getWorkerById = getServiceById;
-export const getWorkerRouteRecord = getServiceRouteRecord;
-export const getWorkerRouteRecordForWorkspace = getServiceRouteRecordForSpace;
-export const resolveWorkerReferenceRecord = resolveServiceReferenceRecord;
-export const resolveWorkerRouteReference = resolveServiceRouteReference;
-export const listWorkerRouteRecordsByIds = listServiceRouteRecordsByIds;
-export const getWorkerRouteSummary = getServiceRouteSummary;
-export const resolveWorkerRouteSummaryForWorkspace = resolveServiceRouteSummaryForSpace;
-export const findWorkerRouteSummaryInWorkspace = findServiceRouteSummaryInSpace;
-export const listWorkspaceWorkerRouteCleanupRecords = listSpaceServiceRouteCleanupRecords;
-export const listWorkerRouteCleanupRecordsForWorkspace = listServiceRouteCleanupRecordsForSpace;
-export const getWorkerForUser = getServiceForUser;
-export const getWorkerForUserWithRole = getServiceForUserWithRole;
-export const createWorker = createService;
-export const deleteWorker = deleteService;

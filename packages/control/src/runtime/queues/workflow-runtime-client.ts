@@ -1,6 +1,6 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
 import type { Step } from '@takos/actions-engine';
-import type { WorkflowEngine, StepResult } from '../../application/services/execution/workflow-engine';
+import type { WorkflowEngine, WorkflowStepResult } from '../../application/services/execution/workflow-engine';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, repositories } from '../../infra/db';
 import { eq, and, ne, asc } from 'drizzle-orm';
 import { safeJsonParseOrDefault } from '../../shared/utils';
@@ -88,8 +88,6 @@ export async function getSpaceIdFromRepoId(d1: D1Database, repoId: string): Prom
   return repository.accountId;
 }
 
-/** @deprecated Use {@link getSpaceIdFromRepoId} instead. */
-export const getWorkspaceIdFromRepoId = getSpaceIdFromRepoId;
 
 export async function markJobSkipped(
   d1: D1Database,
@@ -114,13 +112,13 @@ export async function markJobSkipped(
 // Shared step-result builders
 // ---------------------------------------------------------------------------
 
-/** Build skipped StepResult entries from existing DB step records. */
-export async function buildSkippedStepResultsFromDb(
+/** Build skipped WorkflowStepResult entries from existing DB step records. */
+export async function buildSkippedWorkflowStepResultsFromDb(
   d1: D1Database,
   jobId: string,
   fallbackName: string,
   errorMessage?: string
-): Promise<StepResult[]> {
+): Promise<WorkflowStepResult[]> {
   const db = getDb(d1);
   const steps = await db.select({ number: workflowSteps.number, name: workflowSteps.name })
     .from(workflowSteps).where(eq(workflowSteps.jobId, jobId))
@@ -153,7 +151,7 @@ export async function buildSkippedStepResultsFromDb(
 export async function failJobWithResults(
   engine: WorkflowEngine,
   jobId: string,
-  stepResults: StepResult[],
+  stepResults: WorkflowStepResult[],
   timestamp: string
 ): Promise<void> {
   await engine.onJobComplete(jobId, {

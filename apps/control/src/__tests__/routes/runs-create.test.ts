@@ -17,7 +17,7 @@ vi.mock('@/services/threads/thread-service', () => ({
   checkThreadAccess: mocks.checkThreadAccess,
 }));
 
-import runs from '@/routes/runs';
+import runs from '@/routes/runs/routes';
 
 type Vars = { user: User };
 type HonoEnv = { Bindings: Env; Variables: Vars };

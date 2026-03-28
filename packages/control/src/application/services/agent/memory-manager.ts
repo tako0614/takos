@@ -23,11 +23,6 @@ export interface MemoryState {
   runtime: AgentMemoryRuntime | undefined;
 }
 
-/** Create the initial (empty) memory state. */
-export function createMemoryState(): MemoryState {
-  return { runtime: undefined };
-}
-
 /**
  * Initialize and bootstrap the memory runtime, wiring the tool observer into the
  * provided tool executor. Silently degrades if initialization fails.

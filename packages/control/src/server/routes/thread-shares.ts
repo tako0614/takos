@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { type BaseVariables } from './shared/route-auth';
 import { BadRequestError, NotFoundError } from '@takos/common/errors';
+import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import { checkThreadAccess } from '../../application/services/threads/thread-service';
 import {
@@ -65,8 +66,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       password_required: created.passwordRequired,
     }, 201);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to create share';
-    throw new BadRequestError(message);
+    logError('Failed to create share', err, { module: 'routes/thread-shares' });
+    throw new BadRequestError('Failed to create share');
   }
 })
 

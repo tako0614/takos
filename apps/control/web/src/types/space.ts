@@ -1,13 +1,16 @@
-export interface Space {
+// Re-export types from backend shared models to avoid duplication.
+import type { Space as BackendSpace, SpaceKind } from '@takos/control-shared/types';
+
+/**
+ * Frontend Space: picks the fields needed by the UI and adds `is_personal`.
+ * `id` is optional because it may be absent in create-flow payloads.
+ */
+export interface Space
+  extends Pick<
+    BackendSpace,
+    'slug' | 'name' | 'description' | 'owner_principal_id' | 'automation_principal_id' | 'security_posture' | 'created_at' | 'updated_at'
+  > {
   id?: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  kind: 'user' | 'team' | 'system';
-  owner_principal_id?: string | null;
-  automation_principal_id?: string | null;
-  security_posture?: 'standard' | 'restricted_egress';
+  kind: SpaceKind;
   is_personal?: boolean;
-  created_at: string;
-  updated_at: string;
 }

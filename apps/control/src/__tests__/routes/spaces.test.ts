@@ -33,7 +33,7 @@ vi.mock('@/services/identity/spaces', () => ({
   updateWorkspaceModel: mocks.updateWorkspaceModel,
 }));
 
-import spacesRoutes from '@/routes/spaces/base';
+import spacesRoutes from '@/routes/spaces/routes';
 
 function createUser(): User {
   return {

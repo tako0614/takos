@@ -8,11 +8,12 @@ import {
   setBrowserSessionId,
   browserHostFetch,
 } from '../session';
+import { bytesToHex } from '../../../../../shared/utils/encoding-utils';
 
 function generateBrowserSessionId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(bytes);
 }
 
 export const browserOpenHandler: ToolHandler = async (args, context) => {

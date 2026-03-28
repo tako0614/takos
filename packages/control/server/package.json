@@ -2,6 +2,9 @@
   "name": "@takos/control-server",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     "./routes/api": "../src/server/routes/api.ts",
     "./routes/auth/cli": "../src/server/routes/auth/cli.ts",
@@ -10,7 +13,7 @@
     "./routes/auth/provisioning": "../src/server/routes/auth/provisioning.ts",
     "./routes/auth/session": "../src/server/routes/auth/session.ts",
     "./routes/auth-api": "../src/server/routes/auth-api.ts",
-    "./routes/oauth": "../src/server/routes/oauth/oauth-routes.ts",
+    "./routes/oauth": "../src/server/routes/oauth/routes.ts",
     "./routes/well-known": "../src/server/routes/well-known.ts",
     "./routes/smart-http": "../src/server/routes/smart-http.ts",
     "./routes/setup": "../src/server/routes/setup.ts",

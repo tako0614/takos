@@ -1,7 +1,7 @@
-import type { StepResult } from '../../application/services/execution/workflow-engine';
-import type { JobResult } from '../../application/services/execution/workflow-engine';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
+import type { WorkflowJobResult } from '../../application/services/execution/workflow-engine';
 import { logError, logWarn } from '../../shared/utils/logger';
-import type { JobExecutionState, JobContext } from './workflow-types';
+import type { JobExecutionState, JobQueueContext } from './workflow-types';
 import {
   runtimeDelete,
   getRunStatus,
@@ -16,7 +16,7 @@ import { executeStep } from './workflow-steps';
 // ---------------------------------------------------------------------------
 
 export async function handleJobSkipped(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState
 ): Promise<boolean> {
   const { jobDefinition } = ctx.message;
@@ -34,7 +34,7 @@ export async function handleJobSkipped(
   state.logs.push(`Job skipped (condition not met): ${jobDefinition.if}`);
   state.logs.push('');
 
-  const skippedSteps: StepResult[] = jobDefinition.steps.map((step, index) => ({
+  const skippedSteps: WorkflowStepResult[] = jobDefinition.steps.map((step, index) => ({
     stepNumber: index + 1,
     name: getStepDisplayName(step, index + 1),
     status: 'skipped',
@@ -74,7 +74,7 @@ export async function handleJobSkipped(
 // ---------------------------------------------------------------------------
 
 export async function executeStepLoop(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState
 ): Promise<'cancelled' | void> {
   const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
@@ -127,7 +127,7 @@ export async function executeStepLoop(
     }
 
     if (!shouldRun) {
-      const skippedResult: StepResult = {
+      const skippedResult: WorkflowStepResult = {
         stepNumber,
         name: stepName,
         status: 'skipped',
@@ -155,7 +155,7 @@ export async function executeStepLoop(
 
     const stepCompletedAt = new Date().toISOString();
 
-    const stepResult: StepResult = {
+    const stepResult: WorkflowStepResult = {
       stepNumber,
       name: stepName,
       status: 'completed',
@@ -205,7 +205,7 @@ export async function executeStepLoop(
 // ---------------------------------------------------------------------------
 
 export async function completeJobSuccess(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState
 ): Promise<void> {
   const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
@@ -238,7 +238,7 @@ export async function completeJobSuccess(
     }
   }
 
-  const jobResult: JobResult = {
+  const jobResult: WorkflowJobResult = {
     jobId,
     status: 'completed',
     conclusion: reportedConclusion,
@@ -266,7 +266,7 @@ export async function completeJobSuccess(
 // ---------------------------------------------------------------------------
 
 export async function completeJobFailure(
-  ctx: JobContext,
+  ctx: JobQueueContext,
   state: JobExecutionState,
   err: unknown
 ): Promise<void> {
@@ -287,7 +287,7 @@ export async function completeJobFailure(
     const stepNumber = i + 1;
     if (seenSteps.has(stepNumber)) continue;
     const stepName = getStepDisplayName(jobDefinition.steps[i], stepNumber);
-    const skippedResult: StepResult = {
+    const skippedResult: WorkflowStepResult = {
       stepNumber,
       name: stepName,
       status: 'skipped',

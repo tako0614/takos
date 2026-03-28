@@ -116,9 +116,9 @@ export function normalizeMigrationSql(fileName: string, sql: string): string {
   if (
     fileName === '0011_service_registry_tables.sql' ||
     fileName === '0011_services_physical_tables.sql' ||
-    fileName === '0012_service_tables.sql' ||
+    fileName === '0013_service_tables.sql' ||
     fileName === '0013_service_table_shape_repair.sql' ||
-    fileName === '0018_service_side_columns.sql'
+    fileName === '0019_service_side_columns.sql'
   ) {
     return '';
   }
@@ -171,11 +171,11 @@ export function rewriteInsertOrIgnoreForPostgres(statement: string): string {
 }
 
 export function normalizePostgresMigrationSql(fileName: string, sql: string): string {
-  if (fileName === '0014_deployments_service_id.sql') {
+  if (fileName === '0015_deployments_service_id.sql') {
     return `ALTER TABLE "deployments" RENAME COLUMN "worker_id" TO "service_id";`;
   }
 
-  if (fileName === '0020_apps_service_id.sql') {
+  if (fileName === '0022_apps_service_id.sql') {
     return `
 DO $$
 BEGIN
@@ -191,7 +191,7 @@ CREATE INDEX IF NOT EXISTS "idx_apps_service_id" ON "apps" ("service_id");
 `;
   }
 
-  if (fileName === '0021_shortcut_group_items_service_id.sql') {
+  if (fileName === '0023_shortcut_group_items_service_id.sql') {
     return `
 DO $$
 BEGIN
@@ -205,7 +205,7 @@ END $$;
 `;
   }
 
-  if (fileName === '0022_mcp_servers_service_id.sql') {
+  if (fileName === '0024_mcp_servers_service_id.sql') {
     return `
 DO $$
 BEGIN
@@ -221,7 +221,7 @@ CREATE INDEX IF NOT EXISTS "idx_mcp_servers_service_id" ON "mcp_servers" ("servi
 `;
   }
 
-  if (fileName === '0023_file_handlers_service_hostname.sql') {
+  if (fileName === '0025_file_handlers_service_hostname.sql') {
     return `
 DO $$
 BEGIN
@@ -235,7 +235,7 @@ END $$;
 `;
   }
 
-  if (fileName === '0023_runs_service_id.sql') {
+  if (fileName === '0026_runs_service_id.sql') {
     return `
 DO $$
 BEGIN
@@ -251,7 +251,7 @@ CREATE INDEX IF NOT EXISTS "idx_runs_service_id" ON "runs" ("service_id");
 `;
   }
 
-  if (fileName === '0027_runs_service_heartbeat.sql') {
+  if (fileName === '0031_runs_service_heartbeat.sql') {
     return `
 DO $$
 BEGIN
@@ -267,7 +267,7 @@ CREATE INDEX IF NOT EXISTS "idx_runs_service_heartbeat" ON "runs" ("service_hear
 `;
   }
 
-  if (fileName === '0029_drop_legacy_worker_mirrors.sql') {
+  if (fileName === '0033_drop_legacy_worker_mirrors.sql') {
     return `
 DO $$
 BEGIN
@@ -290,8 +290,8 @@ DROP TABLE IF EXISTS "workers";
   }
 
   if (
-    fileName === '0018_service_adjacent_service_id_columns.sql'
-    || fileName === '0018_service_side_columns.sql'
+    fileName === '0020_service_adjacent_service_id_columns.sql'
+    || fileName === '0019_service_side_columns.sql'
   ) {
     return `
 DO $$
@@ -352,10 +352,10 @@ CREATE INDEX IF NOT EXISTS "idx_managed_takos_tokens_service_id"
   }
 
   if (
-    fileName === '0015_workers_deployments_fk_repair.sql' ||
-    fileName === '0016_deployment_events_deployments_fk_repair.sql' ||
-    fileName === '0017_drop_worker_binding_mirrors.sql' ||
-    fileName === '0018_service_side_columns.sql'
+    fileName === '0016_workers_deployments_fk_repair.sql' ||
+    fileName === '0017_deployment_events_deployments_fk_repair.sql' ||
+    fileName === '0018_drop_worker_binding_mirrors.sql' ||
+    fileName === '0019_service_side_columns.sql'
   ) {
     return '';
   }

@@ -104,6 +104,10 @@ export interface Thread {
   updated_at: string;
 }
 
+/**
+ * Canonical MessageRole definition.
+ * Duplicated in takos-computer/packages/computer-core/src/shared/types.ts (cross-repo boundary).
+ */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export interface Message {
@@ -126,6 +130,15 @@ export interface ToolExecution {
   duration_ms?: number;
 }
 
+/**
+ * Canonical Agent RunStatus definition.
+ * Intentionally duplicated in (cross-package/repo boundaries prevent direct import):
+ *   - packages/agent-core/src/run-executor.ts
+ *   - takos-computer/packages/computer-core/src/shared/types.ts
+ *
+ * NOT the same as the GitHub Actions RunStatus in packages/actions-engine/src/types.ts
+ * ('queued'|'in_progress'|'completed'|'cancelled') — different domain concept.
+ */
 export type RunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface Run {

@@ -5,7 +5,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './base';
+import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes';
 import {
   commitFilesToDefaultBranch,
   importFilesToDefaultBranch,
@@ -14,7 +14,6 @@ import {
 import { BadRequestError, NotFoundError, InternalError, isAppError } from '@takos/common/errors';
 import { logError } from '../../../shared/utils/logger';
 import {
-  type RepoContext,
   WRITE_ROLES,
   requireBucket,
   sigTimestampToIso,

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useI18n } from '../store/i18n';
-import type { Thread, UserSettings } from '../types';
+import type { Thread } from '../types';
 import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from '../hooks/useToast';
+import { useToast } from '../store/toast';
 import { Icons } from '../lib/Icons';
 import { ChatErrorBanner } from './chat/ChatErrorBanner';
 import { ChatHeader } from './chat/ChatHeader';
@@ -13,13 +13,11 @@ import { ChatShareModal } from './chat/ChatShareModal';
 import { ChatExportModal } from './chat/ChatExportModal';
 import { useChatSession } from '../hooks/useChatSession';
 import { useChatSharing } from '../hooks/useChatSharing';
-import { getTierFromModel } from '../lib/modelCatalog';
 import { useMobileHeader } from '../store/mobile-header';
 
 export interface ChatViewProps {
   thread: Thread;
   spaceId: string;
-  userSettings: UserSettings | null;
   onUpdateTitle: (title: string) => void;
   jumpToMessageId?: string | null;
   jumpToMessageSequence?: number | null;
@@ -36,7 +34,6 @@ export interface ChatViewProps {
 export function ChatView({
   thread,
   spaceId,
-  userSettings: _userSettings,
   onUpdateTitle,
   jumpToMessageId,
   jumpToMessageSequence,
@@ -137,12 +134,12 @@ export function ChatView({
 
   useEffect(() => { if (focusRunId) onRunFocusHandled?.(); }, [focusRunId, onRunFocusHandled]);
 
-  const handleTierChange = useCallback(async (model: string) => {
+  const handleModelChange = useCallback(async (model: string) => {
     setSelectedModel(model);
     try {
       const res = await rpc.spaces[':spaceId'].model.$patch({
         param: { spaceId },
-        json: { tier: getTierFromModel(model) } as Record<string, string>,
+        json: { model } as Record<string, string>,
       });
       await rpcJson(res);
     } catch (err) {
@@ -152,10 +149,10 @@ export function ChatView({
 
   useEffect(() => {
     setHeaderContent(
-      <ModelSwitcher selectedModel={selectedModel} isLoading={isLoading} onTierChange={handleTierChange} />
+      <ModelSwitcher selectedModel={selectedModel} isLoading={isLoading} onModelChange={handleModelChange} />
     );
     return () => setHeaderContent(null);
-  }, [selectedModel, isLoading, handleTierChange, setHeaderContent]);
+  }, [selectedModel, isLoading, handleModelChange, setHeaderContent]);
 
   // Drag & drop
   const [isDragOver, setIsDragOver] = useState(false);
@@ -211,7 +208,7 @@ export function ChatView({
           </div>
         </div>
       )}
-      <ChatHeader selectedModel={selectedModel} isLoading={isLoading} onTierChange={handleTierChange} actions={headerActions} />
+      <ChatHeader selectedModel={selectedModel} isLoading={isLoading} onModelChange={handleModelChange} actions={headerActions} />
 
       {taskContext && (
         <div className="px-4 pb-3">

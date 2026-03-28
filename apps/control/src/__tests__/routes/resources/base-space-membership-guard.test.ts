@@ -49,7 +49,7 @@ vi.mock('@/services/resources', () => ({
   updateResourceMetadata: mocks.updateResourceMetadata,
 }));
 
-import resourcesBase from '@/routes/resources/base';
+import resourcesBase from '@/routes/resources/routes';
 
 const TEST_USER_ID = 'user-1';
 const TEST_TIMESTAMP = '2026-02-10T00:00:00.000Z';

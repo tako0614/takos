@@ -3,7 +3,7 @@ import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import * as gitStore from '../../../application/services/git-smart';
 import { getContentTypeFromPath } from '../../../shared/utils/content-type';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './base';
+import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes';
 import { BadRequestError, NotFoundError, InternalError, isAppError } from '@takos/common/errors';
 import { logError } from '../../../shared/utils/logger';
 import {

@@ -2,6 +2,9 @@
   "name": "@takos/control-git",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@takos/control-core": "workspace:*"
   },

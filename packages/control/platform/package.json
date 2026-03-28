@@ -2,6 +2,9 @@
   "name": "@takos/control-platform",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": "../src/platform/index.ts",
     "./accessors": "../src/platform/accessors.ts",

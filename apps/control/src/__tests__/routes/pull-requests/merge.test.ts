@@ -46,7 +46,7 @@ vi.mock('@/services/actions', () => ({
   triggerPullRequestWorkflows: mocks.triggerPullRequestWorkflows,
 }));
 
-import pullRequestsBase from '@/routes/pull-requests/base';
+import pullRequestsBase from '@/routes/pull-requests/routes';
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
   return createMockEnv(overrides) as unknown as Env;

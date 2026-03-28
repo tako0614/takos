@@ -1,10 +1,11 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { ResourcePermission } from '../../../shared/types';
-import { getDb, resourceAccess, accountMemberships } from '../../../infra/db';
+import { getDb, resourceAccess } from '../../../infra/db';
 import { eq, and, inArray } from 'drizzle-orm';
 import { generateId, now, toRequiredIsoString } from '../../../shared/utils';
 import { toApiResourceAccess } from './format';
 import { getResourceById } from './store';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
 
 const RESOURCE_PERMISSIONS: readonly string[] = ['read', 'write', 'admin'];
 
@@ -109,14 +110,7 @@ export async function checkResourceAccess(
   const drizzle = getDb(db);
 
   // Find accounts the user is a member of
-  const memberships = await drizzle.select({ accountId: accountMemberships.accountId })
-    .from(accountMemberships)
-    .where(and(
-      eq(accountMemberships.memberId, userId),
-      eq(accountMemberships.status, 'active'),
-    ))
-    .all();
-  const accountIds = [userId, ...memberships.map((m) => m.accountId)];
+  const accountIds = await resolveAccessibleAccountIds(db, userId, { activeOnly: true });
 
   const access = await drizzle.select({ permission: resourceAccess.permission })
     .from(resourceAccess)
@@ -154,14 +148,7 @@ export async function canAccessResource(
   const drizzle = getDb(db);
 
   // Find accounts the user is a member of
-  const memberships = await drizzle.select({ accountId: accountMemberships.accountId })
-    .from(accountMemberships)
-    .where(and(
-      eq(accountMemberships.memberId, userId),
-      eq(accountMemberships.status, 'active'),
-    ))
-    .all();
-  const accountIds = [userId, ...memberships.map((m) => m.accountId)];
+  const accountIds = await resolveAccessibleAccountIds(db, userId, { activeOnly: true });
 
   const access = await drizzle.select({ permission: resourceAccess.permission })
     .from(resourceAccess)

@@ -33,7 +33,7 @@ import {
   getRunContext,
   getStepDisplayName,
   getRunStatus,
-  getWorkspaceIdFromRepoId,
+  getSpaceIdFromRepoId,
   markJobSkipped,
   buildSkippedStepResultsFromDb,
   failJobWithResults,
@@ -319,17 +319,17 @@ describe('getRunStatus', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getWorkspaceIdFromRepoId
+// getSpaceIdFromRepoId
 // ---------------------------------------------------------------------------
 
-describe('getWorkspaceIdFromRepoId', () => {
+describe('getSpaceIdFromRepoId', () => {
   it('returns accountId from repository', async () => {
     const dbMock = createDrizzleMock({
       selectGet: vi.fn().mockResolvedValue({ accountId: 'ws-123' }),
     });
     mocks.getDb.mockReturnValue(dbMock);
 
-    const result = await getWorkspaceIdFromRepoId({} as any, 'repo-1');
+    const result = await getSpaceIdFromRepoId({} as any, 'repo-1');
     expect(result).toBe('ws-123');
   });
 
@@ -339,8 +339,8 @@ describe('getWorkspaceIdFromRepoId', () => {
     });
     mocks.getDb.mockReturnValue(dbMock);
 
-    await expect(getWorkspaceIdFromRepoId({} as any, 'missing')).rejects.toThrow(
-      'Workspace not found for repository missing'
+    await expect(getSpaceIdFromRepoId({} as any, 'missing')).rejects.toThrow(
+      'Space not found for repository missing'
     );
   });
 
@@ -350,8 +350,8 @@ describe('getWorkspaceIdFromRepoId', () => {
     });
     mocks.getDb.mockReturnValue(dbMock);
 
-    await expect(getWorkspaceIdFromRepoId({} as any, 'repo-no-account')).rejects.toThrow(
-      'Workspace not found for repository repo-no-account'
+    await expect(getSpaceIdFromRepoId({} as any, 'repo-no-account')).rejects.toThrow(
+      'Space not found for repository repo-no-account'
     );
   });
 });

@@ -1,5 +1,6 @@
 import type { Env } from '../../../shared/types';
 import { WFPService, type WfpEnv } from '../wfp';
+import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 
 export type CloudflareManagedResourceType =
   | 'd1'
@@ -51,18 +52,18 @@ export class CloudflareResourceService {
   ): Promise<{ cfId: string | null; cfName: string }> {
     switch (type) {
       case 'd1': {
-        const cfId = await this.wfp.createD1Database(name);
+        const cfId = await this.wfp.d1.createD1Database(name);
         return { cfId, cfName: name };
       }
       case 'r2':
-        await this.wfp.createR2Bucket(name);
+        await this.wfp.r2.createR2Bucket(name);
         return { cfId: name, cfName: name };
       case 'kv': {
-        const cfId = await this.wfp.createKVNamespace(name);
+        const cfId = await this.wfp.kv.createKVNamespace(name);
         return { cfId, cfName: name };
       }
       case 'queue': {
-        const queue = await this.wfp.createQueue(name, {
+        const queue = await this.wfp.queues.createQueue(name, {
           deliveryDelaySeconds: options?.queue?.deliveryDelaySeconds,
         });
         return { cfId: queue.id, cfName: queue.name };
@@ -79,8 +80,8 @@ export class CloudflareResourceService {
           cfName: name,
         };
       case 'vectorize': {
-        const cfId = await this.wfp.createVectorizeIndex(name, options?.vectorize || {
-          dimensions: 1536,
+        const cfId = await this.wfp.vectorize.createVectorizeIndex(name, options?.vectorize || {
+          dimensions: VECTORIZE_DEFAULT_DIMENSIONS,
           metric: 'cosine',
         });
         return { cfId, cfName: name };
@@ -100,30 +101,30 @@ export class CloudflareResourceService {
     const type = String(params.type || '').trim() as CloudflareDeletableResourceType;
     switch (type) {
       case 'd1':
-        if (params.cfId) await this.wfp.deleteD1Database(params.cfId);
+        if (params.cfId) await this.wfp.d1.deleteD1Database(params.cfId);
         return;
       case 'r2':
-        if (params.cfName) await this.wfp.deleteR2Bucket(params.cfName);
+        if (params.cfName) await this.wfp.r2.deleteR2Bucket(params.cfName);
         return;
       case 'kv':
-        if (params.cfId) await this.wfp.deleteKVNamespace(params.cfId);
+        if (params.cfId) await this.wfp.kv.deleteKVNamespace(params.cfId);
         return;
       case 'queue':
         if (params.cfId) {
-          await this.wfp.deleteQueue(params.cfId);
+          await this.wfp.queues.deleteQueue(params.cfId);
           return;
         }
-        if (params.cfName) await this.wfp.deleteQueueByName(params.cfName);
+        if (params.cfName) await this.wfp.queues.deleteQueueByName(params.cfName);
         return;
       case 'analyticsEngine':
       case 'analytics_engine':
       case 'workflow':
         return;
       case 'vectorize':
-        if (params.cfName) await this.wfp.deleteVectorizeIndex(params.cfName);
+        if (params.cfName) await this.wfp.vectorize.deleteVectorizeIndex(params.cfName);
         return;
       case 'worker':
-        if (params.cfName) await this.wfp.deleteWorker(params.cfName);
+        if (params.cfName) await this.wfp.workers.deleteWorker(params.cfName);
         return;
       default:
         return;
@@ -131,10 +132,10 @@ export class CloudflareResourceService {
   }
 
   async executeD1Query(databaseId: string, sql: string): Promise<void> {
-    await this.wfp.executeD1Query(databaseId, sql);
+    await this.wfp.d1.executeD1Query(databaseId, sql);
   }
 
   async queryD1<T>(databaseId: string, sql: string): Promise<T[]> {
-    return this.wfp.queryD1<T>(databaseId, sql);
+    return this.wfp.d1.queryD1<T>(databaseId, sql);
   }
 }

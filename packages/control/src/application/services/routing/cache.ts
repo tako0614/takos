@@ -18,11 +18,11 @@ import { logWarn } from '../../../shared/utils/logger';
 
 export const ROUTING_LOG_PREFIX = '[Routing]';
 
-export const L1_TTL_MS = 10_000; // isolate local cache
-export const L1_MAX_ENTRIES = 2048;
+const L1_TTL_MS = 10_000; // isolate local cache
+const L1_MAX_ENTRIES = 2048;
 
 // KV "freshness" is enforced in application logic (not relying on KV propagation).
-export const L2_MAX_AGE_MS = 90_000;
+const L2_MAX_AGE_MS = 90_000;
 
 // Phase 4: KV is pure cache (short TTL)
 export const L2_KV_TTL_SECONDS = 120;

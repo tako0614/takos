@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../../lib/Icons';
 import type { Commit } from '../../../types';
 import { formatDetailedRelativeDate } from '../../../lib/format';
@@ -107,7 +107,7 @@ export function CommitList({ repoId, branch }: CommitListProps) {
     );
   }
 
-  const groupedCommits = groupCommitsByDate(commits);
+  const groupedCommits = useMemo(() => groupCommitsByDate(commits), [commits]);
 
   return (
     <div className="flex flex-col bg-white dark:bg-zinc-900">

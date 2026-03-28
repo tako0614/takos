@@ -1,5 +1,19 @@
 import type { DurableNamespaceBinding, KvStoreBinding } from '../../../shared/types/bindings.ts';
 
+// Re-export routing primitives from shared/types so that consumers importing
+// from this module continue to work without changes.
+export type {
+  RoutingStore,
+  RoutingRecord,
+  RoutingTarget,
+  WeightedDeploymentTarget,
+  HttpRoute,
+  StoredHttpEndpoint,
+} from '../../../shared/types/routing';
+
+import type { RoutingStore } from '../../../shared/types/routing';
+import type { RoutingTarget, RoutingRecord } from '../../../shared/types/routing';
+
 export type RoutingDurableObjectNamespace = DurableNamespaceBinding;
 export type RoutingKvNamespace = KvStoreBinding;
 
@@ -13,52 +27,6 @@ export type RoutingBindings = {
   ROUTING_DO?: RoutingDurableObjectNamespace;
   ROUTING_DO_PHASE?: string;
   ROUTING_STORE?: RoutingStore;
-};
-
-export type WeightedDeploymentTarget = {
-  routeRef: string;
-  weight: number;
-  // Optional metadata for observability/debugging.
-  deploymentId?: string;
-  status?: 'active' | 'canary' | 'rollback';
-};
-
-export type HttpRoute = {
-  pathPrefix?: string;
-  methods?: string[];
-};
-
-export type StoredHttpEndpoint = {
-  name: string;
-  routes: HttpRoute[];
-  target:
-    | {
-        kind: 'service-ref';
-        ref: string;
-      }
-    | {
-        kind: 'http-url';
-        baseUrl: string;
-      };
-  timeoutMs?: number;
-};
-
-export type RoutingTarget =
-  | { type: 'deployments'; deployments: WeightedDeploymentTarget[] }
-  | { type: 'http-endpoint-set'; endpoints: StoredHttpEndpoint[] };
-
-export type RoutingRecord = {
-  hostname: string;
-  target: RoutingTarget | null;
-  version: number;
-  updatedAt: number;
-  tombstoneUntil?: number;
-};
-
-export type RoutingStore = {
-  getRecord(hostname: string): Promise<RoutingRecord | null>;
-  putRecord(hostname: string, target: RoutingTarget, updatedAt: number): Promise<RoutingRecord>;
-  deleteRecord(hostname: string, tombstoneTtlMs: number, updatedAt: number): Promise<RoutingRecord>;
 };
 
 export type ParsedRoutingValue = {

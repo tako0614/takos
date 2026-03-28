@@ -26,17 +26,17 @@ export interface StartRunOptions {
   actorId: string;
 }
 
-export interface JobResult {
+export interface WorkflowJobResult {
   jobId: string;
   status: 'completed';
   conclusion: Conclusion;
   outputs: Record<string, string>;
-  stepResults: StepResult[];
+  stepResults: WorkflowStepResult[];
   startedAt: string;
   completedAt: string;
 }
 
-export interface StepResult {
+export interface WorkflowStepResult {
   stepNumber: number;
   name: string;
   status: 'completed' | 'skipped';
