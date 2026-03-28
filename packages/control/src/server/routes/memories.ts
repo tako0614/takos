@@ -7,7 +7,7 @@ import type {
   ReminderTriggerType,
   ReminderPriority,
 } from '../../shared/types';
-import { checkSpaceAccess } from '../../shared/utils';
+import { checkSpaceAccess } from '../../application/services/identity/space-access';
 import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './route-auth';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';

@@ -6,8 +6,9 @@ import type {
   ReminderTriggerType,
   ReminderPriority,
 } from '../../shared/types';
-import { checkSpaceAccess } from '../../shared/utils';
-import { parseLimit, requireSpaceAccess, type BaseVariables } from './route-auth';
+import { checkSpaceAccess } from '../../application/services/identity/space-access';
+import { requireSpaceAccess, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {
@@ -35,7 +36,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const validatedQuery = c.req.valid('query');
     const status = validatedQuery.status as ReminderStatus | undefined;
-    const limit = parseLimit(validatedQuery.limit, 50, 100);
+    const { limit } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
     const reminders = await listReminders(c.env.DB, access.space.id, {
       status,

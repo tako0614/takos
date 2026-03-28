@@ -20,6 +20,7 @@ import { accounts, repositories, branches, repoForks, repoRemotes, repoStars, wo
 import { and, eq, sql } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { logError, logWarn } from '../../../shared/utils/logger';
+import { requireFound } from '../validation-utils';
 
 // Re-export shared utilities so existing sibling imports (e.g. `from './routes'`) keep working.
 export {
@@ -159,22 +160,18 @@ export default new Hono<AuthenticatedRouteEnv>()
   const repoId = c.req.param('repoId');
   const db = getDb(c.env.DB);
 
-  const repoAccess = await checkRepoAccess(
+  const repoAccess = requireFound(await checkRepoAccess(
     c.env,
     repoId,
     user?.id,
     undefined,
     { allowPublicRead: true },
+  ), 'Repository');
+
+  const repoResult = requireFound(
+    await db.select().from(repositories).where(eq(repositories.id, repoId)).get(),
+    'Repository',
   );
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
-
-  const repoResult = await db.select().from(repositories).where(eq(repositories.id, repoId)).get();
-
-  if (!repoResult) {
-    throw new NotFoundError('Repository');
-  }
 
   const userRole = user?.id ? repoAccess.role : null;
 
@@ -232,10 +229,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const repoId = c.req.param('repoId');
   const body = c.req.valid('json');
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
+  const repoAccess = requireFound(await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']), 'Repository');
 
   const db = getDb(c.env.DB);
   const data: Record<string, string | number> = {};
@@ -287,10 +281,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const repoId = c.req.param('repoId');
   const db = getDb(c.env.DB);
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
-  if (!repoAccess) {
-    throw new NotFoundError('Repository');
-  }
+  const repoAccess = requireFound(await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']), 'Repository');
 
   const repoObjectCandidates = c.env.GIT_OBJECTS
     ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)

@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn } from './schema-helpers';
+import { createdAtColumn } from './schema-utils';
 
 // 16. AuthService
 export const authServices = sqliteTable('auth_services', {

@@ -12,6 +12,7 @@
 
 import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '../protocol/pkt-line';
 import { concatBytes } from '../core/sha1';
+import { logWarn } from '../../../../shared/utils/logger';
 
 const TEXT_ENCODER = new TextEncoder();
 
@@ -85,7 +86,7 @@ export async function fetchPackFromRemote(
   });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
+    const body = await response.text().catch((e) => { logWarn('Failed to read fetch-pack error response body', { module: 'git-smart', error: String(e) }); return ''; });
     throw new Error(
       `Failed to fetch pack from ${normalizedUrl}: HTTP ${response.status}${body ? ` — ${body.slice(0, 200)}` : ''}`,
     );

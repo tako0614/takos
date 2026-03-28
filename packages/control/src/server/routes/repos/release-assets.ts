@@ -10,7 +10,7 @@ import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { type ReleaseAsset, toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { sanitizeReleaseAssetFilename, buildAttachmentDisposition } from './release-shared';
-import { ok } from '../response-helpers';
+import { ok } from '../response-utils';
 
 const releaseAssets = new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/releases/:tag/assets', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {

@@ -24,7 +24,7 @@ import type { AgentContext, AgentConfig, AgentEvent, AgentMessage, ToolCall } fr
 import type { ToolExecutorLike } from '../../tools/executor';
 import { RunCancelledError } from './run-lifecycle';
 import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
-import { runLangGraphRunner } from './langgraph-runner';
+import { runLangGraphRunner } from './graph-runner';
 import { getAgentConfig } from './runner-config';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { RunTerminalPayload } from '../run-notifier';

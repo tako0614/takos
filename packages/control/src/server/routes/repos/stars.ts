@@ -7,7 +7,7 @@ import { getDb } from '../../../infra/db';
 import { repoStars, repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { parseLimit, parseOffset } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, AuthenticationError, NotFoundError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
@@ -101,8 +101,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   if (!user) {
     throw new AuthenticationError();
   }
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query());
   const db = getDb(c.env.DB);
 
   // Query stars with joined repo and account data

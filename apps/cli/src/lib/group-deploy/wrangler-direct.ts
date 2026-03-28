@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { WranglerDirectDeployOptions, WranglerDirectDeployResult } from './deploy-models.js';
-import { execCommand } from './cloudflare-helpers.js';
+import { execCommand } from './cloudflare-utils.js';
 
 // ── Wrangler Direct Deploy ───────────────────────────────────────────────────
 

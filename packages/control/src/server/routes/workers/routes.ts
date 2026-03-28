@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, requireSpaceAccess } from '../route-auth';
+import { requireSpaceAccess } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { zValidator } from '../zod-validator';
 import {
   countServicesInSpace,
@@ -133,8 +134,9 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/logs', async (c) => {
   const user = c.get('user');
   const workerId = c.req.param('id');
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
-  const sinceHours = parseLimit(c.req.query('since'), 1, 72);
+  const { limit } = parsePagination(c.req.query());
+  const sinceRaw = Number.parseInt(c.req.query('since') ?? '', 10);
+  const sinceHours = Number.isFinite(sinceRaw) && sinceRaw > 0 ? Math.min(sinceRaw, 72) : 1;
 
   if (!c.env.CF_ACCOUNT_ID || !c.env.CF_API_TOKEN) {
     throw new InternalError('Cloudflare API not configured');

@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, ThreadStatus, MessageRole } from '../../shared/types';
-import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './route-auth';
+import { requireSpaceAccess, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger';
+import { requireFound } from './validation-utils';
 import { zValidator } from './zod-validator';
 import {
   checkThreadAccess,
@@ -55,8 +57,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const validatedQuery = c.req.valid('query');
   const q = (validatedQuery.q || '').trim();
   const type = (validatedQuery.type || 'all').toLowerCase(); // keyword | semantic | all
-  const limit = parseLimit(validatedQuery.limit, 20, 100);
-  const offset = parseOffset(validatedQuery.offset);
+  const { limit, offset } = parsePagination(validatedQuery, { maxLimit: 100 });
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
   const resolvedSpaceId = access.space.id;
@@ -99,10 +100,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json({
     thread: access.thread,
@@ -122,10 +120,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const body = c.req.valid('json') as { mode?: ThreadShareMode; password?: string; expires_at?: string; expires_in_days?: number };
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const mode: ThreadShareMode = body.mode === 'password' ? 'password' : 'public';
 
@@ -170,10 +165,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   const shares = await listThreadShares(c.env.DB, threadId);
   const origin = new URL(c.req.url).origin;
@@ -194,10 +186,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const shareId = c.req.param('shareId');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const ok = await revokeThreadShare({ db: c.env.DB, threadId, shareId });
   if (!ok) {
@@ -219,10 +208,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const body = c.req.valid('json');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const updates: { title?: string | null; locale?: 'ja' | 'en' | null; status?: ThreadStatus; context_window?: number } = {};
 
@@ -255,10 +241,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin']), 'Thread');
 
   await deleteThread(c.env, c.env.DB, threadId);
 
@@ -269,10 +252,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   await updateThreadStatus(c.env.DB, threadId, 'archived');
 
@@ -283,10 +263,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   await updateThreadStatus(c.env.DB, threadId, 'active');
 
@@ -298,14 +275,9 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   async (c) => {
   const user = c.get('user');
   const threadId = c.req.param('id');
-  const { limit: limitParam, offset: offsetParam } = c.req.valid('query');
-  const limit = parseLimit(limitParam, 100, 200);
-  const offset = parseOffset(offsetParam);
+  const { limit, offset } = parsePagination(c.req.valid('query'), { limit: 100, maxLimit: 200 });
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json(await getThreadTimeline(c.env, threadId, limit, offset));
 })
@@ -321,19 +293,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
   const {
-    limit: limitParam,
-    offset: offsetParam,
     include_messages: includeMessagesParam,
     root_run_id: rootRunId,
+    ...paginationRaw
   } = c.req.valid('query');
-  const limit = parseLimit(limitParam, 100, 200);
-  const offset = parseOffset(offsetParam);
+  const { limit, offset } = parsePagination(paginationRaw, { limit: 100, maxLimit: 200 });
   const includeMessages = includeMessagesParam !== '0';
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json(await getThreadHistory(c.env, threadId, {
     limit,
@@ -356,17 +323,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const validatedQuery = c.req.valid('query');
   const q = (validatedQuery.q || '').trim();
   const type = (validatedQuery.type || 'all').toLowerCase(); // keyword | semantic | all
-  const limit = parseLimit(validatedQuery.limit, 20, 100);
-  const offset = parseOffset(validatedQuery.offset);
+  const { limit, offset } = parsePagination(validatedQuery, { maxLimit: 100 });
 
   if (!q) {
     throw new BadRequestError('q is required');
   }
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json(await searchThreadMessages({
     env: c.env,
@@ -392,10 +355,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const body = c.req.valid('json');
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const content = typeof body.content === 'string' ? body.content : '';
   const attachmentCount = Array.isArray(body.metadata?.attachments) ? body.metadata.attachments.length : 0;
@@ -430,10 +390,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const format = (exportQuery.format || 'markdown').toLowerCase();
   const includeInternal = exportQuery.include_internal === '1';
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   const response = await exportThread({
     db: c.env.DB,

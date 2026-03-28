@@ -1,7 +1,7 @@
 import { getDb, workflowRuns } from '../../../infra/db';
 import { and, eq } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { buildSanitizedDOHeaders } from '../../../runtime/durable-objects/do-header-utils';
+import { buildSanitizedDOHeaders } from '../../../shared/utils/do-header-utils';
 
 type DurableObjectFetchLike = {
   fetch(input: string | URL, init?: RequestInit): Promise<Response>;

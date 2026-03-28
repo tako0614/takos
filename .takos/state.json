@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "provider": "cloudflare",
+  "env": "staging",
+  "groupName": "test-app",
+  "updatedAt": "2026-03-28T16:21:39.632Z",
+  "resources": {},
+  "workers": {
+    "api": {
+      "scriptName": "api",
+      "deployedAt": "2026-03-28T16:21:38.999Z",
+      "codeHash": "unknown"
+    },
+    "browser-host": {
+      "scriptName": "browser-host",
+      "deployedAt": "2026-03-28T16:21:39.632Z",
+      "codeHash": "unknown"
+    }
+  },
+  "containers": {},
+  "services": {}
+}

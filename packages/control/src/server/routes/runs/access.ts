@@ -1,6 +1,6 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { Run, SpaceRole } from '../../../shared/types';
-import { checkSpaceAccess } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';

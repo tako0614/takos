@@ -11,7 +11,7 @@
  * Requires: docker CLI available.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-helpers.js';
+import { execCommand } from '../cloudflare-utils.js';
 
 export class DockerProvider implements ResourceProvider {
   readonly name = 'docker';

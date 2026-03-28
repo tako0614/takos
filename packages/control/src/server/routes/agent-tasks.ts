@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, AgentTaskStatus } from '../../shared/types';
-import { parseLimit, parseOffset, type BaseVariables } from './route-auth';
+import type { BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
-import { checkSpaceAccess, generateId } from '../../shared/utils';
+import { generateId } from '../../shared/utils';
+import { checkSpaceAccess } from '../../application/services/identity/space-access';
 import { createThread } from '../../application/services/threads/thread-service';
 import { analyzeTask } from '../../application/services/agent/workflow';
 import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../application/services/agent';
@@ -32,8 +34,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
     const status = c.req.query('status') as AgentTaskStatus | undefined;
-    const limit = parseLimit(c.req.query('limit'), 50, 200);
-    const offset = parseOffset(c.req.query('offset'), 0);
+    const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 200 });
 
     const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
     if (!access) {

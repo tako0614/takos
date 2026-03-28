@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-helpers';
+import { createdAtColumn, timestamps } from './schema-utils';
 import { services, serviceBindings, serviceCommonEnvLinks } from './schema-services';
 
 // 14. App

@@ -117,7 +117,7 @@ export async function emitEventImpl(
     const doEmit = async () => {
       const emitRes = await stub.fetch(buildRunNotifierEmitRequest(payload));
       if (!emitRes.ok) {
-        const body = await emitRes.text().catch(() => '');
+        const body = await emitRes.text().catch((e) => { logWarn('Failed to read run event emit response body', { module: 'runner-events', error: String(e) }); return ''; });
         throw new Error(`DO emit non-OK ${emitRes.status}: ${body}`);
       }
       emitOk = true;

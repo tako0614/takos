@@ -68,7 +68,7 @@ vi.mock('@/services/agent/model-catalog', () => ({
   resolveHistoryTokenBudget: mocks.resolveContextWindow,
 }));
 
-vi.mock('@/services/agent/langgraph-runner', () => ({
+vi.mock('@/services/agent/graph-runner', () => ({
   runLangGraphRunner: vi.fn(),
 }));
 

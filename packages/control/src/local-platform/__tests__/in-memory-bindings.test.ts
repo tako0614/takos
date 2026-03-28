@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInMemoryR2Bucket } from './in-memory-bindings.ts';
+import { createInMemoryR2Bucket } from '../in-memory-bindings.ts';
 
 describe('createInMemoryR2Bucket multipart upload', () => {
   it('reassembles parts, preserves metadata, and supports resuming', async () => {

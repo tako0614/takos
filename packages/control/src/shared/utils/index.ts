@@ -19,12 +19,6 @@ export {
   extractBearerToken,
 } from './url-utils';
 
-// --- Space access ---
-
-export {
-  checkSpaceAccess,
-} from '../../application/services/identity/space-access';
-
 // --- Naming ---
 
 export {

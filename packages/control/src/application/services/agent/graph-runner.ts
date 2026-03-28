@@ -14,7 +14,7 @@ import {
   dbMessagesToLangChain,
   langChainMessageToDb,
   type LangGraphEvent,
-} from './langgraph-agent';
+} from './graph-agent';
 import { getTimeoutConfig } from './runner-config';
 import { RunCancelledError } from './run-lifecycle';
 import { withTimeout } from '../../../shared/utils/with-timeout';

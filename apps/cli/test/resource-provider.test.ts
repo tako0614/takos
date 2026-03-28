@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── Mock cloudflare-helpers before any imports ────────────────────────────────
+// ── Mock cloudflare-utils before any imports ────────────────────────────────
 
 const mocks = vi.hoisted(() => ({
   cfApi: vi.fn(),
   execCommand: vi.fn(),
 }));
 
-vi.mock('../src/lib/group-deploy/cloudflare-helpers.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/lib/group-deploy/cloudflare-helpers.js')>();
+vi.mock('../src/lib/group-deploy/cloudflare-utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/group-deploy/cloudflare-utils.js')>();
   return {
     ...actual,
     cfApi: mocks.cfApi,

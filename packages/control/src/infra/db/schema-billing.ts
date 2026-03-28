@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps, updatedAtColumn } from './schema-helpers';
+import { createdAtColumn, timestamps, updatedAtColumn } from './schema-utils';
 
 // 18. BillingAccount
 export const billingAccounts = sqliteTable('billing_accounts', {

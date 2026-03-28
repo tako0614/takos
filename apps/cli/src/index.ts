@@ -10,6 +10,10 @@ import { registerDeployGroupCommand } from './commands/deploy-group.js';
 import { registerPlanCommand } from './commands/plan.js';
 import { registerApplyCommand } from './commands/apply.js';
 import { registerStateCommand } from './commands/state.js';
+import { registerWorkerCommand } from './commands/worker.js';
+import { registerResourceCommand } from './commands/resource.js';
+import { registerContainerCommand } from './commands/container.js';
+import { registerServiceCommand } from './commands/service.js';
 import { isContainerMode, isAuthenticated } from './lib/config.js';
 import { cliExit, isCliCommandExit } from './lib/command-exit.js';
 
@@ -26,6 +30,10 @@ registerDeployGroupCommand(program);
 registerPlanCommand(program);
 registerApplyCommand(program);
 registerStateCommand(program);
+registerWorkerCommand(program);
+registerResourceCommand(program);
+registerContainerCommand(program);
+registerServiceCommand(program);
 registerEndpointCommand(program);
 registerTaskCommands(program);
 
@@ -34,7 +42,7 @@ program.hook('preAction', (thisCommand) => {
     ? process.argv[2].trim().toLowerCase()
     : thisCommand.name().toLowerCase();
 
-  if (['login', 'logout', 'help', 'endpoint', 'deploy-group', 'plan', 'apply', 'state'].includes(commandName)) {
+  if (['login', 'logout', 'help', 'endpoint', 'deploy-group', 'plan', 'apply', 'state', 'worker', 'resource', 'container', 'service'].includes(commandName)) {
     return;
   }
 

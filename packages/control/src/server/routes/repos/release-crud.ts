@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId } from '../../../shared/utils';
-import { parseLimit, parseOffset } from '../route-auth';
+import { generateId, parsePagination } from '../../../shared/utils';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -13,14 +12,13 @@ import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError } from 'takos-common/errors';
 import { fetchReleaseWithDetails } from './release-shared';
-import { ok } from '../response-helpers';
+import { ok } from '../response-utils';
 
 const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/releases', async (c) => {
   const user = c.get('user');
   const repoId = c.req.param('repoId');
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query());
   const includeDrafts = c.req.query('include_drafts') === 'true';
   const db = getDb(c.env.DB);
 

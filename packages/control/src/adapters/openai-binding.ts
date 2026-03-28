@@ -12,6 +12,8 @@
 // cloudflare-compat is not necessary; we just conform to the subset that
 // EmbeddingsService calls.
 
+import { logWarn } from '../shared/utils/logger';
+
 const MODEL_MAP: Record<string, { openAiModel: string; dimensions?: number }> = {
   '@cf/baai/bge-base-en-v1.5': { openAiModel: 'text-embedding-3-small', dimensions: 768 },
   '@cf/baai/bge-small-en-v1.5': { openAiModel: 'text-embedding-3-small', dimensions: 384 },
@@ -62,7 +64,7 @@ export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
       });
 
       if (!response.ok) {
-        const body = await response.text().catch(() => '');
+        const body = await response.text().catch((e) => { logWarn('Failed to read OpenAI error response body', { module: 'openai-binding', error: String(e) }); return ''; });
         throw new Error(
           `OpenAI embeddings API error (${response.status}): ${body.slice(0, 500)}`,
         );

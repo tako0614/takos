@@ -13,6 +13,7 @@ import {
 } from '../application/services/run-notifier/index.ts';
 import { recordRunUsageBatch } from '../application/services/billing/billing.ts';
 import { jsonResponse, readBearerToken } from './runtime-http.ts';
+import { logWarn } from '../shared/utils/logger';
 
 type LocalExecutorHostEnv = {
   DB: D1Database;
@@ -310,7 +311,7 @@ async function localHandleExecutorControlRpc(request: Request, env: LocalExecuto
   if (!tokenInfo || tokenInfo.capability !== 'control') return localExecutorUnauthorized();
 
   const body = request.method === 'POST'
-    ? await request.json().catch(() => ({}))
+    ? await request.json().catch((e) => { logWarn('Failed to parse executor control RPC request body', { module: 'local-executor', error: String(e) }); return {}; })
     : Object.fromEntries(new URL(request.url).searchParams.entries());
 
   if (typeof body === 'object' && body !== null) {

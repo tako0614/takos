@@ -3,7 +3,7 @@ import { and, count, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../../../infra/db';
 import { accountFollows, accountMutes, accountSettings, accounts, repositories, repoStars } from '../../../infra/db/schema';
 import type { Repository, Space } from '../../../shared/types';
-import { checkSpaceAccess } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 
 export interface ProfileUser {
   id: string;

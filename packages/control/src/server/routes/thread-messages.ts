@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, MessageRole } from '../../shared/types';
-import { parseLimit, parseOffset, type BaseVariables } from './route-auth';
+import type { BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
@@ -20,9 +21,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   async (c) => {
   const user = c.get('user');
   const threadId = c.req.param('id');
-  const { limit: limitParam, offset: offsetParam } = c.req.valid('query');
-  const limit = parseLimit(limitParam, 100, 200);
-  const offset = parseOffset(offsetParam);
+  const { limit, offset } = parsePagination(c.req.valid('query'), { limit: 100, maxLimit: 200 });
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
   if (!access) {
@@ -43,13 +42,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
   const {
-    limit: limitParam,
-    offset: offsetParam,
     include_messages: includeMessagesParam,
     root_run_id: rootRunId,
+    ...paginationRaw
   } = c.req.valid('query');
-  const limit = parseLimit(limitParam, 100, 200);
-  const offset = parseOffset(offsetParam);
+  const { limit, offset } = parsePagination(paginationRaw, { limit: 100, maxLimit: 200 });
   const includeMessages = includeMessagesParam !== '0';
 
   const access = await checkThreadAccess(c.env.DB, threadId, user.id);
@@ -78,8 +75,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const validatedQuery = c.req.valid('query');
   const q = (validatedQuery.q || '').trim();
   const type = (validatedQuery.type || 'all').toLowerCase(); // keyword | semantic | all
-  const limit = parseLimit(validatedQuery.limit, 20, 100);
-  const offset = parseOffset(validatedQuery.offset);
+  const { limit, offset } = parsePagination(validatedQuery, { maxLimit: 100 });
 
   if (!q) {
     throw new BadRequestError('q is required');

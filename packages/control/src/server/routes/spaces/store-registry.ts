@@ -2,10 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   requireSpaceAccess,
-  parseLimit,
-  parseOffset,
   type AuthenticatedRouteEnv,
 } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {

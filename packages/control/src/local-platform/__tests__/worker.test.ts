@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInMemoryQueue } from './in-memory-bindings.ts';
-import { LOCAL_QUEUE_NAMES } from './queue-runtime.ts';
+import { createInMemoryQueue } from '../in-memory-bindings.ts';
+import { LOCAL_QUEUE_NAMES } from '../queue-runtime.ts';
 
 const queueSpy = vi.hoisted(() => vi.fn());
 const scheduledSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('../runtime/worker/index.ts', () => ({
+vi.mock('../../runtime/worker/index.ts', () => ({
   createWorkerRuntime: () => ({
     queue: queueSpy,
     scheduled: scheduledSpy,
@@ -16,7 +16,7 @@ vi.mock('../runtime/worker/index.ts', () => ({
   },
 }));
 
-import { runLocalWorkerIteration } from './worker.ts';
+import { runLocalWorkerIteration } from '../worker.ts';
 
 describe('local worker loop', () => {
   beforeEach(() => {

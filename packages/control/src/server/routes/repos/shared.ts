@@ -3,20 +3,15 @@
  */
 import type { Context } from 'hono';
 import { NotFoundError } from 'takos-common/errors';
-import * as gitStore from '../../../application/services/git-smart';
 import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
-import type { AuthenticatedRouteEnv } from '../route-auth';
 
 // ---------------------------------------------------------------------------
-// Bucket types and helpers
+// Bucket types and helpers — canonical definitions live in shared/utils/git-bucket.
+// Re-exported here for backward-compatible imports within the repos route tree.
 // ---------------------------------------------------------------------------
 
-export type RepoBucketBinding = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
-export type GitBucket = Parameters<typeof gitStore.getCommit>[1];
-
-export function toGitBucket(bucket: RepoBucketBinding): GitBucket {
-  return bucket as unknown as GitBucket;
-}
+export type { RepoBucketBinding, GitBucket } from '../../../shared/utils/git-bucket';
+export { toGitBucket } from '../../../shared/utils/git-bucket';
 
 // ---------------------------------------------------------------------------
 // Re-exports

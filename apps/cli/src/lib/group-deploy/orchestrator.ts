@@ -14,7 +14,7 @@ import type {
   WorkerContainerSpec,
   WorkerServiceDef,
 } from './deploy-models.js';
-import { execCommand } from './cloudflare-helpers.js';
+import { execCommand } from './cloudflare-utils.js';
 import { provisionResources } from './provisioner.js';
 import { generateWranglerConfig, serializeWranglerToml } from './wrangler-config.js';
 import { deployContainerWithWrangler, serializeContainerWranglerToml } from './container.js';

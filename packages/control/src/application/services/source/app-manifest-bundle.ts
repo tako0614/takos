@@ -2,12 +2,12 @@ import YAML from 'yaml';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import {
-  normalizeRepoPath,
   BUILD_SOURCE_LABELS,
   type AppManifest,
   type AppDeploymentBuildSource,
   type BundleDoc,
 } from './app-manifest-types';
+import { normalizeRepoPath } from './app-manifest-utils';
 
 function buildSourceLabels(source: AppDeploymentBuildSource): Record<string, string> {
   return {

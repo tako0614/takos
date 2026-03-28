@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './route-auth';
+import { parseJsonBody, requireTenantSource, requireSpaceAccess, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { GitService } from '../../application/services/source/git';
 import type { R2Bucket } from '../../shared/types/bindings.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
@@ -67,8 +68,7 @@ git.get('/spaces/:spaceId/git/log', async (c) => {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
   const path = c.req.query('path');
-  const limit = parseLimit(c.req.query('limit'), 50, 100);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
 
@@ -196,7 +196,7 @@ git.get('/spaces/:spaceId/git/history/:path', async (c) => {
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
   const path = c.req.param('path');
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
+  const { limit } = parsePagination(c.req.query());
 
   const access = await requireSpaceAccess(c, spaceId, user.id);
 

@@ -8,11 +8,13 @@ import {
   type SessionInitResult,
 } from '../../../application/services/sync';
 import { requireSpaceAccess } from '../route-auth';
-import { checkSpaceAccess, generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { toSessionSnakeCase } from './session-mappers';
 import type { SessionContext } from './session-mappers';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
+import { requireParam, requireFound } from '../validation-utils';
 import {
   getPlatformConfig,
   getPlatformGitObjects,
@@ -52,8 +54,7 @@ export async function startSession(
   body: StartSessionBody,
 ): Promise<Response> {
   const user = c.get('user');
-  const spaceId = c.req.param('spaceId') || c.req.param('workspaceId');
-  if (!spaceId) throw new BadRequestError('Missing spaceId');
+  const spaceId = requireParam(c.req.param('spaceId') || c.req.param('workspaceId'), 'spaceId');
   const access = await requireSpaceAccess(
     c,
     spaceId,
@@ -75,17 +76,16 @@ export async function startSession(
   }
 
   const db = getDb(dbBinding);
-  const repoInfo = await db.select({
-    id: repositories.id,
-    name: repositories.name,
-    defaultBranch: repositories.defaultBranch,
-  }).from(repositories).where(
-    and(eq(repositories.id, repoId), eq(repositories.accountId, access.space.id))
-  ).get();
-
-  if (!repoInfo) {
-    throw new NotFoundError('Repository');
-  }
+  const repoInfo = requireFound(
+    await db.select({
+      id: repositories.id,
+      name: repositories.name,
+      defaultBranch: repositories.defaultBranch,
+    }).from(repositories).where(
+      and(eq(repositories.id, repoId), eq(repositories.accountId, access.space.id))
+    ).get(),
+    'Repository',
+  );
 
   const sessionId = generateId();
   const timestamp = new Date().toISOString();
@@ -137,8 +137,7 @@ export async function stopSession(
   body: StopSessionBody,
 ): Promise<Response> {
   const user = c.get('user');
-  const sessionId = c.req.param('sessionId');
-  if (!sessionId) throw new BadRequestError('Missing sessionId');
+  const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
   const gitObjects = getPlatformGitObjects(c);
@@ -149,11 +148,10 @@ export async function stopSession(
     throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
-  const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
-
-  if (!sessionRow) {
-    throw new NotFoundError('Session');
-  }
+  const sessionRow = requireFound(
+    await db.select().from(sessions).where(eq(sessions.id, sessionId)).get(),
+    'Session',
+  );
 
   const session = toSessionSnakeCase(sessionRow);
   const access = await requireSpaceAccess(
@@ -254,18 +252,16 @@ export async function stopSession(
 
 export async function resumeSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
-  const sessionId = c.req.param('sessionId');
-  if (!sessionId) throw new BadRequestError('Missing sessionId');
+  const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
-  const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
-
-  if (!sessionRow) {
-    throw new NotFoundError('Session');
-  }
+  const sessionRow = requireFound(
+    await db.select().from(sessions).where(eq(sessions.id, sessionId)).get(),
+    'Session',
+  );
 
   const access = await requireSpaceAccess(
     c,
@@ -293,19 +289,17 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
 
 export async function discardSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
-  const sessionId = c.req.param('sessionId');
-  if (!sessionId) throw new BadRequestError('Missing sessionId');
+  const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
   const dbBinding = getPlatformSqlBinding(c);
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
   }
   const db = getDb(dbBinding);
-  const sessionRow = await db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
-
-  if (!sessionRow) {
-    throw new NotFoundError('Session');
-  }
+  const sessionRow = requireFound(
+    await db.select().from(sessions).where(eq(sessions.id, sessionId)).get(),
+    'Session',
+  );
 
   const access = await checkSpaceAccess(dbBinding, sessionRow.accountId, user.id, ['owner', 'admin']);
   if (!access) {

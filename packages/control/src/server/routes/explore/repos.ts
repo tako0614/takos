@@ -11,7 +11,7 @@ import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { parseLimit, parseOffset } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { NotFoundError } from 'takos-common/errors';
 import {
   findRepoByUsernameAndName,
@@ -36,8 +36,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const response = await listExploreRepos(c.env.DB, {
       sort: c.req.query('sort') || 'stars',
       order: c.req.query('order') || 'desc',
-      limit: parseLimit(c.req.query('limit'), 20, 100),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query()),
       searchQuery: c.req.query('q')?.trim() || '',
       ...filters,
       userId: user?.id,
@@ -55,8 +54,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     validateExploreFilters(c, filters);
 
     const response = await listTrendingRepos(c.env.DB, {
-      limit: parseLimit(c.req.query('limit'), 20, 100),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query()),
       ...filters,
       userId: user?.id,
     });
@@ -73,8 +71,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     validateExploreFilters(c, filters);
 
     const response = await listNewRepos(c.env.DB, {
-      limit: parseLimit(c.req.query('limit'), 20, 100),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query()),
       ...filters,
       userId: user?.id,
     });
@@ -91,8 +88,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     validateExploreFilters(c, filters);
 
     const response = await listRecentRepos(c.env.DB, {
-      limit: parseLimit(c.req.query('limit'), 20, 100),
-      offset: parseOffset(c.req.query('offset')),
+      ...parsePagination(c.req.query()),
       ...filters,
       userId: user?.id,
     });

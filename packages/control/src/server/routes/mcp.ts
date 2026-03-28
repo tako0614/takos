@@ -22,7 +22,7 @@ import { escapeHtml } from './auth/html';
 import { logError, logWarn } from '../../shared/utils/logger';
 import { BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from 'takos-common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
-import { ok } from './response-helpers';
+import { ok } from './response-utils';
 
 const createServerSchema = z.object({ name: z.string(), url: z.string(), scope: z.string().optional() });
 const updateServerSchema = z.object({ enabled: z.boolean().optional(), name: z.string().optional() });

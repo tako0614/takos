@@ -4,7 +4,7 @@ import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
 import { AppError, BadRequestError, InternalError, parseLimit, type BaseVariables } from './route-auth';
 import { zValidator } from './zod-validator';
-import { buildSanitizedDOHeaders } from '../../runtime/durable-objects/do-header-utils';
+import { buildSanitizedDOHeaders } from '../../shared/utils/do-header-utils';
 import {
   getNotificationPreferences,
   getNotificationsMutedUntil,

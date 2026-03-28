@@ -91,7 +91,7 @@ vi.mock('pg', () => ({
   }),
 }));
 
-import { createPostgresD1Database } from './persistent-bindings.ts';
+import { createPostgresD1Database } from '../persistent-bindings.ts';
 
 describe('createPostgresD1Database', () => {
   beforeEach(() => {
