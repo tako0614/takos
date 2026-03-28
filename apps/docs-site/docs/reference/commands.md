@@ -50,6 +50,61 @@ takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 
 `takos deploy` は repo-local `.takos/app.yml` と、指定 repo/ref に紐づく workflow artifact を使って app deployment を作成する current surface です。
 
+## `takos deploy-group`
+
+`.takos/app.yml` で定義されたアプリグループを Cloudflare に直接デプロイします。
+
+### 基本使用法
+
+```bash
+# 全サービスをデプロイ
+takos deploy-group --env staging --account-id $CF_ACCOUNT_ID --api-token $CF_API_TOKEN
+
+# ドライラン
+takos deploy-group --env staging --dry-run
+
+# 特定の worker のみ
+takos deploy-group --env staging --worker browser-host
+
+# 特定の container のみ
+takos deploy-group --env staging --container my-api
+
+# dispatch namespace にデプロイ
+takos deploy-group --env staging --namespace takos-staging-tenants
+
+# wrangler.toml を直接デプロイ（app.yml なし）
+takos deploy-group --env staging --wrangler-config wrangler.worker.toml
+
+# JSON 出力
+takos deploy-group --env staging --json
+```
+
+### オプション
+
+| オプション | 必須 | 説明 |
+|---|---|---|
+| `--env <name>` | yes | デプロイ先環境（staging, production） |
+| `--manifest <path>` | no | マニフェストパス（デフォルト: .takos/app.yml） |
+| `--worker <name...>` | no | 特定 worker のみデプロイ（複数指定可） |
+| `--container <name...>` | no | 特定 container のみデプロイ（複数指定可） |
+| `--namespace <name>` | no | dispatch namespace にデプロイ |
+| `--group <name>` | no | グループ名（デフォルト: metadata.name） |
+| `--wrangler-config <path>` | no | wrangler.toml を直接デプロイ（--manifest/--worker/--container と排他） |
+| `--base-domain <domain>` | no | テンプレート変数のベースドメイン |
+| `--account-id <id>` | yes* | Cloudflare アカウント ID（環境変数 CLOUDFLARE_ACCOUNT_ID でも可） |
+| `--api-token <token>` | yes* | Cloudflare API トークン（環境変数 CLOUDFLARE_API_TOKEN でも可） |
+| `--compatibility-date <date>` | no | Worker の compatibility date（デフォルト: 2025-01-01） |
+| `--dry-run` | no | デプロイせずに内容を表示 |
+| `--json` | no | JSON 形式で出力 |
+
+### 処理フロー
+
+1. リソースプロビジョニング（D1, R2, KV, secretRef）
+2. Worker サービスをデプロイ（CF Containers 含む）
+3. Container サービスをデプロイ（常設コンテナ）
+4. Secrets を設定
+5. テンプレート変数（env.inject）を解決して注入
+
 ## task-oriented model
 
 Takos CLI の中心は `takos <domain> <task>` です。
