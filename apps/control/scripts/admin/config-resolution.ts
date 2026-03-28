@@ -177,16 +177,20 @@ export function parseGlobalOptions(rawArgs: string[]): { remainingArgs: string[]
 
 export function resolveConfig(options: GlobalOptions): ResolvedConfig {
   const wranglerToml = readWranglerToml();
+  // Canonical env var: CLOUDFLARE_ACCOUNT_ID
+  // CF_ACCOUNT_ID is deprecated but kept as a fallback for backward compatibility.
   const accountId =
     options.accountIdOverride ||
-    process.env.CF_ACCOUNT_ID ||
     process.env.CLOUDFLARE_ACCOUNT_ID ||
+    process.env.CF_ACCOUNT_ID ||
     inferAccountId(options.environment, wranglerToml);
 
+  // Canonical env var: CLOUDFLARE_API_TOKEN
+  // CF_API_TOKEN is deprecated but kept as a fallback for backward compatibility.
   const apiToken =
     options.apiTokenOverride ||
-    process.env.CF_API_TOKEN ||
-    process.env.CLOUDFLARE_API_TOKEN;
+    process.env.CLOUDFLARE_API_TOKEN ||
+    process.env.CF_API_TOKEN;
 
   const d1DatabaseId =
     options.databaseIdOverride ||
@@ -194,11 +198,11 @@ export function resolveConfig(options: GlobalOptions): ResolvedConfig {
     inferD1DatabaseId(options.environment, wranglerToml);
 
   if (!accountId) {
-    fail('CF_ACCOUNT_ID is required (env var or wrangler.toml).');
+    fail('CLOUDFLARE_ACCOUNT_ID is required (env var, --account-id, or wrangler.toml).');
   }
 
   if (!apiToken) {
-    fail('CF_API_TOKEN (or CLOUDFLARE_API_TOKEN) is required.');
+    fail('CLOUDFLARE_API_TOKEN is required (env var or --api-token).');
   }
 
   return {

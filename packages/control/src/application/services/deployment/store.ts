@@ -1,13 +1,14 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-helpers';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
 import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
 
-type DeploymentInsert = typeof deployments.$inferInsert;
-type DeploymentUpdate = Partial<typeof deployments.$inferInsert>;
+type DeploymentInsert = InsertOf<typeof deployments>;
+type DeploymentUpdate = Partial<InsertOf<typeof deployments>>;
 
-export type DeploymentRow = typeof deployments.$inferSelect;
+export type DeploymentRow = SelectOf<typeof deployments>;
 
 export function toApiDeployment(d: DeploymentRow): Deployment {
   return {

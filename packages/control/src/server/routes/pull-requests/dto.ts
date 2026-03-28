@@ -1,10 +1,11 @@
 import type { PullRequestStatus, AuthorType } from '../../../shared/types';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import type { pullRequests } from '../../../infra/db/schema';
 import { accounts } from '../../../infra/db/schema';
 import { getDb, type Database } from '../../../infra/db';
 import { inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-type PrRecord = typeof pullRequests.$inferSelect;
+type PrRecord = SelectOf<typeof pullRequests>;
 import { toIsoString, toRequiredIsoString } from '../../../shared/utils';
 
 export type UserLiteDto = {

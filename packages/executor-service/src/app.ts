@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createLogger } from 'takos-common/logger';
+import { parseIntEnv } from 'takos-common/env-parse';
 import { executeRunInContainer as sharedExecuteRun } from 'takos-agent-core/run-executor';
 import type { StartPayload } from 'takos-agent-core/run-executor';
 import {
@@ -27,7 +28,7 @@ export function createExecutorServiceApp(options: ExecutorServiceOptions = {}) {
   const logger = createLogger({ service: serviceName });
   const runtimeConfig = buildExecutorRuntimeConfig(process.env as Record<string, string | undefined>);
   const concurrency = options.concurrency ?? createConcurrencyGuard(
-    options.maxConcurrentRuns ?? parseInt(process.env.MAX_CONCURRENT_RUNS ?? '5', 10),
+    options.maxConcurrentRuns ?? parseIntEnv('MAX_CONCURRENT_RUNS', 5, { min: 1 }),
   );
   const shutdownController = new AbortController();
 
@@ -52,10 +53,10 @@ export function createExecutorServiceApp(options: ExecutorServiceOptions = {}) {
 }
 
 export function startExecutorService(options: ExecutorServiceOptions = {}) {
-  const port = options.port ?? parseInt(process.env.PORT ?? '8080', 10);
+  const port = options.port ?? parseIntEnv('PORT', 8080, { min: 1, max: 65535 });
   // 30 s grace period — longer than browser-service (15 s) because in-flight
   // agent runs need time to reach a safe checkpoint before forced termination.
-  const gracePeriodMs = options.shutdownGraceMs ?? parseInt(process.env.SHUTDOWN_GRACE_MS ?? '30000', 10);
+  const gracePeriodMs = options.shutdownGraceMs ?? parseIntEnv('SHUTDOWN_GRACE_MS', 30000, { min: 0 });
   const { app, logger, concurrency, shutdownController, runtimeConfig } = createExecutorServiceApp(options);
 
   const server = serve({ fetch: app.fetch, port }, () => {

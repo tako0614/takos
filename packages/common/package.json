@@ -1,7 +1,6 @@
 {
   "name": "takos-common",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -33,6 +32,10 @@
     "./logger": {
       "types": "./dist/logger.d.ts",
       "import": "./dist/logger.js"
+    },
+    "./env-parse": {
+      "types": "./dist/env-parse.d.ts",
+      "import": "./dist/env-parse.js"
     }
   },
   "scripts": {

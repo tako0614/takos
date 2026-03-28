@@ -3,6 +3,8 @@ import chalk from 'chalk';
 import { cliExit } from '../lib/command-exit.js';
 import { getConfig, isContainerMode, saveApiUrl } from '../lib/config.js';
 
+// Canonical source: DEFAULT_LOCAL_PORTS.web in
+// packages/control/src/local-platform/runtime-types.ts
 const DEFAULT_LOCAL_PORT = 8787;
 
 const ENDPOINT_PRESETS: Readonly<Record<string, string>> = {

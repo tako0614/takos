@@ -1,8 +1,6 @@
 import { useCallback, useRef } from 'react';
 import {
   useConnectionManagerBase,
-  processIncomingMessage,
-  handleTransportClose,
   type ConnectionManagerOptions,
   type ConnectionManagerResult,
   type TransportSetupContext,
@@ -47,26 +45,11 @@ export function useSseConnectionManager(
   }, []);
 
   const setupTransport = useCallback((ctx: TransportSetupContext): void => {
-    const {
-      runId,
-      reconnectAttemptsRef,
-      startWebSocketRef,
-      startMessagePolling,
-      currentRunIdRef,
-      lastEventIdRef,
-      verifyRunStatus,
-      handleWebSocketEventRef,
-      isMountedRef,
-      handleRunCompletedRef,
-      setIsLoading,
-      setCurrentRun,
-      setError,
-      t,
-    } = ctx;
+    const { runId, lastEventId, onMessage, onClose, onOpen } = ctx;
 
     const sseParams = new URLSearchParams();
-    if (lastEventIdRef.current > 0) {
-      sseParams.set('last_event_id', String(lastEventIdRef.current));
+    if (lastEventId > 0) {
+      sseParams.set('last_event_id', String(lastEventId));
     }
     const sseQuery = sseParams.toString();
     const sseUrl = `/api/runs/${runId}/sse${sseQuery ? `?${sseQuery}` : ''}`;
@@ -81,34 +64,18 @@ export function useSseConnectionManager(
         if (es.readyState !== EventSource.OPEN) {
           console.warn('[SSE] Connection timeout, closing');
           es.close();
-          handleTransportClose(runId, 'SSE', {
-            isMountedRef,
-            currentRunIdRef,
-            reconnectAttemptsRef,
-            startWebSocketRef,
-            handleRunCompletedRef,
-            setIsLoading,
-            setCurrentRun,
-            setError,
-            t,
-          });
+          onClose();
         }
       }, 10_000);
 
       es.onopen = () => {
         clearTimeout(connectTimeout);
         console.debug('[SSE] Connection established for run', runId);
-        reconnectAttemptsRef.current = 0;
-        startMessagePolling(currentRunIdRef);
+        onOpen();
       };
 
       es.onmessage = (event: MessageEvent) => {
-        processIncomingMessage(event.data, runId, '[SSE]', {
-          lastEventIdRef,
-          currentRunIdRef,
-          verifyRunStatus,
-          handleWebSocketEventRef,
-        });
+        onMessage(event.data);
       };
 
       es.onerror = () => {
@@ -119,17 +86,7 @@ export function useSseConnectionManager(
         if (es.readyState === EventSource.CLOSED) {
           console.warn('[SSE] Connection closed, will attempt manual reconnect');
           eventSourceRef.current = null;
-          handleTransportClose(runId, 'SSE', {
-            isMountedRef,
-            currentRunIdRef,
-            reconnectAttemptsRef,
-            startWebSocketRef,
-            handleRunCompletedRef,
-            setIsLoading,
-            setCurrentRun,
-            setError,
-            t,
-          });
+          onClose();
         } else {
           // CONNECTING state -- EventSource is auto-reconnecting.
           console.debug('[SSE] Reconnecting automatically...');

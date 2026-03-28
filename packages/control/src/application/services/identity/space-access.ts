@@ -1,12 +1,13 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceRole, Space, SpaceMembership } from '../../../shared/types';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { resolveUserPrincipalId } from './principals';
 import { getDb } from '../../../infra/db';
 import { accounts, accountMemberships } from '../../../infra/db/schema';
 import { eq, and, or } from 'drizzle-orm';
 
-function toSpace(row: typeof accounts.$inferSelect): Space {
+function toSpace(row: SelectOf<typeof accounts>): Space {
   const kind = row.type === 'user' ? 'user' : row.type === 'system' ? 'system' : 'team';
   return {
     id: row.id,
@@ -27,7 +28,7 @@ function toSpace(row: typeof accounts.$inferSelect): Space {
   };
 }
 
-function toSpaceMembership(row: typeof accountMemberships.$inferSelect): SpaceMembership {
+function toSpaceMembership(row: SelectOf<typeof accountMemberships>): SpaceMembership {
   return {
     id: row.id,
     space_id: row.accountId,

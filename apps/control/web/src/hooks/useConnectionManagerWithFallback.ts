@@ -62,18 +62,31 @@ export function useConnectionManagerWithFallback(
   // Without this, the SSE hook's version (which only closes EventSource) would
   // be active even when WS is the transport, leaving WS connections dangling
   // on run.failed events.
-  options.handleWebSocketEventRef.current = (
+  const { processor, currentRunIdRef, lastEventIdRef, isMountedRef, setError, t } = options;
+  const {
+    verifyRunStatus,
+    upsertRunMeta,
+    handleWebSocketEventRef,
+    handleRunCompletedRef,
+    setCurrentRun,
+    setStreaming,
+    setIsLoading,
+    resetStreamingState,
+    appendTimelineEntry,
+  } = processor;
+
+  handleWebSocketEventRef.current = (
     eventType: string,
     data: unknown,
     eventId?: number,
     sourceRunId?: string,
   ) => {
     const payload = parseEventData(data);
-    const runId = payload.run?.id || sourceRunId || options.currentRunIdRef.current || '';
+    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current || '';
     if (!runId) return;
-    const isPrimaryRun = runId === options.currentRunIdRef.current;
+    const isPrimaryRun = runId === currentRunIdRef.current;
     if (payload.run?.id) {
-      options.upsertRunMeta(payload.run as Partial<Run> & { id: string });
+      upsertRunMeta(payload.run as Partial<Run> & { id: string });
     }
 
     const handler = EVENT_DISPATCH[eventType];
@@ -84,20 +97,20 @@ export function useConnectionManagerWithFallback(
         eventId,
         eventType,
         isPrimaryRun,
-        verifyRunStatus: options.verifyRunStatus,
-        isMountedRef: options.isMountedRef,
-        currentRunIdRef: options.currentRunIdRef,
-        lastEventIdRef: options.lastEventIdRef,
-        handleWebSocketEventRef: options.handleWebSocketEventRef,
-        handleRunCompletedRef: options.handleRunCompletedRef,
-        setCurrentRun: options.setCurrentRun,
-        setStreaming: options.setStreaming,
-        setIsLoading: options.setIsLoading,
-        setError: options.setError,
+        verifyRunStatus,
+        isMountedRef,
+        currentRunIdRef,
+        lastEventIdRef,
+        handleWebSocketEventRef,
+        handleRunCompletedRef,
+        setCurrentRun,
+        setStreaming,
+        setIsLoading,
+        setError,
         closeWebSocket,
-        resetStreamingState: options.resetStreamingState,
-        appendTimelineEntry: options.appendTimelineEntry,
-        t: options.t,
+        resetStreamingState,
+        appendTimelineEntry,
+        t,
       });
     }
   };

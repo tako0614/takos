@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { oauthConsents, oauthClients } from '../../../infra/db';
 import type { OAuthConsent } from '../../../shared/types/oauth';
 import { generateId } from './pkce';
@@ -7,7 +8,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { revokeAllUserClientTokens } from './token';
 
-type OAuthConsentRow = typeof oauthConsents.$inferSelect;
+type OAuthConsentRow = SelectOf<typeof oauthConsents>;
 
 function toApiConsent(row: OAuthConsentRow): OAuthConsent {
   return {

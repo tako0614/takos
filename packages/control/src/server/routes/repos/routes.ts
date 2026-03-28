@@ -1,8 +1,6 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { z } from 'zod';
-import type { RepositoryVisibility } from '../../../shared/types';
-import { now, toIsoString } from '../../../shared/utils';
+import { now } from '../../../shared/utils';
 import {
   requireSpaceAccess,
 } from '../shared/route-auth';
@@ -10,7 +8,6 @@ import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, No
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
-import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
 import { collectReachableObjectShas } from '../../../application/services/git-smart';
 import {
   checkRepoAccess,
@@ -19,209 +16,43 @@ import {
   RepositoryCreationError,
 } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
-import type { Database } from '../../../infra/db';
 import { accounts, repositories, branches, repoForks, repoRemotes, repoStars, workflowSecrets } from '../../../infra/db/schema';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { logError, logWarn } from '../../../shared/utils/logger';
 
-// --- Shared repo utilities (formerly repos/utils.ts) ---
+// Re-export shared utilities so existing sibling imports (e.g. `from './routes'`) keep working.
+export {
+  type RepoBucketBinding,
+  type GitBucket,
+  toGitBucket,
+  sanitizeRepoName,
+  readableCommitErrorResponse,
+  generateExploreInvalidationUrls,
+  encodeBase64,
+  hasWriteRole,
+  type TreeFlattenLimitErrorCode,
+  getTreeFlattenLimitError,
+} from './shared';
 
-export type RepoBucketBinding = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
-export type GitBucket = Parameters<typeof gitStore.getCommit>[1];
+import { generateExploreInvalidationUrls } from './shared';
+import {
+  resolveOwnerUsername,
+  formatRepositoryResponse,
+  deleteR2Prefix,
+  cleanupRepoGitObjects,
+  collectCleanupCandidates,
+} from './repo-helpers';
 
-export function toGitBucket(bucket: RepoBucketBinding): GitBucket {
-  return bucket as unknown as GitBucket;
-}
+// ---------------------------------------------------------------------------
+// Type aliases for deletion cleanup
+// ---------------------------------------------------------------------------
 
-export { sanitizeRepoName } from '../../../shared/utils';
-
-export function readableCommitErrorResponse(
-  c: Context,
-  ref: string,
-  result: Extract<ResolveReadableCommitResult, { ok: false }>
-): Response {
-  if (result.reason === 'ref_not_found') {
-    throw new NotFoundError('Ref');
-  }
-
-  if (result.reason === 'commit_not_found') {
-    return c.json({
-      error: 'Commit object missing',
-      ref,
-      commit_sha: result.refCommitSha || null,
-    }, 409);
-  }
-
-  return c.json({
-    error: 'Commit tree missing',
-    ref,
-    commit_sha: result.refCommitSha || null,
-  }, 409);
-}
-
-export function generateExploreInvalidationUrls(c: Context): string[] {
-  const origin = new URL(c.req.url).origin;
-
-  return [
-    `${origin}/explore/repos`,
-    `${origin}/explore/repos/trending`,
-    `${origin}/explore/repos/new`,
-    `${origin}/explore/repos/recent`,
-    `${origin}/explore/suggest`,
-    `${origin}/explore/packages`,
-    `${origin}/explore/users`,
-  ];
-}
-
-export function encodeBase64(data: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  return btoa(binary);
-}
-
-export function hasWriteRole(role: string | null | undefined): boolean {
-  return role === 'owner' || role === 'admin' || role === 'editor';
-}
-
-export type TreeFlattenLimitErrorCode =
-  | 'TREE_FLATTEN_ENTRY_LIMIT_EXCEEDED'
-  | 'TREE_FLATTEN_DEPTH_LIMIT_EXCEEDED';
-
-/**
- * Check whether an error is a tree flatten limit error.
- * Shared across git, git-advanced, and sync routes.
- */
-export function getTreeFlattenLimitError(
-  err: unknown
-): { code: TreeFlattenLimitErrorCode; detail: string } | null {
-  if (!(err instanceof Error)) {
-    return null;
-  }
-  if (err.message.includes('Tree flatten entry limit exceeded')) {
-    return { code: 'TREE_FLATTEN_ENTRY_LIMIT_EXCEEDED', detail: err.message };
-  }
-  if (err.message.includes('Tree flatten depth limit exceeded')) {
-    return { code: 'TREE_FLATTEN_DEPTH_LIMIT_EXCEEDED', detail: err.message };
-  }
-  return null;
-}
-
-// --- End shared repo utilities ---
-
-const MAX_REPO_OBJECT_CLEANUP_CANDIDATES = 25_000;
-type GitObjectsBucket = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
-type ReachableObjectsBucket = Parameters<typeof collectReachableObjectShas>[1];
 type DeleteBucket = Parameters<typeof gitStore.deleteObject>[0];
 
-type RepositoryResponseSource = {
-  name: string;
-  description: string | null;
-  visibility: string;
-  defaultBranch: string;
-  stars: number;
-  forks: number;
-  gitEnabled: number | boolean;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-};
-/**
- * Resolve the display username for an account (workspace or user).
- * The account's own slug is the username — no personal workspace indirection needed.
- */
-async function resolveOwnerUsername(db: Database, spaceId: string): Promise<string> {
-  const workspace = await db.select({
-    slug: accounts.slug,
-  })
-    .from(accounts)
-    .where(eq(accounts.id, spaceId))
-    .get();
-
-  return workspace?.slug || '';
-}
-
-function formatRepositoryResponse(
-  repository: RepositoryResponseSource,
-  ownerUsername: string
-) {
-  return {
-    owner_username: ownerUsername,
-    name: repository.name,
-    description: repository.description,
-    visibility: repository.visibility as RepositoryVisibility,
-    default_branch: repository.defaultBranch,
-    stars: repository.stars,
-    forks: repository.forks,
-    git_enabled: repository.gitEnabled,
-    created_at: toIsoString(repository.createdAt),
-    updated_at: toIsoString(repository.updatedAt),
-  };
-}
-
-async function deleteR2Prefix(
-  bucket: GitObjectsBucket,
-  prefix: string
-): Promise<void> {
-  let cursor: string | undefined;
-
-  do {
-    const listing = await bucket.list({ prefix, cursor });
-    if (listing.objects.length > 0) {
-      await Promise.all(listing.objects.map((object: { key: string }) => bucket.delete(object.key)));
-    }
-    cursor = listing.truncated ? listing.cursor : undefined;
-  } while (cursor);
-}
-
-async function cleanupRepoGitObjects(
-  db: Database,
-  d1: AuthenticatedRouteEnv['Bindings']['DB'],
-  bucket: GitObjectsBucket,
-  deletedRepoId: string,
-  candidateOids: Set<string>
-): Promise<void> {
-  if (candidateOids.size === 0) {
-    return;
-  }
-
-  const candidateList = Array.from(candidateOids);
-  const sharedOids = new Set<string>();
-  const otherRepos = await db.select({ id: repositories.id })
-    .from(repositories)
-    .where(ne(repositories.id, deletedRepoId))
-    .all();
-
-  for (const repo of otherRepos) {
-    if (sharedOids.size === candidateList.length) {
-      break;
-    }
-
-    const reachable = await collectReachableObjectShas(
-      d1,
-      bucket as ReachableObjectsBucket,
-      repo.id
-    );
-    for (const oid of candidateList) {
-      if (!sharedOids.has(oid) && reachable.has(oid)) {
-        sharedOids.add(oid);
-      }
-    }
-  }
-
-  const deletable = candidateList.filter((oid) => !sharedOids.has(oid));
-  if (deletable.length === 0) {
-    return;
-  }
-
-  const chunkSize = 100;
-  for (let i = 0; i < deletable.length; i += chunkSize) {
-    const chunk = deletable.slice(i, i + chunkSize);
-    await Promise.allSettled(chunk.map((oid) => gitStore.deleteObject(bucket as DeleteBucket, oid)));
-  }
-}
-
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/spaces/:spaceId/repos', invalidateCacheOnMutation([generateExploreInvalidationUrls]), zValidator('json', z.object({
@@ -239,7 +70,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     user.id,
     ['owner', 'admin', 'editor'],
     'Workspace not found or insufficient permissions'
-  );
+  );
   const spaceId = access.space.id;
 
   const db = getDb(c.env.DB);
@@ -299,7 +130,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const spaceIdentifier = c.req.param('spaceId');
   const db = getDb(c.env.DB);
 
-  const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
+  const access = await requireSpaceAccess(c, spaceIdentifier, user.id);
   const spaceId = access.space.id;
 
   const ownerUsername = await resolveOwnerUsername(db, spaceId);
@@ -461,24 +292,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Repository');
   }
 
-  let repoObjectCandidates: Set<string> | null = null;
-  if (c.env.GIT_OBJECTS) {
-    try {
-      const reachable = await collectReachableObjectShas(c.env.DB, c.env.GIT_OBJECTS, repoId);
-      if (reachable.size <= MAX_REPO_OBJECT_CLEANUP_CANDIDATES) {
-        repoObjectCandidates = reachable;
-      } else {
-        logWarn('Skipping git object cleanup due to oversized candidate set', {
-          action: 'deleteRepository',
-          repoId,
-          size: reachable.size,
-          max: MAX_REPO_OBJECT_CLEANUP_CANDIDATES,
-        });
-      }
-    } catch (error) {
-      logWarn('Failed to collect reachable objects before repo deletion', { action: 'deleteRepository', repoId });
-    }
-  }
+  const repoObjectCandidates = c.env.GIT_OBJECTS
+    ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)
+    : null;
 
   await db.delete(branches).where(eq(branches.repoId, repoId));
   await db.delete(repoForks).where(eq(repoForks.forkRepoId, repoId));

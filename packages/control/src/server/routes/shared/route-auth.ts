@@ -1,7 +1,8 @@
-import type { Context } from 'hono';
-import type { Env, User } from '../../../shared/types';
+import type { Context, MiddlewareHandler } from 'hono';
+import type { Env, User, SpaceRole } from '../../../shared/types';
+import type { SpaceAccess } from '../../../application/services/identity/space-access';
 import { checkSpaceAccess } from '../../../shared/utils';
-import { AppError, ErrorCodes, NotFoundError, InternalError } from 'takos-common/errors';
+import { AppError, ErrorCodes, NotFoundError, InternalError, AuthenticationError, BadRequestError as BadRequestErr } from 'takos-common/errors';
 
 // Re-export Error classes and types from takos-common/errors (canonical location)
 export {
@@ -126,4 +127,119 @@ export async function parseJsonBody<T>(
     // Malformed JSON body -- return null so callers can handle gracefully
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Space access middleware
+// ---------------------------------------------------------------------------
+
+/**
+ * Variables set by the `spaceAccess()` middleware.
+ *
+ * After the middleware runs, route handlers can call:
+ *   - `c.get('spaceId')` for the resolved (canonical) space ID
+ *   - `c.get('access')` for the full `SpaceAccess` object (space + membership)
+ *
+ * Always combine with `BaseVariables` so `c.get('user')` is also available.
+ */
+export interface SpaceAccessVariables extends BaseVariables {
+  spaceId: string;
+  access: SpaceAccess;
+}
+
+/** Route env for endpoints that go through the `spaceAccess()` middleware. */
+export type SpaceAccessRouteEnv = {
+  Bindings: Env;
+  Variables: SpaceAccessVariables;
+};
+
+// Re-export SpaceAccess so consumers don't need an extra import
+export type { SpaceAccess };
+
+/**
+ * Resolve the space identifier from the request.
+ *
+ * Checks, in order:
+ * 1. URL params `:spaceId` or `:workspaceId`
+ * 2. Query params `spaceId` or `space_id`
+ *
+ * Returns `null` if none found.
+ */
+function resolveSpaceIdentifier(c: AnyCtx): string | null {
+  // URL path params
+  const paramSpaceId = c.req.param('spaceId') || c.req.param('workspaceId');
+  if (paramSpaceId) return paramSpaceId;
+
+  // Query params
+  const querySpaceId = c.req.query('spaceId') || c.req.query('space_id');
+  if (querySpaceId) return querySpaceId;
+
+  return null;
+}
+
+export interface SpaceAccessOptions {
+  /** Required roles for access. When omitted any role is accepted. */
+  roles?: SpaceRole[];
+  /** Error message on access failure. */
+  message?: string;
+  /** HTTP status code on access failure (default: 404). */
+  status?: number;
+}
+
+/**
+ * Hono middleware factory that extracts user + spaceId and validates
+ * space membership in one step.
+ *
+ * Replaces the repeated boilerplate:
+ * ```ts
+ * const user = c.get('user');
+ * const spaceId = c.req.param('spaceId');
+ * const access = await requireSpaceAccess(c, spaceId, user.id, roles);
+ * ```
+ *
+ * Usage:
+ * ```ts
+ * app.get('/spaces/:spaceId/things', spaceAccess(), async (c) => {
+ *   const { space } = c.get('access');
+ *   // ...
+ * });
+ *
+ * app.post('/spaces/:spaceId/things', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), async (c) => {
+ *   const { space } = c.get('access');
+ *   // ...
+ * });
+ * ```
+ */
+export function spaceAccess(
+  options?: SpaceAccessOptions | SpaceRole[],
+): MiddlewareHandler<SpaceAccessRouteEnv> {
+  const opts: SpaceAccessOptions = Array.isArray(options)
+    ? { roles: options }
+    : (options ?? {});
+
+  return async (c, next) => {
+    const user = c.get('user');
+    if (!user) {
+      throw new AuthenticationError();
+    }
+
+    const spaceIdentifier = resolveSpaceIdentifier(c);
+    if (!spaceIdentifier) {
+      throw new BadRequestErr('spaceId is required');
+    }
+
+    const access = await requireSpaceAccess(
+      c,
+      spaceIdentifier,
+      user.id,
+      opts.roles,
+      opts.message,
+      opts.status,
+    );
+
+    c.set('spaceId', access.space.id);
+    c.set('access', access);
+
+    await next();
+  };
 }

@@ -422,6 +422,28 @@ export const Icons = {
       <path d="M12.2 6.2 11 5" />
     </>
   ),
+  ToggleOn: createIcon(
+    <>
+      <rect width="44" height="24" rx="12" fill="currentColor" opacity="0.2" />
+      <circle cx="32" cy="12" r="8" fill="currentColor" />
+    </>,
+    { viewBox: '0 0 44 24', fill: 'none', 'aria-hidden': true },
+  ),
+  ToggleOff: createIcon(
+    <>
+      <rect width="44" height="24" rx="12" fill="currentColor" opacity="0.2" />
+      <circle cx="12" cy="12" r="8" fill="currentColor" />
+    </>,
+    { viewBox: '0 0 44 24', fill: 'none', 'aria-hidden': true },
+  ),
+  ToggleOnFilled: createIcon(
+    <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm10 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />,
+    { fill: 'currentColor' },
+  ),
+  ToggleOffFilled: createIcon(
+    <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />,
+    { fill: 'currentColor' },
+  ),
 };
 
 export type IconName = keyof typeof Icons;

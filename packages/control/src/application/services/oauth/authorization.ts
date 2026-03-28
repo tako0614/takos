@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { oauthAuthorizationCodes } from '../../../infra/db';
 import type {
   OAuthAuthorizationCode,
@@ -26,7 +27,7 @@ import { eq, and, lt } from 'drizzle-orm';
 import { revokeTokensByAuthorizationCode } from './token';
 import { toIsoString } from '../../../shared/utils';
 
-type OAuthAuthorizationCodeRow = typeof oauthAuthorizationCodes.$inferSelect;
+type OAuthAuthorizationCodeRow = SelectOf<typeof oauthAuthorizationCodes>;
 
 function toApiAuthorizationCode(row: OAuthAuthorizationCodeRow): OAuthAuthorizationCode {
   return {

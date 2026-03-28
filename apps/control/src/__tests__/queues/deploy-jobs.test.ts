@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createDeploymentService: vi.fn(),
+  DeploymentService: vi.fn(),
   getDb: vi.fn(),
 }));
 
 vi.mock('@/services/deployment', () => ({
-  createDeploymentService: mocks.createDeploymentService,
+  DeploymentService: mocks.DeploymentService,
 }));
 
 vi.mock('@/db', async () => {
@@ -110,19 +110,19 @@ describe('isValidDeploymentQueueMessage', () => {
 describe('handleDeploymentJob', () => {
   it('calls executeDeployment on the deployment service', async () => {
     const executeDeployment = vi.fn().mockResolvedValue(undefined);
-    mocks.createDeploymentService.mockReturnValue({ executeDeployment });
+    mocks.DeploymentService.mockImplementation(() => ({ executeDeployment }));
 
     await handleDeploymentJob(validDeployMessage(), {} as any);
 
-    expect(mocks.createDeploymentService).toHaveBeenCalled();
+    expect(mocks.DeploymentService).toHaveBeenCalled();
     expect(executeDeployment).toHaveBeenCalledWith('deploy-1');
   });
 
   it('throws when executeDeployment fails (allowing queue retry)', async () => {
     const error = new Error('deployment failed');
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       executeDeployment: vi.fn().mockRejectedValue(error),
-    });
+    }));
 
     await expect(handleDeploymentJob(validDeployMessage(), {} as any)).rejects.toThrow('deployment failed');
   });
@@ -136,9 +136,9 @@ describe('handleDeploymentJobDlq', () => {
   it('marks deployment as failed when still in progress', async () => {
     const dbMock = createDrizzleMock();
     mocks.getDb.mockReturnValue(dbMock);
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockResolvedValue({ id: 'deploy-1', status: 'building' }),
-    });
+    }));
 
     await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 5);
 
@@ -148,9 +148,9 @@ describe('handleDeploymentJobDlq', () => {
   it('does not update when deployment is already successful', async () => {
     const dbMock = createDrizzleMock();
     mocks.getDb.mockReturnValue(dbMock);
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockResolvedValue({ id: 'deploy-1', status: 'success' }),
-    });
+    }));
 
     await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
 
@@ -160,9 +160,9 @@ describe('handleDeploymentJobDlq', () => {
   it('does not update when deployment is already rolled_back', async () => {
     const dbMock = createDrizzleMock();
     mocks.getDb.mockReturnValue(dbMock);
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockResolvedValue({ id: 'deploy-1', status: 'rolled_back' }),
-    });
+    }));
 
     await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
 
@@ -172,9 +172,9 @@ describe('handleDeploymentJobDlq', () => {
   it('does not update when deployment is not found', async () => {
     const dbMock = createDrizzleMock();
     mocks.getDb.mockReturnValue(dbMock);
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockResolvedValue(null),
-    });
+    }));
 
     await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
 
@@ -182,9 +182,9 @@ describe('handleDeploymentJobDlq', () => {
   });
 
   it('throws when deployment status update fails', async () => {
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockRejectedValue(new Error('db read failed')),
-    });
+    }));
 
     await expect(
       handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3)
@@ -198,9 +198,9 @@ describe('handleDeploymentJobDlq', () => {
       update: vi.fn().mockReturnValue({ set: setFn }),
     };
     mocks.getDb.mockReturnValue(dbMock);
-    mocks.createDeploymentService.mockReturnValue({
+    mocks.DeploymentService.mockImplementation(() => ({
       getDeploymentById: vi.fn().mockResolvedValue({ id: 'deploy-1', status: 'pending' }),
-    });
+    }));
 
     await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 4);
 

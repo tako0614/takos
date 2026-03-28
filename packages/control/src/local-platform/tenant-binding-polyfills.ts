@@ -131,7 +131,7 @@ function generatePolyfillBlock(entry: PolyfillBindingEntry): string {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(event),
-      }).catch(() => {});
+      }).catch(() => { /* fire-and-forget: matches CF's synchronous writeDataPoint() API */ });
     },
   };
 }`;

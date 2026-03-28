@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
 import { createCommonEnvService } from '../../../services/common-env';
-import { createDeploymentService } from '../../../services/deployment/index';
+import { DeploymentService } from '../../../services/deployment/index';
 import { createServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
 import { normalizeCommonEnvName } from '../../../services/common-env/crypto';
 import { getDb, resources, resourceAccess, serviceDeployments } from '../../../../infra/db';
@@ -276,7 +276,7 @@ export const workerEnvGetHandler: ToolHandler = async (args, context) => {
     return describeLocalEnv(envVars, workerIdentifier);
   }
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployment = await deploymentService.getDeploymentById(ref.deploymentId);
   if (!deployment) {
     throw new Error(`Deployment not found for artifact: ${workerIdentifier}`);
@@ -328,7 +328,7 @@ export const workerBindingsGetHandler: ToolHandler = async (args, context) => {
     return describeBindings(bindings, workerIdentifier);
   }
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployment = await deploymentService.getDeploymentById(ref.deploymentId);
   if (!deployment) {
     throw new Error(`Deployment not found for artifact: ${workerIdentifier}`);
@@ -415,7 +415,7 @@ export const workerRuntimeGetHandler: ToolHandler = async (args, context) => {
     return describeRuntimeConfig(runtimeConfig, workerIdentifier);
   }
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployment = await deploymentService.getDeploymentById(ref.deploymentId);
   if (!deployment) {
     throw new Error(`Deployment not found for artifact: ${workerIdentifier}`);

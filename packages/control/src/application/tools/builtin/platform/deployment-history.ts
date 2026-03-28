@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { createDeploymentService } from '../../../services/deployment/index';
+import { DeploymentService } from '../../../services/deployment/index';
 import { getDb, services } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import type { WorkerBinding } from '../../../../platform/providers/cloudflare/wfp.ts';
@@ -88,7 +88,7 @@ export const deploymentHistoryHandler: ToolHandler = async (args, context) => {
     ? Math.max(1, Math.min(50, Math.floor(args.limit)))
     : 20;
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployments = await deploymentService.getDeploymentHistory(serviceId, limit);
 
   return JSON.stringify({
@@ -110,7 +110,7 @@ export const deploymentGetHandler: ToolHandler = async (args, context) => {
 
   await ensureServiceInWorkspace(serviceId, context.spaceId, context.db);
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployment = await deploymentService.getDeploymentById(deploymentId);
   if (!deployment || deployment.service_id !== serviceId) {
     throw new Error(`Deployment not found: ${deploymentId}`);
@@ -161,7 +161,7 @@ export const deploymentRollbackHandler: ToolHandler = async (args, context) => {
     ? Math.floor(args.target_version)
     : undefined;
 
-  const deploymentService = createDeploymentService(context.env);
+  const deploymentService = new DeploymentService(context.env);
   const deployment = await deploymentService.rollback({ serviceId, userId: context.userId, targetVersion });
 
   return JSON.stringify({

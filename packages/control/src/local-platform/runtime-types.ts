@@ -12,13 +12,18 @@ import type {
 /**
  * Default host-side ports for the local-platform stack.
  *
- * These values are the single source of truth for TypeScript code.
- * The same port numbers are duplicated in build-time / env config files
- * that cannot import this module. Keep them in sync when changing:
- *   - apps/control/web/vite.config.ts          (dev server proxy target)
- *   - apps/control/.env.self-host.example       (TAKOS_CONTROL_WEB_PORT etc.)
- *   - .env.local.example                        (TAKOS_CONTROL_WEB_PORT etc.)
+ * These values are the single source of truth for all port numbers.
+ * TypeScript source files should import this constant directly.
+ *
+ * The following non-TS config files duplicate these values and must be
+ * kept in sync manually when changing:
  *   - .env.self-host                            (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - .env.local.example                        (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - apps/control/.env.self-host.example       (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - apps/runtime/.env.example                 (TAKOS_API_URL)
+ *   - packages/executor-service/.env.example    (CONTROL_RPC_BASE_URL)
+ *   - scripts/local-smoke.mjs                   (defaults object)
+ *   - deploy/helm/takos/values.yaml             (port fields)
  */
 export const DEFAULT_LOCAL_PORTS = {
   web: 8787,
@@ -37,6 +42,22 @@ export const DEFAULT_LOCAL_SERVICE_PORTS = {
   runtime: 8080,
   executor: 8080,
   browser: 8080,
+} as const;
+
+/**
+ * Default domain names for the local-platform stack.
+ *
+ * These values are the single source of truth for TypeScript code.
+ * The same domain names are duplicated in build-time / env config files
+ * that cannot import this module. Keep them in sync when changing:
+ *   - .env.local.example                        (TAKOS_ADMIN_DOMAIN etc.)
+ *   - apps/control/.env.self-host.example        (TAKOS_ADMIN_DOMAIN etc.)
+ */
+export const DEFAULT_LOCAL_DOMAINS = {
+  /** Admin panel domain (matches TAKOS_ADMIN_DOMAIN in env examples). */
+  admin: 'admin.localhost',
+  /** Tenant sub-domain base (matches TAKOS_TENANT_BASE_DOMAIN in env examples). */
+  tenantBase: 'app.localhost',
 } as const;
 
 export type LocalFetch = (

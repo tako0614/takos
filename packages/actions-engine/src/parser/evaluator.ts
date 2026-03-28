@@ -2,138 +2,30 @@
  * Expression evaluator
  * Handles parsing and evaluation of tokenized GitHub Actions expressions
  */
-import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
-
 import {
   MAX_EVALUATE_CALLS,
-  MAX_FROM_JSON_SIZE,
   MAX_PARSE_ACCESS_DEPTH,
 } from '../constants.js';
 import type { ExecutionContext } from '../workflow-models.js';
 import { ExpressionError } from './tokenizer.js';
 import type { Token, TokenType } from './tokenizer.js';
+import {
+  fnContains,
+  fnStartsWith,
+  fnEndsWith,
+  fnFormat,
+  fnJoin,
+  fnToJSON,
+  fnFromJSON,
+  fnHashFiles,
+  fnSuccess,
+  fnAlways,
+  fnCancelled,
+  fnFailure,
+} from './evaluator-builtins.js';
 
 const BLOCKED_PROPERTY_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const GLOB_PATTERN_CHARS = /[*?[\]]/;
-const REGEXP_META_CHARS = /[|\\{}()[\]^$+?.]/g;
 const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
-
-function normalizePathLike(value: string): string {
-  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-}
-
-function containsGlobPattern(pattern: string): boolean {
-  return GLOB_PATTERN_CHARS.test(pattern);
-}
-
-function globToRegExp(pattern: string): RegExp {
-  const normalized = normalizePathLike(pattern);
-  let regex = '^';
-
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized[i];
-
-    if (char === '*') {
-      if (normalized[i + 1] === '*') {
-        regex += '.*';
-        i++;
-      } else {
-        regex += '[^/]*';
-      }
-      continue;
-    }
-
-    if (char === '?') {
-      regex += '[^/]';
-      continue;
-    }
-
-    regex += char.replace(REGEXP_META_CHARS, '\\$&');
-  }
-
-  regex += '$';
-  return new RegExp(regex);
-}
-
-function isInsideWorkspace(workspace: string, targetPath: string): boolean {
-  const relativePath = relative(workspace, targetPath);
-  return (
-    relativePath === '' ||
-    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-  );
-}
-
-function collectWorkspaceFiles(workspace: string): string[] {
-  const files: string[] = [];
-  const queue = [workspace];
-
-  while (queue.length > 0) {
-    const currentDir = queue.pop();
-    if (!currentDir) {
-      continue;
-    }
-
-    let entries;
-    try {
-      entries = readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      const absolutePath = resolve(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(absolutePath);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      const relativePath = normalizePathLike(relative(workspace, absolutePath));
-      if (relativePath.length > 0) {
-        files.push(relativePath);
-      }
-    }
-  }
-
-  files.sort();
-  return files;
-}
-
-function resolveWorkspaceFile(
-  workspace: string,
-  fileOrRelativePath: string
-): string | null {
-  const absolutePath = isAbsolute(fileOrRelativePath)
-    ? resolve(fileOrRelativePath)
-    : resolve(workspace, fileOrRelativePath);
-
-  if (!isInsideWorkspace(workspace, absolutePath)) {
-    return null;
-  }
-
-  try {
-    if (!lstatSync(absolutePath).isFile()) {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-
-  return normalizePathLike(relative(workspace, absolutePath));
-}
-
-function hashFileSha256(filePath: string): string | null {
-  try {
-    const content = readFileSync(filePath);
-    return createHash('sha256').update(content).digest('hex');
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Simple expression parser and evaluator
@@ -415,18 +307,18 @@ export class ExpressionEvaluator {
 
   private callFunction(name: string, args: unknown[]): unknown {
     const FUNCTIONS: Record<string, () => unknown> = {
-      'contains': () => this.fnContains(args),
-      'startsWith': () => this.fnStartsWith(args),
-      'endsWith': () => this.fnEndsWith(args),
-      'format': () => this.fnFormat(args),
-      'join': () => this.fnJoin(args),
-      'toJSON': () => this.fnToJSON(args),
-      'fromJSON': () => this.fnFromJSON(args),
-      'hashFiles': () => this.fnHashFiles(args),
-      'success': () => this.fnSuccess(),
-      'always': () => this.fnAlways(),
-      'cancelled': () => this.fnCancelled(),
-      'failure': () => this.fnFailure(),
+      'contains': () => fnContains(args),
+      'startsWith': () => fnStartsWith(args),
+      'endsWith': () => fnEndsWith(args),
+      'format': () => fnFormat(args),
+      'join': () => fnJoin(args),
+      'toJSON': () => fnToJSON(args),
+      'fromJSON': () => fnFromJSON(args),
+      'hashFiles': () => fnHashFiles(args, this.context),
+      'success': () => fnSuccess(this.context),
+      'always': () => fnAlways(),
+      'cancelled': () => fnCancelled(this.context),
+      'failure': () => fnFailure(this.context),
     };
 
     const fn = FUNCTIONS[name];
@@ -437,192 +329,5 @@ export class ExpressionEvaluator {
       );
     }
     return fn();
-  }
-
-  private fnContains(args: unknown[]): boolean {
-    const [search, item] = args;
-    if (typeof search === 'string') {
-      return search.toLowerCase().includes(String(item).toLowerCase());
-    }
-    if (Array.isArray(search)) {
-      return search.includes(item);
-    }
-    return false;
-  }
-
-  private fnStartsWith(args: unknown[]): boolean {
-    const [str, searchStr] = args;
-    return String(str).toLowerCase().startsWith(String(searchStr).toLowerCase());
-  }
-
-  private fnEndsWith(args: unknown[]): boolean {
-    const [str, searchStr] = args;
-    return String(str).toLowerCase().endsWith(String(searchStr).toLowerCase());
-  }
-
-  private fnFormat(args: unknown[]): string {
-    const [template, ...values] = args;
-    if (template === null || template === undefined) {
-      return '';
-    }
-    let result = String(template);
-    for (let i = 0; i < values.length; i++) {
-      result = result.split(`{${i}}`).join(String(values[i]));
-    }
-    return result;
-  }
-
-  private fnJoin(args: unknown[]): string {
-    const [arr, separator = ','] = args;
-    if (Array.isArray(arr)) {
-      return arr.join(String(separator));
-    }
-    return String(arr);
-  }
-
-  private fnToJSON(args: unknown[]): string {
-    return JSON.stringify(args[0]);
-  }
-
-  private fnFromJSON(args: unknown[]): unknown {
-    const str = String(args[0]);
-    // Limit input size to prevent OOM from attacker-controlled JSON strings
-    if (str.length > MAX_FROM_JSON_SIZE) {
-      return null;
-    }
-    try {
-      return JSON.parse(str);
-    } catch {
-      return null;
-    }
-  }
-
-  private fnHashFiles(args: unknown[]): string {
-    const includePatterns: string[] = [];
-    const excludePatterns: string[] = [];
-
-    for (const arg of args) {
-      if (typeof arg !== 'string') {
-        continue;
-      }
-
-      const pattern = arg.trim();
-      if (pattern.length === 0) {
-        continue;
-      }
-
-      if (pattern.startsWith('!') && pattern.length > 1) {
-        excludePatterns.push(pattern.slice(1));
-      } else {
-        includePatterns.push(pattern);
-      }
-    }
-
-    if (includePatterns.length === 0) {
-      return '';
-    }
-
-    return this.evaluateHashFiles(includePatterns, excludePatterns);
-  }
-
-  private evaluateHashFiles(
-    includePatterns: string[],
-    excludePatterns: string[]
-  ): string {
-    const workspace = resolve(this.context.github.workspace || process.cwd());
-    const files = this.collectMatchedHashFiles(
-      workspace,
-      includePatterns,
-      excludePatterns
-    );
-    if (files.length === 0) {
-      return '';
-    }
-
-    const fileHashes = this.hashFiles(workspace, files);
-    if (fileHashes.length === 0) {
-      return '';
-    }
-    if (fileHashes.length === 1) {
-      return fileHashes[0];
-    }
-
-    const aggregate = createHash('sha256');
-    for (const fileHash of fileHashes) {
-      aggregate.update(fileHash);
-    }
-    return aggregate.digest('hex');
-  }
-
-  private collectMatchedHashFiles(
-    workspace: string,
-    includePatterns: string[],
-    excludePatterns: string[]
-  ): string[] {
-    const matchedFiles = new Set<string>();
-    let workspaceFiles: string[] | undefined;
-
-    const applyPattern = (pattern: string, include: boolean): void => {
-      if (containsGlobPattern(pattern)) {
-        workspaceFiles ??= collectWorkspaceFiles(workspace);
-        const regexp = globToRegExp(pattern);
-        for (const file of workspaceFiles) {
-          if (regexp.test(file)) {
-            if (include) {
-              matchedFiles.add(file);
-            } else {
-              matchedFiles.delete(file);
-            }
-          }
-        }
-        return;
-      }
-
-      const file = resolveWorkspaceFile(workspace, pattern);
-      if (!file) {
-        return;
-      }
-      if (include) {
-        matchedFiles.add(file);
-      } else {
-        matchedFiles.delete(file);
-      }
-    };
-
-    for (const pattern of includePatterns) {
-      applyPattern(pattern, true);
-    }
-    for (const pattern of excludePatterns) {
-      applyPattern(pattern, false);
-    }
-
-    return [...matchedFiles].sort();
-  }
-
-  private hashFiles(workspace: string, files: string[]): string[] {
-    const fileHashes: string[] = [];
-    for (const file of files) {
-      const fileHash = hashFileSha256(resolve(workspace, file));
-      if (fileHash) {
-        fileHashes.push(fileHash);
-      }
-    }
-    return fileHashes;
-  }
-
-  private fnSuccess(): boolean {
-    return this.context.job.status === 'success';
-  }
-
-  private fnAlways(): boolean {
-    return true;
-  }
-
-  private fnCancelled(): boolean {
-    return this.context.job.status === 'cancelled';
-  }
-
-  private fnFailure(): boolean {
-    return this.context.job.status === 'failure';
   }
 }

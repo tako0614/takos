@@ -173,7 +173,9 @@ async function downloadSpaceFiles(
         }
 
         if (!(await resolveAndVerifyPathWithinBase(resolvedBaseDir, resolvedTargetDir))) {
-          await fs.unlink(tempPath).catch(() => undefined);
+          await fs.unlink(tempPath).catch((err) => {
+            logger.debug(`Failed to clean up temp file ${tempPath}`, { error: err });
+          });
           pushLog(logs, `Warning: Destination directory escaped base path, skipping: ${rawFilePath}`);
           continue;
         }
@@ -183,7 +185,9 @@ async function downloadSpaceFiles(
         const resolvedFinalPath = await resolveAndVerifyPathWithinBase(resolvedBaseDir, validatedPath);
         if (!resolvedFinalPath) {
           // Attempt to remove the escaped file
-          await fs.unlink(validatedPath).catch(() => undefined);
+          await fs.unlink(validatedPath).catch((err) => {
+            logger.debug(`Failed to remove escaped file ${validatedPath}`, { error: err });
+          });
           pushLog(logs, `Warning: Path traversal detected after rename, removed: ${rawFilePath}`);
           downloadFailureCount++;
           continue;

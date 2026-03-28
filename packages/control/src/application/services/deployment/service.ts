@@ -56,10 +56,17 @@ import {
 } from './artifacts';
 
 export class DeploymentService {
+  private encryptionKey: string;
+
   constructor(
     private env: DeploymentEnv,
-    private encryptionKey: string
-  ) {}
+    encryptionKey?: string,
+  ) {
+    this.encryptionKey = encryptionKey ?? env.ENCRYPTION_KEY ?? '';
+    if (!this.encryptionKey) {
+      throw new InternalError('ENCRYPTION_KEY must be set for deployment service');
+    }
+  }
 
   async createDeployment(input: CreateDeploymentInput): Promise<Deployment> {
     const deploymentId = generateId();
@@ -315,14 +322,4 @@ export class DeploymentService {
     }
     return stuck.length;
   }
-}
-
-export function createDeploymentService(env: DeploymentEnv): DeploymentService {
-  const encryptionKey = env.ENCRYPTION_KEY || '';
-
-  if (!encryptionKey) {
-    throw new InternalError('ENCRYPTION_KEY must be set for deployment service');
-  }
-
-  return new DeploymentService(env, encryptionKey);
 }

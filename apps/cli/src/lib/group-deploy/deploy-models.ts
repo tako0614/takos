@@ -1,47 +1,36 @@
 /**
  * Group Deploy — type definitions.
+ *
+ * Shared types (ServiceDeployResult, ResourceProvisionResult, BindingResult,
+ * GroupDeployResult, ProvisionedResource, WranglerConfig, status aliases, and
+ * Wrangler binding sub-types) are canonical in
+ *   `packages/control/src/application/services/deployment/group-deploy-types.ts`
+ * and re-exported here for CLI consumption.
+ *
+ * CLI-specific types (container specs, manifest defs, template context,
+ * wrangler-direct types, GroupDeployOptions) are defined locally below.
  */
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Re-exports from canonical source ────────────────────────────────────────
 
-export type ServiceDeployStatus = 'deployed' | 'failed' | 'skipped';
-export type ResourceProvisionStatus = 'provisioned' | 'exists' | 'failed';
-export type BindingStatus = 'bound' | 'failed';
+export type {
+  ServiceDeployStatus,
+  ResourceProvisionStatus,
+  BindingStatus,
+  ServiceDeployResult,
+  ResourceProvisionResult,
+  BindingResult,
+  GroupDeployResult,
+  ProvisionedResource,
+  WranglerConfig,
+  WranglerD1Binding,
+  WranglerR2Binding,
+  WranglerKVBinding,
+  WranglerServiceBinding,
+  WranglerVars,
+} from 'takos-control/deployment/group-deploy-types';
 
-export interface ServiceDeployResult {
-  name: string;
-  type: 'worker' | 'container' | 'http';
-  status: ServiceDeployStatus;
-  scriptName?: string;
-  url?: string;
-  error?: string;
-}
-
-export interface ResourceProvisionResult {
-  name: string;
-  type: string;
-  status: ResourceProvisionStatus;
-  id?: string;
-  error?: string;
-}
-
-export interface BindingResult {
-  from: string;
-  to: string;
-  type: string;
-  status: BindingStatus;
-  error?: string;
-}
-
-export interface GroupDeployResult {
-  groupName: string;
-  env: string;
-  namespace?: string;
-  dryRun: boolean;
-  services: ServiceDeployResult[];
-  resources: ResourceProvisionResult[];
-  bindings: BindingResult[];
-}
+// ── CLI-specific types ──────────────────────────────────────────────────────
 
 export interface ContainerSpec {
   dockerfile: string;
@@ -136,25 +125,6 @@ export interface WranglerDirectDeployResult {
   namespace?: string;
   status: 'deployed' | 'failed' | 'dry-run';
   error?: string;
-}
-
-export interface ProvisionedResource {
-  name: string;
-  type: string;
-  id: string;
-  binding: string;
-}
-
-export interface WranglerConfig {
-  name: string;
-  main: string;
-  compatibility_date: string;
-  vars?: Record<string, string>;
-  d1_databases?: Array<{ binding: string; database_name: string; database_id: string }>;
-  r2_buckets?: Array<{ binding: string; bucket_name: string }>;
-  kv_namespaces?: Array<{ binding: string; id: string }>;
-  services?: Array<{ binding: string; service: string }>;
-  dispatch_namespace?: string;
 }
 
 export interface ContainerWranglerConfig {

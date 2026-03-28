@@ -9,6 +9,7 @@ import {
   createConcurrencyGuard,
   type ConcurrencyGuard,
 } from 'takos-agent-core/executor-utils';
+import { parseIntValue } from 'takos-common/env-parse';
 
 type ExecutorLogger = {
   info(msg: string, meta?: Record<string, unknown>): void;
@@ -38,14 +39,14 @@ export function buildExecutorRuntimeConfig(
     SERPER_API_KEY: env.SERPER_API_KEY,
   };
 
-  const maxRunDurationMs = typeof env.AGENT_TOTAL_TIMEOUT === 'string'
-    ? Number.parseInt(env.AGENT_TOTAL_TIMEOUT, 10)
+  const maxRunDurationMs = env.AGENT_TOTAL_TIMEOUT
+    ? parseIntValue('AGENT_TOTAL_TIMEOUT', env.AGENT_TOTAL_TIMEOUT, 0, { min: 1 })
     : undefined;
 
   return {
     controlRpcBaseUrl: env.CONTROL_RPC_BASE_URL,
     allowNoLlmFallback: readBooleanEnv(env.TAKOS_ALLOW_NO_LLM ?? env.TAKOS_LOCAL_ALLOW_NO_LLM),
-    maxRunDurationMs: Number.isFinite(maxRunDurationMs) ? maxRunDurationMs : undefined,
+    maxRunDurationMs: maxRunDurationMs && maxRunDurationMs > 0 ? maxRunDurationMs : undefined,
     executionEnv,
   };
 }

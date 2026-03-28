@@ -164,7 +164,6 @@ vi.mock('drizzle-orm', () => ({
 
 import {
   buildDeploymentArtifactRef,
-  createDeploymentService,
   DeploymentService,
 } from '@/services/deployment/service';
 import type { Deployment, DeploymentEvent, CreateDeploymentInput } from '@/services/deployment/types';
@@ -266,7 +265,7 @@ describe('buildDeploymentArtifactRef', () => {
   });
 });
 
-describe('createDeploymentService', () => {
+describe('DeploymentService constructor', () => {
   it('throws when ENCRYPTION_KEY is not set', () => {
     const env = {
       DB: {} as any,
@@ -277,17 +276,17 @@ describe('createDeploymentService', () => {
       HOSTNAME_ROUTING: {} as any,
     } as any;
 
-    expect(() => createDeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
+    expect(() => new DeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
   });
 
   it('throws when ENCRYPTION_KEY is empty string', () => {
     const env = makeEnv({ ENCRYPTION_KEY: '' });
-    expect(() => createDeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
+    expect(() => new DeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
   });
 
   it('creates a service when ENCRYPTION_KEY is set', () => {
     const env = makeEnv();
-    const service = createDeploymentService(env);
+    const service = new DeploymentService(env);
     expect(service).toBeDefined();
     expect(service).toBeInstanceOf(DeploymentService);
   });

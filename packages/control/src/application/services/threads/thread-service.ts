@@ -1,5 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-helpers';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
 import { getDb, threads, messages, runs } from '../../../infra/db';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
@@ -29,7 +30,7 @@ type MessageRow = {
 // Drizzle row -> app type converters
 // ---------------------------------------------------------------------------
 
-function toThread(t: typeof threads.$inferSelect): Thread {
+function toThread(t: SelectOf<typeof threads>): Thread {
   return {
     id: t.id,
     space_id: t.accountId,
@@ -59,7 +60,7 @@ function toMessage(m: MessageRow): Message {
   };
 }
 
-function toRun(r: typeof runs.$inferSelect): Run {
+function toRun(r: SelectOf<typeof runs>): Run {
   const rootThreadId = r.rootThreadId ?? r.threadId;
   const rootRunId = r.rootRunId ?? r.id;
   return {
@@ -174,7 +175,7 @@ export async function updateThread(
   const db = getDb(dbBinding);
   const timestamp = now();
 
-  const data: Partial<typeof threads.$inferInsert> = { updatedAt: timestamp };
+  const data: Partial<InsertOf<typeof threads>> = { updatedAt: timestamp };
 
   if (updates.title !== undefined) {
     data.title = updates.title || null;
@@ -341,7 +342,7 @@ export async function createMessage(
     }
   }
 
-  const createData: typeof messages.$inferInsert = {
+  const createData: InsertOf<typeof messages> = {
     id,
     threadId: thread.id,
     role: input.role,

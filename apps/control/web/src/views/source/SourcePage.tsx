@@ -6,7 +6,7 @@ import { CreateRepoModal } from '../shared/repos/CreateRepoModal';
 import type { Space } from '../../types';
 import { RepoDetailPanel } from './components/RepoDetailPanel';
 import { useSourceData } from '../../hooks/useSourceData';
-import { useSourceViewUiState } from './useSourceViewUiState';
+import { useSourceViewUiState } from '../../hooks/useSourceViewUiState';
 import { SourceSearchBar } from './SourceSearchBar';
 import {
   SourceFilterStatusBar,

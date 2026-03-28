@@ -6,11 +6,6 @@
   "description": "Build and utility scripts for Takos monorepo",
   "scripts": {
     "check-lockfiles": "node check-lockfiles.mjs",
-    "check-worker-bindings": "tsx check-worker-bindings.ts",
-    "check-routing-do-gate": "tsx check-routing-do-gate.ts",
-    "check-staging-dns": "tsx check-staging-dns.ts",
-    "generate-keys": "tsx generate-keys.ts",
-    "redeploy-tenant": "tsx redeploy-tenant.ts",
     "lint-docs": "node --experimental-strip-types validate-docs.ts || tsx validate-docs.ts",
     "lint-agent-docs": "node --experimental-strip-types validate-agent-docs.ts || tsx validate-agent-docs.ts"
   },

@@ -2,28 +2,30 @@
 /**
  * Update worker OAuth credentials
  *
- * Usage: CF_API_TOKEN=xxx npx tsx scripts/update-worker-oauth.ts <worker-name> <client-id> <client-secret>
+ * Usage: CLOUDFLARE_API_TOKEN=xxx npx tsx scripts/update-worker-oauth.ts <worker-name> <client-id> <client-secret>
  */
 
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length < 3) {
-    console.error('Usage: CF_API_TOKEN=xxx npx tsx scripts/update-worker-oauth.ts <worker-name> <client-id> <client-secret>');
+    console.error('Usage: CLOUDFLARE_API_TOKEN=xxx npx tsx scripts/update-worker-oauth.ts <worker-name> <client-id> <client-secret>');
     process.exit(1);
   }
 
   const [workerName, clientId, clientSecret] = args;
-  const apiToken = process.env.CF_API_TOKEN;
-  const accountId = process.env.CF_ACCOUNT_ID;
+  // Canonical env vars: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+  // CF_API_TOKEN and CF_ACCOUNT_ID are deprecated aliases kept for backward compatibility.
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
   const dispatchNamespace = process.env.CF_DISPATCH_NAMESPACE || 'takos-tenants';
 
   if (!apiToken) {
-    console.error('CF_API_TOKEN environment variable is required');
+    console.error('CLOUDFLARE_API_TOKEN environment variable is required');
     process.exit(1);
   }
   if (!accountId) {
-    console.error('CF_ACCOUNT_ID environment variable is required');
+    console.error('CLOUDFLARE_ACCOUNT_ID environment variable is required');
     process.exit(1);
   }
 

@@ -1,6 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import * as fsPromises from 'fs/promises';
 import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.js';
 import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.js';
 
@@ -151,11 +150,11 @@ export async function verifyNoSymlinkPathComponents(
  */
 export async function resolveBaseDirectory(baseDir: string, createIfMissing: boolean): Promise<string> {
   if (createIfMissing) {
-    await fsPromises.mkdir(baseDir, { recursive: true });
+    await fs.promises.mkdir(baseDir, { recursive: true });
   }
 
-  const resolvedBase = await fsPromises.realpath(baseDir);
-  const baseStats = await fsPromises.stat(resolvedBase);
+  const resolvedBase = await fs.promises.realpath(baseDir);
+  const baseStats = await fs.promises.stat(resolvedBase);
   if (!baseStats.isDirectory()) {
     throw new Error(`Base path is not a directory: ${baseDir}`);
   }
@@ -169,7 +168,7 @@ export async function resolveBaseDirectory(baseDir: string, createIfMissing: boo
  */
 export async function resolveAndVerifyPathWithinBase(baseDir: string, targetPath: string): Promise<string | null> {
   try {
-    const resolvedPath = await fsPromises.realpath(targetPath);
+    const resolvedPath = await fs.promises.realpath(targetPath);
     if (!isPathWithinBase(baseDir, resolvedPath, { resolveInputs: true })) {
       return null;
     }
@@ -200,10 +199,10 @@ export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: s
 
   for (const pathPart of pathParts) {
     currentPath = path.join(currentPath, pathPart);
-    let currentStats: Awaited<ReturnType<typeof fsPromises.lstat>>;
+    let currentStats: Awaited<ReturnType<typeof fs.promises.lstat>>;
 
     try {
-      currentStats = await fsPromises.lstat(currentPath);
+      currentStats = await fs.promises.lstat(currentPath);
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
       if (e.code === 'ENOENT') {

@@ -23,7 +23,9 @@ export {
   getToolsByCategory,
 } from './builtin';
 
-export { ToolExecutor, createToolExecutor, toOpenAIFunctions } from './executor';
+export { ToolExecutor } from './executor';
+export { createToolExecutor, SessionState } from './executor-setup';
+export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils';
 export { ErrorCodes, ToolError, classifyError, SEVERITY_HINTS } from './tool-error-classifier';
 export type { ErrorCode, ErrorSeverity } from './tool-error-classifier';
 export { assertToolPermission, filterAccessibleTools, getAllRequiredCapabilities, canRoleAccessExposedTool, canUseToolCapabilities } from './tool-permission';

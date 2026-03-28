@@ -71,7 +71,7 @@ const mockDeploymentService = {
 };
 
 vi.mock('@/services/deployment/index', () => ({
-  createDeploymentService: vi.fn(() => mockDeploymentService),
+  DeploymentService: vi.fn(() => mockDeploymentService),
 }));
 
 vi.mock('@/services/platform/workers', () => ({

@@ -102,15 +102,17 @@ export function useWebSocketConnection({
     setError,
     currentRunIdRef,
     lastEventIdRef,
-    setCurrentRun: processor.setCurrentRun,
-    setIsLoading: processor.setIsLoading,
-    setStreaming: processor.setStreaming,
-    resetStreamingState: processor.resetStreamingState,
-    appendTimelineEntry: processor.appendTimelineEntry,
-    verifyRunStatus: processor.verifyRunStatus,
-    upsertRunMeta: processor.upsertRunMeta,
-    handleRunCompletedRef: processor.handleRunCompletedRef,
-    handleWebSocketEventRef: processor.handleWebSocketEventRef,
+    processor: {
+      setCurrentRun: processor.setCurrentRun,
+      setIsLoading: processor.setIsLoading,
+      setStreaming: processor.setStreaming,
+      resetStreamingState: processor.resetStreamingState,
+      appendTimelineEntry: processor.appendTimelineEntry,
+      verifyRunStatus: processor.verifyRunStatus,
+      upsertRunMeta: processor.upsertRunMeta,
+      handleRunCompletedRef: processor.handleRunCompletedRef,
+      handleWebSocketEventRef: processor.handleWebSocketEventRef,
+    },
   });
 
   // --- Wire up handleRunCompleted (needs connection.closeWebSocket) ---

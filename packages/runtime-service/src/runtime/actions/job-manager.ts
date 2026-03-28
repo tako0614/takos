@@ -56,34 +56,18 @@ const COMPLETED_JOB_RETENTION_MS = 5 * 60 * 1000;
 // ---------------------------------------------------------------------------
 
 export class JobManager {
-  private activeJobs = new Map<string, ActiveJob>();
+  readonly jobs = new Map<string, ActiveJob>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private cleanupRunning = false;
 
-  getJob(jobId: string): ActiveJob | undefined {
-    return this.activeJobs.get(jobId);
-  }
-
-  hasJob(jobId: string): boolean {
-    return this.activeJobs.has(jobId);
-  }
-
-  setJob(jobId: string, job: ActiveJob): void {
-    this.activeJobs.set(jobId, job);
-  }
-
-  deleteJob(jobId: string): void {
-    this.activeJobs.delete(jobId);
-  }
-
   countRunningJobsForSpace(spaceId: string): number {
-    return Array.from(this.activeJobs.values())
+    return Array.from(this.jobs.values())
       .filter(job => job.status === 'running' && job.spaceId === spaceId)
       .length;
   }
 
   countRunningJobsGlobal(): number {
-    return Array.from(this.activeJobs.values())
+    return Array.from(this.jobs.values())
       .filter(job => job.status === 'running')
       .length;
   }
@@ -106,10 +90,10 @@ export class JobManager {
 
   /** Delete a job from the active map after clearing its sanitizer and cleaning up job directory. */
   async purgeJob(jobId: string): Promise<void> {
-    const job = this.activeJobs.get(jobId);
+    const job = this.jobs.get(jobId);
     if (!job) return;
     // Delete from map first to prevent concurrent access during cleanup
-    this.activeJobs.delete(jobId);
+    this.jobs.delete(jobId);
     job.secretsSanitizer.clear();
     // Ensure job directory is cleaned up (best-effort, may already be removed)
     await removeJobDirSafe(job.workspacePath, jobId, 'purged job');
@@ -118,7 +102,7 @@ export class JobManager {
   /** Schedule removal of a completed job after the retention window. */
   scheduleJobCleanup(jobId: string): void {
     const tryPurge = (): void => {
-      const job = this.activeJobs.get(jobId);
+      const job = this.jobs.get(jobId);
       if (!job) return;
       if (job.status === 'running') {
         // Still running -- retry after another retention window
@@ -173,7 +157,7 @@ export class JobManager {
 
   private async cleanupStaleJobs(): Promise<void> {
     const now = Date.now();
-    for (const [jobId, job] of this.activeJobs.entries()) {
+    for (const [jobId, job] of this.jobs.entries()) {
       const age = now - job.startedAt;
 
       // Clean up jobs that exceeded maximum age regardless of status
@@ -181,7 +165,7 @@ export class JobManager {
         logger.info('Cleaning up stale job (max age exceeded)', { jobId, status: job.status });
         job.secretsSanitizer.clear();
         await removeJobDirSafe(job.workspacePath, jobId, 'stale job');
-        this.activeJobs.delete(jobId);
+        this.jobs.delete(jobId);
         continue;
       }
 

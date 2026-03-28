@@ -1,4 +1,5 @@
 import os from 'os';
+import { parseIntEnv } from 'takos-common/env-parse';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -20,15 +21,7 @@ function optionalEnvAny(names: string[], fallback = ''): string {
   return fallback;
 }
 
-function parsePort(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? '8080', 10);
-  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
-    throw new Error(`Invalid PORT: ${value ?? ''}`);
-  }
-  return parsed;
-}
-
-export const PORT = parsePort(process.env.PORT);
+export const PORT = parseIntEnv('PORT', 8080, { min: 1, max: 65535 });
 
 export const R2_ACCOUNT_ID = optionalEnv('R2_ACCOUNT_ID');
 export const R2_ACCESS_KEY_ID = optionalEnv('R2_ACCESS_KEY_ID');

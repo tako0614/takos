@@ -13,15 +13,17 @@ async function main() {
   }
 
   // Get required env vars
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const accountId = process.env.CF_ACCOUNT_ID;
+  // Canonical env vars: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+  // CF_API_TOKEN and CF_ACCOUNT_ID are deprecated aliases kept for backward compatibility.
+  const token = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
   const namespace = process.env.CF_DISPATCH_NAMESPACE || 'takos-tenants';
   if (!token) {
     console.error('CLOUDFLARE_API_TOKEN not set');
     process.exit(1);
   }
   if (!accountId) {
-    console.error('CF_ACCOUNT_ID not set');
+    console.error('CLOUDFLARE_ACCOUNT_ID not set');
     process.exit(1);
   }
 

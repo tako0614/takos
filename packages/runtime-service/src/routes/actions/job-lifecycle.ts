@@ -60,7 +60,7 @@ app.post('/actions/jobs/:jobId/start', async (c) => {
       return badRequest(c, `Steps exceed per-job limit (max ${SANDBOX_LIMITS.maxStepsPerJob})`);
     }
 
-    if (jobManager.hasJob(jobId)) {
+    if (jobManager.jobs.has(jobId)) {
       return c.json({ error: { code: ErrorCodes.CONFLICT, message: 'Job already exists' } }, 409);
     }
 
@@ -120,7 +120,7 @@ app.post('/actions/jobs/:jobId/start', async (c) => {
       outputs: {},
     };
 
-    jobManager.setJob(jobId, job);
+    jobManager.jobs.set(jobId, job);
 
     pushLog(logs, 'Job directory created successfully');
     pushLog(logs, `Working path: ${workspacePath}`);
@@ -145,7 +145,7 @@ app.post('/actions/jobs/:jobId/complete', async (c) => {
   };
 
   try {
-    const job = jobManager.getJob(jobId);
+    const job = jobManager.jobs.get(jobId);
     if (!job) return notFound(c, 'Job not found');
 
     job.status = conclusion === 'success' ? 'completed' : 'failed';
@@ -213,7 +213,7 @@ app.delete('/actions/jobs/:jobId', async (c) => {
   const jobId = c.req.param('jobId');
 
   try {
-    const job = jobManager.getJob(jobId);
+    const job = jobManager.jobs.get(jobId);
     if (!job) return notFound(c, 'Job not found');
 
     job.status = 'failed';
@@ -226,7 +226,7 @@ app.delete('/actions/jobs/:jobId', async (c) => {
 
     await removeJobDirSafe(job.workspacePath, jobId, 'cancelled job');
 
-    jobManager.deleteJob(jobId);
+    jobManager.jobs.delete(jobId);
 
     return c.json({
       jobId,

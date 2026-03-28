@@ -15,8 +15,8 @@ takos --help             # ヘルプ
 
 ```bash
 takos deploy-group --env staging \
-  --account-id $CF_ACCOUNT_ID \
-  --api-token $CF_API_TOKEN
+  --account-id $CLOUDFLARE_ACCOUNT_ID \
+  --api-token $CLOUDFLARE_API_TOKEN
 ```
 
 ### オプション一覧

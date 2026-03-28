@@ -128,7 +128,7 @@ export async function ensureServerMigrations(client: Client, migrationsDir: stri
       });
       await transaction.commit();
     } catch (error) {
-      await transaction.rollback().catch(() => undefined);
+      await transaction.rollback().catch(() => undefined /* rollback: best-effort after migration failure */);
       throw error;
     } finally {
       transaction.close();

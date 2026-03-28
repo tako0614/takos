@@ -1,5 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
@@ -61,7 +62,7 @@ export async function listResourcesForWorkspace(
     .all();
   const sharedResourceIds = sharedAccessGrants.map(a => a.resourceId);
 
-  let sharedResources: Array<typeof resources.$inferSelect & { accessPermission?: string }> = [];
+  let sharedResources: Array<SelectOf<typeof resources> & { accessPermission?: string }> = [];
   if (sharedResourceIds.length > 0) {
     const rawShared = await drizzle.select().from(resources)
       .where(and(
@@ -122,7 +123,7 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
   const accessMap = buildAccessMap(accessGrants);
 
-  let sharedResources: Array<typeof resources.$inferSelect> = [];
+  let sharedResources: Array<SelectOf<typeof resources>> = [];
   if (sharedResourceIds.length > 0) {
     sharedResources = await drizzle.select().from(resources)
       .where(and(
@@ -169,7 +170,7 @@ export async function listResourcesByType(
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
   const accessPermMap = buildAccessMap(accessGrants);
 
-  let sharedResources: Array<typeof resources.$inferSelect> = [];
+  let sharedResources: Array<SelectOf<typeof resources>> = [];
   if (sharedResourceIds.length > 0) {
     sharedResources = await drizzle.select().from(resources)
       .where(and(
@@ -359,7 +360,7 @@ export async function getAvailableResourcesForWorkspace(
   const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
   const accessPermMap = buildAccessMap(accessGrants);
 
-  let sharedResources: Array<typeof resources.$inferSelect> = [];
+  let sharedResources: Array<SelectOf<typeof resources>> = [];
   if (sharedResourceIds.length > 0) {
     sharedResources = await drizzle.select().from(resources)
       .where(and(

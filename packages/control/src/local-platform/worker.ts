@@ -11,7 +11,7 @@ import {
   type ConsumableQueue,
   type LocalQueueRecord,
 } from './queue-runtime.ts';
-import { logError, logInfo } from '../shared/utils/logger.ts';
+import { logDebug, logError, logInfo } from '../shared/utils/logger.ts';
 import { buildNodeWorkerPlatform } from '../platform/adapters/node.ts';
 import type { PlatformScheduledEvent } from '../shared/types/bindings.ts';
 
@@ -179,7 +179,7 @@ export async function startLocalWorkerLoop(): Promise<void> {
       logError('local worker iteration failed', error, { module: 'local_worker' });
       await updateHeartbeat('error', {
         error: error instanceof Error ? error.message : String(error),
-      }).catch(() => undefined);
+      }).catch((e) => { logDebug('heartbeat update failed', { module: 'local_worker', error: e instanceof Error ? e.message : String(e) }); });
       await sleep(pollIntervalMs);
     }
   }

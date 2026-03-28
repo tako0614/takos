@@ -48,28 +48,6 @@ export interface App {
   worker?: Worker;
 }
 
-/** @deprecated Use Worker instead */
-export interface Deployment {
-  id: string;
-  space_id: string;
-  name: string;
-  description: string | null;
-  deploy_type: ServiceType;
-  status: ServiceStatus;
-  url: string | null;
-  icon: string | null;
-  hostname?: string | null;
-  service_name?: string | null;
-  slug?: string | null;
-  workspace_name?: string;
-  created_at: string;
-  updated_at: string;
-  app_config?: string | null;
-  takos_client_entry?: string | null;
-  has_takos_client?: boolean;
-  has_worker_assets?: boolean;
-}
-
 export interface CustomDomain {
   id: string;
   service_id: string;

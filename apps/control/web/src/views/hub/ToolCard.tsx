@@ -42,9 +42,9 @@ export function ToolCard({ tool, onToggle, onEdit, onExecute, onDelete }: ToolCa
           title={tool.enabled ? t('disable') : t('enable')}
         >
           {tool.enabled ? (
-            <ToggleOnIcon className="w-6 h-6 text-blue-500" />
+            <Icons.ToggleOnFilled className="w-6 h-6 text-blue-500" />
           ) : (
-            <ToggleOffIcon className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+            <Icons.ToggleOffFilled className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
           )}
         </button>
 
@@ -78,21 +78,5 @@ export function ToolCard({ tool, onToggle, onEdit, onExecute, onDelete }: ToolCa
         )}
       </div>
     </div>
-  );
-}
-
-function ToggleOnIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm10 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />
-    </svg>
-  );
-}
-
-function ToggleOffIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />
-    </svg>
   );
 }

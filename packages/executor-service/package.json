@@ -16,7 +16,7 @@
     "takos-control": "workspace:*",
     "hono": "^4.12.4",
     "jszip": "^3.10.1",
-    "yaml": "^2.5.1"
+    "yaml": "^2.8.2"
   },
   "exports": {
     ".": "./src/app.ts",

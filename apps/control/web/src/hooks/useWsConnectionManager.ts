@@ -1,8 +1,6 @@
 import { useCallback, useRef } from 'react';
 import {
   useConnectionManagerBase,
-  processIncomingMessage,
-  handleTransportClose,
   type ConnectionManagerOptions,
   type ConnectionManagerResult,
   type TransportSetupContext,
@@ -38,27 +36,12 @@ export function useWsConnectionManager(
   }, []);
 
   const setupTransport = useCallback((ctx: TransportSetupContext): void => {
-    const {
-      runId,
-      reconnectAttemptsRef,
-      startWebSocketRef,
-      startMessagePolling,
-      currentRunIdRef,
-      lastEventIdRef,
-      verifyRunStatus,
-      handleWebSocketEventRef,
-      isMountedRef,
-      handleRunCompletedRef,
-      setIsLoading,
-      setCurrentRun,
-      setError,
-      t,
-    } = ctx;
+    const { runId, lastEventId, onMessage, onClose, onOpen } = ctx;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsParams = new URLSearchParams();
-    if (lastEventIdRef.current > 0) {
-      wsParams.set('last_event_id', String(lastEventIdRef.current));
+    if (lastEventId > 0) {
+      wsParams.set('last_event_id', String(lastEventId));
     }
     const wsQuery = wsParams.toString();
     const wsUrl = `${protocol}//${window.location.host}/api/runs/${runId}/ws${wsQuery ? `?${wsQuery}` : ''}`;
@@ -81,9 +64,7 @@ export function useWsConnectionManager(
         clearTimeout(connectTimeout);
         ws.send(JSON.stringify({ type: 'subscribe', runId }));
         lastPongRef.current = Date.now();
-        reconnectAttemptsRef.current = 0;
-
-        startMessagePolling(currentRunIdRef);
+        onOpen();
 
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         heartbeatRef.current = setInterval(() => {
@@ -114,12 +95,7 @@ export function useWsConnectionManager(
           // Not JSON -- will be handled below
         }
 
-        processIncomingMessage(event.data, runId, '[WS]', {
-          lastEventIdRef,
-          currentRunIdRef,
-          verifyRunStatus,
-          handleWebSocketEventRef,
-        });
+        onMessage(event.data);
       };
 
       ws.onerror = (event) => {
@@ -134,17 +110,7 @@ export function useWsConnectionManager(
           heartbeatRef.current = null;
         }
 
-        handleTransportClose(currentRunIdRef.current || '', 'WebSocket', {
-          isMountedRef,
-          currentRunIdRef,
-          reconnectAttemptsRef,
-          startWebSocketRef,
-          handleRunCompletedRef,
-          setIsLoading,
-          setCurrentRun,
-          setError,
-          t,
-        });
+        onClose();
       };
     } catch (wsErr) {
       console.error('WebSocket creation failed:', wsErr);

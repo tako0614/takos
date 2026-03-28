@@ -1,2 +1,2 @@
-export type { GitBucket } from '../repos/routes';
-export { toGitBucket } from '../repos/routes';
+export type { GitBucket } from '../repos/shared';
+export { toGitBucket } from '../repos/shared';

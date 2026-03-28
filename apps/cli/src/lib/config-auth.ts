@@ -8,6 +8,7 @@ import Conf from 'conf';
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, chmodSync, mkdirSync } from 'fs';
+import { PRODUCTION_DOMAIN } from 'takos-control/shared/constants';
 import { logWarning } from './cli-log.js';
 import { validateApiUrl, isValidId } from './config-validation.js';
 import {
@@ -34,7 +35,7 @@ function getConfInstance(): Conf<ConfStore> {
   });
 }
 
-export const DEFAULT_API_URL = 'https://takos.jp';
+export const DEFAULT_API_URL = `https://${PRODUCTION_DOMAIN}`;
 
 /**
  * Validate workspace ID from env var and return it, or throw on invalid format.

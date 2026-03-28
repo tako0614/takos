@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { base64UrlEncode, now } from '../../../shared/utils';
 import { hashPassword, verifyPassword } from '../identity/auth-utils';
 import { getDb, threadShares } from '../../../infra/db';
@@ -19,7 +20,7 @@ export type ThreadShareRecord = {
   created_at: string;
 };
 
-function toRecord(row: typeof threadShares.$inferSelect): ThreadShareRecord {
+function toRecord(row: SelectOf<typeof threadShares>): ThreadShareRecord {
   return {
     id: row.id,
     thread_id: row.threadId,

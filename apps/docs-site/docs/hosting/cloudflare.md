@@ -447,7 +447,7 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | --- | --- |
 | `ADMIN_DOMAIN` | 管理ドメイン |
 | `TENANT_BASE_DOMAIN` | テナント用ベースドメイン |
-| `CF_ACCOUNT_ID` | Cloudflare アカウント ID |
+| `CF_ACCOUNT_ID` | Cloudflare アカウント ID（CLI では `CLOUDFLARE_ACCOUNT_ID` を推奨） |
 | `CF_ZONE_ID` | DNS ゾーン ID |
 | `WFP_DISPATCH_NAMESPACE` | dispatch namespace 名 |
 | `ROUTING_DO_PHASE` | RoutingDO rollout phase（`1`-`4`、本番は `4`） |

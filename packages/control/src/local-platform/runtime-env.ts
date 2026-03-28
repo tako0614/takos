@@ -11,7 +11,7 @@ import {
   resolveOptionalServiceForwardUrl,
   resolveServiceUrl,
 } from './runtime-http.ts';
-import { DEFAULT_LOCAL_PORTS, DEFAULT_LOCAL_SERVICE_PORTS } from './runtime-types.ts';
+import { DEFAULT_LOCAL_DOMAINS, DEFAULT_LOCAL_PORTS, DEFAULT_LOCAL_SERVICE_PORTS } from './runtime-types.ts';
 import type { LocalFetch } from './runtime-types.ts';
 
 export async function createRuntimeHostEnvForTests(deps: {
@@ -25,7 +25,7 @@ export async function createRuntimeHostEnvForTests(deps: {
   return {
     RUNTIME_CONTAINER: runtimeNamespace,
     TAKOS_WEB: { fetch: (request: Request) => deps.webFetch(request) },
-    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? 'admin.localhost',
+    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? DEFAULT_LOCAL_DOMAINS.admin,
     PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? 'http://runtime-host.local',
   };
 }
@@ -39,7 +39,7 @@ export async function createRuntimeHostEnv() {
   return {
     RUNTIME_CONTAINER: runtimeNamespace,
     TAKOS_WEB: createForwardingBinding(resolveServiceUrl('TAKOS_LOCAL_WEB_URL', DEFAULT_LOCAL_PORTS.web)),
-    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? 'admin.localhost',
+    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? DEFAULT_LOCAL_DOMAINS.admin,
     PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.runtimeHost}`,
   };
 }

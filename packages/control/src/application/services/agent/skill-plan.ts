@@ -1,5 +1,5 @@
 /**
- * Skill Manager - Handles skill plan resolution, catalog management, and locale processing.
+ * Skill Plan - Handles skill plan resolution, catalog management, and locale processing.
  *
  * Extracted from runner.ts to separate skill concerns from the core run loop.
  */
@@ -10,7 +10,7 @@ import type { ToolExecutorLike } from '../../tools/executor';
 import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills';
 import { emitSkillLoadOutcome } from './skills';
 
-export interface SkillManagerDeps {
+export interface SkillPlanDeps {
   runIo: AgentRunnerIo;
   runId: string;
   threadId: string;
@@ -30,7 +30,7 @@ export interface SkillState {
  * Returns the raw SkillLoadResult for further processing.
  */
 export async function resolveAndApplySkills(
-  deps: SkillManagerDeps,
+  deps: SkillPlanDeps,
   state: SkillState,
   history: AgentMessage[],
   toolExecutor: ToolExecutorLike | undefined,

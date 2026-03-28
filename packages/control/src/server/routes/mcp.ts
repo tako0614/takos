@@ -22,11 +22,11 @@ import {
   refreshMcpToken,
 } from '../../application/services/platform/mcp';
 import { McpClient } from '../../application/tools/mcp-client';
-import { requireSpaceAccess } from './shared/route-auth';
+import { spaceAccess, type SpaceAccessRouteEnv } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { escapeHtml } from './auth/html';
 import { logError, logWarn } from '../../shared/utils/logger';
-import { AuthenticationError, BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from 'takos-common/errors';
+import { BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from 'takos-common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 // ---------------------------------------------------------------------------
@@ -44,9 +44,7 @@ const updateServerSchema = z.object({
   name: z.string().optional(),
 });
 
-type McpRouteEnv = { Bindings: Env; Variables: { user?: { id: string } } };
-
-const mcpRoutes = new Hono<McpRouteEnv>();
+const mcpRoutes = new Hono<SpaceAccessRouteEnv>();
 
 const MCP_LIST_ROLES = getSpaceOperationPolicy('mcp_server.list').allowed_roles;
 const MCP_CREATE_ROLES = getSpaceOperationPolicy('mcp_server.create').allowed_roles;
@@ -132,16 +130,10 @@ mcpRoutes.get('/oauth/callback', async (c) => {
 
 /** POST /api/mcp/servers?spaceId=... */
 mcpRoutes.post('/servers',
+  spaceAccess({ roles: MCP_CREATE_ROLES }),
   zValidator('json', createServerSchema),
   async (c) => {
-  const user = c.get('user');
-  if (!user) throw new AuthenticationError();
-
-  const spaceId = c.req.query('spaceId');
-  if (!spaceId) throw new BadRequestError('spaceId query param required');
-
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_CREATE_ROLES);
-
+  const spaceId = c.get('spaceId');
   const body = c.req.valid('json');
 
   if (!body.name || !body.url) {
@@ -167,15 +159,8 @@ mcpRoutes.post('/servers',
 });
 
 /** GET /api/mcp/servers?spaceId=... */
-mcpRoutes.get('/servers', async (c) => {
-  const user = c.get('user');
-  if (!user) throw new AuthenticationError();
-
-  const spaceId = c.req.query('spaceId');
-  if (!spaceId) throw new BadRequestError('spaceId query param required');
-
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
-
+mcpRoutes.get('/servers', spaceAccess({ roles: MCP_LIST_ROLES }), async (c) => {
+  const spaceId = c.get('spaceId');
   const servers = await listMcpServers(c.env.DB, spaceId);
 
   return c.json({
@@ -184,15 +169,9 @@ mcpRoutes.get('/servers', async (c) => {
 });
 
 /** DELETE /api/mcp/servers/:id?spaceId=... */
-mcpRoutes.delete('/servers/:id', async (c) => {
-  const user = c.get('user');
-  if (!user) throw new AuthenticationError();
-
+mcpRoutes.delete('/servers/:id', spaceAccess({ roles: MCP_DELETE_ROLES }), async (c) => {
+  const spaceId = c.get('spaceId');
   const serverId = c.req.param('id');
-  const spaceId = c.req.query('spaceId');
-  if (!spaceId) throw new BadRequestError('spaceId query param required');
-
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_DELETE_ROLES);
 
   const deleted = await deleteMcpServer(c.env.DB, spaceId, serverId);
   if (!deleted) throw new NotFoundError('MCP server');
@@ -202,17 +181,11 @@ mcpRoutes.delete('/servers/:id', async (c) => {
 
 /** PATCH /api/mcp/servers/:id?spaceId=... */
 mcpRoutes.patch('/servers/:id',
+  spaceAccess({ roles: MCP_UPDATE_ROLES }),
   zValidator('json', updateServerSchema),
   async (c) => {
-  const user = c.get('user');
-  if (!user) throw new AuthenticationError();
-
+  const spaceId = c.get('spaceId');
   const serverId = c.req.param('id');
-  const spaceId = c.req.query('spaceId');
-  if (!spaceId) throw new BadRequestError('spaceId query param required');
-
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_UPDATE_ROLES);
-
   const body = c.req.valid('json');
 
   const updated = await updateMcpServer(c.env.DB, spaceId, serverId, body);
@@ -224,15 +197,9 @@ mcpRoutes.patch('/servers/:id',
 });
 
 /** GET /api/mcp/servers/:id/tools?spaceId=... */
-mcpRoutes.get('/servers/:id/tools', async (c) => {
-  const user = c.get('user');
-  if (!user) throw new AuthenticationError();
-
+mcpRoutes.get('/servers/:id/tools', spaceAccess({ roles: MCP_LIST_ROLES }), async (c) => {
+  const spaceId = c.get('spaceId');
   const serverId = c.req.param('id');
-  const spaceId = c.req.query('spaceId');
-  if (!spaceId) throw new BadRequestError('spaceId query param required');
-
-  const access = await requireSpaceAccess(c, spaceId, user.id, MCP_LIST_ROLES);
 
   const server = await getMcpServerWithTokens(c.env.DB, spaceId, serverId);
   if (!server) throw new NotFoundError('MCP server');

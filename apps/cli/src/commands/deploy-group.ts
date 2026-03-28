@@ -34,6 +34,8 @@ type DeployGroupCommandOptions = {
 };
 
 function resolveAccountId(override?: string): string {
+  // Canonical env var: CLOUDFLARE_ACCOUNT_ID
+  // CF_ACCOUNT_ID is deprecated but kept as a fallback for backward compatibility.
   const accountId = override || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
   if (!accountId.trim()) {
     console.log(chalk.red('Cloudflare account ID is required.'));
@@ -44,6 +46,8 @@ function resolveAccountId(override?: string): string {
 }
 
 function resolveApiToken(override?: string): string {
+  // Canonical env var: CLOUDFLARE_API_TOKEN
+  // CF_API_TOKEN is deprecated but kept as a fallback for backward compatibility.
   const apiToken = override || process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || '';
   if (!apiToken.trim()) {
     console.log(chalk.red('Cloudflare API token is required.'));

@@ -1,4 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-helpers';
 import { oauthClients } from '../../../infra/db';
 import type {
   OAuthClient,
@@ -14,7 +15,7 @@ import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 
-type OAuthClientRow = typeof oauthClients.$inferSelect;
+type OAuthClientRow = SelectOf<typeof oauthClients>;
 
 function toApiClient(row: OAuthClientRow): OAuthClient {
   return {

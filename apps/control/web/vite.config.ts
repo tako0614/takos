@@ -2,9 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
+import { DEFAULT_LOCAL_PORTS } from '../../../packages/control/src/local-platform/runtime-types.ts';
 
 export default defineConfig(({ mode }) => {
   const isDebugBuild = mode === 'staging-debug';
+  const webTarget = `http://localhost:${DEFAULT_LOCAL_PORTS.web}`;
 
   return {
     plugins: [
@@ -27,14 +29,12 @@ export default defineConfig(({ mode }) => {
       minify: isDebugBuild ? false : 'esbuild',
     },
     server: {
-      // Port 8787 must match DEFAULT_LOCAL_PORTS.web in
-      // packages/control/src/local-platform/runtime-types.ts
       proxy: {
-        '/auth': 'http://localhost:8787',
-        '/me': 'http://localhost:8787',
-        '/workers': 'http://localhost:8787',
-        '/spaces': 'http://localhost:8787',
-        '/health': 'http://localhost:8787',
+        '/auth': webTarget,
+        '/me': webTarget,
+        '/workers': webTarget,
+        '/spaces': webTarget,
+        '/health': webTarget,
       },
     },
   };

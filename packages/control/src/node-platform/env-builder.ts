@@ -51,6 +51,8 @@ import { disposeRedisClient } from '../local-platform/redis-bindings.ts';
 import { removeLocalDataDir } from '../local-platform/persistent-bindings.ts';
 import type { TenantWorkerRuntimeRegistry } from '../local-platform/tenant-worker-runtime.ts';
 
+import { DEFAULT_LOCAL_DOMAINS } from '../local-platform/runtime-types.ts';
+
 // -- Resolvers ----------------------------------------------------------------
 import { optionalEnv, resolveLocalDataDir, resolvePostgresUrl, resolveRedisUrl } from './resolvers/env-helpers.ts';
 import { resolveDatabase } from './resolvers/db-resolver.ts';
@@ -173,14 +175,16 @@ async function getSharedState(): Promise<SharedState> {
 
 function buildBaseConfig(isLocal: boolean) {
   return {
-    ADMIN_DOMAIN: optionalEnv('ADMIN_DOMAIN') ?? (isLocal ? 'takos.localhost' : ''),
-    TENANT_BASE_DOMAIN: optionalEnv('TENANT_BASE_DOMAIN') ?? (isLocal ? 'tenant.localhost' : ''),
+    ADMIN_DOMAIN: optionalEnv('ADMIN_DOMAIN') ?? (isLocal ? DEFAULT_LOCAL_DOMAINS.admin : ''),
+    TENANT_BASE_DOMAIN: optionalEnv('TENANT_BASE_DOMAIN') ?? (isLocal ? DEFAULT_LOCAL_DOMAINS.tenantBase : ''),
     GOOGLE_CLIENT_ID: optionalEnv('GOOGLE_CLIENT_ID') ?? (isLocal ? LOCAL_DEV_DEFAULTS.GOOGLE_CLIENT_ID : ''),
     GOOGLE_CLIENT_SECRET: optionalEnv('GOOGLE_CLIENT_SECRET') ?? (isLocal ? LOCAL_DEV_DEFAULTS.GOOGLE_CLIENT_SECRET : ''),
     PLATFORM_PRIVATE_KEY: optionalEnv('PLATFORM_PRIVATE_KEY') ?? (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PRIVATE_KEY : ''),
     PLATFORM_PUBLIC_KEY: optionalEnv('PLATFORM_PUBLIC_KEY') ?? (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PUBLIC_KEY : ''),
-    CF_ACCOUNT_ID: optionalEnv('CF_ACCOUNT_ID'),
-    CF_API_TOKEN: optionalEnv('CF_API_TOKEN'),
+    // Canonical env vars: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
+    // CF_ACCOUNT_ID and CF_API_TOKEN are deprecated aliases kept for backward compatibility.
+    CF_ACCOUNT_ID: optionalEnv('CLOUDFLARE_ACCOUNT_ID') ?? optionalEnv('CF_ACCOUNT_ID'),
+    CF_API_TOKEN: optionalEnv('CLOUDFLARE_API_TOKEN') ?? optionalEnv('CF_API_TOKEN'),
     CF_ZONE_ID: optionalEnv('CF_ZONE_ID'),
     WFP_DISPATCH_NAMESPACE: optionalEnv('WFP_DISPATCH_NAMESPACE'),
     ENCRYPTION_KEY: optionalEnv('ENCRYPTION_KEY') ?? (isLocal ? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY : ''),
@@ -198,12 +202,12 @@ export async function disposeNodePlatformState(): Promise<void> {
   const pendingState = sharedPromise;
   sharedPromise = null;
   resetRoutingSeed();
-  const state = pendingState ? await pendingState.catch(() => null) : null;
+  const state = pendingState ? await pendingState.catch(() => null /* dispose: init may have failed */) : null;
   if (state) {
     await Promise.resolve((state.db as typeof state.db & { close?: () => Promise<void> | void }).close?.())
-      .catch(() => undefined);
+      .catch(() => undefined /* dispose: db close is best-effort during teardown */);
   }
-  await Promise.all(Array.from(dispatchRegistries, (registry) => registry.dispose().catch(() => undefined)));
+  await Promise.all(Array.from(dispatchRegistries, (registry) => registry.dispose().catch(() => undefined /* dispose: registry teardown is best-effort */)));
   dispatchRegistries.clear();
   await disposeRedisClient();
 }
