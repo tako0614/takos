@@ -117,6 +117,93 @@ takos deploy-group --wrangler-config wrangler.toml --env staging
 
 詳しくは [Store 経由デプロイ](/deploy/store-deploy) を参照してください。
 
+## `--compatibility-date` の詳細
+
+`--compatibility-date` は Cloudflare Workers ランタイムの API バージョンを指定するオプションです。デフォルトは `2025-01-01`。
+
+### どういう仕組み？
+
+Cloudflare Workers は、ランタイム API に破壊的変更を入れるとき「この日付以降に作成/更新された Worker だけ新しい挙動にする」という互換性レイヤーを持っています。`compatibility_date` がその境界日付です。
+
+```bash
+# デフォルト (2025-01-01)
+takos deploy-group --env staging
+
+# 新しい API を試したいとき
+takos deploy-group --env staging --compatibility-date 2026-03-01
+```
+
+### ベストプラクティス
+
+| 環境 | 推奨 |
+| --- | --- |
+| **production** | 固定して変えない。動作確認済みの日付をそのまま使う |
+| **staging / dev** | 新しい日付を試す。問題がなければ production に反映 |
+
+::: warning
+新しい日付にすると新しい API が使えるようになる反面、既存の挙動が変わる（breaking change）可能性があります。必ず staging で試してから production に適用してください。
+:::
+
+生成される `wrangler.toml` では以下のように設定されます:
+
+```toml
+compatibility_date = "2025-01-01"
+```
+
+## `--wrangler-config` での namespace 注入
+
+`--wrangler-config` と `--namespace` を組み合わせると、既存の `wrangler.toml` に `dispatch_namespace` を自動注入してデプロイできます。
+
+### 処理の流れ
+
+```text
+1. 指定された wrangler.toml を読み込み
+2. 既存の dispatch_namespace 行があればすべて削除
+3. [env.{env}] セクションを探す
+   → 見つかった場合: セクション直後に dispatch_namespace を追加
+   → 見つからない場合: トップレベルに追加
+4. 一時ファイルに書き出し
+5. wrangler deploy --config <一時ファイル> --env <env> を実行
+6. 一時ファイルを削除
+```
+
+### 具体例
+
+元の `wrangler.toml`:
+
+```toml
+name = "my-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[env.staging]
+vars = { ENV = "staging" }
+```
+
+以下のコマンドを実行:
+
+```bash
+takos deploy-group --wrangler-config wrangler.toml --env staging --namespace takos-staging-tenants
+```
+
+注入後の内容:
+
+```toml
+name = "my-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[env.staging]
+dispatch_namespace = "takos-staging-tenants"
+vars = { ENV = "staging" }
+```
+
+### 注意点
+
+- 既に `dispatch_namespace` がある場合は上書き（元の行を削除してから注入）
+- `--namespace` を指定しなければ注入は行われない
+- `--wrangler-config` は `--manifest`、`--worker`、`--container` とは同時に使えない
+
 ## 次のステップ
 
 - [Store 経由デプロイ](/deploy/store-deploy) --- `takos deploy` の使い方

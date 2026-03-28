@@ -100,6 +100,8 @@ metadata:
   name: notes-assistant
 spec:
   version: 0.3.0
+  icon: assets/icon.png
+  capabilities: [mcp]
   workers:
     web:
       build:
@@ -117,12 +119,48 @@ spec:
       type: secretRef
       binding: MCP_AUTH_TOKEN
       generate: true
+  oauth:
+    clientName: Notes Assistant
+    redirectUris: [https://example.com/callback]
+    scopes: [threads:read]
+    autoEnv: true
+    metadata:
+      logoUri: https://example.com/logo.png
+      tosUri: https://example.com/terms
+      policyUri: https://example.com/privacy
   mcpServers:
     - name: notes
       route: mcp-endpoint
       transport: streamable-http
       authSecretRef: mcp-auth-secret
 ```
+
+## spec のトップレベルフィールド
+
+### icon
+
+アプリのアイコン画像。リポジトリ内の画像パス（`assets/icon.png`）または外部 URL（`https://example.com/icon.png`）を指定できる。
+
+```yaml
+spec:
+  icon: assets/icon.png
+```
+
+### capabilities
+
+アプリが持つ能力を宣言する。システムが機能検出に使う。
+
+```yaml
+spec:
+  capabilities: [mcp, file-handler]
+```
+
+型定義上は `string[]` で任意の値を指定可能。よく使われる値:
+
+| 値 | 意味 |
+| --- | --- |
+| `mcp` | MCP Server を提供する |
+| `file-handler` | ファイルハンドラーを提供する |
 
 ## 構成の決め方
 
