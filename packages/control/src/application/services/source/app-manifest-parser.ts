@@ -11,7 +11,9 @@ import {
   type AppRoute,
   type AppMcpServer,
   type AppFileHandler,
+  type AppService,
   type WorkerService,
+  type ContainerService,
 } from './app-manifest-types';
 import { parseResources, validateResourceBindings } from './app-manifest-validation';
 
@@ -78,9 +80,9 @@ export const parseAppManifestText = parseAppManifestYaml;
 
 // --- internal parsing helpers ---
 
-function parseServices(specRecord: Record<string, unknown>): Record<string, WorkerService> {
+function parseServices(specRecord: Record<string, unknown>): Record<string, AppService> {
   const servicesRecord = asRecord(specRecord.services);
-  const services: Record<string, WorkerService> = {};
+  const services: Record<string, AppService> = {};
   const serviceNames = Object.keys(servicesRecord);
   if (serviceNames.length === 0) {
     throw new Error('spec.services must contain at least one service');
@@ -95,7 +97,12 @@ function parseServices(specRecord: Record<string, unknown>): Record<string, Work
       continue;
     }
 
-    throw new Error(`spec.services.${serviceName}.type must be worker`);
+    if (type === 'container') {
+      services[serviceName] = parseContainerService(serviceName, serviceSpec);
+      continue;
+    }
+
+    throw new Error(`spec.services.${serviceName}.type must be worker or container`);
   }
 
   return services;
@@ -131,6 +138,28 @@ function parseWorkerService(serviceName: string, serviceSpec: Record<string, unk
     ...((() => { const v = asStringMap(serviceSpec.env, `spec.services.${serviceName}.env`); return v ? { env: v } : {}; })()),
     ...(serviceSpec.bindings ? parseServiceBindings(serviceName, serviceSpec) : {}),
     ...(serviceSpec.triggers ? parseServiceTriggers(serviceName, serviceSpec) : {}),
+  };
+}
+
+function parseContainerService(serviceName: string, serviceSpec: Record<string, unknown>): ContainerService {
+  const containerSpec = asRecord(serviceSpec.container);
+  if (Object.keys(containerSpec).length === 0) {
+    throw new Error(`spec.services.${serviceName}.container is required for container type`);
+  }
+  const dockerfile = asRequiredString(containerSpec.dockerfile, `spec.services.${serviceName}.container.dockerfile`);
+  const port = Number(containerSpec.port);
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new Error(`spec.services.${serviceName}.container.port must be a positive number`);
+  }
+  return {
+    type: 'container',
+    container: {
+      dockerfile: normalizeRepoPath(dockerfile),
+      port,
+      ...(containerSpec.instanceType ? { instanceType: String(containerSpec.instanceType) } : {}),
+      ...(containerSpec.maxInstances ? { maxInstances: Number(containerSpec.maxInstances) } : {}),
+    },
+    ...((() => { const v = asStringMap(serviceSpec.env, `spec.services.${serviceName}.env`); return v ? { env: v } : {}; })()),
   };
 }
 
@@ -198,7 +227,7 @@ function parseServiceTriggers(serviceName: string, serviceSpec: Record<string, u
 
 function parseRoutes(
   specRecord: Record<string, unknown>,
-  services: Record<string, WorkerService>,
+  services: Record<string, AppService>,
 ): AppRoute[] | undefined {
   const routesRaw = specRecord.routes;
   if (routesRaw == null) return undefined;
@@ -236,11 +265,13 @@ function parseMcpServers(specRecord: Record<string, unknown>): AppMcpServer[] | 
     if (!endpoint && !route) {
       throw new Error(`spec.mcpServers[${index}].endpoint or spec.mcpServers[${index}].route is required`);
     }
+    const authSecretRef = asString(server.authSecretRef, `spec.mcpServers[${index}].authSecretRef`);
     return {
       name: asRequiredString(server.name, `spec.mcpServers[${index}].name`),
       ...(endpoint ? { endpoint } : {}),
       ...(route ? { route } : {}),
       ...((() => { const v = asString(server.transport, `spec.mcpServers[${index}].transport`); return v ? { transport: v as 'streamable-http' } : {}; })()),
+      ...(authSecretRef ? { authSecretRef } : {}),
     };
   });
 }

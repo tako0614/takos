@@ -54,6 +54,7 @@ export function appManifestToBundleDocs(
       spec: {
         type: resource.type,
         ...(resource.binding ? { binding: resource.binding } : {}),
+        ...(resource.generate ? { generate: resource.generate } : {}),
         ...(resource.type === 'vectorize' && resource.vectorize ? { vectorize: resource.vectorize } : {}),
         ...(resource.type === 'queue' && resource.queue ? { queue: resource.queue } : {}),
         ...(resource.type === 'analyticsEngine' && resource.analyticsEngine ? { analyticsEngine: resource.analyticsEngine } : {}),
@@ -69,6 +70,25 @@ export function appManifestToBundleDocs(
   }
 
   for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
+    if (service.type === 'container') {
+      docs.push({
+        apiVersion: 'takos.dev/v1alpha1',
+        kind: 'Workload',
+        metadata: { name: serviceName },
+        spec: {
+          type: 'container',
+          pluginConfig: {
+            dockerfile: service.container.dockerfile,
+            port: service.container.port,
+            ...(service.container.instanceType ? { instanceType: service.container.instanceType } : {}),
+            ...(service.container.maxInstances ? { maxInstances: service.container.maxInstances } : {}),
+          },
+          ...(service.env ? { env: service.env } : {}),
+        },
+      });
+      continue;
+    }
+
     const source = buildSources.get(serviceName);
     if (!source) {
       throw new Error(`Build source is missing for worker service: ${serviceName}`);
@@ -151,6 +171,7 @@ export function appManifestToBundleDocs(
         endpointRef: server.endpoint || server.route,
         name: server.name,
         transport: server.transport || 'streamable-http',
+        ...(server.authSecretRef ? { authSecretRef: server.authSecretRef } : {}),
       },
     });
   }

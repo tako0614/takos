@@ -7,6 +7,7 @@ import {
   normalizeRepoPath,
   filterWorkflowErrors,
   type AppResource,
+  type AppService,
   type WorkerService,
 } from './app-manifest-types';
 
@@ -44,7 +45,7 @@ export function validateDeployProducerJob(workflow: Workflow, workflowPath: stri
 
 export function parseResources(
   specRecord: Record<string, unknown>,
-  services: Record<string, WorkerService>,
+  services: Record<string, AppService>,
 ): Record<string, AppResource> {
   const resourcesRecord = asRecord(specRecord.resources);
   const resources: Record<string, AppResource> = {};
@@ -57,6 +58,7 @@ export function parseResources(
     resources[resourceName] = {
       type: type as AppResource['type'],
       ...((() => { const v = asString(resource.binding, `spec.resources.${resourceName}.binding`); return v ? { binding: v } : {}; })()),
+      ...(resource.generate === true ? { generate: true } : {}),
       ...(resource.migrations
         ? {
             migrations: typeof resource.migrations === 'string'
@@ -148,10 +150,11 @@ export function parseResources(
 }
 
 export function validateResourceBindings(
-  services: Record<string, WorkerService>,
+  services: Record<string, AppService>,
   resources: Record<string, AppResource>,
 ): void {
   for (const [serviceName, service] of Object.entries(services)) {
+    if (service.type === 'container') continue;
     const bindingLists = service.bindings || {};
     for (const resourceName of bindingLists.d1 || []) {
       if (resources[resourceName]?.type !== 'd1') {

@@ -8,6 +8,7 @@ export type AppMetadata = {
 export type AppResource = {
   type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize' | 'queue' | 'analyticsEngine' | 'workflow' | 'durableObject';
   binding?: string;
+  generate?: boolean;
   migrations?: string | { up: string; down: string };
   vectorize?: {
     dimensions: number;
@@ -69,6 +70,19 @@ export type WorkerService = {
   };
 };
 
+export type ContainerService = {
+  type: 'container';
+  container: {
+    dockerfile: string;
+    port: number;
+    instanceType?: string;
+    maxInstances?: number;
+  };
+  env?: Record<string, string>;
+};
+
+export type AppService = WorkerService | ContainerService;
+
 export type AppRoute = {
   name?: string;
   service: string;
@@ -82,6 +96,7 @@ export type AppMcpServer = {
   endpoint?: string;
   route?: string;
   transport?: 'streamable-http';
+  authSecretRef?: string;
 };
 
 export type AppFileHandler = {
@@ -116,7 +131,7 @@ export type AppManifest = {
       scopes: string[];
     };
     resources?: Record<string, AppResource>;
-    services: Record<string, WorkerService>;
+    services: Record<string, AppService>;
     routes?: AppRoute[];
     mcpServers?: AppMcpServer[];
     fileHandlers?: AppFileHandler[];
