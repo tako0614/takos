@@ -32,6 +32,8 @@
     "deploy-group": "pnpm --filter takos-cli start -- deploy-group",
     "deploy-group:dry-run": "pnpm --filter takos-cli start -- deploy-group --dry-run",
     "deploy-group:service": "pnpm --filter takos-cli start -- deploy-group --service",
+    "plan": "pnpm --filter takos-cli start -- plan",
+    "apply": "pnpm --filter takos-cli start -- apply",
     "dev:cli": "pnpm --filter takos-cli dev",
     "clean": "pnpm -r exec rm -rf dist node_modules",
     "clean:dist": "pnpm -r exec rm -rf dist",

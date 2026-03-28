@@ -5,6 +5,10 @@
  * bypassing the store install flow. Provisions resources, deploys
  * workers, and wires up service bindings.
  *
+ * NOTE: This command is kept for backward compatibility. For new
+ * workflows, prefer `takos apply` which adds state tracking,
+ * diff-based planning, and selective targeting.
+ *
  * Usage:
  *   takos deploy-group --env staging --namespace takos-staging-tenants
  *   takos deploy-group --manifest .takos/app.yml --env production --dry-run
