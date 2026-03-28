@@ -1,8 +1,6 @@
 # deploy-group
 
-> このページでわかること: `takos deploy-group` コマンドの全オプションと使い方。
-
-`takos deploy-group` は、`.takos/app.yml` で定義されたアプリグループを Cloudflare に直接デプロイするコマンドです。ローカル開発やテスト環境のデプロイに使います。
+`.takos/app.yml` で定義したアプリを Cloudflare に直接デプロイします。ローカル開発・テスト向け。
 
 ## 基本的な使い方
 

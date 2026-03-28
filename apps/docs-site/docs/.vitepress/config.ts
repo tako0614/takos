@@ -43,7 +43,6 @@ export default defineConfig({
             { text: "Containers", link: "/apps/containers" },
             { text: "Workers", link: "/apps/workers" },
             { text: "Routes", link: "/apps/routes" },
-            { text: "Resources", link: "/apps/resources" },
             { text: "環境変数", link: "/apps/environment" },
             { text: "MCP Server", link: "/apps/mcp" },
             { text: "OAuth", link: "/apps/oauth" },
