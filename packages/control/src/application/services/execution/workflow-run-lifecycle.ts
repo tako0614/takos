@@ -8,7 +8,7 @@ import {
   validateWorkflow,
   createExecutionPlan,
 } from 'takos-actions-engine';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows, workflowSecrets } from '../../../infra/db';
 import { eq, and, ne, max, inArray, count } from 'drizzle-orm';
@@ -73,7 +73,7 @@ export async function startRun(
     .get();
 
   const runNumber = (lastRun?.maxRunNumber || 0) + 1;
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const runId = generateId();
 
   const workflowId = await resolveWorkflowId(db, repoId, workflowPath);
@@ -198,7 +198,7 @@ export async function startRun(
 
 export async function cancelRun(db: D1Database, runId: string): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await drizzle.update(workflowRuns)
     .set({
@@ -293,7 +293,7 @@ export async function finalizeRunIfComplete(db: D1Database, runId: string): Prom
     .set({
       status: 'completed',
       conclusion,
-      completedAt: now(),
+      completedAt: new Date().toISOString(),
     })
     .where(eq(workflowRuns.id, runId))
     .run();

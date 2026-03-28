@@ -73,31 +73,6 @@ export class CommonEnvReconciler {
       await updateLinkRuntime(this.env, update);
     }
   }
-
-  async markWorkerLinksApplyFailed(params: {
-    spaceId: string;
-    workerId: string;
-    targetKeys?: Set<string>;
-    error: unknown;
-  }): Promise<void> {
-    await this.markServiceLinksApplyFailed({
-      spaceId: params.spaceId,
-      serviceId: params.workerId,
-      targetKeys: params.targetKeys,
-      error: params.error,
-    });
-  }
-
-  async reconcileWorkerCommonEnv(
-    spaceId: string,
-    workerId: string,
-    options?: {
-      targetKeys?: Set<string>;
-      trigger?: CommonEnvReconcileTrigger;
-    }
-  ): Promise<void> {
-    await this.reconcileServiceCommonEnv(spaceId, workerId, options);
-  }
 }
 
 export { CommonEnvReconciler as ServiceCommonEnvReconciler };

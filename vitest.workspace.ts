@@ -7,6 +7,5 @@ export default defineWorkspace([
   'packages/common',
   'packages/actions-engine',
   'packages/browser-service',
-  'packages/cloudflare-compat',
   'packages/runtime-service',
 ]);

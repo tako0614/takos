@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';

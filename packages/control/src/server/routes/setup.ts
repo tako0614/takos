@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { now } from '../../shared/utils';
+
 import { validateUsername } from '../../shared/utils/domain-validation';
-import { type BaseVariables } from './shared/route-auth';
+import { type BaseVariables } from './route-auth';
 import { BadRequestError, ConflictError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import { getDb } from '../../infra/db';
@@ -70,7 +70,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new ConflictError('This username is already taken');
     }
 
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     await db.update(accounts).set({
       slug: username.toLowerCase(),
       setupCompleted: true,

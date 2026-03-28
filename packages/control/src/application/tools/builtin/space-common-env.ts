@@ -78,7 +78,7 @@ export const workspaceEnvSetHandler: ToolHandler = async (args, context) => {
     secret,
     actor: { type: 'user', userId: context.userId },
   });
-  await service.reconcileWorkersForEnvKey(context.spaceId, name, 'workspace_env_put');
+  await service.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_put');
 
   return JSON.stringify({
     success: true,
@@ -104,7 +104,7 @@ export const workspaceEnvDeleteHandler: ToolHandler = async (args, context) => {
     throw new Error(`Environment variable not found: ${name}`);
   }
 
-  await service.reconcileWorkersForEnvKey(context.spaceId, name, 'workspace_env_delete');
+  await service.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_delete');
 
   return JSON.stringify({
     success: true,

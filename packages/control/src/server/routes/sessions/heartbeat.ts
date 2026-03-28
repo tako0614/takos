@@ -1,7 +1,7 @@
 import { getDb } from '../../../infra/db';
 import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { checkSpaceAccess, now, toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess, toIsoString } from '../../../shared/utils';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
 import { BadRequestError, AuthorizationError, NotFoundError } from 'takos-common/errors';
 import type {
@@ -45,7 +45,7 @@ export async function heartbeatSession(
 
   const sessionAge = Date.now() - new Date(session.createdAt).getTime();
   if (sessionAge > SESSION_MAX_AGE_MS) {
-    await db.update(sessions).set({ status: 'dead', updatedAt: now() }).where(
+    await db.update(sessions).set({ status: 'dead', updatedAt: new Date().toISOString() }).where(
       and(eq(sessions.id, sessionId), eq(sessions.status, 'running'))
     );
     throw new BadRequestError('Session expired: exceeded maximum age');
@@ -55,7 +55,7 @@ export async function heartbeatSession(
     throw new BadRequestError('Session is not running');
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await db.update(sessions).set({ lastHeartbeat: timestamp, updatedAt: timestamp }).where(eq(sessions.id, sessionId));
 
   return c.json({ success: true, timestamp });
@@ -93,7 +93,7 @@ export async function getSessionHealth(c: SessionContext): Promise<Response> {
   const isHealthy = isRunning && (isNewSession || hasRecentHeartbeat);
 
   if (!isHealthy && session.status === 'running') {
-    await db.update(sessions).set({ status: 'dead', updatedAt: now() }).where(
+    await db.update(sessions).set({ status: 'dead', updatedAt: new Date().toISOString() }).where(
       and(eq(sessions.id, sessionId), eq(sessions.status, 'running'))
     );
   }

@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps } from './schema-helpers';
 
 // 35. Edge
 export const edges = sqliteTable('edges', {
@@ -9,7 +10,7 @@ export const edges = sqliteTable('edges', {
   type: text('type').notNull(),
   weight: real('weight').notNull().default(1.0),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxType: index('idx_edges_type').on(table.type),
   idxTarget: index('idx_edges_target_id').on(table.targetId),
@@ -34,7 +35,7 @@ const fileHandlersTable = sqliteTable('file_handlers', {
   serviceHostname: text('service_hostname').notNull(),
   name: text('name').notNull(),
   openPath: text('open_path').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxAccount: index('idx_file_handlers_account_id').on(table.accountId),
 }));
@@ -102,7 +103,7 @@ export const moderationAuditLogs = sqliteTable('moderation_audit_logs', {
   actionType: text('action_type').notNull(),
   reason: text('reason'),
   details: text('details').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxTargetTypeId: index('idx_moderation_audit_logs_target_type_id').on(table.targetType, table.targetId),
   idxReport: index('idx_moderation_audit_logs_report_id').on(table.reportId),
@@ -119,7 +120,7 @@ export const nodes = sqliteTable('nodes', {
   refId: text('ref_id').notNull(),
   label: text('label'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxType: index('idx_nodes_type').on(table.type),
   idxRefId: index('idx_nodes_ref_id').on(table.refId),

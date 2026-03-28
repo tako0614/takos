@@ -3,7 +3,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { SpaceRole } from '../../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from '../shared/route-auth';
+import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {

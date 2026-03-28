@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
-import { now, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { generateExploreInvalidationUrls } from './routes';
 import { getDb } from '../../../infra/db';
 import { repoStars, repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { parseLimit, parseOffset } from '../shared/route-auth';
+import { parseLimit, parseOffset } from '../route-auth';
 import { BadRequestError, AuthenticationError, NotFoundError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
@@ -21,7 +21,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Repository');
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const existingStar = await db.select()
     .from(repoStars)

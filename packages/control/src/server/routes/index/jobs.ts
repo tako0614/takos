@@ -4,7 +4,7 @@ import { getDb } from '../../../infra/db';
 import { indexJobs, files, chunks, nodes } from '../../../infra/db/schema';
 import { eq, and, ne, inArray, asc } from 'drizzle-orm';
 import type { EmbeddingsService } from '../../../application/services/execution/embeddings';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { extractAndCreateEdges } from './graph';
 import { chunkContent, getR2Key } from './index-context';
 import { logWarn } from '../../../shared/utils/logger';
@@ -21,7 +21,7 @@ export async function runIndexJob(
     return;
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await drizzle.update(indexJobs).set({
     status: 'running',
     startedAt: timestamp,
@@ -45,13 +45,13 @@ export async function runIndexJob(
 
     await drizzle.update(indexJobs).set({
       status: 'completed',
-      completedAt: now(),
+      completedAt: new Date().toISOString(),
     }).where(eq(indexJobs.id, jobId));
   } catch (error) {
     await drizzle.update(indexJobs).set({
       status: 'failed',
       error: String(error),
-      completedAt: now(),
+      completedAt: new Date().toISOString(),
     }).where(eq(indexJobs.id, jobId));
     throw error;
   }
@@ -66,7 +66,7 @@ export async function indexFile(
   embeddingsService?: EmbeddingsService | null
 ): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await drizzle.update(indexJobs).set({
     status: 'running',
     startedAt: timestamp,
@@ -82,13 +82,13 @@ export async function indexFile(
     await drizzle.update(indexJobs).set({
       status: 'completed',
       processedFiles: 1,
-      completedAt: now(),
+      completedAt: new Date().toISOString(),
     }).where(eq(indexJobs.id, jobId));
   } catch (error) {
     await drizzle.update(indexJobs).set({
       status: 'failed',
       error: String(error),
-      completedAt: now(),
+      completedAt: new Date().toISOString(),
     }).where(eq(indexJobs.id, jobId));
     throw error;
   }
@@ -119,7 +119,7 @@ async function indexFileContent(
   );
 
   const contentChunks = chunkContent(content);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   for (const chunk of contentChunks) {
     const chunkId = generateId();
     await drizzle.insert(chunks).values({
@@ -129,7 +129,7 @@ async function indexFileContent(
       startLine: chunk.startLine,
       endLine: chunk.endLine,
       content: chunk.content,
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     });
   }
 

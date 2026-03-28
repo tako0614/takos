@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { createSession } from '../../../application/services/identity/session';
 import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
 import { validateCliCallbackUrl } from './provisioning';
 import { escapeHtml, errorPage, warningPage } from './html';
 import { BadRequestError } from 'takos-common/errors';

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { validateClientCredentials } from '../../../application/services/oauth/client';
 import { verifyAccessToken, isAccessTokenValid, getRefreshToken } from '../../../application/services/oauth/token';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
-import type { PublicRouteEnv } from '../shared/route-auth';
+import type { PublicRouteEnv } from '../route-auth';
 import { getBodyValue, type FormBody } from './request-utils';
 
 const oauthIntrospect = new Hono<PublicRouteEnv>();

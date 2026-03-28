@@ -3,15 +3,15 @@
  * Supports OpenAI, Anthropic Claude, and Google Gemini
  */
 
-import type { AgentMessage, AgentTool, ToolCall } from '../agent-models';
-import { logError } from '../../../../shared/utils/logger';
+import type { AgentMessage, AgentTool, ToolCall } from './agent-models';
+import { logError } from '../../../shared/utils/logger';
 import {
   DEFAULT_MODEL_ID,
   getModelProvider,
   type ModelProvider,
-} from '../model-catalog';
-export { DEFAULT_MODEL_ID } from '../model-catalog';
-export type { ModelProvider } from '../model-catalog';
+} from './model-catalog';
+export { DEFAULT_MODEL_ID } from './model-catalog';
+export type { ModelProvider } from './model-catalog';
 
 /** Truncate and redact LLM API error bodies to prevent API key / secret leakage. */
 function sanitizeLlmError(body: string, maxLen = 500): string {

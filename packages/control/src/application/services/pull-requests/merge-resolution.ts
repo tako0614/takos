@@ -3,7 +3,7 @@ import type { AuthorType, PullRequestStatus, User } from '../../../shared/types'
 import * as gitStore from '../git-smart';
 import { getDb, branches, pullRequests } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { now, toIsoString, toRequiredIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 import { decodeBlobContent } from '../../../shared/utils/unified-diff';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
@@ -196,7 +196,7 @@ export async function resolveConflictsAndMerge(
 
   const treeOid = await buildTreeFromPaths(bucket, mergedFileList);
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const signature = buildUserSignature(user, timestamp);
   const message =
     params.commitMessage ||
@@ -482,8 +482,8 @@ async function advanceBaseBranchAndMarkMerged(
       ...updatedPullRequest,
       status: updatedPullRequest.status as PullRequestStatus,
       authorType: updatedPullRequest.authorType as AuthorType,
-      createdAt: toRequiredIsoString(updatedPullRequest.createdAt),
-      updatedAt: toRequiredIsoString(updatedPullRequest.updatedAt),
+      createdAt: toIsoString(updatedPullRequest.createdAt),
+      updatedAt: toIsoString(updatedPullRequest.updatedAt),
       mergedAt: toIsoString(updatedPullRequest.mergedAt),
     },
   };

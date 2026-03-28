@@ -2,7 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { ResourcePermission } from '../../../shared/types';
 import { getDb, resourceAccess } from '../../../infra/db';
 import { eq, and, inArray } from 'drizzle-orm';
-import { generateId, now, toRequiredIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { toApiResourceAccess } from './format';
 import { getResourceById } from './store';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
@@ -39,7 +39,7 @@ export async function listResourceAccess(db: D1Database, resourceId: string) {
       accountId: ra.accountId,
       permission: ra.permission,
       grantedByAccountId: ra.grantedByAccountId,
-      createdAt: toRequiredIsoString(ra.createdAt),
+      createdAt: toIsoString(ra.createdAt),
     }),
     workspace_name: ra.accountName,
   }));
@@ -51,7 +51,7 @@ export async function upsertResourceAccess(
 ) {
   const drizzle = getDb(db);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   try {
     await drizzle.insert(resourceAccess).values({

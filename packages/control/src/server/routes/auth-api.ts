@@ -14,7 +14,7 @@ import {
   deleteAuthSession,
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
-import { now, extractBearerToken } from '../../shared/utils';
+import { extractBearerToken } from '../../shared/utils';
 import { BadRequestError, AuthenticationError, ConflictError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 
@@ -102,7 +102,7 @@ authApi.post('/setup-username',
 
   await db.update(accounts).set({
     slug: body.username,
-    updatedAt: now(),
+    updatedAt: new Date().toISOString(),
   }).where(eq(accounts.id, user.id)).run();
 
   return c.json({ success: true, username: body.username });
@@ -135,7 +135,7 @@ authApi.patch('/profile',
     throw new BadRequestError('No updates provided');
   }
 
-  updateData.updatedAt = now();
+  updateData.updatedAt = new Date().toISOString();
 
   const db = getDb(c.env.DB);
   await db.update(accounts).set(updateData).where(eq(accounts.id, user.id)).run();

@@ -79,7 +79,7 @@ vi.mock('@/tools/mcp-client', () => ({
   },
 }));
 
-import { loadMcpTools } from '@/tools/loaders/mcp-tools';
+import { loadMcpTools } from '@/tools/mcp-tools';
 
 const MANAGED_SERVER = {
   id: 'managed-1',

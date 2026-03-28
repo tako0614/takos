@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, spaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, spaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import {
   createWorkspaceWithDefaultRepo,

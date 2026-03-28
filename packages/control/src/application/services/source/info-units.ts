@@ -2,10 +2,9 @@ import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/t
 import type { Env } from '../../../shared/types';
 import { getDb, runs, runEvents, infoUnits, nodes, edges, sessionRepos, repositories } from '../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { getRunEventsAfterFromR2 } from '../offload/run-events';
 import { logWarn } from '../../../shared/utils/logger';
-
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 const MAX_INFO_UNIT_TOKENS = 2048;
@@ -167,7 +166,7 @@ async function ensureNode(
     refId,
     label: label || null,
     metadata: JSON.stringify(metadata || {}),
-    createdAt: now(),
+    createdAt: new Date().toISOString(),
   });
 
   return id;
@@ -202,7 +201,7 @@ async function ensureEdge(
     type,
     weight: 1.0,
     metadata: JSON.stringify(metadata || {}),
-    createdAt: now(),
+    createdAt: new Date().toISOString(),
   });
 }
 
@@ -274,7 +273,7 @@ export class InfoUnitIndexer {
 
     const segments = buildSegments(entries);
     const segmentCount = Math.max(1, segments.length);
-    const createdAt = now();
+    const createdAt = new Date().toISOString();
 
     const sessionRepoResults = run.sessionId
       ? await db.select({

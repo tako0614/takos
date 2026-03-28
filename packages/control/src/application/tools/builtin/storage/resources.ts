@@ -1,7 +1,7 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
 import { createCloudflareApiClient } from '../../../services/cloudflare/api-client.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../../platform/providers/cloudflare/wfp.ts';
-import { generateId, now } from '../../../../shared/utils';
+import { generateId } from '../../../../shared/utils';
 import { getDb, resources } from '../../../../infra/db';
 
 export const CREATE_D1: ToolDefinition = {
@@ -101,8 +101,8 @@ export const createD1Handler: ToolHandler = async (args, context) => {
     cfId: databaseId,
     cfName: cfName,
     config: '{}',
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 
   let output = `D1 Database created!\n`;
@@ -149,8 +149,8 @@ export const createKVHandler: ToolHandler = async (args, context) => {
     cfId: namespaceId,
     cfName: cfName,
     config: '{}',
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 
   let output = `KV Namespace created!\n`;
@@ -189,8 +189,8 @@ export const createR2Handler: ToolHandler = async (args, context) => {
     cfId: cfName,
     cfName: cfName,
     config: '{}',
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 
   let output = `R2 Bucket created!\n`;

@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import {
   createSession,
   deleteSession,
@@ -14,7 +14,7 @@ import {
   createAuthSession,
   cleanupUserSessions,
 } from '../../../application/services/identity/auth-utils';
-import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
 import { sanitizeReturnTo, provisionGoogleOAuthUser } from './provisioning';
 import { errorPage } from './html';
 import { getDb } from '../../../infra/db';
@@ -208,7 +208,7 @@ authSessionRouter.get('/callback', async (c) => {
 
     // Update lastLoginAt on identity
     await db.update(authIdentities).set({
-      lastLoginAt: now(),
+      lastLoginAt: new Date().toISOString(),
       emailSnapshot: googleUser.email,
     }).where(
       and(eq(authIdentities.provider, 'google'), eq(authIdentities.providerSub, googleUser.id))
@@ -221,7 +221,7 @@ authSessionRouter.get('/callback', async (c) => {
 
     // Create auth_identity for the new user
     const emailKind = determineEmailKind(googleUser.email, googleUser.hd);
-    const identityTimestamp = now();
+    const identityTimestamp = new Date().toISOString();
     await db.insert(authIdentities).values({
       id: generateId(),
       userId: provisionedUser.id,

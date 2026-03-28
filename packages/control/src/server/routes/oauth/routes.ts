@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import type { PublicRouteEnv } from '../shared/route-auth';
+import type { PublicRouteEnv } from '../route-auth';
 import { oauthBodyLimit } from '../../middleware/body-size';
 import oauthAuthorize from './authorize';
 import oauthDevice from './device';

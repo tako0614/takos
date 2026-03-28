@@ -7,7 +7,7 @@
  * Implementation is split into:
  *   - runner-events.ts    : event emission helpers
  *   - runner-history.ts   : run status, conversation history, message helpers
- *   - runner-types.ts     : constants, utility functions, shared types
+ *   - runner-utils.ts     : constants, utility functions, shared types
  *   - session-closer.ts   : auto-close session (snapshot + file sync)
  *   - skills.ts           : skill loading, resolution, and context
  *   - simple-loop.ts      : simple LLM loop and no-LLM fallback
@@ -40,8 +40,8 @@ import { buildToolCatalogContent } from './prompt-builder';
 import { buildBudgetedSystemPrompt, LANE_PRIORITY, LANE_MAX_TOKENS, type PromptLane } from './prompt-budget';
 
 // Extracted modules
-import type { ToolExecution } from './runner-types';
-import { sanitizeErrorMessage } from './runner-types';
+import type { ToolExecution } from './runner-utils';
+import { sanitizeErrorMessage } from './runner-utils';
 import { autoCloseSession as autoCloseSessionImpl } from './session-closer';
 import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
 import { RemoteToolExecutor } from './remote-tool-executor';

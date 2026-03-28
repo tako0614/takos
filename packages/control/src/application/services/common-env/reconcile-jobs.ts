@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, serviceCommonEnvReconcileJobs } from '../../../infra/db';
 import { eq, and, or, inArray, isNull, isNotNull, lte } from 'drizzle-orm';
 
@@ -163,7 +163,7 @@ export class CommonEnvReconcileJobStore {
 
   private async bumpRetryWaitToPending(jobId: string): Promise<void> {
     const db = getDb(this.env.DB);
-    const ts = now();
+    const ts = new Date().toISOString();
     await db
       .update(t)
       .set({
@@ -186,7 +186,7 @@ export class CommonEnvReconcileJobStore {
     trigger: CommonEnvReconcileTrigger;
   }): Promise<void> {
     const db = getDb(this.env.DB);
-    const ts = now();
+    const ts = new Date().toISOString();
     if (params.job.status === 'retry_wait') {
       await db
         .update(t)
@@ -277,7 +277,7 @@ export class CommonEnvReconcileJobStore {
 
     const db = getDb(this.env.DB);
     const id = generateId();
-    const ts = now();
+    const ts = new Date().toISOString();
     await db
       .insert(t)
       .values({
@@ -366,7 +366,7 @@ export class CommonEnvReconcileJobStore {
       .where(
         and(
           inArray(t.status, ['pending', 'retry_wait']),
-          or(isNull(t.nextAttemptAt), lte(t.nextAttemptAt, now())),
+          or(isNull(t.nextAttemptAt), lte(t.nextAttemptAt, new Date().toISOString())),
         ),
       )
       .orderBy(t.createdAt)
@@ -377,7 +377,7 @@ export class CommonEnvReconcileJobStore {
 
   async markProcessing(jobId: string): Promise<boolean> {
     const db = getDb(this.env.DB);
-    const ts = now();
+    const ts = new Date().toISOString();
     const leaseToken = generateId();
     const leaseExpiresAt = processingLeaseExpiresAt();
     const result = await db
@@ -401,7 +401,7 @@ export class CommonEnvReconcileJobStore {
 
   async markCompleted(jobId: string): Promise<void> {
     const db = getDb(this.env.DB);
-    const ts = now();
+    const ts = new Date().toISOString();
     await db
       .update(t)
       .set({
@@ -419,7 +419,7 @@ export class CommonEnvReconcileJobStore {
   async markRetry(jobId: string, currentAttempts: number, error: unknown): Promise<void> {
     const db = getDb(this.env.DB);
     const attempts = currentAttempts + 1;
-    const ts = now();
+    const ts = new Date().toISOString();
     const code = toErrorCode(error);
     const message = toErrorMessage(error);
     if (attempts >= MAX_RETRY_ATTEMPTS) {
@@ -457,7 +457,7 @@ export class CommonEnvReconcileJobStore {
 
   private async listStaleProcessing(limit: number): Promise<CommonEnvReconcileJobAttemptRow[]> {
     const db = getDb(this.env.DB);
-    const nowIso = now();
+    const nowIso = new Date().toISOString();
     const fallbackCutoff = staleProcessingCutoff();
     return db
       .select({
@@ -488,7 +488,7 @@ export class CommonEnvReconcileJobStore {
   }
 
   async enqueuePeriodicDriftSweep(limit: number): Promise<number> {
-    const nowIso = now();
+    const nowIso = new Date().toISOString();
     const fallbackCutoff = staleProcessingCutoff();
     const targets = await this.env.DB
       .prepare(`

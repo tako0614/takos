@@ -1,7 +1,7 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { ConflictError } from 'takos-common/errors';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import {
   decryptCommonEnvValue,
@@ -68,7 +68,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
   const name = normalizeEnvName(params.name);
   assertSpaceCommonEnvKeyAllowed(name);
   const nextValue = String(params.value ?? '');
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const encrypted = await encryptCommonEnvValue(deps.env, spaceId, name, nextValue);
 
   const existing = await getDb(deps.env.DB).select({
@@ -169,7 +169,7 @@ export async function ensureSystemCommonEnv(deps: SpaceEnvDeps, spaceId: string,
     const value = String(entry.value ?? '');
     const isSecret = entry.secret === true;
     const encrypted = await encryptCommonEnvValue(deps.env, spaceId, name, value);
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     await runInTransaction(deps, async () => {
       const result = await getDb(deps.env.DB).insert(accountEnvVars)

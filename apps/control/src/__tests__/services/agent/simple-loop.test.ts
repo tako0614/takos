@@ -20,7 +20,7 @@ vi.mock('@/utils/with-timeout', () => ({
   }),
 }));
 
-vi.mock('@/services/agent/runner-types', () => ({
+vi.mock('@/services/agent/runner-utils', () => ({
   anySignal: vi.fn((signals: AbortSignal[]) => signals[0] || new AbortController().signal),
   addToolExecution: vi.fn(),
   redactSensitiveArgs: vi.fn((args: Record<string, unknown>) => args),

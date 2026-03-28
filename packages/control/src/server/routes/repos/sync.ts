@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, requireSpaceAccess } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, requireSpaceAccess } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess, toApiRepositoryFromDb } from '../../../application/services/source/repos';
@@ -9,7 +9,7 @@ import { getTreeFlattenLimitError } from './routes';
 import { getDb } from '../../../infra/db';
 import { repositories } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import { now } from '../../../shared/utils';
+
 import { logError } from '../../../shared/utils/logger';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
@@ -86,16 +86,11 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       : null;
 
     let targetBranches: string[] = [];
+    let upstreamBranchMap: Map<string, Awaited<ReturnType<typeof gitStore.getBranch>> & {}>;
     if (requestedBranches !== null) {
-      const missingBranches: string[] = [];
-      for (const branchName of requestedBranches) {
-        const upstreamBranch = await gitStore.getBranch(c.env.DB, upstream.id, branchName);
-        if (!upstreamBranch) {
-          missingBranches.push(branchName);
-        } else {
-          targetBranches.push(upstreamBranch.name);
-        }
-      }
+      // Batch-fetch all requested branches from upstream in one query
+      upstreamBranchMap = await gitStore.getBranchesByNames(c.env.DB, upstream.id, requestedBranches);
+      const missingBranches = requestedBranches.filter(name => !upstreamBranchMap.has(name));
 
       if (missingBranches.length > 0) {
         return c.json({
@@ -103,11 +98,14 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
           missing_branches: missingBranches,
         }, 404);
       }
+
+      targetBranches = requestedBranches.filter(name => upstreamBranchMap.has(name));
     } else {
       const upstreamBranches = await gitStore.listBranches(c.env.DB, upstream.id);
       targetBranches = upstreamBranches
         .map(branch => branch.name)
         .filter(branchName => !branchName.startsWith('remotes/'));
+      upstreamBranchMap = new Map(upstreamBranches.map(b => [b.name, b]));
     }
 
     const updated: Array<{
@@ -116,14 +114,20 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       new: string;
     }> = [];
 
+    // Batch-fetch all tracking branches for the fork repo in one query
+    const trackingNames = targetBranches.map(b => `remotes/${remote}/${b}`);
+    const trackingBranchMap = trackingNames.length > 0
+      ? await gitStore.getBranchesByNames(c.env.DB, repoId, trackingNames)
+      : new Map();
+
     for (const branchName of targetBranches) {
-      const upstreamBranch = await gitStore.getBranch(c.env.DB, upstream.id, branchName);
+      const upstreamBranch = upstreamBranchMap.get(branchName);
       if (!upstreamBranch) {
         continue;
       }
 
       const trackingName = `remotes/${remote}/${branchName}`;
-      const currentTrackingBranch = await gitStore.getBranch(c.env.DB, repoId, trackingName);
+      const currentTrackingBranch = trackingBranchMap.get(trackingName) || null;
       const oldSha = currentTrackingBranch?.commit_sha || null;
 
       if (oldSha === upstreamBranch.commit_sha) {
@@ -205,7 +209,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
     ['owner', 'admin', 'editor'],
     'Permission denied',
     403
-  );
+  );
 
   if (!repo.forked_from_id) {
     throw new BadRequestError('Repository is not a fork');
@@ -358,7 +362,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       }, 409);
     }
 
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const signature = {
       name: user.name || 'User',
       email: user.email || 'user@takos.dev',

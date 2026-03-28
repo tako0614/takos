@@ -90,6 +90,74 @@ export const VECTORIZE_DEFAULT_DIMENSIONS = 1536;
 /** Maximum retry attempts for a single deployment step. */
 export const MAX_DEPLOYMENT_STEP_RETRIES = 3;
 
+/** Maximum worker bundle size for deployments (Cloudflare Workers paid plan limit). */
+export const MAX_BUNDLE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// ---------------------------------------------------------------------------
+// Git operations
+// ---------------------------------------------------------------------------
+
+/** Maximum total bytes scanned per repository search request. */
+export const GIT_SEARCH_MAX_TOTAL_BYTES = 5 * 1024 * 1024; // 5 MiB
+
+/** Maximum single file size for repository search. */
+export const GIT_SEARCH_MAX_FILE_BYTES = 512 * 1024; // 512 KiB
+
+/** Maximum single file size for diff and blame operations. */
+export const GIT_DIFF_MAX_FILE_BYTES = 256 * 1024; // 256 KiB
+
+/** Maximum line count for diff and blame operations. */
+export const GIT_DIFF_MAX_LINES = 2000;
+
+/** Maximum number of files in a single diff payload. */
+export const GIT_DIFF_MAX_FILES = 200;
+
+/** Maximum commits walked during blame. */
+export const GIT_BLAME_MAX_COMMITS = 200;
+
+/** Maximum commits replayed during a rebase merge. */
+export const GIT_REBASE_MAX_COMMITS = 200;
+
+/** Maximum request body size for Git smart HTTP endpoints. */
+export const MAX_GIT_REQUEST_BODY_BYTES = 90 * 1024 * 1024; // 90 MB
+
+/** Lease duration for the per-repo push lock (ms). */
+export const GIT_PUSH_LOCK_LEASE_MS = 5 * 60 * 1000; // 5 min
+
+/** Maximum object candidates considered during repo cleanup. */
+export const MAX_REPO_OBJECT_CLEANUP_CANDIDATES = 25_000;
+
+// ---------------------------------------------------------------------------
+// Logs
+// ---------------------------------------------------------------------------
+
+/** Default chunk size when reading action logs without an explicit limit. */
+export const DEFAULT_LOG_CHUNK_BYTES = 128 * 1024; // 128 KiB
+
+/** Maximum chunk size for a single action log read. */
+export const MAX_LOG_CHUNK_BYTES = 1024 * 1024; // 1 MiB
+
+// ---------------------------------------------------------------------------
+// Releases
+// ---------------------------------------------------------------------------
+
+/** Maximum character length for a release asset filename. */
+export const MAX_RELEASE_ASSET_FILENAME_LENGTH = 180;
+
+// ---------------------------------------------------------------------------
+// Runs / Observation
+// ---------------------------------------------------------------------------
+
+/** Maximum run events returned in a single observation response. */
+export const MAX_EVENTS_PER_RESPONSE = 2000;
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+/** Maximum items in a bulk storage operation. */
+export const MAX_BULK_OPERATION_ITEMS = 200;
+
 // ---------------------------------------------------------------------------
 // Pagination defaults
 // ---------------------------------------------------------------------------

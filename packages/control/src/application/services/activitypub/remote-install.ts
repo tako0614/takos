@@ -4,7 +4,7 @@
  */
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { generateId, now, sanitizeRepoName } from '../../../shared/utils';
+import { generateId, sanitizeRepoName } from '../../../shared/utils';
 import { getDb, repositories } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -89,7 +89,7 @@ export async function installFromRemoteStore(
 
   // 5. Create local repository record
   const repoId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.insert(repositories).values({
     id: repoId,

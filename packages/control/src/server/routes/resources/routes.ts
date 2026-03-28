@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ResourceType } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {
@@ -59,7 +59,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor', 'viewer'],
       'Workspace not found or access denied',
       404
-    );
+    );
 
     const resourceList = await listResourcesForWorkspace(dbBinding, user.id, access.space.id);
 
@@ -212,7 +212,8 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
       ['owner', 'admin', 'editor'],
       'Workspace not found or insufficient permissions',
       403
-    );
+    );
+
     spaceId = access.space.id;
   } else {
     // Default to user's own account
@@ -220,7 +221,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const name = body.name.trim();
   const cfName = `takos-${body.type}-${id}`;
 

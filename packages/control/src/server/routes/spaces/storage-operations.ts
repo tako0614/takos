@@ -1,13 +1,14 @@
 import type { MiddlewareHandler } from 'hono';
 import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import type { OAuthContext } from '../../middleware/oauth-auth';
 import { StorageError } from '../../../application/services/source/space-storage';
 import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError, PayloadTooLargeError } from 'takos-common/errors';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
+import { MAX_BULK_OPERATION_ITEMS } from '../../../shared/config/limits';
+export { MAX_BULK_OPERATION_ITEMS };
 
 export const storageBulkLimiter = RateLimiters.sensitive();
-export const MAX_BULK_OPERATION_ITEMS = 200;
 
 export const INLINE_SAFE_MIME_PREFIXES = ['image/', 'audio/', 'video/', 'application/pdf'];
 

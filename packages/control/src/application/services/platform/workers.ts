@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceRole } from '../../../shared/types';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { accountMemberships, accounts, getDb, services } from '../../../infra/db';
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../identity/principals';
@@ -376,7 +376,7 @@ export async function getServiceForUserWithRole(d1: D1Database, serviceId: strin
 export async function createService(d1: D1Database, input: { spaceId: string; workerType: 'app' | 'service'; slug?: string; config?: string | null; platformDomain: string; }) {
   const db = getDb(d1);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const slug = slugifyServiceName(input.slug ?? id);
   const hostname = `${slug}.${input.platformDomain}`;
   const serviceSlotName = `worker-${id}`;

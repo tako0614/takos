@@ -1,24 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  now,
   toIsoString,
-  toRequiredIsoString,
   base64UrlEncode,
   base64UrlDecode,
 } from '@/utils/index';
-
-describe('now', () => {
-  it('returns an ISO string', () => {
-    const result = now();
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-  });
-
-  it('returns a parseable date', () => {
-    const result = now();
-    const parsed = new Date(result);
-    expect(parsed.getTime()).not.toBeNaN();
-  });
-});
 
 describe('toIsoString', () => {
   it('returns string as-is when given a string', () => {
@@ -40,14 +25,14 @@ describe('toIsoString', () => {
   });
 });
 
-describe('toRequiredIsoString', () => {
+describe('toIsoString (required overload)', () => {
   it('returns string as-is', () => {
-    expect(toRequiredIsoString('2024-01-01T00:00:00Z')).toBe('2024-01-01T00:00:00Z');
+    expect(toIsoString('2024-01-01T00:00:00Z')).toBe('2024-01-01T00:00:00Z');
   });
 
   it('converts Date to ISO string', () => {
     const date = new Date('2024-06-15T12:00:00Z');
-    expect(toRequiredIsoString(date)).toBe('2024-06-15T12:00:00.000Z');
+    expect(toIsoString(date)).toBe('2024-06-15T12:00:00.000Z');
   });
 });
 

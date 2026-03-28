@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env, User } from '../../../shared/types';
-import type { BaseVariables } from '../shared/route-auth';
+import type { BaseVariables } from '../route-auth';
 import { InMemoryRateLimiter } from '../../../shared/utils';
-import { parseJsonBody } from '../shared/route-auth';
+import { parseJsonBody } from '../route-auth';
 import {
   handleIndexFile,
   handleIndexStatus,

@@ -1,7 +1,7 @@
 import { getDb, infraEndpointRoutes } from '../../../infra/db';
 import { infraEndpoints, serviceRuntimes } from '../../../infra/db/schema-platform';
 import type { Env } from '../../../shared/types';
-import { generateId, now, safeJsonParseOrDefault } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
 import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/types';
 import { eq, and, sql } from 'drizzle-orm';
 
@@ -22,7 +22,7 @@ export class InfraService {
       .where(and(eq(serviceRuntimes.accountId, params.spaceId), eq(serviceRuntimes.name, params.name)))
       .get();
 
-    const ts = now();
+    const ts = new Date().toISOString();
     if (existing) {
       await db
         .update(serviceRuntimes)
@@ -82,7 +82,7 @@ export class InfraService {
       .where(and(eq(infraEndpoints.accountId, params.spaceId), eq(infraEndpoints.name, params.name)))
       .get();
 
-    const ts = now();
+    const ts = new Date().toISOString();
     if (existing) {
       await db
         .update(infraEndpoints)

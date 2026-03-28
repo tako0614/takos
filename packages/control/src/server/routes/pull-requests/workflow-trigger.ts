@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import type { RepoAccess } from '../../../application/services/source/repos';
 import {
   triggerPullRequestWorkflows,

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ResourcePermission } from '../../../shared/types';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import {
   deleteResourceAccess,

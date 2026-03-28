@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { toIsoString } from '../../../shared/utils';
+import { toIsoString, parsePagination, paginatedResponse } from '../../../shared/utils';
 import { fetchProfileActivity } from '../../../application/services/identity/profile-activity';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
+import { type OptionalAuthRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { NotFoundError, AuthorizationError, BadRequestError } from 'takos-common/errors';
 import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries';
@@ -68,9 +68,8 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
   async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const { limit: limitRaw, offset: offsetRaw, sort: sortRaw, order: orderRaw } = c.req.valid('query');
-  const limit = parseLimit(limitRaw, 20, 100);
-  const offset = parseOffset(offsetRaw);
+  const { sort: sortRaw, order: orderRaw, ...paginationRaw } = c.req.valid('query');
+  const { limit, offset } = parsePagination(paginationRaw);
   const sort = sortRaw || 'updated';
   const order = orderRaw || 'desc';
   const db = getDb(c.env.DB);
@@ -121,10 +120,10 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
     updated_at: toIsoString(repo.updatedAt),
   }));
 
+  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
   return c.json({
-    repos,
-    total,
-    has_more: offset + repos.length < total,
+    repos: items,
+    ...pagination,
   });
 })
 
@@ -137,9 +136,7 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
   async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const { limit: limitRaw, offset: offsetRaw } = c.req.valid('query');
-  const limit = parseLimit(limitRaw, 20, 100);
-  const offset = parseOffset(offsetRaw);
+  const { limit, offset } = parsePagination(c.req.valid('query'));
   const db = getDb(c.env.DB);
 
   const profileUser = await getUserByUsername(c.env.DB, username);
@@ -214,10 +211,10 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
     };
   });
 
+  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
   return c.json({
-    repos,
-    total,
-    has_more: offset + repos.length < total,
+    repos: items,
+    ...pagination,
   });
 })
 
@@ -254,7 +251,7 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
   }
 
   const { limit: limitRaw, before: beforeRaw } = c.req.valid('query');
-  const limit = parseLimit(limitRaw, 20, 50);
+  const { limit } = parsePagination({ limit: limitRaw }, { maxLimit: 50 });
 
   let before: string | null = null;
   if (beforeRaw) {

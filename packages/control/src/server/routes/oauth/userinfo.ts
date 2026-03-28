@@ -4,7 +4,7 @@ import { parseScopes } from '../../../application/services/oauth/scopes';
 import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
-import type { PublicRouteEnv } from '../shared/route-auth';
+import type { PublicRouteEnv } from '../route-auth';
 import { extractBearerToken } from '../../../shared/utils';
 
 const oauthUserinfo = new Hono<PublicRouteEnv>();

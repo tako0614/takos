@@ -1,8 +1,7 @@
 import { getDb } from '../../../infra/db';
 import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema';
 import { eq, asc } from 'drizzle-orm';
-
-export const MAX_RELEASE_ASSET_FILENAME_LENGTH = 180;
+import { MAX_RELEASE_ASSET_FILENAME_LENGTH } from '../../../shared/config/limits';
 
 export function sanitizeReleaseAssetFilename(fileName: string): string {
   const normalized = fileName

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { checkTokenBucket, hitTokenBucket, type TokenBucketState } from '@/utils/token-bucket';
+import { hitTokenBucket, type TokenBucketState } from '@/utils/token-bucket';
 
 describe('Token Bucket', () => {
   it('starts full and allows immediately', () => {
     const now = 1_000_000;
-    const { state, result } = checkTokenBucket(undefined, { maxRequests: 5, windowMs: 10_000 }, now);
+    const { state, result } = hitTokenBucket(undefined, { maxRequests: 5, windowMs: 10_000 }, now, true);
 
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(5);

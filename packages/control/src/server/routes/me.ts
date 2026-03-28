@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, User } from '../../shared/types';
-import { now, safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils';
+import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils';
 import { validateUsername } from '../../shared/utils/domain-validation';
 import { getDb } from '../../infra/db';
 import { accounts, oauthTokens, oauthAuditLogs, personalAccessTokens } from '../../infra/db/schema';
@@ -9,7 +9,7 @@ import { getUserConsentsWithClients, revokeConsent } from '../../application/ser
 import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
-import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './route-auth';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 import { logWarn } from '../../shared/utils/logger';
 import {
@@ -147,7 +147,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
     await db.update(accounts).set({
       slug: normalizedUsername,
-      updatedAt: now(),
+      updatedAt: new Date().toISOString(),
     }).where(eq(accounts.id, user.id));
 
     return c.json({ success: true, username: normalizedUsername });
@@ -177,7 +177,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     await db.update(oauthTokens).set({
       revoked: true,
-      revokedAt: now(),
+      revokedAt: new Date().toISOString(),
       revokedReason: 'user_revoked',
     }).where(and(eq(oauthTokens.accountId, user.id), eq(oauthTokens.clientId, clientId)));
 
@@ -364,7 +364,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const tokenPrefix = tokenPlain.substring(0, 12);
 
     const id = generateId();
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const scopes = body.scopes ?? '*';
 
     let expiresAt: string | null = null;

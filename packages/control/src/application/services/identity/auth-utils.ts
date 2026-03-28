@@ -10,7 +10,6 @@ import { getDb, authSessions, oauthStates } from '../../../infra/db';
 import { eq, and, gt, lt, desc, notInArray, sql } from 'drizzle-orm';
 import { logInfo } from '../../../shared/utils/logger';
 import { bytesToHex } from '../../../shared/utils/encoding-utils';
-import { now as nowISO } from '../../../shared/utils/date-utils';
 
 // ---------------------------------------------------------------------------
 // Internal helpers (not exported)
@@ -37,7 +36,7 @@ async function cleanupExpiredRows(
     throw new Error(`cleanupExpiredRows: disallowed table/column "${table}"/"${column}"`);
   }
   // Dynamic table/column name -- must stay as raw SQL
-  await db.prepare(`DELETE FROM ${table} WHERE ${column} < ?`).bind(nowISO()).run();
+  await db.prepare(`DELETE FROM ${table} WHERE ${column} < ?`).bind(new Date().toISOString()).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +254,7 @@ export async function createAuthSession(
     userAgent: userAgent || null,
     ipAddress: ipAddress || null,
     expiresAt,
-    createdAt: nowISO(),
+    createdAt: new Date().toISOString(),
   });
 
   return { token, expiresAt };
@@ -278,7 +277,7 @@ export async function validateAuthSession(
     .from(authSessions)
     .where(and(
       eq(authSessions.tokenHash, tokenHash),
-      gt(authSessions.expiresAt, nowISO()),
+      gt(authSessions.expiresAt, new Date().toISOString()),
     ))
     .get();
 

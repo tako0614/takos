@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context, Handler } from 'hono';
 import * as gitStore from '../../../application/services/git-smart';
-import { parseLimit, type OptionalAuthRouteEnv } from '../shared/route-auth';
+import { parseLimit, type OptionalAuthRouteEnv } from '../route-auth';
 import { findRepoByUsernameAndName } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema';

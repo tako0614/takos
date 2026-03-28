@@ -1,7 +1,5 @@
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-
-const DEFAULT_LOG_CHUNK_BYTES = 128 * 1024;
-const MAX_LOG_CHUNK_BYTES = 1024 * 1024;
+import { DEFAULT_LOG_CHUNK_BYTES, MAX_LOG_CHUNK_BYTES } from '../../../../shared/config/limits';
 
 export class LogsNotFoundError extends Error {
   constructor() {

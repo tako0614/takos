@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps } from './schema-helpers';
 
 // 13. AgentTask
 export const agentTasks = sqliteTable('agent_tasks', {
@@ -17,8 +18,7 @@ export const agentTasks = sqliteTable('agent_tasks', {
   dueAt: text('due_at'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxThread: index('idx_agent_tasks_thread_id').on(table.threadId),
   idxStatus: index('idx_agent_tasks_status').on(table.status),
@@ -40,7 +40,7 @@ export const artifacts = sqliteTable('artifacts', {
   content: text('content'),
   fileId: text('file_id'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxType: index('idx_artifacts_type').on(table.type),
   idxRun: index('idx_artifacts_run_id').on(table.runId),
@@ -63,8 +63,7 @@ export const infoUnits = sqliteTable('info_units', {
   segmentCount: integer('segment_count').notNull().default(1),
   vectorId: text('vector_id'),
   metadata: text('metadata').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxThread: index('idx_info_units_thread_id').on(table.threadId),
   idxSession: index('idx_info_units_session_id').on(table.sessionId),
@@ -122,8 +121,7 @@ export const memories = sqliteTable('memories', {
   expiresAt: text('expires_at'),
   lastAccessedAt: text('last_accessed_at'),
   accessCount: integer('access_count').default(0),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxType: index('idx_memories_type').on(table.type),
   idxTypeCategory: index('idx_memories_type_category').on(table.type, table.category),
@@ -144,7 +142,7 @@ export const messages = sqliteTable('messages', {
   toolCallId: text('tool_call_id'),
   metadata: text('metadata').notNull().default('{}'),
   sequence: integer('sequence').notNull().default(0),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxThreadSequence: index('idx_messages_thread_sequence').on(table.threadId, table.sequence),
   idxThread: index('idx_messages_thread_id').on(table.threadId),
@@ -163,8 +161,7 @@ export const reminders = sqliteTable('reminders', {
   status: text('status').default('pending'),
   triggeredAt: text('triggered_at'),
   priority: text('priority').default('normal'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxStatus: index('idx_reminders_status').on(table.status),
   idxPriority: index('idx_reminders_priority').on(table.priority),
@@ -177,7 +174,7 @@ export const runEvents = sqliteTable('run_events', {
   runId: text('run_id').notNull(),
   type: text('type').notNull(),
   data: text('data').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxType: index('idx_run_events_type').on(table.type),
   idxRunTypeCreatedAt: index('idx_run_events_run_type_created_at').on(table.runId, table.type, table.createdAt),
@@ -207,7 +204,7 @@ const runsTable = sqliteTable('runs', {
   leaseVersion: integer('lease_version').notNull().default(0),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxService: index('idx_runs_service_id').on(table.serviceId),
   idxServiceHeartbeat: index('idx_runs_service_heartbeat').on(table.serviceHeartbeat),
@@ -242,8 +239,7 @@ export const skills = sqliteTable('skills', {
   triggers: text('triggers'),
   metadata: text('metadata').notNull().default('{}'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountName: uniqueIndex('idx_skills_account_name').on(table.accountId, table.name),
   idxEnabled: index('idx_skills_enabled').on(table.enabled),
@@ -262,7 +258,7 @@ export const threadShares = sqliteTable('thread_shares', {
   expiresAt: text('expires_at'),
   revokedAt: text('revoked_at'),
   lastAccessedAt: text('last_accessed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxThread: index('idx_thread_shares_thread_id').on(table.threadId),
   idxExpiresAt: index('idx_thread_shares_expires_at').on(table.expiresAt),
@@ -281,8 +277,7 @@ export const threads = sqliteTable('threads', {
   keyPoints: text('key_points').notNull().default('[]'),
   retrievalIndex: integer('retrieval_index').notNull().default(-1),
   contextWindow: integer('context_window').notNull().default(50),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxStatus: index('idx_threads_status').on(table.status),
   idxAccount: index('idx_threads_account_id').on(table.accountId),
@@ -297,7 +292,7 @@ export const toolOperations = sqliteTable('tool_operations', {
   status: text('status').notNull().default('pending'),
   resultOutput: text('result_output'),
   resultError: text('result_error'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
   completedAt: text('completed_at'),
 }, (table) => ({
   uniqRunOpKey: uniqueIndex('idx_tool_operations_key').on(table.runId, table.operationKey),

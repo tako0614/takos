@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './route-auth';
 import { GitService } from '../../application/services/source/git';
 import type { R2Bucket } from '../../shared/types/bindings.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';

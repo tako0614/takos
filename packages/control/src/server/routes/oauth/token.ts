@@ -13,7 +13,7 @@ import { areScopesAllowed, parseScopes } from '../../../application/services/oau
 import { consumeApprovedDeviceAuthorization, pollDeviceAuthorization } from '../../../application/services/oauth/device';
 import { DEVICE_CODE_GRANT_TYPE } from '../../../shared/types/oauth';
 import { tryLogOAuthEvent, getBodyValue } from './request-utils';
-import type { PublicRouteEnv } from '../shared/route-auth';
+import type { PublicRouteEnv } from '../route-auth';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 import { logWarn } from '../../../shared/utils/logger';
 

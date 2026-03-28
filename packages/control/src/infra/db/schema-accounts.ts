@@ -1,10 +1,11 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps, updatedAtColumn } from './schema-helpers';
 
 // 1. AccountBlock
 export const accountBlocks = sqliteTable('account_blocks', {
   blockerAccountId: text('blocker_account_id').notNull(),
   blockedAccountId: text('blocked_account_id').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.blockerAccountId, table.blockedAccountId] }),
   idxBlocker: index('idx_account_blocks_blocker_account_id').on(table.blockerAccountId),
@@ -18,8 +19,7 @@ export const accountEnvVars = sqliteTable('account_env_vars', {
   name: text('name').notNull(),
   valueEncrypted: text('value_encrypted').notNull(),
   isSecret: integer('is_secret', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountName: uniqueIndex('idx_account_env_vars_account_id_name').on(table.accountId, table.name),
   idxAccount: index('idx_account_env_vars_account_id').on(table.accountId),
@@ -31,9 +31,9 @@ export const accountFollowRequests = sqliteTable('account_follow_requests', {
   requesterAccountId: text('requester_account_id').notNull(),
   targetAccountId: text('target_account_id').notNull(),
   status: text('status').notNull().default('pending'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
   respondedAt: text('responded_at'),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...updatedAtColumn,
 }, (table) => ({
   uniqRequesterTarget: uniqueIndex('idx_account_follow_requests_requester_target').on(table.requesterAccountId, table.targetAccountId),
   idxTargetStatus: index('idx_account_follow_requests_target_status').on(table.targetAccountId, table.status),
@@ -45,7 +45,7 @@ export const accountFollowRequests = sqliteTable('account_follow_requests', {
 export const accountFollows = sqliteTable('account_follows', {
   followerAccountId: text('follower_account_id').notNull(),
   followingAccountId: text('following_account_id').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.followerAccountId, table.followingAccountId] }),
   idxFollowing: index('idx_account_follows_following_account_id').on(table.followingAccountId),
@@ -59,8 +59,8 @@ export const accountMemberships = sqliteTable('account_memberships', {
   memberId: text('member_id').notNull(),
   role: text('role').notNull().default('viewer'),
   status: text('status').notNull().default('active'),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...updatedAtColumn,
+  ...createdAtColumn,
 }, (table) => ({
   uniqAccountMember: uniqueIndex('idx_account_memberships_account_member').on(table.accountId, table.memberId),
   idxMember: index('idx_account_memberships_member_id').on(table.memberId),
@@ -72,8 +72,7 @@ export const accountMetadata = sqliteTable('account_metadata', {
   accountId: text('account_id').notNull(),
   key: text('key').notNull(),
   value: text('value').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   pk: primaryKey({ columns: [table.accountId, table.key] }),
   idxKey: index('idx_account_metadata_key').on(table.key),
@@ -88,7 +87,7 @@ export const accountModeration = sqliteTable('account_moderation', {
   lastWarnAt: text('last_warn_at'),
   bannedAt: text('banned_at'),
   reason: text('reason'),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...updatedAtColumn,
 }, (table) => ({
   idxSuspendedUntil: index('idx_account_moderation_suspended_until').on(table.suspendedUntil),
   idxStatus: index('idx_account_moderation_status').on(table.status),
@@ -98,7 +97,7 @@ export const accountModeration = sqliteTable('account_moderation', {
 export const accountMutes = sqliteTable('account_mutes', {
   muterAccountId: text('muter_account_id').notNull(),
   mutedAccountId: text('muted_account_id').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.muterAccountId, table.mutedAccountId] }),
   idxMuter: index('idx_account_mutes_muter_account_id').on(table.muterAccountId),
@@ -112,8 +111,7 @@ export const accountSettings = sqliteTable('account_settings', {
   autoUpdateEnabled: integer('auto_update_enabled', { mode: 'boolean' }).notNull().default(true),
   privateAccount: integer('private_account', { mode: 'boolean' }).notNull().default(false),
   activityVisibility: text('activity_visibility').notNull().default('public'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 });
 
 // 10. AccountStats
@@ -124,7 +122,7 @@ export const accountStats = sqliteTable('account_stats', {
   snapshotCount: integer('snapshot_count').notNull().default(0),
   blobCount: integer('blob_count').notNull().default(0),
   lastCalculatedAt: text('last_calculated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...updatedAtColumn,
 }, (table) => ({
   idxTotalSizeBytes: index('idx_account_stats_total_size_bytes').on(table.totalSizeBytes),
   idxFileCount: index('idx_account_stats_file_count').on(table.fileCount),
@@ -143,8 +141,7 @@ export const accountStorageFiles = sqliteTable('account_storage_files', {
   r2Key: text('r2_key'),
   sha256: text('sha256'),
   uploadedByAccountId: text('uploaded_by_account_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountPath: uniqueIndex('idx_account_storage_files_account_path').on(table.accountId, table.path),
   idxParent: index('idx_account_storage_files_parent_id').on(table.parentId),
@@ -171,8 +168,7 @@ export const accounts = sqliteTable('accounts', {
   aiProvider: text('ai_provider').default('openai'),
   securityPosture: text('security_posture').notNull().default('standard'),
   ownerAccountId: text('owner_account_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxType: index('idx_accounts_type').on(table.type),
   idxSlug: index('idx_accounts_slug').on(table.slug),

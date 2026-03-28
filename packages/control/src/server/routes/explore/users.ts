@@ -4,7 +4,7 @@ import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, or, desc, asc, like, inArray, count } from 'drizzle-orm';
-import { parseLimit, parseOffset } from '../shared/route-auth';
+import { parseLimit, parseOffset } from '../route-auth';
 import { NotFoundError } from 'takos-common/errors';
 
 type Variables = {
@@ -41,22 +41,36 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       .offset(offset)
       .all();
 
-    // Sequential to avoid D1 concurrency issues
-    const usersWithRepoCount = [];
-    for (const user of users.slice(0, limit).filter(u => u.slug)) {
-      const cntResult = await db.select({ count: count() }).from(repositories).where(
-        and(eq(repositories.visibility, 'public'), eq(repositories.accountId, user.id))
-      ).get();
-      const cnt = cntResult?.count ?? 0;
-      if (cnt > 0) {
-        usersWithRepoCount.push({
-          username: user.slug as string,
-          name: user.name,
-          avatar_url: user.picture,
-          public_repo_count: cnt,
-        });
-      }
-    }
+    const paginatedUsers = users.slice(0, limit).filter(u => u.slug);
+    const userIds = paginatedUsers.map(u => u.id);
+
+    // Batch query: get public repo counts for all users at once
+    const repoCounts = userIds.length > 0
+      ? await db.select({
+          accountId: repositories.accountId,
+          count: count(),
+        }).from(repositories)
+          .where(and(eq(repositories.visibility, 'public'), inArray(repositories.accountId, userIds)))
+          .groupBy(repositories.accountId)
+          .all()
+      : [];
+
+    const repoCountMap = new Map(repoCounts.map(r => [r.accountId, r.count]));
+
+    const usersWithRepoCount = paginatedUsers
+      .map(user => {
+        const cnt = repoCountMap.get(user.id) ?? 0;
+        if (cnt > 0) {
+          return {
+            username: user.slug as string,
+            name: user.name,
+            avatar_url: user.picture,
+            public_repo_count: cnt,
+          };
+        }
+        return null;
+      })
+      .filter((u): u is NonNullable<typeof u> => u !== null);
 
     const hasMore = users.length > limit;
 

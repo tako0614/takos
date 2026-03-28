@@ -1,7 +1,6 @@
 import type { Env } from '../../../shared/types';
 import { getDb, sessions } from '../../../infra/db';
 import { and, eq, lt, isNull, or, sql } from 'drizzle-orm';
-import { now } from '../../../shared/utils';
 
 export interface CleanupDeadSessionsSummary {
   markedDead: number;
@@ -22,7 +21,7 @@ export async function cleanupDeadSessions(
 
   const cutoffTime = new Date(Date.now() - heartbeatTimeoutMs).toISOString();
   const startupCutoff = new Date(Date.now() - startupGraceMs).toISOString();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const result = await db.update(sessions)
     .set({ status: 'dead', updatedAt: timestamp })

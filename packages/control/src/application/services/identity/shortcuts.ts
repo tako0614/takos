@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db';
 import { eq, and, asc, inArray } from 'drizzle-orm';
-import { now, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 
 export const ALLOWED_SHORTCUT_RESOURCE_TYPES = ['service', 'resource', 'link'] as const;
 export type ShortcutResourceType = (typeof ALLOWED_SHORTCUT_RESOURCE_TYPES)[number];
@@ -154,7 +154,7 @@ export async function createShortcut(
 
   const drizzle = getDb(db);
   const id = generateShortcutId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const shortcut = await drizzle.insert(shortcutsTable).values({
     id,
@@ -202,7 +202,7 @@ export async function updateShortcut(
     return false;
   }
 
-  data.updatedAt = now();
+  data.updatedAt = new Date().toISOString();
 
   await drizzle.update(shortcutsTable).set(data).where(and(eq(shortcutsTable.id, id), eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId)));
 
@@ -213,4 +213,22 @@ export async function deleteShortcut(db: D1Database, userId: string, spaceId: st
   const drizzle = getDb(db);
 
   await drizzle.delete(shortcutsTable).where(and(eq(shortcutsTable.id, id), eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId)));
+}
+
+export async function reorderShortcuts(
+  db: D1Database,
+  userId: string,
+  spaceId: string,
+  orderedIds: string[],
+): Promise<void> {
+  if (orderedIds.length === 0) return;
+
+  const timestamp = new Date().toISOString();
+  const statements = orderedIds.map((id, position) =>
+    db.prepare(
+      'UPDATE shortcuts SET position = ?, updated_at = ? WHERE id = ? AND user_account_id = ? AND account_id = ?'
+    ).bind(position, timestamp, id, userId, spaceId)
+  );
+
+  await db.batch(statements);
 }

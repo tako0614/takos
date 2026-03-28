@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { Repository } from '../../../shared/types';
-import { generateId, now, toIsoString } from '../../../shared/utils';
-import { requireSpaceAccess } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId, toIsoString } from '../../../shared/utils';
+import { requireSpaceAccess } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError, ConflictError, InternalError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
@@ -43,7 +43,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       user.id,
       undefined,
       'Repository not found'
-    );
+    );
+
   }
   const targetSpaceId = body.target_space_id || null;
 
@@ -84,7 +85,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   }
 
   const forkId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.insert(repositories).values({
     id: forkId,

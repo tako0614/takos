@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { base64UrlEncode, now } from '../../../shared/utils';
+import { base64UrlEncode } from '../../../shared/utils';
 import { hashPassword, verifyPassword } from '../identity/auth-utils';
 import { getDb, threadShares } from '../../../infra/db';
 import { eq, and, isNull, desc } from 'drizzle-orm';
@@ -76,7 +76,7 @@ export async function createThreadShare(params: {
     expiresAt = d.toISOString();
   }
 
-  const createdAt = now();
+  const createdAt = new Date().toISOString();
   const db = getDb(d1);
 
   await db.insert(threadShares).values({
@@ -125,7 +125,7 @@ export async function revokeThreadShare(params: {
   shareId: string;
 }): Promise<boolean> {
   const { db: d1, threadId, shareId } = params;
-  const revokedAt = now();
+  const revokedAt = new Date().toISOString();
   const db = getDb(d1);
 
   const result = await db.update(threadShares)
@@ -165,7 +165,7 @@ export async function getThreadShareByToken(d1: D1Database, token: string): Prom
 export async function markThreadShareAccessed(d1: D1Database, shareId: string): Promise<void> {
   const db = getDb(d1);
   await db.update(threadShares)
-    .set({ lastAccessedAt: now() })
+    .set({ lastAccessedAt: new Date().toISOString() })
     .where(eq(threadShares.id, shareId));
 }
 

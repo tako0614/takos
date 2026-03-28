@@ -33,8 +33,6 @@ function createMockReconciler(): CommonEnvReconciler {
   return {
     reconcileServiceCommonEnv: vi.fn().mockResolvedValue(undefined),
     markServiceLinksApplyFailed: vi.fn().mockResolvedValue(undefined),
-    reconcileWorkerCommonEnv: vi.fn().mockResolvedValue(undefined),
-    markWorkerLinksApplyFailed: vi.fn().mockResolvedValue(undefined),
   } as unknown as CommonEnvReconciler;
 }
 
@@ -52,11 +50,11 @@ describe('CommonEnvOrchestrator', () => {
     orchestrator = new CommonEnvOrchestrator(env, jobs, reconciler);
   });
 
-  describe('enqueueWorkerReconcile', () => {
-    it('delegates to jobs.enqueue', async () => {
-      await orchestrator.enqueueWorkerReconcile({
+  describe('enqueueServiceReconcile', () => {
+    it('delegates to jobs.enqueueService', async () => {
+      await orchestrator.enqueueServiceReconcile({
         spaceId: 'space-1',
-        workerId: 'worker-1',
+        serviceId: 'worker-1',
         targetKeys: ['MY_VAR'],
         trigger: 'workspace_env_put',
       });
@@ -70,11 +68,11 @@ describe('CommonEnvOrchestrator', () => {
     });
   });
 
-  describe('reconcileWorkersForEnvKey', () => {
-    it('finds linked workers and enqueues jobs for them', async () => {
+  describe('reconcileServicesForEnvKey', () => {
+    it('finds linked services and enqueues jobs for them', async () => {
       (repositoryModule.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1', 'w-2']);
 
-      await orchestrator.reconcileWorkersForEnvKey('space-1', 'my_var', 'workspace_env_put');
+      await orchestrator.reconcileServicesForEnvKey('space-1', 'my_var', 'workspace_env_put');
 
       expect(repositoryModule.listServiceIdsLinkedToEnvKey).toHaveBeenCalledWith(env, 'space-1', 'MY_VAR');
       expect(jobs.enqueueForServices).toHaveBeenCalledWith({
@@ -88,7 +86,7 @@ describe('CommonEnvOrchestrator', () => {
     it('uses default trigger when not specified', async () => {
       (repositoryModule.listServiceIdsLinkedToEnvKey as ReturnType<typeof vi.fn>).mockResolvedValue(['w-1']);
 
-      await orchestrator.reconcileWorkersForEnvKey('space-1', 'my_var');
+      await orchestrator.reconcileServicesForEnvKey('space-1', 'my_var');
 
       expect(jobs.enqueueForServices).toHaveBeenCalledWith(
         expect.objectContaining({ trigger: 'workspace_env_put' })
@@ -96,11 +94,11 @@ describe('CommonEnvOrchestrator', () => {
     });
   });
 
-  describe('reconcileWorkers', () => {
-    it('enqueues for specified workers with normalized keys', async () => {
-      await orchestrator.reconcileWorkers({
+  describe('reconcileServices', () => {
+    it('enqueues for specified services with normalized keys', async () => {
+      await orchestrator.reconcileServices({
         spaceId: 'space-1',
-        workerIds: ['w-1', 'w-2'],
+        serviceIds: ['w-1', 'w-2'],
         keys: ['my_var', 'another_var'],
         trigger: 'manual_links_set',
       });
@@ -114,9 +112,9 @@ describe('CommonEnvOrchestrator', () => {
     });
 
     it('defaults trigger to bundle_required_links', async () => {
-      await orchestrator.reconcileWorkers({
+      await orchestrator.reconcileServices({
         spaceId: 'space-1',
-        workerIds: ['w-1'],
+        serviceIds: ['w-1'],
       });
 
       expect(jobs.enqueueForServices).toHaveBeenCalledWith(
@@ -125,9 +123,9 @@ describe('CommonEnvOrchestrator', () => {
     });
 
     it('passes undefined targetKeys when keys not specified', async () => {
-      await orchestrator.reconcileWorkers({
+      await orchestrator.reconcileServices({
         spaceId: 'space-1',
-        workerIds: ['w-1'],
+        serviceIds: ['w-1'],
       });
 
       expect(jobs.enqueueForServices).toHaveBeenCalledWith(

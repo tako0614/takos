@@ -3,7 +3,7 @@ import { edges, nodes, files } from '../../../infra/db/schema';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceFile } from '../../../shared/types';
-import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
+import { checkSpaceAccess, generateId } from '../../../shared/utils';
 import type { IndexContext } from './index-context';
 import { resolvePath } from './index-context';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
@@ -60,7 +60,7 @@ export async function extractAndCreateEdges(
   sourceNodeId: string
 ): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const ext = file.path.split('.').pop()?.toLowerCase();
   const imports: string[] = [];
 

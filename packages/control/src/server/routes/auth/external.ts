@@ -10,7 +10,7 @@ import {
   isValidRedirectUri,
 } from '../../../application/services/identity/auth-utils';
 import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
 import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html';
 import { BadRequestError, AuthorizationError } from 'takos-common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';

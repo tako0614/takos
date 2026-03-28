@@ -3,7 +3,7 @@ import type { Message, MemoryType } from '../../../shared/types';
 import { LLMClient } from '../agent';
 import { getDb, memories, messages as messagesTable } from '../../../infra/db';
 import { eq, asc } from 'drizzle-orm';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { chatAndParseJsonArray } from './llm-parser';
 import { MEMORY_TYPES } from './memories';
 import { logError } from '../../../shared/utils/logger';
@@ -266,7 +266,7 @@ Format:
     extractedMemories: ExtractedMemory[]
   ): Promise<number> {
     const db = getDb(this.dbBinding);
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     let saved = 0;
 
     for (const memory of extractedMemories) {

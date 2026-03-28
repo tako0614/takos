@@ -5,7 +5,7 @@ import { getDb } from '../../../infra/db';
 import { repositories, repoStars, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { toIsoString } from '../../../shared/utils';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
+import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../route-auth';
 import { NotFoundError } from 'takos-common/errors';
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();

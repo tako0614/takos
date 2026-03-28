@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Env } from '../../shared/types';
-import type { BaseVariables } from './shared/route-auth';
+import type { BaseVariables } from './route-auth';
 import { zValidator } from './zod-validator';
 import { logError } from '../../shared/utils/logger';
 import { AppError, BadRequestError, InternalError, ErrorCodes } from 'takos-common/errors';

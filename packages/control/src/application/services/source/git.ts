@@ -1,5 +1,5 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db';
 import { eq, and, ne, desc } from 'drizzle-orm';
 
@@ -71,7 +71,7 @@ export class GitService {
     paths?: string[] // Optional: specific paths to commit
   ): Promise<GitCommit> {
     const db = getDb(this.d1);
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const parentCommit = await db
       .select({ id: gitCommits.id })
@@ -370,7 +370,7 @@ export class GitService {
       .update(files)
       .set({
         sha256: change.newHash,
-        updatedAt: now(),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(files.id, file.id));
 

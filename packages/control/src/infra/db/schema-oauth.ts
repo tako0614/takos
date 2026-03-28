@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps, updatedAtColumn } from './schema-helpers';
 
 // 50. McpOAuthPending
 export const mcpOauthPending = sqliteTable('mcp_oauth_pending', {
@@ -12,7 +13,7 @@ export const mcpOauthPending = sqliteTable('mcp_oauth_pending', {
   tokenEndpoint: text('token_endpoint').notNull(),
   scope: text('scope'),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxState: index('idx_mcp_oauth_pending_state').on(table.state),
   idxAccount: index('idx_mcp_oauth_pending_account_id').on(table.accountId),
@@ -35,8 +36,7 @@ const mcpServersTable = sqliteTable('mcp_servers', {
   oauthScope: text('oauth_scope'),
   oauthIssuerUrl: text('oauth_issuer_url'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountName: uniqueIndex('idx_mcp_servers_account_name').on(table.accountId, table.name),
   idxService: index('idx_mcp_servers_service_id').on(table.serviceId),
@@ -57,7 +57,7 @@ export const oauthAuditLogs = sqliteTable('oauth_audit_logs', {
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   details: text('details').notNull().default('{}'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxEventType: index('idx_oauth_audit_logs_event_type').on(table.eventType),
   idxCreatedAt: index('idx_oauth_audit_logs_created_at').on(table.createdAt),
@@ -77,7 +77,7 @@ export const oauthAuthorizationCodes = sqliteTable('oauth_authorization_codes', 
   codeChallengeMethod: text('code_challenge_method').notNull().default('S256'),
   used: integer('used', { mode: 'boolean' }).notNull().default(false),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxExpiresAt: index('idx_oauth_authorization_codes_expires_at').on(table.expiresAt),
   idxCodeHash: index('idx_oauth_authorization_codes_code_hash').on(table.codeHash),
@@ -103,8 +103,7 @@ export const oauthClients = sqliteTable('oauth_clients', {
   ownerAccountId: text('owner_account_id'),
   registrationAccessTokenHash: text('registration_access_token_hash'),
   status: text('status').notNull().default('active'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxStatus: index('idx_oauth_clients_status').on(table.status),
   idxOwner: index('idx_oauth_clients_owner_account_id').on(table.ownerAccountId),
@@ -119,7 +118,7 @@ export const oauthConsents = sqliteTable('oauth_consents', {
   scopes: text('scopes').notNull(),
   status: text('status').notNull().default('active'),
   grantedAt: text('granted_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...updatedAtColumn,
 }, (table) => ({
   uniqAccountClient: uniqueIndex('idx_oauth_consents_account_client').on(table.accountId, table.clientId),
   idxClient: index('idx_oauth_consents_client_id').on(table.clientId),
@@ -141,8 +140,7 @@ export const oauthDeviceCodes = sqliteTable('oauth_device_codes', {
   deniedAt: text('denied_at'),
   usedAt: text('used_at'),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   idxUserCodeHash: index('idx_oauth_device_codes_user_code_hash').on(table.userCodeHash),
   idxStatus: index('idx_oauth_device_codes_status').on(table.status),
@@ -160,7 +158,7 @@ export const oauthStates = sqliteTable('oauth_states', {
   returnTo: text('return_to'),
   cliCallback: text('cli_callback'),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxState: index('idx_oauth_states_state').on(table.state),
   idxExpiresAt: index('idx_oauth_states_expires_at').on(table.expiresAt),
@@ -181,7 +179,7 @@ export const oauthTokens = sqliteTable('oauth_tokens', {
   usedAt: text('used_at'),
   tokenFamily: text('token_family'),
   expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxTokenType: index('idx_oauth_tokens_token_type').on(table.tokenType),
   idxTokenHash: index('idx_oauth_tokens_token_hash').on(table.tokenHash),

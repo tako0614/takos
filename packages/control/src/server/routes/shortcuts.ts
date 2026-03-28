@@ -4,7 +4,7 @@ import type { Env, User } from '../../shared/types';
 import {
   getRequestedSpaceIdentifier,
   requireSpaceAccess,
-} from './shared/route-auth';
+} from './route-auth';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {
@@ -13,6 +13,7 @@ import {
   deleteShortcut,
   isShortcutResourceType,
   listShortcuts,
+  reorderShortcuts,
   type ShortcutResourceType,
   updateShortcut,
 } from '../../application/services/identity/shortcuts';
@@ -179,10 +180,8 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
 
     const body = c.req.valid('json');
 
-    // Update each shortcut's position
-    for (let i = 0; i < body.order.length; i++) {
-      await updateShortcut(c.env.DB, user.id, spaceId, body.order[i], { position: i });
-    }
+    // Batch update all shortcut positions in a single D1 batch call
+    await reorderShortcuts(c.env.DB, user.id, spaceId, body.order);
 
     return c.json({ success: true });
   });

@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, oauthAuditLogs } from '../../../infra/db';
 
 export type OAuthAuditEvent =
@@ -34,7 +34,7 @@ export async function logOAuthEvent(
 ) {
   const db = getDb(dbBinding);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const details = input.details ? JSON.stringify(input.details) : '{}';
 
   await db.insert(oauthAuditLogs).values({

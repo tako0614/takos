@@ -4,7 +4,7 @@ import type { Env } from '../../shared/types';
 import type { SpaceRole } from '../../shared/types';
 import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin';
 import { McpClient } from './mcp-client';
-import { loadMcpTools } from './loaders/mcp-tools';
+import { loadMcpTools } from './mcp-tools';
 import { logWarn } from '../../shared/utils/logger';
 
 export interface ToolResolverOptions {

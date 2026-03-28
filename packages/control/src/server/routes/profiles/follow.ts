@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString, parsePagination, paginatedResponse } from '../../../shared/utils';
 import { createNotification } from '../../../application/services/notifications/service';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../shared/route-auth';
+import { type OptionalAuthRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { NotFoundError, AuthenticationError, AuthorizationError, BadRequestError } from 'takos-common/errors';
 import { getUserByUsername, getUserPrivacySettings, getUserStats, isMutedBy } from './profile-queries';
@@ -26,11 +26,10 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
   async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const { limit: limitRaw, offset: offsetRaw, sort: sortRaw, order: orderRaw } = c.req.valid('query');
+  const { sort: sortRaw, order: orderRaw, ...paginationRaw } = c.req.valid('query');
   const sort = sortRaw || 'created';
   const order = orderRaw || (sort === 'username' ? 'asc' : 'desc');
-  const limit = parseLimit(limitRaw, 20, 100);
-  const offset = parseOffset(offsetRaw);
+  const { limit, offset } = parsePagination(paginationRaw);
   const db = getDb(c.env.DB);
 
   const profileUser = await getUserByUsername(c.env.DB, username);
@@ -55,11 +54,10 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
   async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const { limit: limitRaw, offset: offsetRaw, sort: sortRaw, order: orderRaw } = c.req.valid('query');
+  const { sort: sortRaw, order: orderRaw, ...paginationRaw } = c.req.valid('query');
   const sort = sortRaw || 'created';
   const order = orderRaw || (sort === 'username' ? 'asc' : 'desc');
-  const limit = parseLimit(limitRaw, 20, 100);
-  const offset = parseOffset(offsetRaw);
+  const { limit, offset } = parsePagination(paginationRaw);
   const db = getDb(c.env.DB);
 
   const profileUser = await getUserByUsername(c.env.DB, username);
@@ -91,9 +89,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
   }
 
   const username = c.req.param('username');
-  const { limit: limitRaw, offset: offsetRaw } = c.req.valid('query');
-  const limit = parseLimit(limitRaw, 20, 100);
-  const offset = parseOffset(offsetRaw);
+  const { limit, offset } = parsePagination(c.req.valid('query'));
 
   const db = getDb(c.env.DB);
   const profileUser = await getUserByUsername(c.env.DB, username);
@@ -166,10 +162,10 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
     };
   });
 
+  const { items, ...pagination } = paginatedResponse(requests, total, { limit, offset });
   return c.json({
-    requests,
-    total,
-    has_more: offset + requests.length < total,
+    requests: items,
+    ...pagination,
   });
 })
 
@@ -211,14 +207,14 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
     await db.insert(accountFollows).values({
       followerAccountId: reqRow.requesterAccountId,
       followingAccountId: reqRow.targetAccountId,
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     });
   } catch {
     // ignore (already following)
   }
 
   await db.update(accountFollowRequests)
-    .set({ status: 'accepted', respondedAt: now(), updatedAt: now() })
+    .set({ status: 'accepted', respondedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     .where(eq(accountFollowRequests.id, reqRow.id));
 
   const requesterMutedTarget = await isMutedBy(c.env.DB, reqRow.requesterAccountId, currentUser.id);
@@ -271,7 +267,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
   }
 
   await db.update(accountFollowRequests)
-    .set({ status: 'rejected', respondedAt: now(), updatedAt: now() })
+    .set({ status: 'rejected', respondedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     .where(eq(accountFollowRequests.id, reqRow.id));
 
   return c.json({ success: true });
@@ -335,7 +331,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
     if (existingReq?.status !== 'pending') {
       if (existingReq) {
         await db.update(accountFollowRequests)
-          .set({ status: 'pending', respondedAt: null, updatedAt: now() })
+          .set({ status: 'pending', respondedAt: null, updatedAt: new Date().toISOString() })
           .where(eq(accountFollowRequests.id, existingReq.id));
       } else {
         await db.insert(accountFollowRequests).values({
@@ -343,9 +339,9 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
           requesterAccountId: currentUser.id,
           targetAccountId: targetUser.id,
           status: 'pending',
-          createdAt: now(),
+          createdAt: new Date().toISOString(),
           respondedAt: null,
-          updatedAt: now(),
+          updatedAt: new Date().toISOString(),
         });
       }
 
@@ -365,7 +361,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
   await db.insert(accountFollows).values({
     followerAccountId: currentUser.id,
     followingAccountId: targetUser.id,
-    createdAt: now(),
+    createdAt: new Date().toISOString(),
   });
 
   await sendFollowNotificationIfNotMuted(
@@ -434,7 +430,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
 
   if (pending) {
     await db.update(accountFollowRequests)
-      .set({ status: 'canceled', respondedAt: now(), updatedAt: now() })
+      .set({ status: 'canceled', respondedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
       .where(eq(accountFollowRequests.id, pending.id));
 
     const stats = await getUserStats(c.env.DB, targetUser.id);

@@ -5,7 +5,7 @@ import { checkSpaceAccess } from '../../../shared/utils';
 import { getDb, accounts, repositories } from '../../../infra/db';
 import { and, desc, eq } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { generateId, now, sanitizeRepoName } from '../../../shared/utils';
+import { generateId, sanitizeRepoName } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { logError } from '../../../shared/utils/logger';
 
@@ -192,7 +192,7 @@ export async function createRepository(
   }
 
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const actor = await resolveRepositoryInitActor(db, input.actorAccountId);
 
   await db.insert(repositories).values({

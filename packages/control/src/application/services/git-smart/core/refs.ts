@@ -9,8 +9,8 @@ import type { SelectOf } from '../../../../shared/types/drizzle-utils';
 import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects';
 import { SHA1_PATTERN } from '../git-objects';
 import { getDb, branches, tags } from '../../../../infra/db';
-import { eq, and, desc, asc } from 'drizzle-orm';
-import { generateId, now, toIsoString } from '../../../../shared/utils';
+import { eq, and, desc, asc, inArray } from 'drizzle-orm';
+import { generateId, toIsoString } from '../../../../shared/utils';
 import { isInvalidArrayBufferError } from '../../../../shared/utils/db-guards';
 
 const MAX_REPO_ID_LENGTH = 128;
@@ -130,6 +130,28 @@ export async function getBranch(dbBinding: D1Database, repoId: string, name: str
   );
 }
 
+export async function getBranchesByNames(dbBinding: D1Database, repoId: string, names: string[]): Promise<Map<string, GitBranch>> {
+  const validNames = names.filter(n => isValidRefName(n));
+  if (!isValidRepoId(repoId) || validNames.length === 0) return new Map();
+  const db = getDb(dbBinding);
+  const result = await withDrizzleFallback(
+    async () => {
+      const rows = await db.select().from(branches)
+        .where(and(eq(branches.repoId, repoId), inArray(branches.name, validNames)))
+        .all();
+      return rows.map(branchFromDrizzle);
+    },
+    async () => {
+      const placeholders = validNames.map(() => '?').join(',');
+      const rows = await dbBinding.prepare(
+        `SELECT ${BRANCH_COLUMNS} FROM branches WHERE repo_id = ? AND name IN (${placeholders})`
+      ).bind(repoId, ...validNames).all<D1BranchRow>();
+      return (rows.results || []).map(toBranch);
+    },
+  );
+  return new Map(result.map(b => [b.name, b]));
+}
+
 export async function getDefaultBranch(dbBinding: D1Database, repoId: string): Promise<GitBranch | null> {
   if (!isValidRepoId(repoId)) return null;
   const db = getDb(dbBinding);
@@ -175,7 +197,7 @@ export async function createBranch(
 
   const db = getDb(dbBinding);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   try {
     await db.insert(branches).values({
@@ -198,7 +220,7 @@ export async function updateBranch(
   if (oldSha === null) return createBranch(dbBinding, repoId, name, newSha);
 
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const result = await db.update(branches)
     .set({ commitSha: newSha, updatedAt: timestamp })
     .where(and(eq(branches.repoId, repoId), eq(branches.name, name), eq(branches.commitSha, oldSha)))
@@ -288,7 +310,7 @@ export async function createTag(
 
   const db = getDb(dbBinding);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   try {
     await db.insert(tags).values({

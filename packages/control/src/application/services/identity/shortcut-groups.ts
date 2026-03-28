@@ -2,7 +2,6 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, shortcutGroups, shortcutGroupItems } from '../../../infra/db';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { now } from '../../../shared/utils';
 
 export interface ShortcutItem {
   type: 'service' | 'ui' | 'd1' | 'r2' | 'kv' | 'link';
@@ -181,7 +180,7 @@ export async function createShortcutGroup(
     position: i,
   }));
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.insert(shortcutGroups).values({
     id,
@@ -279,7 +278,7 @@ export async function updateShortcutGroup(
     }
   }
 
-  updateData.updatedAt = now();
+  updateData.updatedAt = new Date().toISOString();
 
   await db
     .update(shortcutGroups)
@@ -370,7 +369,7 @@ export async function addItemToGroup(
 
   await db
     .update(shortcutGroups)
-    .set({ updatedAt: now() })
+    .set({ updatedAt: new Date().toISOString() })
     .where(eq(shortcutGroups.id, groupId));
 
   return newItem;
@@ -414,7 +413,7 @@ export async function removeItemFromGroup(
 
   await db
     .update(shortcutGroups)
-    .set({ updatedAt: now() })
+    .set({ updatedAt: new Date().toISOString() })
     .where(eq(shortcutGroups.id, groupId));
 
   return true;

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { checkThreadAccess } from '../../../application/services/threads/thread-service';
-import { parseLimit } from '../shared/route-auth';
+import { parseLimit } from '../route-auth';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../shared/route-auth';
+import type { BaseVariables } from '../route-auth';
 import { NotFoundError, BadRequestError } from 'takos-common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;

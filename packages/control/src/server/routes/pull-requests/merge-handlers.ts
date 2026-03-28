@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { toIsoString } from '../../../shared/utils';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos';
 import {

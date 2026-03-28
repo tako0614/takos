@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import type { Env, User } from '../../shared/types';
-import { generateId, now } from '../../shared/utils';
+import { generateId } from '../../shared/utils';
 import {
   getRequestedSpaceIdentifier,
   parseJsonBody,
   requireSpaceAccess,
-} from './shared/route-auth';
+} from './route-auth';
 import { BadRequestError, AuthenticationError, NotFoundError, AuthorizationError } from 'takos-common/errors';
 import { getDb } from '../../infra/db';
 import { apps as appsTable, accounts } from '../../infra/db/schema';
@@ -85,7 +85,6 @@ async function resolveAppsSpaceScope(
     spaceId: access.space.id,
   };
 }
-
 
 /**
  * Register App API routes (requires authentication)
@@ -292,7 +291,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
 
     // Build update data
     const updateData: { description?: string; icon?: string; updatedAt: string } = {
-      updatedAt: now(),
+      updatedAt: new Date().toISOString(),
     };
 
     if (body.description !== undefined) {
@@ -337,7 +336,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
 
     // Generate new client key
     const clientKey = `tak_${generateId()}${generateId()}`;
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     await db.update(appsTable).set({
       takosClientKey: clientKey,

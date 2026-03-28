@@ -3,7 +3,7 @@ import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { ALL_SCOPES } from '../../../shared/types/oauth';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto';
 import { getCommonEnvSecret, normalizeEnvName } from './crypto';
 import type { SyncState } from './repository';
@@ -235,7 +235,7 @@ export async function upsertManagedTakosTokenConfig(params: {
 
   const issued = await issueTakosAccessToken();
   const tokenEncrypted = await encryptManagedToken(params.env, serviceId, envName, issued.token);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const rowId = existing?.id || generateId();
 
   const drizzle = getDb(params.env.DB);
@@ -376,7 +376,7 @@ export async function listTakosBuiltinStatuses(params: {
 
 export async function markManagedTakosTokenUsedByHash(db: D1Database, tokenHash: string): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await drizzle.update(serviceManagedTakosTokens)
     .set({
       lastUsedAt: timestamp,

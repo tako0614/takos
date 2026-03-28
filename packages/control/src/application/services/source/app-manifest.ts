@@ -7,6 +7,11 @@ export type {
   AppRoute,
   AppDeploymentBuildSource,
   BundleDoc,
+  HealthCheck,
+  LifecycleHook,
+  LifecycleHooks,
+  UpdateStrategy,
+  ServiceBinding,
 } from './app-manifest-types';
 
 // Re-export parsing

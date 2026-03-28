@@ -43,6 +43,41 @@ export type WorkflowArtifactBuild = {
   };
 };
 
+// --- Health check ---
+
+export type HealthCheck = {
+  path: string;
+  intervalSeconds?: number;
+  timeoutSeconds?: number;
+  unhealthyThreshold?: number;
+};
+
+// --- Lifecycle hooks ---
+
+export type LifecycleHook = {
+  command: string;
+  timeoutSeconds?: number;
+};
+
+export type LifecycleHooks = {
+  preApply?: LifecycleHook;
+  postApply?: LifecycleHook;
+};
+
+// --- Update / rollback strategy ---
+
+export type UpdateStrategy = {
+  strategy?: 'rolling' | 'canary' | 'blue-green';
+  canaryWeight?: number;
+  healthCheck?: string;
+  rollbackOnFailure?: boolean;
+  timeoutSeconds?: number;
+};
+
+// --- Service binding (dependency version constraint) ---
+
+export type ServiceBinding = string | { name: string; version?: string };
+
 // --- Container & Worker types ---
 
 /** Container definition (CF Containers — worker に紐づけて使う) */
@@ -62,6 +97,7 @@ export type AppService = {
   maxInstances?: number;
   ipv4?: boolean;
   env?: Record<string, string>;
+  healthCheck?: HealthCheck;
 };
 
 /** Worker definition (CF Workers) */
@@ -78,12 +114,13 @@ export type AppWorker = {
     analytics?: string[];
     workflows?: string[];
     durableObjects?: string[];
-    services?: string[];
+    services?: ServiceBinding[];
   };
   triggers?: {
     schedules?: Array<{ cron: string; export: string }>;
     queues?: Array<{ queue: string; export: string }>;
   };
+  healthCheck?: HealthCheck;
 };
 
 /** Env configuration with template injection support */
@@ -138,12 +175,15 @@ export type AppManifest = {
     };
     takos?: {
       scopes: string[];
+      minVersion?: string;
     };
     resources?: Record<string, AppResource>;
     containers?: Record<string, AppContainer>;
     services?: Record<string, AppService>;
     workers?: Record<string, AppWorker>;
     routes?: AppRoute[];
+    lifecycle?: LifecycleHooks;
+    update?: UpdateStrategy;
     mcpServers?: AppMcpServer[];
     fileHandlers?: AppFileHandler[];
   };

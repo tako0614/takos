@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import {
   importExternalRepository,
   fetchRemoteUpdates,

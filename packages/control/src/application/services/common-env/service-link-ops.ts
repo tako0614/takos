@@ -1,6 +1,6 @@
 import { eq, and, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
@@ -39,7 +39,7 @@ export async function ensureRequiredServiceLinks(deps: ServiceLinkDeps, params: 
   const keys = uniqueEnvNames(params.keys || []);
   if (keys.length === 0 || params.serviceIds.length === 0) return;
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await runInTransaction(deps, async () => {
     for (const serviceId of params.serviceIds) {
       for (const key of keys) {

@@ -3,7 +3,7 @@ import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from 
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
-import { now, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 import { toApiResource } from './format';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
 
@@ -297,7 +297,7 @@ export async function updateResourceMetadata(
   const drizzle = getDb(db);
 
   const data: Record<string, unknown> = {
-    updatedAt: now(),
+    updatedAt: new Date().toISOString(),
   };
 
   if (updates.name !== undefined) {
@@ -326,7 +326,7 @@ export async function markResourceDeleting(db: D1Database, resourceId: string) {
   await drizzle.update(resources)
     .set({
       status: 'deleting',
-      updatedAt: now(),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(resources.id, resourceId));
 }

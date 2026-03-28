@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from './shared/route-auth';
+import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import {
   quickSearchPaths,

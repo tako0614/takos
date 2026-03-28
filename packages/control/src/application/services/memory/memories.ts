@@ -7,7 +7,7 @@ import type {
   ReminderStatus,
   ReminderTriggerType,
 } from '../../../shared/types';
-import { generateId, now, toRequiredIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { getDb, memories, reminders } from '../../../infra/db';
 import { eq, and, or, like, desc, asc, sql, inArray } from 'drizzle-orm';
 
@@ -70,8 +70,8 @@ function toMemoryApi(m: {
     expires_at: toOptionalIsoString(m.expiresAt),
     last_accessed_at: toOptionalIsoString(m.lastAccessedAt),
     access_count: m.accessCount ?? 0,
-    created_at: toRequiredIsoString(m.createdAt),
-    updated_at: toRequiredIsoString(m.updatedAt),
+    created_at: toIsoString(m.createdAt),
+    updated_at: toIsoString(m.updatedAt),
   };
 }
 
@@ -103,8 +103,8 @@ function toReminderApi(r: {
     status: isReminderStatus(reminderStatus) ? reminderStatus : 'pending',
     triggered_at: toOptionalIsoString(r.triggeredAt),
     priority: isReminderPriority(reminderPriority) ? reminderPriority : 'normal',
-    created_at: toRequiredIsoString(r.createdAt),
-    updated_at: toRequiredIsoString(r.updatedAt),
+    created_at: toIsoString(r.createdAt),
+    updated_at: toIsoString(r.updatedAt),
   };
 }
 
@@ -141,7 +141,7 @@ export async function listMemories(
 export async function bumpMemoryAccess(
   dbBinding: Env['DB'],
   memoryIds: string[],
-  timestamp: string = now()
+  timestamp: string = new Date().toISOString()
 ) {
   if (memoryIds.length === 0) return;
 
@@ -214,7 +214,7 @@ export async function createMemory(
   }
 ): Promise<Memory | null> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const id = generateId();
 
   await db.insert(memories).values({
@@ -250,7 +250,7 @@ export async function updateMemory(
   }
 ): Promise<Memory | null> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const data: Record<string, unknown> = { updatedAt: timestamp };
   if (updates.content !== undefined) data.content = updates.content;
@@ -319,7 +319,7 @@ export async function createReminder(
   }
 ): Promise<Reminder | null> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const id = generateId();
 
   await db.insert(reminders).values({
@@ -351,7 +351,7 @@ export async function updateReminder(
   }
 ): Promise<Reminder | null> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const data: Record<string, unknown> = { updatedAt: timestamp };
   if (updates.content !== undefined) data.content = updates.content;
@@ -378,7 +378,7 @@ export async function deleteReminder(dbBinding: Env['DB'], reminderId: string) {
 
 export async function triggerReminder(dbBinding: Env['DB'], reminderId: string): Promise<Reminder | null> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.update(reminders)
     .set({

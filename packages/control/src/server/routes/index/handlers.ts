@@ -4,7 +4,7 @@ import { eq, and, ne, inArray, desc, count } from 'drizzle-orm';
 import { createEmbeddingsService, isEmbeddingsAvailable } from '../../../application/services/execution/embeddings';
 import type { IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
+import { checkSpaceAccess, generateId } from '../../../shared/utils';
 import { logError, logInfo } from '../../../shared/utils/logger';
 import { indexFile, runIndexJob } from './jobs';
 import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './index-context';
@@ -130,7 +130,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
   const fileCount = fileCountResult?.count ?? 0;
 
   const jobId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const job = await db.insert(indexJobs).values({
     id: jobId,
     accountId: spaceId,
@@ -182,7 +182,7 @@ export async function handleIndexFile(
   }
 
   const jobId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const job = await db.insert(indexJobs).values({
     id: jobId,
     accountId: spaceId,

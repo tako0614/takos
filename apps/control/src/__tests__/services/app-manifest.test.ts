@@ -923,4 +923,321 @@ spec:
 `)).toThrow(/template errors.*service "nonexistent" not found/);
     });
   });
+
+  // ============================================================
+  // 7 つの新仕様テスト
+  // ============================================================
+
+  // --- YAML ヘルパー ---
+
+  const minWorkerYaml = `
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js`;
+
+  function yaml(overrides: {
+    version?: string;
+    workers?: string;
+    lifecycle?: string;
+    update?: string;
+    takos?: string;
+    resources?: string;
+    services?: string;
+  }): string {
+    return `
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: test-app
+spec:
+  version: ${overrides.version ?? '1.0.0'}
+${overrides.resources ? `  resources:\n${overrides.resources}` : ''}
+${overrides.services ? `  services:\n${overrides.services}` : ''}
+  workers:
+${overrides.workers ?? `    web:${minWorkerYaml}`}
+${overrides.lifecycle ? `  lifecycle:\n${overrides.lifecycle}` : ''}
+${overrides.update ? `  update:\n${overrides.update}` : ''}
+${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
+`;
+  }
+
+  // ============================================================
+  // 1. Semver バリデーション
+  // ============================================================
+
+  describe('semver validation', () => {
+    it('rejects invalid semver', () => {
+      expect(() => parseAppManifestYaml(yaml({ version: 'banana' }))).toThrow(
+        'spec.version must be valid semver',
+      );
+    });
+
+    it('rejects v-prefixed version', () => {
+      expect(() => parseAppManifestYaml(yaml({ version: 'v1.0.0' }))).toThrow(
+        'spec.version must be valid semver',
+      );
+    });
+
+    it('rejects incomplete semver', () => {
+      expect(() => parseAppManifestYaml(yaml({ version: "'1.0'" }))).toThrow(
+        'spec.version must be valid semver',
+      );
+    });
+
+    it('accepts semver with prerelease', () => {
+      const manifest = parseAppManifestYaml(yaml({ version: '1.0.0-beta.1' }));
+      expect(manifest.spec.version).toBe('1.0.0-beta.1');
+    });
+
+    it('accepts semver with build metadata', () => {
+      const manifest = parseAppManifestYaml(yaml({ version: '1.0.0+build.123' }));
+      expect(manifest.spec.version).toBe('1.0.0+build.123');
+    });
+
+    it('accepts standard semver', () => {
+      const manifest = parseAppManifestYaml(yaml({ version: '0.1.0' }));
+      expect(manifest.spec.version).toBe('0.1.0');
+    });
+  });
+
+  // ============================================================
+  // 2. ヘルスチェック
+  // ============================================================
+
+  describe('healthCheck', () => {
+    it('parses worker healthCheck', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      healthCheck:
+        path: /health
+        intervalSeconds: 30`,
+      }));
+      expect(manifest.spec.workers?.web.healthCheck?.path).toBe('/health');
+      expect(manifest.spec.workers?.web.healthCheck?.intervalSeconds).toBe(30);
+    });
+
+    it('parses worker healthCheck with all fields', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      healthCheck:
+        path: /healthz
+        intervalSeconds: 15
+        timeoutSeconds: 5
+        unhealthyThreshold: 3`,
+      }));
+      expect(manifest.spec.workers?.web.healthCheck).toEqual({
+        path: '/healthz',
+        intervalSeconds: 15,
+        timeoutSeconds: 5,
+        unhealthyThreshold: 3,
+      });
+    });
+
+    it('parses service healthCheck', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        services: `    my-api:
+      dockerfile: Dockerfile
+      port: 3000
+      healthCheck:
+        path: /health
+        intervalSeconds: 60`,
+      }));
+      expect(manifest.spec.services!['my-api'].healthCheck?.path).toBe('/health');
+      expect(manifest.spec.services!['my-api'].healthCheck?.intervalSeconds).toBe(60);
+    });
+  });
+
+  // ============================================================
+  // 3. ライフサイクルフック
+  // ============================================================
+
+  describe('lifecycle hooks', () => {
+    it('parses lifecycle hooks', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        lifecycle: `    preApply:
+      command: pnpm run migrate
+      timeoutSeconds: 120
+    postApply:
+      command: pnpm run seed`,
+      }));
+      expect(manifest.spec.lifecycle?.preApply?.command).toBe('pnpm run migrate');
+      expect(manifest.spec.lifecycle?.preApply?.timeoutSeconds).toBe(120);
+      expect(manifest.spec.lifecycle?.postApply?.command).toBe('pnpm run seed');
+      expect(manifest.spec.lifecycle?.postApply?.timeoutSeconds).toBeUndefined();
+    });
+
+    it('parses lifecycle with only preApply', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        lifecycle: `    preApply:
+      command: pnpm run migrate`,
+      }));
+      expect(manifest.spec.lifecycle?.preApply?.command).toBe('pnpm run migrate');
+      expect(manifest.spec.lifecycle?.postApply).toBeUndefined();
+    });
+
+    it('omits lifecycle when not specified', () => {
+      const manifest = parseAppManifestYaml(yaml({}));
+      expect(manifest.spec.lifecycle).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // 4. 依存バージョン制約 (service binding)
+  // ============================================================
+
+  describe('service binding version constraint', () => {
+    it('parses service binding with version constraint', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        services:
+          - name: other
+            version: ">=2.0.0"`,
+      }));
+      const svc = manifest.spec.workers?.web.bindings?.services;
+      expect(svc).toHaveLength(1);
+      expect(svc![0]).toEqual({ name: 'other', version: '>=2.0.0' });
+    });
+
+    it('accepts plain string service bindings', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        services:
+          - other-worker`,
+      }));
+      const svc = manifest.spec.workers?.web.bindings?.services;
+      expect(svc).toEqual(['other-worker']);
+    });
+
+    it('accepts mixed string and object service bindings', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        services:
+          - simple-svc
+          - name: versioned-svc
+            version: "^1.0.0"`,
+      }));
+      const svc = manifest.spec.workers?.web.bindings?.services;
+      expect(svc).toHaveLength(2);
+      expect(svc![0]).toBe('simple-svc');
+      expect(svc![1]).toEqual({ name: 'versioned-svc', version: '^1.0.0' });
+    });
+  });
+
+  // ============================================================
+  // 5. プラットフォーム最小バージョン (takos.minVersion)
+  // ============================================================
+
+  describe('takos.minVersion', () => {
+    it('parses takos.minVersion', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        takos: `    scopes:
+      - threads:read
+    minVersion: '2.0.0'`,
+      }));
+      expect(manifest.spec.takos?.minVersion).toBe('2.0.0');
+      expect(manifest.spec.takos?.scopes).toEqual(['threads:read']);
+    });
+
+    it('accepts takos without minVersion', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        takos: `    scopes:
+      - threads:read`,
+      }));
+      expect(manifest.spec.takos?.scopes).toEqual(['threads:read']);
+      expect(manifest.spec.takos?.minVersion).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // 6. ロールバック戦略 (update)
+  // ============================================================
+
+  describe('update strategy', () => {
+    it('parses update strategy', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        update: `    strategy: canary
+    canaryWeight: 10
+    rollbackOnFailure: true`,
+      }));
+      expect(manifest.spec.update?.strategy).toBe('canary');
+      expect(manifest.spec.update?.canaryWeight).toBe(10);
+      expect(manifest.spec.update?.rollbackOnFailure).toBe(true);
+    });
+
+    it('parses blue-green strategy', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        update: `    strategy: blue-green
+    timeoutSeconds: 300`,
+      }));
+      expect(manifest.spec.update?.strategy).toBe('blue-green');
+      expect(manifest.spec.update?.timeoutSeconds).toBe(300);
+    });
+
+    it('parses rolling strategy', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        update: `    strategy: rolling`,
+      }));
+      expect(manifest.spec.update?.strategy).toBe('rolling');
+    });
+
+    it('rejects invalid strategy', () => {
+      expect(() =>
+        parseAppManifestYaml(yaml({
+          update: `    strategy: yolo`,
+        })),
+      ).toThrow('spec.update.strategy must be');
+    });
+
+    it('omits update when not specified', () => {
+      const manifest = parseAppManifestYaml(yaml({}));
+      expect(manifest.spec.update).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // 7. マイグレーション拡張 (kv resources)
+  // ============================================================
+
+  describe('kv resource migrations', () => {
+    it('allows migrations on kv resources', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        kv:
+          - cache`,
+        resources: `    cache:
+      type: kv
+      binding: CACHE
+      migrations: .takos/migrations/cache`,
+      }));
+      expect(manifest.spec.resources?.cache.migrations).toBe('.takos/migrations/cache');
+      expect(manifest.spec.resources?.cache.type).toBe('kv');
+      expect(manifest.spec.resources?.cache.binding).toBe('CACHE');
+    });
+
+    it('allows migrations with up/down on kv resources', () => {
+      const manifest = parseAppManifestYaml(yaml({
+        workers: `    web:${minWorkerYaml}
+      bindings:
+        kv:
+          - cache`,
+        resources: `    cache:
+      type: kv
+      binding: CACHE
+      migrations:
+        up: .takos/migrations/cache/up
+        down: .takos/migrations/cache/down`,
+      }));
+      expect(manifest.spec.resources?.cache.migrations).toEqual({
+        up: '.takos/migrations/cache/up',
+        down: '.takos/migrations/cache/down',
+      });
+    });
+  });
 });

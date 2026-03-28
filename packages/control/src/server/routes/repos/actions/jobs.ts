@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../../route-auth';
 import { getDb } from '../../../../infra/db';
 import { workflowJobs, workflowSteps, workflowRuns } from '../../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';

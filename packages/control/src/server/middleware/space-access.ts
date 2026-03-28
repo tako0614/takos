@@ -59,7 +59,7 @@ export class SpaceAccessError extends AppError {
  * Require space access, throwing {@link SpaceAccessError} on failure.
  *
  * This is a throwing wrapper around the existing `requireSpaceAccess`
- * helper from `server/routes/shared/route-auth.ts`.  It calls
+ * helper from `server/routes/route-auth.ts`.  It calls
  * `checkSpaceAccess` directly and, on failure, throws a
  * `SpaceAccessError` (an `AppError` subclass) which the global error
  * handler converts to the standard nested error response.

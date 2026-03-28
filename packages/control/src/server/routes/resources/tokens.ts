@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getResourceById, getResourceByName } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
 import { resourceAccessTokens } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { generateId, now, base64UrlEncode } from '../../../shared/utils';
+import { generateId, base64UrlEncode } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { AuthorizationError, NotFoundError } from 'takos-common/errors';
 
@@ -117,7 +117,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   }
 
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const db = getDb(c.env.DB);
   await db.insert(resourceAccessTokens).values({
@@ -180,7 +180,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   }
 
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const db = getDb(c.env.DB);
   await db.insert(resourceAccessTokens).values({

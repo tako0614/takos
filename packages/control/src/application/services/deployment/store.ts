@@ -2,7 +2,7 @@ import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
-import { now, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
 
 type DeploymentInsert = InsertOf<typeof deployments>;
@@ -265,7 +265,7 @@ export async function logDeploymentEvent(
       stepName,
       message,
       details: options?.details ? JSON.stringify(options.details) : null,
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     })
     .run();
 }

@@ -2,7 +2,7 @@
  * Workflow Engine – storage operations (logs and artifacts)
  */
 
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, workflowJobs, workflowArtifacts } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
@@ -55,7 +55,7 @@ export async function createArtifact(
 
   const artifactId = generateId();
   const r2Key = `workflow-artifacts/${runId}/${artifactId}/${name}`;
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
   await bucket.put(r2Key, data, {

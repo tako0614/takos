@@ -10,7 +10,7 @@ import { isValidSha } from '../git-objects';
 import { putCommit, getCommitData } from './object-store';
 import { getDb, commits } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { generateId, now, toIsoString } from '../../../../shared/utils';
+import { generateId, toIsoString } from '../../../../shared/utils';
 
 interface CommitIndexRow {
   sha: string;
@@ -47,7 +47,7 @@ function indexedToCommit(row: CommitIndexRow): GitCommit {
 }
 
 function makeSignature(sig?: GitSignature): GitSignature {
-  const ts = now();
+  const ts = new Date().toISOString();
   return sig || {
     name: 'System',
     email: 'system@takos.dev',

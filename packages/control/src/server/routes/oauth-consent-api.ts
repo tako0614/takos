@@ -34,7 +34,7 @@ import {
   recordDeviceUserCodeAttempt,
   clearDeviceUserCodeAttempts,
 } from '../../shared/utils/device-auth-rate-limit';
-import type { PublicRouteEnv } from './shared/route-auth';
+import type { PublicRouteEnv } from './route-auth';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
 type ConsentApiEnv = { Bindings: PublicRouteEnv['Bindings']; Variables: { user?: User } };

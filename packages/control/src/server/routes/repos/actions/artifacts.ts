@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../../route-auth';
 import { NotFoundError, InternalError, GoneError } from 'takos-common/errors';
+import { ok } from '../../response-helpers';
 import {
   deleteWorkflowArtifactById,
   getWorkflowArtifactById,
@@ -86,5 +87,5 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError('Artifact');
     }
 
-    return c.json({ deleted: true });
+    return ok(c);
   });

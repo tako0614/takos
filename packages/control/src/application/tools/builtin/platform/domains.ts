@@ -1,5 +1,5 @@
 ﻿import type { ToolDefinition, ToolHandler } from '../../types';
-import { generateId, now } from '../../../../shared/utils';
+import { generateId } from '../../../../shared/utils';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { deleteHostnameRouting, upsertHostnameRouting } from '../../../services/routing/service';
@@ -139,8 +139,8 @@ export const domainAddHandler: ToolHandler = async (args, context) => {
     status: 'pending',
     verificationToken: verifyToken,
     verificationMethod: 'cname',
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 
   const desiredState = new ServiceDesiredStateService(env);
@@ -195,7 +195,7 @@ export const domainVerifyHandler: ToolHandler = async (args, context) => {
     const cnameData = await cnameResp.json() as { Answer?: Array<{ data: string }> };
 
     if (cnameData.Answer?.length) {
-      await db.update(serviceCustomDomains).set({ status: 'active', verifiedAt: now(), updatedAt: now() })
+      await db.update(serviceCustomDomains).set({ status: 'active', verifiedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
         .where(eq(serviceCustomDomains.id, domainRecord.id));
 
       return `Domain verified via CNAME: ${domain}\nThe domain is now active.`;
@@ -207,7 +207,7 @@ export const domainVerifyHandler: ToolHandler = async (args, context) => {
     const txtData = await txtResp.json() as { Answer?: Array<{ data: string }> };
 
     if (txtData.Answer?.some(a => a.data.includes(domainRecord.verificationToken))) {
-      await db.update(serviceCustomDomains).set({ status: 'active', verifiedAt: now(), updatedAt: now() })
+      await db.update(serviceCustomDomains).set({ status: 'active', verifiedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
         .where(eq(serviceCustomDomains.id, domainRecord.id));
 
       return `Domain verified via TXT: ${domain}\nThe domain is now active.`;
@@ -247,7 +247,6 @@ export const domainRemoveHandler: ToolHandler = async (args, context) => {
 
   return `Domain removed: ${domain}`;
 };
-
 
 export const DOMAIN_TOOLS: ToolDefinition[] = [
   DOMAIN_LIST,

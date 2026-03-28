@@ -363,7 +363,7 @@ describe('services base routes', () => {
         service_name: null,
       });
       mocks.CommonEnvService.mockReturnValue({
-        deleteWorkerTakosAccessTokenConfig: vi.fn().mockResolvedValue(undefined),
+        deleteServiceTakosAccessTokenConfig: vi.fn().mockResolvedValue(undefined),
       });
       mocks.createOptionalCloudflareWfpProvider.mockReturnValue(null);
 

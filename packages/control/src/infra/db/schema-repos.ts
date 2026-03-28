@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { createdAtColumn, timestamps } from './schema-helpers';
 
 // 24. Blob
 export const blobs = sqliteTable('blobs', {
@@ -7,7 +8,7 @@ export const blobs = sqliteTable('blobs', {
   size: integer('size').notNull(),
   isBinary: integer('is_binary', { mode: 'boolean' }).notNull().default(false),
   refcount: integer('refcount').notNull().default(1),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.accountId, table.hash] }),
   idxRefcount: index('idx_blobs_refcount').on(table.refcount),
@@ -21,8 +22,7 @@ export const branches = sqliteTable('branches', {
   commitSha: text('commit_sha').notNull(),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
   isProtected: integer('is_protected', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqRepoName: uniqueIndex('idx_branches_repo_name').on(table.repoId, table.name),
   idxRepo: index('idx_branches_repo_id').on(table.repoId),
@@ -38,7 +38,7 @@ export const chunks = sqliteTable('chunks', {
   endLine: integer('end_line').notNull(),
   content: text('content').notNull(),
   vectorId: text('vector_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxVector: index('idx_chunks_vector_id').on(table.vectorId),
   idxFile: index('idx_chunks_file_id').on(table.fileId),
@@ -79,8 +79,7 @@ export const files = sqliteTable('files', {
   kind: text('kind').notNull().default('source'),
   visibility: text('visibility').notNull().default('private'),
   indexedAt: text('indexed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountPath: uniqueIndex('idx_files_account_path').on(table.accountId, table.path),
   idxSha256: index('idx_files_sha256').on(table.sha256),
@@ -101,7 +100,7 @@ export const gitCommits = sqliteTable('git_commits', {
   insertions: integer('insertions').notNull().default(0),
   deletions: integer('deletions').notNull().default(0),
   treeHash: text('tree_hash').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxParent: index('idx_git_commits_parent_id').on(table.parentId),
   idxCreatedAt: index('idx_git_commits_created_at').on(table.createdAt),
@@ -139,7 +138,7 @@ export const indexJobs = sqliteTable('index_jobs', {
   error: text('error'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxStatus: index('idx_index_jobs_status').on(table.status),
   idxAccount: index('idx_index_jobs_account_id').on(table.accountId),
@@ -154,7 +153,7 @@ export const prComments = sqliteTable('pr_comments', {
   content: text('content').notNull(),
   filePath: text('file_path'),
   lineNumber: integer('line_number'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxPr: index('idx_pr_comments_pr_id').on(table.prId),
   idxFilePath: index('idx_pr_comments_file_path').on(table.filePath),
@@ -170,7 +169,7 @@ export const prReviews = sqliteTable('pr_reviews', {
   status: text('status').notNull(),
   body: text('body'),
   analysis: text('analysis'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxStatus: index('idx_pr_reviews_status').on(table.status),
   idxReviewerTypeId: index('idx_pr_reviews_reviewer_type_id').on(table.reviewerType, table.reviewerId),
@@ -191,8 +190,7 @@ export const pullRequests = sqliteTable('pull_requests', {
   authorId: text('author_id'),
   runId: text('run_id'),
   mergedAt: text('merged_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqRepoNumber: uniqueIndex('idx_pull_requests_repo_number').on(table.repoId, table.number),
   idxStatus: index('idx_pull_requests_status').on(table.status),
@@ -206,7 +204,7 @@ export const repoForks = sqliteTable('repo_forks', {
   id: text('id').primaryKey(),
   forkRepoId: text('fork_repo_id').notNull().unique(),
   upstreamRepoId: text('upstream_repo_id').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxUpstream: index('idx_repo_forks_upstream_repo_id').on(table.upstreamRepoId),
   idxFork: index('idx_repo_forks_fork_repo_id').on(table.forkRepoId),
@@ -224,7 +222,7 @@ export const repoReleaseAssets = sqliteTable('repo_release_assets', {
   downloadCount: integer('download_count').notNull().default(0),
   bundleFormat: text('bundle_format'),
   bundleMetaJson: text('bundle_meta_json'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   uniqReleaseAssetKey: uniqueIndex('idx_repo_release_assets_release_asset_key').on(table.releaseId, table.assetKey),
   idxRelease: index('idx_repo_release_assets_release_id').on(table.releaseId),
@@ -243,8 +241,7 @@ export const repoReleases = sqliteTable('repo_releases', {
   downloads: integer('downloads').notNull().default(0),
   authorAccountId: text('author_account_id'),
   publishedAt: text('published_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqRepoTag: uniqueIndex('idx_repo_releases_repo_tag').on(table.repoId, table.tag),
   idxTag: index('idx_repo_releases_tag').on(table.tag),
@@ -262,7 +259,7 @@ export const repoRemotes = sqliteTable('repo_remotes', {
   url: text('url'),
   /** Timestamp of the last successful fetch from the remote. */
   lastFetchedAt: text('last_fetched_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   uniqRepoName: uniqueIndex('idx_repo_remotes_repo_name').on(table.repoId, table.name),
   idxRepo: index('idx_repo_remotes_repo_id').on(table.repoId),
@@ -272,7 +269,7 @@ export const repoRemotes = sqliteTable('repo_remotes', {
 export const repoStars = sqliteTable('repo_stars', {
   accountId: text('account_id').notNull(),
   repoId: text('repo_id').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.accountId, table.repoId] }),
   idxRepo: index('idx_repo_stars_repo_id').on(table.repoId),
@@ -300,8 +297,7 @@ export const repositories = sqliteTable('repositories', {
   license: text('license'),
   featured: integer('featured', { mode: 'boolean' }).notNull().default(false),
   installCount: integer('install_count').notNull().default(0),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()).$onUpdateFn(() => new Date().toISOString()),
+  ...timestamps,
 }, (table) => ({
   uniqAccountName: uniqueIndex('idx_repositories_account_name').on(table.accountId, table.name),
   idxVisibilityUpdatedAt: index('idx_repositories_visibility_updated_at').on(table.visibility, table.updatedAt),
@@ -325,7 +321,7 @@ export const snapshots = sqliteTable('snapshots', {
   message: text('message'),
   author: text('author'),
   status: text('status').notNull().default('pending'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   idxStatus: index('idx_snapshots_status').on(table.status),
   idxAccount: index('idx_snapshots_account_id').on(table.accountId),
@@ -340,7 +336,7 @@ export const tags = sqliteTable('tags', {
   message: text('message'),
   taggerName: text('tagger_name'),
   taggerEmail: text('tagger_email'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  ...createdAtColumn,
 }, (table) => ({
   uniqRepoName: uniqueIndex('idx_tags_repo_name').on(table.repoId, table.name),
   idxRepo: index('idx_tags_repo_id').on(table.repoId),

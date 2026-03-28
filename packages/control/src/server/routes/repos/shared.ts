@@ -5,7 +5,7 @@ import type { Context } from 'hono';
 import { NotFoundError } from 'takos-common/errors';
 import * as gitStore from '../../../application/services/git-smart';
 import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 
 // ---------------------------------------------------------------------------
 // Bucket types and helpers
