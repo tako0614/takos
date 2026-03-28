@@ -43,6 +43,14 @@ export type WorkflowArtifactBuild = {
   };
 };
 
+export type WorkerContainer = {
+  name: string;
+  dockerfile: string;
+  port: number;
+  instanceType?: string;
+  maxInstances?: number;
+};
+
 export type WorkerService = {
   type: 'worker';
   build: WorkflowArtifactBuild;
@@ -68,6 +76,7 @@ export type WorkerService = {
       export: string;
     }>;
   };
+  containers?: WorkerContainer[];
 };
 
 export type ContainerService = {

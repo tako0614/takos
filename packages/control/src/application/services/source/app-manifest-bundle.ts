@@ -109,9 +109,55 @@ export function appManifestToBundleDocs(
             services: service.bindings?.services || [],
           },
           ...(service.triggers ? { triggers: service.triggers } : {}),
+          ...(service.containers && service.containers.length > 0
+            ? {
+                containers: service.containers.map((c) => ({
+                  name: c.name,
+                  dockerfile: c.dockerfile,
+                  port: c.port,
+                  ...(c.instanceType ? { instanceType: c.instanceType } : {}),
+                  ...(c.maxInstances ? { maxInstances: c.maxInstances } : {}),
+                })),
+              }
+            : {}),
         },
       },
     });
+
+    // Emit container workload docs for each CF Container attached to this worker
+    if (service.containers && service.containers.length > 0) {
+      for (const container of service.containers) {
+        docs.push({
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Workload',
+          metadata: { name: `${serviceName}-${container.name}` },
+          spec: {
+            type: 'container',
+            parentRef: serviceName,
+            pluginConfig: {
+              dockerfile: container.dockerfile,
+              port: container.port,
+              ...(container.instanceType ? { instanceType: container.instanceType } : {}),
+              ...(container.maxInstances ? { maxInstances: container.maxInstances } : {}),
+            },
+          },
+        });
+
+        docs.push({
+          apiVersion: 'takos.dev/v1alpha1',
+          kind: 'Binding',
+          metadata: { name: `${container.name}-container-to-${serviceName}` },
+          spec: {
+            from: `${serviceName}-${container.name}`,
+            to: serviceName,
+            mount: {
+              as: `${container.name.toUpperCase().replace(/-/g, '_')}_CONTAINER`,
+              type: 'durableObject',
+            },
+          },
+        });
+      }
+    }
   }
 
   for (const [resourceName, resource] of Object.entries(manifest.spec.resources || {})) {

@@ -251,6 +251,155 @@ spec:
     }));
   });
 
+  it('parses worker service with containers', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: container-app
+spec:
+  version: 1.0.0
+  services:
+    browser-host:
+      type: worker
+      containers:
+        - name: browser
+          dockerfile: packages/browser-service/Dockerfile
+          port: 8080
+          instanceType: standard-2
+          maxInstances: 25
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: build-browser-host
+          artifact: browser-host
+          artifactPath: dist/browser-host.js
+`);
+
+    const svc = manifest.spec.services['browser-host'];
+    expect(svc.type).toBe('worker');
+    if (svc.type === 'worker') {
+      expect(svc.containers).toHaveLength(1);
+      expect(svc.containers![0]).toEqual({
+        name: 'browser',
+        dockerfile: 'packages/browser-service/Dockerfile',
+        port: 8080,
+        instanceType: 'standard-2',
+        maxInstances: 25,
+      });
+    }
+  });
+
+  it('parses persistent container service', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: vps-app
+spec:
+  version: 1.0.0
+  services:
+    my-api:
+      type: container
+      container:
+        dockerfile: Dockerfile
+        port: 3000
+`);
+
+    const svc = manifest.spec.services['my-api'];
+    expect(svc.type).toBe('container');
+    if (svc.type === 'container') {
+      expect(svc.container).toEqual({
+        dockerfile: 'Dockerfile',
+        port: 3000,
+      });
+    }
+  });
+
+  it('emits worker containers into bundle docs', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: container-app
+spec:
+  version: 1.0.0
+  services:
+    browser-host:
+      type: worker
+      containers:
+        - name: browser
+          dockerfile: packages/browser-service/Dockerfile
+          port: 8080
+          instanceType: standard-2
+          maxInstances: 25
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: build-browser-host
+          artifact: browser-host
+          artifactPath: dist/browser-host.js
+`);
+
+    const docs = appManifestToBundleDocs(manifest, new Map([
+      ['browser-host', {
+        service_name: 'browser-host',
+        workflow_path: '.takos/workflows/deploy.yml',
+        workflow_job: 'build-browser-host',
+        workflow_artifact: 'browser-host',
+        artifact_path: 'dist/browser-host.js',
+      }],
+    ]));
+
+    // Worker workload should include containers in pluginConfig
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Workload',
+      metadata: expect.objectContaining({ name: 'browser-host' }),
+      spec: expect.objectContaining({
+        type: 'cloudflare.worker',
+        pluginConfig: expect.objectContaining({
+          containers: [{
+            name: 'browser',
+            dockerfile: 'packages/browser-service/Dockerfile',
+            port: 8080,
+            instanceType: 'standard-2',
+            maxInstances: 25,
+          }],
+        }),
+      }),
+    }));
+
+    // Container workload doc should be emitted
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Workload',
+      metadata: { name: 'browser-host-browser' },
+      spec: expect.objectContaining({
+        type: 'container',
+        parentRef: 'browser-host',
+        pluginConfig: {
+          dockerfile: 'packages/browser-service/Dockerfile',
+          port: 8080,
+          instanceType: 'standard-2',
+          maxInstances: 25,
+        },
+      }),
+    }));
+
+    // Binding from container to worker should be emitted
+    expect(docs).toContainEqual(expect.objectContaining({
+      kind: 'Binding',
+      metadata: { name: 'browser-container-to-browser-host' },
+      spec: expect.objectContaining({
+        from: 'browser-host-browser',
+        to: 'browser-host',
+        mount: {
+          as: 'BROWSER_CONTAINER',
+          type: 'durableObject',
+        },
+      }),
+    }));
+  });
+
   it('emits queue, analyticsEngine, workflow resources and trigger metadata into bundle docs', () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1

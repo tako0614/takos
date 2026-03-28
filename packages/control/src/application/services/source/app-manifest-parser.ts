@@ -13,6 +13,7 @@ import {
   type AppFileHandler,
   type AppService,
   type WorkerService,
+  type WorkerContainer,
   type ContainerService,
 } from './app-manifest-types';
 import { parseResources, validateResourceBindings } from './app-manifest-validation';
@@ -125,6 +126,28 @@ function parseWorkerService(serviceName: string, serviceSpec: Record<string, unk
     throw new Error(`spec.services.${serviceName}.build.fromWorkflow.path must be under .takos/workflows/`);
   }
 
+  let containers: WorkerContainer[] | undefined;
+  const containersRaw = serviceSpec.containers;
+  if (containersRaw != null) {
+    if (!Array.isArray(containersRaw)) {
+      throw new Error(`spec.services.${serviceName}.containers must be an array`);
+    }
+    containers = containersRaw.map((entry, i) => {
+      const c = asRecord(entry);
+      const port = Number(c.port);
+      if (!Number.isFinite(port) || port <= 0) {
+        throw new Error(`spec.services.${serviceName}.containers[${i}].port must be a positive number`);
+      }
+      return {
+        name: asRequiredString(c.name, `spec.services.${serviceName}.containers[${i}].name`),
+        dockerfile: normalizeRepoPath(asRequiredString(c.dockerfile, `spec.services.${serviceName}.containers[${i}].dockerfile`)),
+        port,
+        ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
+        ...(c.maxInstances ? { maxInstances: Number(c.maxInstances) } : {}),
+      };
+    });
+  }
+
   return {
     type: 'worker',
     build: {
@@ -138,6 +161,7 @@ function parseWorkerService(serviceName: string, serviceSpec: Record<string, unk
     ...((() => { const v = asStringMap(serviceSpec.env, `spec.services.${serviceName}.env`); return v ? { env: v } : {}; })()),
     ...(serviceSpec.bindings ? parseServiceBindings(serviceName, serviceSpec) : {}),
     ...(serviceSpec.triggers ? parseServiceTriggers(serviceName, serviceSpec) : {}),
+    ...(containers && containers.length > 0 ? { containers } : {}),
   };
 }
 
