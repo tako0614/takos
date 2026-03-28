@@ -3,7 +3,7 @@ import type { Env, DbEnv, AiEnv } from '../../../shared/types';
 type ThreadContextEnv = DbEnv & AiEnv;
 import { getDb, accounts, threads, messages } from '../../../infra/db';
 import { eq, and, gt, inArray, desc, asc } from 'drizzle-orm';
-import { now, toIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 import { LLMClient, getProviderFromModel } from './llm';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { AgentMessage } from './agent-models';
@@ -361,7 +361,7 @@ export async function indexThreadContext(params: {
 
   await db.update(threads).set({
     retrievalIndex: lastSequence,
-    updatedAt: now(),
+    updatedAt: new Date().toISOString(),
   }).where(eq(threads.id, threadId));
 
   const next = await db.select({
@@ -415,7 +415,7 @@ export async function indexThreadContext(params: {
         await db.update(threads).set({
           summary: updated.summary,
           keyPoints: JSON.stringify(updated.keyPoints),
-          updatedAt: now(),
+          updatedAt: new Date().toISOString(),
         }).where(eq(threads.id, threadId));
         summaryUpdated = true;
       }

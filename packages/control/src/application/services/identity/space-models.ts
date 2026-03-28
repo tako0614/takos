@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { now } from '../../../shared/utils';
+
 import { getDb, accounts } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 
@@ -44,7 +44,7 @@ export async function updateWorkspaceModel(
     .set({
       aiModel: model,
       aiProvider: provider,
-      updatedAt: now(),
+      updatedAt: new Date().toISOString(),
     })
     .where(eq(accounts.id, spaceId));
 }

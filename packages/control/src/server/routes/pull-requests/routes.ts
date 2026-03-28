@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { PullRequestStatus, AuthorType } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
-import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId } from '../../../shared/utils';
+import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -65,7 +65,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const number = await getNextPullRequestNumber(c.env.DB, repoId);
     const baseBranch = body.base_branch || repoAccess.repo.default_branch;
     const authorType = body.author_type || 'user';
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const pullRequest = await db.insert(pullRequests).values({
       id,
@@ -219,7 +219,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     const updateData: { title?: string; description?: string; updatedAt: string } = {
-      updatedAt: now(),
+      updatedAt: new Date().toISOString(),
     };
 
     if (body.title !== undefined && body.title.trim().length > 0) {
@@ -280,7 +280,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const updated = await db.update(pullRequests)
       .set({
         status: 'closed',
-        updatedAt: now(),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(pullRequests.id, pullRequest.id))
       .returning()

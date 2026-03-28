@@ -7,7 +7,7 @@
 import type { WorkflowContext } from './workflow-types';
 import { getDb, pullRequests, sessions, accounts, runs, branches } from '../../../infra/db';
 import { eq, and, sql } from 'drizzle-orm';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 
 // ── PR creation ─────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ export async function createPullRequest(
 ): Promise<string> {
   const { env, userId, runId } = context;
   const db = getDb(env.DB);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const prId = generateId();
 
   const MAX_RETRIES = 5;
@@ -99,7 +99,7 @@ export async function mergePullRequest(
     return;
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   // Resolve sessionId from the associated run
   let sessionId: string | null = null;

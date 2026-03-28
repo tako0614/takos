@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Repository } from '../../../shared/types';
-import { generateId, now, toIsoString, sanitizeRepoName } from '../../../shared/utils';
+import { generateId, toIsoString, sanitizeRepoName } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { toApiRepositoryFromDb } from './repos';
 import { getDb, repositories, repoReleases } from '../../../infra/db';
@@ -90,7 +90,7 @@ export async function forkWithWorkflows(
   }
 
   const forkId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await drizzle.insert(repositories).values({
     id: forkId,

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, requireSpaceAccess } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseLimit, requireSpaceAccess } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import {
   countServicesInSpace,
@@ -293,9 +293,9 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   const commonEnvService = new CommonEnvService(c.env);
-  await commonEnvService.deleteWorkerTakosAccessTokenConfig({
+  await commonEnvService.deleteServiceTakosAccessTokenConfig({
     spaceId: worker.space_id,
-    workerId: worker.id,
+    serviceId: worker.id,
   });
   await deleteService(c.env.DB, workerId);
 

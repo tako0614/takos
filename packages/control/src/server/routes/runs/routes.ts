@@ -8,7 +8,7 @@ import {
   RUN_TERMINAL_STATUSES,
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
-import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess, generateId, toIsoString } from '../../../shared/utils';
 import { BadRequestError, NotFoundError, AppError, ErrorCodes } from 'takos-common/errors';
 import { checkRunAccess } from './access';
 import {
@@ -20,7 +20,7 @@ import {
 import { registerRunCreateRoutes } from './create';
 import { registerRunListRoutes } from './list';
 import { buildSanitizedDOHeaders } from '../../../runtime/durable-objects/do-header-utils';
-import type { BaseVariables } from '../shared/route-auth';
+import type { BaseVariables } from '../route-auth';
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
@@ -96,7 +96,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     }
 
     const db = getDb(c.env.DB);
-    const completedAt = now();
+    const completedAt = new Date().toISOString();
     await db.update(runs).set({ status: 'cancelled', completedAt }).where(eq(runs.id, runId));
 
     const cancellationPayload = buildTerminalPayload(runId, 'cancelled', {}, access.run.session_id ?? null);
@@ -234,7 +234,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         content: body.content ?? null,
         fileId: body.file_id ?? null,
         metadata: JSON.stringify(body.metadata ?? {}),
-        createdAt: now(),
+        createdAt: new Date().toISOString(),
       }).returning().get();
 
       return c.json({

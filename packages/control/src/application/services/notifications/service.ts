@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../../shared/types';
 import { getDb, notificationSettings, notificationPreferences, notifications } from '../../../infra/db';
 import { eq, and, lt, inArray, isNull, count, desc } from 'drizzle-orm';
-import { generateId, now, safeJsonParseOrDefault } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
 import { buildDurableObjectUrl } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
 import {
@@ -104,7 +104,7 @@ async function emitNotificationCreated(stub: NotificationNotifierStub, notificat
 
 export async function ensureNotificationSettings(dbBinding: D1Database, userId: string): Promise<void> {
   const db = getDb(dbBinding);
-  const ts = now();
+  const ts = new Date().toISOString();
   try {
     const existingSettings = await db.select().from(notificationSettings)
       .where(eq(notificationSettings.accountId, userId)).get();
@@ -151,7 +151,7 @@ export async function setNotificationsMutedUntil(
   mutedUntil: string | null
 ): Promise<{ muted_until: string | null }> {
   const db = getDb(dbBinding);
-  const ts = now();
+  const ts = new Date().toISOString();
   const mutedValue = mutedUntil ? new Date(mutedUntil).toISOString() : null;
   try {
     const row = await db.select({ mutedUntil: notificationSettings.mutedUntil }).from(notificationSettings)
@@ -196,7 +196,7 @@ function emptyMatrix(): NotificationPreferenceMatrix {
 
 export async function ensureNotificationPreferences(dbBinding: D1Database, userId: string): Promise<void> {
   const db = getDb(dbBinding);
-  const ts = now();
+  const ts = new Date().toISOString();
   try {
     const existing = await db.select({
       type: notificationPreferences.type,
@@ -280,7 +280,7 @@ export async function updateNotificationPreferences(
   updates: Array<{ type: NotificationType; channel: NotificationChannel; enabled: boolean }>
 ): Promise<NotificationPreferenceMatrix> {
   const db = getDb(dbBinding);
-  const ts = now();
+  const ts = new Date().toISOString();
   try {
     // 1. Batch-fetch all existing preferences for this user
     const existingRows = await db.select({
@@ -436,7 +436,7 @@ export async function markNotificationRead(
   const db = getDb(dbBinding);
   try {
     await db.update(notifications)
-      .set({ readAt: now() })
+      .set({ readAt: new Date().toISOString() })
       .where(and(
         eq(notifications.id, notificationId),
         eq(notifications.recipientAccountId, userId),
@@ -473,7 +473,7 @@ export async function createNotification(
   }
 
   const id = generateId(16);
-  const ts = now();
+  const ts = new Date().toISOString();
   const muted = await isNotificationsMuted(env.DB, input.userId);
 
   const dataStr = JSON.stringify(input.data ?? {});

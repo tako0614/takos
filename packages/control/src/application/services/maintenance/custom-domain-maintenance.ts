@@ -1,7 +1,7 @@
 import type { Env } from '../../../shared/types';
 import { getDb, serviceCustomDomains } from '../../../infra/db';
 import { and, asc, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
-import { now } from '../../../shared/utils';
+
 import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
 import type { RoutingTarget } from '../routing/types';
@@ -142,7 +142,7 @@ export async function runCustomDomainReverification(
         if (!domain.cfCustomHostnameId) {
           // No CF hostname ID — shouldn't be in ssl_pending, reset to dns_verified
           await db.update(serviceCustomDomains)
-            .set({ status: 'dns_verified', updatedAt: now() })
+            .set({ status: 'dns_verified', updatedAt: new Date().toISOString() })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.failed += 1;
@@ -154,7 +154,7 @@ export async function runCustomDomainReverification(
         if (cfStatus && cfStatus.sslStatus === 'active') {
           // SSL provisioned — promote to active and ensure KV routing
           await db.update(serviceCustomDomains)
-            .set({ status: 'active', sslStatus: 'active', updatedAt: now() })
+            .set({ status: 'active', sslStatus: 'active', updatedAt: new Date().toISOString() })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           let target: RoutingTarget | null = null;
@@ -177,7 +177,7 @@ export async function runCustomDomainReverification(
         } else if (cfStatus && SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
           // SSL failed/expired — mark as ssl_failed and remove KV routing
           await db.update(serviceCustomDomains)
-            .set({ status: 'ssl_failed', sslStatus: 'failed', updatedAt: now() })
+            .set({ status: 'ssl_failed', sslStatus: 'failed', updatedAt: new Date().toISOString() })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           await deleteHostnameRouting({ env, hostname: domain.domain });
@@ -185,7 +185,7 @@ export async function runCustomDomainReverification(
         } else {
           // Still pending — just touch updatedAt
           await db.update(serviceCustomDomains)
-            .set({ updatedAt: now() })
+            .set({ updatedAt: new Date().toISOString() })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.verifying += 1;
@@ -197,7 +197,7 @@ export async function runCustomDomainReverification(
       await db.update(serviceCustomDomains)
         .set({
           status: 'verifying',
-          updatedAt: now(),
+          updatedAt: new Date().toISOString(),
         })
         .where(eq(serviceCustomDomains.id, domain.id))
         .run();
@@ -214,7 +214,7 @@ export async function runCustomDomainReverification(
           .set({
             status: 'failed',
             sslStatus: 'failed',
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domain.id))
           .run();
@@ -274,7 +274,7 @@ export async function runCustomDomainReverification(
         .set({
           status: nextStatus,
           sslStatus: nextSslStatus,
-          updatedAt: now(),
+          updatedAt: new Date().toISOString(),
         })
         .where(eq(serviceCustomDomains.id, domain.id))
         .run();
@@ -350,7 +350,7 @@ export async function reconcileStuckDomains(
           .set({
             cfCustomHostnameId: null,
             sslStatus: null,
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domain.id))
           .run();
@@ -365,7 +365,7 @@ export async function reconcileStuckDomains(
         if (!domain.cfCustomHostnameId) {
           // No CF hostname — reset to dns_verified for retry
           await db.update(serviceCustomDomains)
-            .set({ status: 'dns_verified', sslStatus: null, updatedAt: now() })
+            .set({ status: 'dns_verified', sslStatus: null, updatedAt: new Date().toISOString() })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.reset += 1;
@@ -381,7 +381,7 @@ export async function reconcileStuckDomains(
               status: 'dns_verified',
               cfCustomHostnameId: null,
               sslStatus: null,
-              updatedAt: now(),
+              updatedAt: new Date().toISOString(),
             })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
@@ -392,7 +392,7 @@ export async function reconcileStuckDomains(
             .set({
               status: 'ssl_failed',
               sslStatus: 'failed',
-              updatedAt: now(),
+              updatedAt: new Date().toISOString(),
             })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();

@@ -1,12 +1,13 @@
 import type { User } from '../../../shared/types';
-import { now } from '../../../shared/utils';
+
 import * as gitStore from '../../../application/services/git-smart';
 import { type Database } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { pullRequests, branches } from '../../../infra/db/schema';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { toPullRequestRecord, type PullRequestRecord } from './dto';
 import { toGitBucket, type GitBucket } from './git-store';
+import { GIT_REBASE_MAX_COMMITS } from '../../../shared/config/limits';
 
 type MergeApplyFailure = { success: false; error: 'branch_not_found' | 'ref_conflict'; current: string | null };
 type MergeApplySuccess = { success: true; pullRequest: PullRequestRecord };
@@ -32,7 +33,6 @@ export type MergeExecutionResult = MergeExecutionSuccess | MergeExecutionFailure
 
 type MergeTargetSuccess = { success: true; newBaseSha: string };
 type MergeTargetResult = MergeTargetSuccess | MergeExecutionFailure;
-
 
 function buildUserSignature(user: User, timestamp: string): gitStore.GitSignature {
   return {
@@ -158,7 +158,7 @@ async function createRebaseMergeTarget(params: {
     });
   }
 
-  const MAX_REBASE_COMMITS = 200;
+  const MAX_REBASE_COMMITS = GIT_REBASE_MAX_COMMITS;
   const commitsToRebase: gitStore.GitCommit[] = [];
   let cursorSha = params.headSha;
   while (cursorSha !== mergeBase) {
@@ -209,7 +209,7 @@ async function createRebaseMergeTarget(params: {
       });
     }
 
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const commit = await gitStore.createCommit(params.env.DB, params.bucket, params.repoId, {
       tree: mergeResult.tree_sha,
       parents: [currentParentSha],
@@ -287,7 +287,7 @@ async function createMergeOrSquashTarget(params: {
     treeOid = mergeResult.tree_sha;
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const signature = buildUserSignature(params.user, timestamp);
   const message = params.commitMessage || (
     params.mergeMethod === 'squash'
@@ -338,7 +338,7 @@ export async function performPullRequestMerge(params: {
     baseSha
   );
   if (headIsAncestorOfBase) {
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const updatedPullRequest = await params.db.update(pullRequests)
       .set({
         status: 'merged',
@@ -398,7 +398,7 @@ export async function performPullRequestMerge(params: {
     return mergeTarget;
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const mergeApply = await advanceBaseBranchAndMarkPullRequestMerged(params.db, {
     repoId: params.repoId,
     baseBranch: params.pullRequest.baseBranch,

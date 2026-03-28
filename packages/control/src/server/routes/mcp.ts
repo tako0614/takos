@@ -16,12 +16,13 @@ import {
   decryptAccessToken, refreshMcpToken,
 } from '../../application/services/platform/mcp';
 import { McpClient } from '../../application/tools/mcp-client';
-import { spaceAccess, type SpaceAccessRouteEnv } from './shared/route-auth';
+import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
 import { zValidator } from './zod-validator';
 import { escapeHtml } from './auth/html';
 import { logError, logWarn } from '../../shared/utils/logger';
 import { BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from 'takos-common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
+import { ok } from './response-helpers';
 
 const createServerSchema = z.object({ name: z.string(), url: z.string(), scope: z.string().optional() });
 const updateServerSchema = z.object({ enabled: z.boolean().optional(), name: z.string().optional() });
@@ -76,7 +77,7 @@ mcpRoutes.get('/servers', spaceAccess({ roles: MCP_LIST_ROLES }), async (c) => {
 mcpRoutes.delete('/servers/:id', spaceAccess({ roles: MCP_DELETE_ROLES }), async (c) => {
   const deleted = await deleteMcpServer(c.env.DB, c.get('spaceId'), c.req.param('id'));
   if (!deleted) throw new NotFoundError('MCP server');
-  return c.json({ success: true });
+  return ok(c);
 });
 
 mcpRoutes.patch('/servers/:id', spaceAccess({ roles: MCP_UPDATE_ROLES }), zValidator('json', updateServerSchema), async (c) => {

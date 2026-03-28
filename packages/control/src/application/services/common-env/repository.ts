@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { now } from '../../../shared/utils';
+
 import { getDb, accountEnvVars, serviceCommonEnvLinks } from '../../../infra/db';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { getServiceRouteRecord } from '../platform/workers';
@@ -154,7 +154,7 @@ export async function getService(env: Pick<Env, 'DB'>, spaceId: string, serviceI
 
 export async function updateLinkRuntime(env: Pick<Env, 'DB'>, update: ReconcileUpdate): Promise<void> {
   const db = getDb(env.DB);
-  const ts = now();
+  const ts = new Date().toISOString();
 
   const setFields: Record<string, unknown> = {
     lastReconciledAt: ts,

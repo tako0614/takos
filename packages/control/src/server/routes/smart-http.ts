@@ -19,6 +19,7 @@ import { accounts, repositories } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { checkSpaceAccess, toIsoString } from '../../shared/utils';
 import { logError } from '../../shared/utils/logger';
+import { MAX_GIT_REQUEST_BODY_BYTES, GIT_PUSH_LOCK_LEASE_MS } from '../../shared/config/limits';
 import type {
   D1Database,
   DurableObjectStubBinding,
@@ -31,8 +32,6 @@ type Variables = {
 
 const smartHttpRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 const ZERO_SHA = '0000000000000000000000000000000000000000';
-const MAX_GIT_REQUEST_BODY = 90 * 1024 * 1024;
-const PUSH_LOCK_LEASE_MS = 5 * 60 * 1000;
 
 type RepoPushLockNamespace = {
   idFromName(name: string): unknown;
@@ -166,7 +165,7 @@ async function acquireRepoPushLock(env: Env, repoId: string): Promise<{ token: s
   const res = await stub.fetch('https://git-push-lock/acquire', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, leaseMs: PUSH_LOCK_LEASE_MS }),
+    body: JSON.stringify({ token, leaseMs: GIT_PUSH_LOCK_LEASE_MS }),
   });
 
   if (res.status === 409) {
@@ -276,7 +275,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuth, async
   const bucket = getGitBucket(c.env);
   let body: Uint8Array;
   try {
-    body = await readRequestBodyWithLimit(c.req.raw, MAX_GIT_REQUEST_BODY);
+    body = await readRequestBodyWithLimit(c.req.raw, MAX_GIT_REQUEST_BODY_BYTES);
   } catch (err) {
     return c.text(`${err instanceof Error ? err.message : 'Request body too large'}\n`, 413);
   }
@@ -316,9 +315,9 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
 
   // Pre-check Content-Length before reading body
   const contentLength = readContentLength(c.req.raw);
-  if (contentLength !== null && contentLength > MAX_GIT_REQUEST_BODY) {
+  if (contentLength !== null && contentLength > MAX_GIT_REQUEST_BODY_BYTES) {
     await releaseRepoPushLock(c.env, result.repo.id, pushLock);
-    return c.text(`Request body exceeds ${MAX_GIT_REQUEST_BODY} bytes\n`, 413);
+    return c.text(`Request body exceeds ${MAX_GIT_REQUEST_BODY_BYTES} bytes\n`, 413);
   }
 
   try {
@@ -329,7 +328,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
     let receivePack: { response: Uint8Array; updatedRefs: { oldSha: string; newSha: string; refName: string }[] };
     try {
       if (stream) {
-        receivePack = await handleReceivePackFromStream(c.env.DB, bucket, result.repo.id, stream, MAX_GIT_REQUEST_BODY);
+        receivePack = await handleReceivePackFromStream(c.env.DB, bucket, result.repo.id, stream, MAX_GIT_REQUEST_BODY_BYTES);
       } else {
         receivePack = await handleReceivePack(c.env.DB, bucket, result.repo.id, new Uint8Array());
       }

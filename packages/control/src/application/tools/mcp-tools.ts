@@ -1,12 +1,12 @@
-import type { ToolDefinition, RegisteredTool } from '../tool-definitions';
-import type { Env, SpaceRole } from '../../../shared/types';
-import { getDb, mcpServers } from '../../../infra/db';
+import type { ToolDefinition, RegisteredTool } from './tool-definitions';
+import type { Env, SpaceRole } from '../../shared/types';
+import { getDb, mcpServers } from '../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { McpClient } from '../mcp-client';
-import { refreshMcpToken, decryptAccessToken, assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from '../../services/platform/mcp';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Database } from '../../../infra/db';
-import { logError } from '../../../shared/utils/logger';
+import { McpClient } from './mcp-client';
+import { refreshMcpToken, decryptAccessToken, assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from '../services/platform/mcp';
+import type { D1Database } from '../../shared/types/bindings.ts';
+import type { Database } from '../../infra/db';
+import { logError } from '../../shared/utils/logger';
 
 export interface McpLoadResult {
   tools: Map<string, RegisteredTool>;
@@ -99,7 +99,7 @@ export async function loadMcpTools(
     }).from(mcpServers).where(and(eq(mcpServers.accountId, spaceId), eq(mcpServers.enabled, true))).all()
       .then((rows) => rows as McpServerLoadRecord[]);
   } catch (err) {
-    logError('Failed to load MCP servers from DB', err, { module: 'tools/loaders/mcp-tools' });
+    logError('Failed to load MCP servers from DB', err, { module: 'tools/mcp-tools' });
     failedServers.push('(all — DB query failed)');
     return { tools, clients, failedServers };
   }

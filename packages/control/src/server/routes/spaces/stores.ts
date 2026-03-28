@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   requireSpaceAccess,
   type AuthenticatedRouteEnv,
-} from '../shared/route-auth';
+} from '../route-auth';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {

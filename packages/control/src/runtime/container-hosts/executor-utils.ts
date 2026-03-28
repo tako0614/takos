@@ -9,7 +9,7 @@ import type {
   Queue,
 } from '../../shared/types/bindings.ts';
 import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
-import { decodeBase64ToBytes } from '../../shared/utils/encoding-utils';
+import { base64ToBytes } from '../../shared/utils/encoding-utils';
 import type {
   DbEnv,
   StorageEnv,
@@ -149,7 +149,7 @@ export function headersToRecord(headers: Headers): Record<string, string> {
   return out;
 }
 
-export { decodeBase64ToBytes };
+export { base64ToBytes };
 
 export function readRunServiceId(body: Record<string, unknown>): string | null {
   if (typeof body.serviceId === 'string' && body.serviceId.length > 0) return body.serviceId;

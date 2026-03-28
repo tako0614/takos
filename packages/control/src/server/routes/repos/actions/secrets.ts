@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
-import { parseJsonBody } from '../../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import { parseJsonBody } from '../../route-auth';
+import type { AuthenticatedRouteEnv } from '../../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import { getDb } from '../../../../infra/db';
 import { workflowSecrets } from '../../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { encrypt, generateId, now } from '../../../../shared/utils';
+import { encrypt, generateId } from '../../../../shared/utils';
 import { NotFoundError, InternalError } from 'takos-common/errors';
+import { ok } from '../../response-helpers';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/secrets', async (c) => {
@@ -68,7 +69,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     const encryptedValue = JSON.stringify(await encrypt(body.value, encryptionKey, `secret:${repoId}:${name}`));
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const existing = await db.select()
       .from(workflowSecrets)
@@ -141,5 +142,5 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError('Secret');
     }
 
-    return c.json({ deleted: true });
+    return ok(c);
   });

@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, Repository, Space, SecurityPosture } from '../../../shared/types';
-import { generateId, now, slugifyName } from '../../../shared/utils';
+import { generateId, slugifyName } from '../../../shared/utils';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
 import { resolveUserPrincipalId } from './principals';
 import { getDb, accounts, accountMemberships, repositories } from '../../../infra/db';
@@ -240,7 +240,7 @@ async function ensureSelfMembership(db: D1Database, userId: string): Promise<voi
     .limit(1)
     .get();
   if (!existing) {
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     await drizzle.insert(accountMemberships).values({
       id: generateId(),
       accountId: userId,
@@ -337,7 +337,7 @@ export async function createWorkspaceWithDefaultRepo(
 ): Promise<{ workspace: Space; repository: Repository | null }> {
   const spaceId = options?.id || generateId();
   const repoId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const kind = options?.kind || 'team';
   const trimmedName = name.trim();
   const slug = await generateUniqueSlug(env.DB, slugifyName(trimmedName), spaceId.slice(0, 6));
@@ -416,7 +416,7 @@ export async function updateWorkspace(
   const nextModel = updates.ai_model ?? current.aiModel;
   const nextProvider = updates.ai_provider ?? current.aiProvider;
   const nextSecurityPosture = updates.security_posture ?? (current.securityPosture === 'restricted_egress' ? 'restricted_egress' : 'standard');
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const drizzle = getDb(db);
   await drizzle

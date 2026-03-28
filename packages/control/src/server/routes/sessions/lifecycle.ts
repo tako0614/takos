@@ -7,8 +7,8 @@ import {
   RuntimeSessionManager,
   type SessionInitResult,
 } from '../../../application/services/sync';
-import { requireSpaceAccess } from '../shared/route-auth';
-import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
+import { requireSpaceAccess } from '../route-auth';
+import { checkSpaceAccess, generateId } from '../../../shared/utils';
 import { toSessionSnakeCase } from './session-mappers';
 import type { SessionContext } from './session-mappers';
 import { logError, logWarn } from '../../../shared/utils/logger';
@@ -88,7 +88,7 @@ export async function startSession(
   }
 
   const sessionId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await db.insert(sessions).values({
     id: sessionId,
     accountId: access.space.id,
@@ -216,7 +216,7 @@ export async function stopSession(
     throw new InternalError('Failed to commit changes to Git');
   }
 
-  await db.update(sessions).set({ status: 'stopped', updatedAt: now() }).where(eq(sessions.id, sessionId));
+  await db.update(sessions).set({ status: 'stopped', updatedAt: new Date().toISOString() }).where(eq(sessions.id, sessionId));
 
   if (gitResult?.success && gitResult.pushed && gitResult.commitHash) {
     const afterSha = gitResult.commitHash;
@@ -280,7 +280,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     throw new BadRequestError('Session is not stopped');
   }
 
-  await db.update(sessions).set({ status: 'running', updatedAt: now() }).where(eq(sessions.id, sessionId));
+  await db.update(sessions).set({ status: 'running', updatedAt: new Date().toISOString() }).where(eq(sessions.id, sessionId));
 
   return c.json({
     success: true,
@@ -316,7 +316,7 @@ export async function discardSession(c: SessionContext): Promise<Response> {
     throw new BadRequestError('Cannot discard a merged session');
   }
 
-  await db.update(sessions).set({ status: 'discarded', updatedAt: now() }).where(eq(sessions.id, sessionId));
+  await db.update(sessions).set({ status: 'discarded', updatedAt: new Date().toISOString() }).where(eq(sessions.id, sessionId));
 
   if (runtimeSessionEnv) {
     try {

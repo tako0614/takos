@@ -1,7 +1,7 @@
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
 import { BadRequestError } from 'takos-common/errors';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
@@ -139,7 +139,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
     return { added: [], removed: [] };
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   let addedOut: string[] = [];
   let removedOut: string[] = [];
 
@@ -347,7 +347,7 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
 
   const rowIds = rows.map((row) => row.id);
   const changedKeys = rows.map((row) => normalizeEnvName(row.envName));
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await runInTransaction(deps, async () => {
     await getDb(deps.env.DB).update(serviceCommonEnvLinks)

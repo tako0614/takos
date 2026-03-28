@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { parseLimit } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseLimit } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -17,6 +17,13 @@ import type { IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { logError } from '../../../shared/utils/logger';
 import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from 'takos-common/errors';
+import {
+  GIT_SEARCH_MAX_TOTAL_BYTES,
+  GIT_SEARCH_MAX_FILE_BYTES,
+  GIT_DIFF_MAX_FILE_BYTES,
+  GIT_DIFF_MAX_LINES,
+  GIT_BLAME_MAX_COMMITS,
+} from '../../../shared/config/limits';
 
 function getPathFromRouteOrQuery(c: Context<AuthenticatedRouteEnv>): string {
   const routePath = c.req.param('path') || '';
@@ -106,8 +113,8 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
     let bytesScanned = 0;
     let truncated = false;
 
-    const MAX_TOTAL_BYTES = 5 * 1024 * 1024; // 5MiB per request
-    const MAX_FILE_BYTES = 512 * 1024; // 512KiB per file
+    const MAX_TOTAL_BYTES = GIT_SEARCH_MAX_TOTAL_BYTES;
+    const MAX_FILE_BYTES = GIT_SEARCH_MAX_FILE_BYTES;
 
     const files = await gitStore.flattenTree(bucket, resolvedCommit.commit.tree, '', {
       skipSymlinks: true,
@@ -402,9 +409,9 @@ async function handleBlameRequest(c: Context<AuthenticatedRouteEnv>) {
     throw new NotFoundError('File');
   }
 
-  const MAX_FILE_BYTES = 256 * 1024;
-  const MAX_LINES = 2000;
-  const MAX_COMMITS = 200;
+  const MAX_FILE_BYTES = GIT_DIFF_MAX_FILE_BYTES;
+  const MAX_LINES = GIT_DIFF_MAX_LINES;
+  const MAX_COMMITS = GIT_BLAME_MAX_COMMITS;
 
   const changeCommits: Array<{ commit: gitStore.GitCommit; lines: string[] }> = [];
   let cursorCommit: gitStore.GitCommit | null = headCommit;

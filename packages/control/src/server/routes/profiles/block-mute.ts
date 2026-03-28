@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { now } from '../../../shared/utils';
-import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+
+import type { OptionalAuthRouteEnv } from '../route-auth';
 import { NotFoundError, AuthenticationError, BadRequestError } from 'takos-common/errors';
 import { getUserByUsername } from './profile-queries';
 import { getDb } from '../../../infra/db';
@@ -29,7 +29,7 @@ export const blockMuteRoutes = new Hono<OptionalAuthRouteEnv>()
     await db.insert(accountBlocks).values({
       blockerAccountId: currentUser.id,
       blockedAccountId: targetUser.id,
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     });
   } catch {
     // already blocked
@@ -94,7 +94,7 @@ export const blockMuteRoutes = new Hono<OptionalAuthRouteEnv>()
     await db.insert(accountMutes).values({
       muterAccountId: currentUser.id,
       mutedAccountId: targetUser.id,
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     });
   } catch {
     // Unique constraint violation means user is already muted -- safe to ignore

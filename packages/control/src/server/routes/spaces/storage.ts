@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import storageDownloads from './storage-downloads';
 import storageUploads from './storage-uploads';
 import storageManagement from './storage-management';

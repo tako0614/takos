@@ -5,7 +5,7 @@
 import type { Workflow } from 'takos-actions-engine';
 import type { Conclusion } from 'takos-actions-engine';
 import { parseWorkflow } from 'takos-actions-engine';
-import { now } from '../../../shared/utils';
+
 import * as gitStore from '../git-smart';
 import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../../infra/db';
 import { eq, and, ne, or, count } from 'drizzle-orm';
@@ -203,7 +203,7 @@ export async function onJobStart(
   runnerName?: string,
 ): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await drizzle.update(workflowJobs)
     .set({
@@ -242,7 +242,7 @@ export async function updateStepStatus(
   error?: string,
 ): Promise<void> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const startedAt = status === 'in_progress' ? timestamp : undefined;
   const completedAt = status === 'completed' || status === 'skipped' ? timestamp : undefined;
 
@@ -322,7 +322,7 @@ async function findJobRecordByKey(
  */
 async function skipJobAndSteps(db: D1Database, jobId: string): Promise<void> {
   const drizzle = getDb(db);
-  const ts = now();
+  const ts = new Date().toISOString();
 
   await drizzle.update(workflowJobs)
     .set({

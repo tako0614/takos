@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { parseLimit } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { DeploymentService } from '../../../application/services/deployment/index';
@@ -13,8 +13,7 @@ import { getServiceForUser, getServiceForUserWithRole } from '../../../applicati
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError } from 'takos-common/errors';
-
-const MAX_BUNDLE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB (Cloudflare Workers paid plan limit)
+import { MAX_BUNDLE_SIZE_BYTES } from '../../../shared/config/limits';
 
 type ApiDeploymentEvent = {
   id: string;

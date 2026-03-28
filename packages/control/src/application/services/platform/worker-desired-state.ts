@@ -1,5 +1,5 @@
 import { BadRequestError } from 'takos-common/errors';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { RoutingTarget } from '../routing/types';
 import { normalizeEnvName } from '../common-env/crypto';
@@ -126,7 +126,7 @@ export class ServiceDesiredStateService {
 
     // Encrypt all values first (before entering the transaction) since
     // encryption is async and we want to minimise time inside the transaction.
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const encrypted: Array<{
       name: string;
       valueEncrypted: string;
@@ -225,7 +225,7 @@ export class ServiceDesiredStateService {
     if (!serviceId) {
       throw new BadRequestError('Resource binding replacement requires a service identifier');
     }
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     await this.env.DB.prepare('BEGIN IMMEDIATE').run();
     try {

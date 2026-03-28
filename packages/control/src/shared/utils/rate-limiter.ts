@@ -1,6 +1,5 @@
 import type { Context, Next } from 'hono';
 import {
-  checkSlidingWindow,
   hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
@@ -68,10 +67,10 @@ export class InMemoryRateLimiter {
     this.maybeCleanup();
 
     const timestamps = this.requests.get(key) || [];
-    const result = checkSlidingWindow(timestamps, {
+    const { result } = hitSlidingWindow(timestamps, {
       maxRequests: this.config.maxRequests,
       windowMs: this.config.windowMs,
-    });
+    }, undefined, true);
 
     return {
       remaining: result.remaining,

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { AppError, BadRequestError, InternalError, parseLimit, type BaseVariables } from './shared/route-auth';
+import { AppError, BadRequestError, InternalError, parseLimit, type BaseVariables } from './route-auth';
 import { zValidator } from './zod-validator';
 import { buildSanitizedDOHeaders } from '../../runtime/durable-objects/do-header-utils';
 import {

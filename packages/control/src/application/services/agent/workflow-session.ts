@@ -8,7 +8,7 @@
 import type { SnapshotTree } from '../sync/types';
 import type { WorkflowContext, RuntimeSnapshotResponse } from './workflow-types';
 import { SnapshotManager } from '../sync/snapshot';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, sessions, accounts, runs } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { callRuntimeRequest } from '../execution/runtime-request-handler';
@@ -22,7 +22,7 @@ export async function startWorkflowSession(
 ): Promise<{ sessionId: string; snapshotId: string }> {
   const { env, spaceId, runId } = context;
   const db = getDb(env.DB);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const workspace = await db.select({
     headSnapshotId: accounts.headSnapshotId,
@@ -88,7 +88,7 @@ export async function commitWorkflowSession(
     throw new Error('No session to commit');
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const snapshotManager = new SnapshotManager(env, spaceId);
 
   const session = await db.select({

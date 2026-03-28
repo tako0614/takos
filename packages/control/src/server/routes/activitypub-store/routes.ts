@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { CacheTTL, withCache } from '../../middleware/cache';
-import { parseLimit, type PublicRouteEnv } from '../shared/route-auth';
+import { parseLimit, type PublicRouteEnv } from '../route-auth';
 import {
   findStoreBySlug,
   findStoreRepository,

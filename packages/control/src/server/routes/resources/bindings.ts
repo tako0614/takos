@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { generateId, now } from '../../../shared/utils';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId } from '../../../shared/utils';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import {
   checkResourceAccess,
@@ -56,7 +56,7 @@ const resourcesBindings = new Hono<AuthenticatedRouteEnv>()
   }
 
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const bindingType = resource.type === 'worker' ? 'service' : resource.type;
 
   try {

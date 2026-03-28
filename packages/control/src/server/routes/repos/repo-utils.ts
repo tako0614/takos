@@ -3,19 +3,18 @@
  */
 import type { RepositoryVisibility } from '../../../shared/types';
 import { toIsoString } from '../../../shared/utils';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import * as gitStore from '../../../application/services/git-smart';
 import { collectReachableObjectShas } from '../../../application/services/git-smart';
 import type { Database } from '../../../infra/db';
 import { accounts, repositories } from '../../../infra/db/schema';
 import { eq, ne } from 'drizzle-orm';
 import { logWarn } from '../../../shared/utils/logger';
+import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from '../../../shared/config/limits';
 
 // ---------------------------------------------------------------------------
 // Constants & type aliases
 // ---------------------------------------------------------------------------
-
-export const MAX_REPO_OBJECT_CLEANUP_CANDIDATES = 25_000;
 
 type GitObjectsBucket = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
 type ReachableObjectsBucket = Parameters<typeof collectReachableObjectShas>[1];

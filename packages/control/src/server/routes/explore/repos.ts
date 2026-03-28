@@ -11,7 +11,7 @@ import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { checkRepoAccess } from '../../../application/services/source/repos';
-import { parseLimit, parseOffset } from '../shared/route-auth';
+import { parseLimit, parseOffset } from '../route-auth';
 import { NotFoundError } from 'takos-common/errors';
 import {
   findRepoByUsernameAndName,

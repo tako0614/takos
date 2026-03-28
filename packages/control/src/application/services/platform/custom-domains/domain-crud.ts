@@ -2,7 +2,7 @@ import type { Env } from '../../../../shared/types';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, count } from 'drizzle-orm';
 import { isDomainReserved, generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domain-validation';
-import { now } from '../../../../shared/utils';
+
 import { deleteHostnameRouting } from '../../routing/service';
 import { ServiceDesiredStateService } from '../worker-desired-state';
 import { logError } from '../../../../shared/utils/logger';
@@ -104,7 +104,7 @@ export async function addCustomDomain(
   const verificationToken = generateVerificationToken();
 
   try {
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     await db.insert(serviceCustomDomains).values({
       id: domainId,
       serviceId,

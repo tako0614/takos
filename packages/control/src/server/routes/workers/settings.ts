@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import settingsConfig from './settings-config';
 import settingsEnvVars from './settings-env-vars';
 import settingsCommonEnv from './settings-common-env';

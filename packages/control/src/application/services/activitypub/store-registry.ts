@@ -7,7 +7,7 @@ import { and, eq, desc } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import {
   resolveStoreViaWebFinger,
   fetchRemoteStoreActor,
@@ -75,7 +75,7 @@ function actorToInsertValues(
   actor: RemoteStoreActor,
   options: { setActive?: boolean; subscribe?: boolean },
 ) {
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   return {
     id,
     accountId,
@@ -131,7 +131,7 @@ export async function addRemoteStore(
   // 4. If setting active, deactivate others
   if (input.setActive) {
     await db.update(storeRegistry)
-      .set({ isActive: false, updatedAt: now() })
+      .set({ isActive: false, updatedAt: new Date().toISOString() })
       .where(and(eq(storeRegistry.accountId, accountId), eq(storeRegistry.isActive, true)));
   }
 
@@ -220,7 +220,7 @@ export async function setActiveStore(
   entryId: string | null,
 ): Promise<void> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   // Deactivate all
   await db.update(storeRegistry)
@@ -259,7 +259,7 @@ export async function refreshRemoteStore(
   if (!existing) return null;
 
   const actor = await fetchRemoteStoreActor(existing.actorUrl);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const updates = {
     name: actor.name || existing.name,
@@ -305,7 +305,7 @@ export async function setSubscription(
   if (!existing) return false;
 
   await db.update(storeRegistry)
-    .set({ subscriptionEnabled: enabled, updatedAt: now() })
+    .set({ subscriptionEnabled: enabled, updatedAt: new Date().toISOString() })
     .where(eq(storeRegistry.id, entryId));
 
   return true;
@@ -334,7 +334,7 @@ export async function markOutboxChecked(
   entryId: string,
 ): Promise<void> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   await db.update(storeRegistry)
     .set({ lastOutboxCheckedAt: timestamp, updatedAt: timestamp })
     .where(eq(storeRegistry.id, entryId));

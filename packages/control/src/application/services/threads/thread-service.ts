@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
 import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
-import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
+import { checkSpaceAccess, generateId, toIsoString } from '../../../shared/utils';
 import { getDb, threads, messages, runs } from '../../../infra/db';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
@@ -147,7 +147,7 @@ export async function createThread(
 ): Promise<Thread | null> {
   const db = getDb(dbBinding);
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const title = input.title || null;
 
   const result = await db.insert(threads).values({
@@ -173,7 +173,7 @@ export async function updateThread(
   }
 
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const data: Partial<InsertOf<typeof threads>> = { updatedAt: timestamp };
 
@@ -208,7 +208,7 @@ export async function updateThreadStatus(
   status: ThreadStatus
 ): Promise<void> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.update(threads)
     .set({ status, updatedAt: timestamp })
@@ -221,7 +221,7 @@ export async function deleteThread(
   threadId: string
 ): Promise<void> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.update(threads)
     .set({ status: 'deleted', updatedAt: timestamp })
@@ -324,7 +324,7 @@ export async function createMessage(
 
   const sequence = (agg?.maxSeq ?? -1) + 1;
   const id = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const toolCallsStr = input.tool_calls ? JSON.stringify(input.tool_calls) : null;
   const metadataStr = JSON.stringify(input.metadata || {});
 

@@ -40,6 +40,7 @@ interface ManifestService {
   maxInstances?: number;
   ipv4?: boolean;
   env?: Record<string, string>;
+  healthCheck?: { path: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
 }
 
 /** Worker definition in the new `spec.workers` section */
@@ -62,13 +63,14 @@ interface ManifestWorker {
     analytics?: string[];
     workflows?: string[];
     durableObjects?: string[];
-    services?: string[];
+    services?: Array<string | { name: string; version?: string }>;
   };
   triggers?: {
     schedules?: Array<{ cron: string; export: string }>;
     queues?: Array<{ queue: string; export: string }>;
   };
   containers?: string[];
+  healthCheck?: { path: string; intervalSeconds?: number; timeoutSeconds?: number; unhealthyThreshold?: number };
 }
 
 interface ManifestRoute {
@@ -136,6 +138,7 @@ function emitNewFormatDocs(
           ...(service.ipv4 ? { ipv4: true } : {}),
         },
         ...(service.env ? { env: service.env } : {}),
+        ...(service.healthCheck ? { healthCheck: service.healthCheck } : {}),
       },
     });
   }
@@ -184,6 +187,7 @@ function emitNewFormatDocs(
               }
             : {}),
         },
+        ...(worker.healthCheck ? { healthCheck: worker.healthCheck } : {}),
       },
     });
 
@@ -306,6 +310,8 @@ export function appManifestToBundleDocs(
       ...(Object.keys(envSpec).length > 0 ? { env: envSpec } : manifest.spec.env ? { env: manifest.spec.env } : {}),
       ...(manifest.spec.oauth ? { oauth: manifest.spec.oauth } : {}),
       ...(manifest.spec.takos ? { takos: manifest.spec.takos } : {}),
+      ...(manifest.spec.lifecycle ? { lifecycle: manifest.spec.lifecycle } : {}),
+      ...(manifest.spec.update ? { update: manifest.spec.update } : {}),
       ...(manifest.spec.fileHandlers ? { fileHandlers: manifest.spec.fileHandlers } : {}),
     },
   });

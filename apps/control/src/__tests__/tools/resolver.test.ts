@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-vi.mock('@/tools/loaders/mcp-tools', () => ({
+vi.mock('@/tools/mcp-tools', () => ({
   loadMcpTools: vi.fn().mockResolvedValue({
     tools: new Map(),
     clients: new Map(),
@@ -12,7 +12,7 @@ vi.mock('@/tools/loaders/mcp-tools', () => ({
 
 import { ToolResolver, createToolResolver } from '@/tools/resolver';
 import { BUILTIN_TOOLS } from '@/tools/builtin';
-import { loadMcpTools } from '@/tools/loaders/mcp-tools';
+import { loadMcpTools } from '@/tools/mcp-tools';
 
 describe('ToolResolver', () => {
   const db = {} as D1Database;

@@ -10,14 +10,14 @@ import type { Env } from '@/types';
 const mockListWorkspaceCommonEnv = vi.fn();
 const mockUpsertWorkspaceCommonEnv = vi.fn();
 const mockDeleteWorkspaceCommonEnv = vi.fn();
-const mockReconcileWorkersForEnvKey = vi.fn();
+const mockReconcileServicesForEnvKey = vi.fn();
 
 vi.mock('@/services/common-env', () => ({
   CommonEnvService: vi.fn(() => ({
     listSpaceCommonEnv: mockListWorkspaceCommonEnv,
     upsertSpaceCommonEnv: mockUpsertWorkspaceCommonEnv,
     deleteSpaceCommonEnv: mockDeleteWorkspaceCommonEnv,
-    reconcileWorkersForEnvKey: mockReconcileWorkersForEnvKey,
+    reconcileServicesForEnvKey: mockReconcileServicesForEnvKey,
   })),
 }));
 
@@ -112,7 +112,7 @@ describe('workspace common env tools', () => {
   describe('workspaceEnvSetHandler', () => {
     it('creates an environment variable', async () => {
       mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileWorkersForEnvKey.mockResolvedValue(undefined);
+      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
 
       const result = JSON.parse(
         await workspaceEnvSetHandler(
@@ -128,7 +128,7 @@ describe('workspace common env tools', () => {
 
     it('creates a secret environment variable', async () => {
       mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileWorkersForEnvKey.mockResolvedValue(undefined);
+      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
 
       const result = JSON.parse(
         await workspaceEnvSetHandler(
@@ -155,14 +155,14 @@ describe('workspace common env tools', () => {
 
     it('reconciles workers after setting env', async () => {
       mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileWorkersForEnvKey.mockResolvedValue(undefined);
+      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
 
       await workspaceEnvSetHandler(
         { name: 'MY_VAR', value: 'val' },
         makeContext(),
       );
 
-      expect(mockReconcileWorkersForEnvKey).toHaveBeenCalledWith(
+      expect(mockReconcileServicesForEnvKey).toHaveBeenCalledWith(
         'ws-test',
         'MY_VAR',
         'workspace_env_put',
@@ -173,7 +173,7 @@ describe('workspace common env tools', () => {
   describe('workspaceEnvDeleteHandler', () => {
     it('deletes an environment variable', async () => {
       mockDeleteWorkspaceCommonEnv.mockResolvedValue(true);
-      mockReconcileWorkersForEnvKey.mockResolvedValue(undefined);
+      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
 
       const result = JSON.parse(
         await workspaceEnvDeleteHandler({ name: 'MY_VAR' }, makeContext()),
@@ -199,11 +199,11 @@ describe('workspace common env tools', () => {
 
     it('reconciles workers after deletion', async () => {
       mockDeleteWorkspaceCommonEnv.mockResolvedValue(true);
-      mockReconcileWorkersForEnvKey.mockResolvedValue(undefined);
+      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
 
       await workspaceEnvDeleteHandler({ name: 'MY_VAR' }, makeContext());
 
-      expect(mockReconcileWorkersForEnvKey).toHaveBeenCalledWith(
+      expect(mockReconcileServicesForEnvKey).toHaveBeenCalledWith(
         'ws-test',
         'MY_VAR',
         'workspace_env_delete',

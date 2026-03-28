@@ -1,6 +1,6 @@
 import type { Env } from '../../../shared/types';
 import type { Snapshot, SnapshotTree, BlobFetcher } from './models';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, snapshots, blobs, files } from '../../../infra/db';
 import { eq, and, inArray, lte, ne, sql } from 'drizzle-orm';
@@ -57,7 +57,7 @@ export class SnapshotManager {
 
         const { treeKey } = await this.storage.putTree(snapshotId, tree);
 
-        const timestamp = now();
+        const timestamp = new Date().toISOString();
         await db.insert(snapshots)
             .values({
                 id: snapshotId,
@@ -318,7 +318,7 @@ export class SnapshotManager {
                         size: size,
                         isBinary: false,
                         refcount: 1,
-                        createdAt: now(),
+                        createdAt: new Date().toISOString(),
                     })
                     .run();
             } catch {

@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { insertFailedResource, insertResource } from './store';
 import { CloudflareResourceService, type CloudflareManagedResourceType } from '../../../platform/providers/cloudflare/resources.ts';
 
@@ -40,7 +40,7 @@ export async function provisionCloudflareResource(
   cfName: string;
 }> {
   const id = input.id || generateId();
-  const timestamp = input.timestamp || now();
+  const timestamp = input.timestamp || new Date().toISOString();
   const provider = new CloudflareResourceService(env);
 
   try {

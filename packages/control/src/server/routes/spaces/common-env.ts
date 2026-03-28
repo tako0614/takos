@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../shared/route-auth';
+import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
 import { CommonEnvService } from '../../../application/services/common-env';
-import { buildCommonEnvActor } from '../common-env/handlers';
+import { buildCommonEnvActor } from '../common-env-handlers';
 import { logError } from '../../../shared/utils/logger';
 import { AppError, BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
@@ -49,7 +49,7 @@ export default new Hono<SpaceAccessRouteEnv>()
         secret: body.secret === true,
         actor,
       });
-      await service.reconcileWorkersForEnvKey(space.id, body.name, 'workspace_env_put');
+      await service.reconcileServicesForEnvKey(space.id, body.name, 'workspace_env_put');
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -72,7 +72,7 @@ export default new Hono<SpaceAccessRouteEnv>()
       if (!deleted) {
         throw new NotFoundError('Common env');
       }
-      await service.reconcileWorkersForEnvKey(space.id, envName, 'workspace_env_delete');
+      await service.reconcileServicesForEnvKey(space.id, envName, 'workspace_env_delete');
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof AppError) throw error;

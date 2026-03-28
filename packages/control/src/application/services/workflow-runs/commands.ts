@@ -5,7 +5,7 @@ import {
   type Workflow,
   type WorkflowDiagnostic,
 } from 'takos-actions-engine';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows } from '../../../infra/db';
 import { eq, and, inArray, max } from 'drizzle-orm';
 
@@ -149,7 +149,7 @@ export async function dispatchWorkflowRun(
     .get();
 
   const runNumber = (lastRun?.maxRunNumber || 0) + 1;
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const runId = generateId();
   const existingWorkflow = await db.select({ id: workflows.id })
     .from(workflows)
@@ -231,7 +231,7 @@ export async function cancelWorkflowRun(
     .from(workflowJobs)
     .where(and(eq(workflowJobs.runId, params.runId), eq(workflowJobs.status, 'in_progress')))
     .all();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.update(workflowRuns)
     .set({ status: 'cancelled', conclusion: 'cancelled', completedAt: timestamp })
@@ -292,7 +292,7 @@ export async function rerunWorkflowRun(
   const parsed = loadAndValidateWorkflow(resolved.content);
   if (!parsed.ok) return { ok: false as const, status: 400 as const, error: parsed.error.message, details: parsed.error.details };
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const newRunId = generateId();
   const newAttempt = run.runAttempt + 1;
 

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import { parseWorkflow } from 'takos-actions-engine';
-import { generateId, now, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
-import { parseJsonBody } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { parseJsonBody } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import type { RepoAccess } from '../../../application/services/source/repos';
 import * as gitStore from '../../../application/services/git-smart';
@@ -12,6 +12,7 @@ import type { Database } from '../../../infra/db';
 import { workflows } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { NotFoundError, InternalError } from 'takos-common/errors';
+import { ok } from '../response-helpers';
 
 interface WorkflowParseResult {
   name: string | null;
@@ -239,7 +240,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const content = new TextDecoder().decode(blob);
     const { name, triggers, errors } = parseWorkflowContent(content);
 
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
     const workflowId = await upsertWorkflowCache(db, repoId, path, content, name, triggers, timestamp, cached?.id);
 
     return c.json({
@@ -284,7 +285,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
   const content = new TextDecoder().decode(blob);
   const { name, triggers, errors } = parseWorkflowContent(content);
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const existing = await db.select({ id: workflows.id })
     .from(workflows)
     .where(and(eq(workflows.repoId, repoId), eq(workflows.path, path)))
@@ -324,7 +325,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
   const refName = resolveRefName(body.branch, repoAccess);
   const workflowFiles = await listWorkflowFiles(c.env.DB, bucket, repoId, refName);
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const synced: string[] = [];
   const errors: Array<{ path: string; error: string }> = [];
 
@@ -382,7 +383,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
   await db.delete(workflows)
     .where(and(eq(workflows.repoId, repoId), eq(workflows.path, path)));
 
-  return c.json({ deleted: true });
+  return ok(c);
   });
 
 export default workflowsRouter;

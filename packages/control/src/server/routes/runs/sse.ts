@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../shared/route-auth';
+import type { BaseVariables } from '../route-auth';
 import { NotFoundError, AppError, ErrorCodes } from 'takos-common/errors';
 import { checkRunAccess } from './access';
 import { getPlatformServices } from '../../../platform/accessors.ts';

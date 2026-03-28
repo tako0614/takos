@@ -11,7 +11,7 @@ import { extractJsonFromLLMResponse, REVIEW_PROMPT } from './workflow-types';
 import { LLMClient } from './llm';
 import { getDb, pullRequests, prReviews } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { buildPRDiffText } from '../pull-requests/ai-review';
 import { logError } from '../../../shared/utils/logger';
 
@@ -67,7 +67,7 @@ export async function executeReview(
   }
 
   const reviewId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.insert(prReviews).values({
     id: reviewId,

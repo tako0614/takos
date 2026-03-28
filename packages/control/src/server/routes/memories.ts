@@ -8,7 +8,7 @@ import type {
   ReminderPriority,
 } from '../../shared/types';
 import { checkSpaceAccess } from '../../shared/utils';
-import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
+import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './route-auth';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {

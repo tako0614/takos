@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from './shared/route-auth';
+import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
 import {
   createSkill,
   deleteSkillByName,

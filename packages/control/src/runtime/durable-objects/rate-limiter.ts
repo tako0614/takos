@@ -1,10 +1,9 @@
 import {
-  checkSlidingWindow,
   hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
 } from '../../shared/utils/sliding-window';
-import { checkTokenBucket, hitTokenBucket, type TokenBucketState } from '../../shared/utils/token-bucket';
+import { hitTokenBucket, type TokenBucketState } from '../../shared/utils/token-bucket';
 
 import { jsonResponse } from './do-header-utils';
 import { logWarn } from '../../shared/utils/logger';
@@ -157,7 +156,7 @@ export class RateLimiterDO implements DurableObject {
 
     if (algorithm === 'token_bucket') {
       const state = this.tokenBuckets.get(key);
-      const { state: next, result } = checkTokenBucket(state, { maxRequests, windowMs });
+      const { state: next, result } = hitTokenBucket(state, { maxRequests, windowMs }, undefined, true);
       this.tokenBuckets.set(key, next);
       this.entries.delete(key);
 
@@ -165,11 +164,11 @@ export class RateLimiterDO implements DurableObject {
     }
 
     const timestamps = this.entries.get(key) || [];
-    const sliding = checkSlidingWindow(timestamps, { maxRequests, windowMs });
+    const sliding = hitSlidingWindow(timestamps, { maxRequests, windowMs }, undefined, true).result;
 
     if (algorithm === 'shadow') {
       const state = this.tokenBuckets.get(key);
-      const { state: next, result: tokenBucket } = checkTokenBucket(state, { maxRequests, windowMs });
+      const { state: next, result: tokenBucket } = hitTokenBucket(state, { maxRequests, windowMs }, undefined, true);
       this.tokenBuckets.set(key, next);
 
       return jsonResponse({

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { OptionalAuthRouteEnv } from '../shared/route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
 import profilesApi from './api';
 import profilesRepo from './repo';
 import profilesView from './view';

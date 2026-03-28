@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { generateId, now, toIsoString } from '../../../../shared/utils';
+import { generateId, toIsoString } from '../../../../shared/utils';
 import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { deleteHostnameRouting } from '../../../services/routing/service';
@@ -182,7 +182,7 @@ export const workerCreateHandler: ToolHandler = async (args, context) => {
   const icon = args.icon as string || (type === 'app' ? '📱' : '⚙️');
 
   const workerId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 32);
 
   const db = getDb(context.db);

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, now, toIsoString } from '../../../shared/utils';
-import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId, toIsoString } from '../../../shared/utils';
+import { type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -81,7 +81,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     const id = generateId();
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const comment = await db.insert(prComments).values({
       id,

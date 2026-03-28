@@ -20,7 +20,7 @@ import type {
 import { cloneExecutionContract } from './skill-scoring';
 import { selectRelevantSkills } from './skill-scoring';
 import { logWarn } from '../../../shared/utils/logger';
-import { sanitizeSkillContent } from './security/injection-detector';
+import { sanitizeSkillContent } from './injection-detector';
 
 // ── Re-exported types from skill-contracts ──────────────────────────────
 

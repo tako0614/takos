@@ -1,7 +1,7 @@
 import type { Env } from '../../../../shared/types';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { now } from '../../../../shared/utils';
+
 import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service';
 import type { RoutingTarget } from '../../routing/routing-models';
 import { ServiceDesiredStateService } from '../worker-desired-state';
@@ -42,7 +42,7 @@ export async function verifyCustomDomain(
   }
 
   await db.update(serviceCustomDomains)
-    .set({ status: 'verifying', updatedAt: now() })
+    .set({ status: 'verifying', updatedAt: new Date().toISOString() })
     .where(eq(serviceCustomDomains.id, domainId));
 
   const verifyHost = `verify.${env.TENANT_BASE_DOMAIN}`;
@@ -58,7 +58,7 @@ export async function verifyCustomDomain(
 
   if (!verification.verified) {
     await db.update(serviceCustomDomains)
-      .set({ status: 'pending', updatedAt: now() })
+      .set({ status: 'pending', updatedAt: new Date().toISOString() })
       .where(eq(serviceCustomDomains.id, domainId));
 
     return {
@@ -72,7 +72,7 @@ export async function verifyCustomDomain(
   }
 
   await db.update(serviceCustomDomains)
-    .set({ status: 'dns_verified', updatedAt: now() })
+    .set({ status: 'dns_verified', updatedAt: new Date().toISOString() })
     .where(eq(serviceCustomDomains.id, domainId));
 
   const cfResult = await createCloudflareCustomHostname(env, customDomain.domain);
@@ -82,7 +82,7 @@ export async function verifyCustomDomain(
       .set({
         status: 'ssl_failed',
         sslStatus: 'failed',
-        updatedAt: now(),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(serviceCustomDomains.id, domainId));
 
@@ -101,7 +101,7 @@ export async function verifyCustomDomain(
   const initialStatus: DomainStatus = hasCustomHostname ? 'ssl_pending' : 'active';
   const initialSslStatus = hasCustomHostname ? 'pending' : 'active';
 
-  const nowTimestamp = now();
+  const nowTimestamp = new Date().toISOString();
   try {
     await db.update(serviceCustomDomains)
       .set({
@@ -145,7 +145,7 @@ export async function verifyCustomDomain(
             cfCustomHostnameId: null,
             sslStatus: null,
             verifiedAt: null,
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domainId));
       } catch (compensateError) {
@@ -166,7 +166,7 @@ export async function verifyCustomDomain(
         message: 'DNS verified. SSL/TLS certificate is being provisioned. Check back shortly.',
         dns_verified: true,
         ssl_verified: false,
-        verified_at: now(),
+        verified_at: new Date().toISOString(),
         ssl_status: 'pending',
       },
     };
@@ -179,7 +179,7 @@ export async function verifyCustomDomain(
       message: 'Domain verified and activated successfully',
       dns_verified: true,
       ssl_verified: true,
-      verified_at: now(),
+      verified_at: new Date().toISOString(),
       ssl_status: 'active',
     },
   };
@@ -226,7 +226,7 @@ export async function getCustomDomainDetails(
           .set({
             status: 'active',
             sslStatus: 'active',
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domainId));
       } else if (['pending_validation', 'pending_issuance', 'pending_deployment'].includes(cfStatus.sslStatus)) {
@@ -238,7 +238,7 @@ export async function getCustomDomainDetails(
           .set({
             status: 'ssl_failed',
             sslStatus: 'failed',
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domainId));
       }
@@ -332,7 +332,7 @@ export async function refreshSslStatus(
       .set({
         status: newDomainStatus,
         sslStatus: newSslStatus,
-        updatedAt: now(),
+        updatedAt: new Date().toISOString(),
       })
       .where(eq(serviceCustomDomains.id, domainId));
   }

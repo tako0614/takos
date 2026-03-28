@@ -2,7 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { getDb, skills as skillsTable } from '../../../infra/db';
-import { generateId, now, toIsoString } from '../../../shared/utils';
+import { generateId, toIsoString } from '../../../shared/utils';
 import {
   getOfficialSkillById,
   listLocalizedOfficialSkills,
@@ -178,7 +178,7 @@ export async function createSkill(
   const drizzle = getDb(db);
   const metadata = await validateSkillMetadataForWorkspace(db, spaceId, input.metadata);
   const skillId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const triggersStr = input.triggers?.join(',') || null;
 
   const skill = await drizzle
@@ -221,7 +221,7 @@ export async function updateSkill(
     ? await validateSkillMetadataForWorkspace(db, spaceId, input.metadata)
     : parseSkillMetadata(skill.metadata);
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const name = input.name?.trim() || skill.name;
   const description = input.description !== undefined ? (input.description?.trim() || null) : skill.description;
   const instructions = input.instructions?.trim() || skill.instructions;
@@ -268,7 +268,7 @@ export async function updateSkillByName(
 
 export async function updateSkillEnabled(db: D1Database, skillId: string, enabled: boolean): Promise<boolean> {
   const drizzle = getDb(db);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await drizzle
     .update(skillsTable)

@@ -68,6 +68,7 @@ export {
 // --- Refs ---
 export {
   getBranch,
+  getBranchesByNames,
   getDefaultBranch,
   listBranches,
   isValidRefName,

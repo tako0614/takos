@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Env } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, files, apps } from '../../../infra/db';
 import { eq, and, like } from 'drizzle-orm';
 
@@ -96,7 +96,7 @@ export async function deployFrontendFromWorkspace(
     uploaded++;
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   // Check if app exists
   const existingApp = await drizzle.select({ id: apps.id }).from(apps).where(and(eq(apps.accountId, input.spaceId), eq(apps.name, appName))).get();

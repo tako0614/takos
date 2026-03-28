@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, parseOffset } from '../../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
+import { parseLimit, parseOffset } from '../../route-auth';
+import type { AuthenticatedRouteEnv } from '../../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../../zod-validator';
 import { checkRepoAccess } from '../../../../application/services/source/repos';

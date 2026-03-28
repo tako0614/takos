@@ -9,10 +9,10 @@ import { createEmptyTree, applyTreeChanges } from './core/tree-ops';
 import { putBlob, getCommitData } from './core/object-store';
 import { getDb, branches, tags, repoForks, repoRemotes } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 
 function makeSignature(sig?: GitSignature): GitSignature {
-  const ts = now();
+  const ts = new Date().toISOString();
   return sig || {
     name: 'System',
     email: 'system@takos.dev',
@@ -52,7 +52,7 @@ export async function forkRepository(
   targetRepoId: string,
 ): Promise<void> {
   const db = getDb(dbBinding);
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const sourceBranches = await db.select().from(branches).where(eq(branches.repoId, sourceRepoId)).all();
   const sourceTags = await db.select().from(tags).where(eq(tags.repoId, sourceRepoId)).all();

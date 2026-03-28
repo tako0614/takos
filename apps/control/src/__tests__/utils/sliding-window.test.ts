@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkSlidingWindow,
   hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
 } from '@/utils/sliding-window';
 
-describe('checkSlidingWindow', () => {
+describe('hitSlidingWindow (dryRun)', () => {
   const config = { maxRequests: 5, windowMs: 10_000 };
 
   it('allows when no previous timestamps', () => {
-    const result = checkSlidingWindow([], config, 1_000_000);
+    const { result } = hitSlidingWindow([], config, 1_000_000, true);
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(5);
     expect(result.total).toBe(5);
@@ -19,7 +18,7 @@ describe('checkSlidingWindow', () => {
   it('decrements remaining based on recent timestamps', () => {
     const now = 1_000_000;
     const timestamps = [now - 1000, now - 2000, now - 3000];
-    const result = checkSlidingWindow(timestamps, config, now);
+    const { result } = hitSlidingWindow(timestamps, config, now, true);
     expect(result.remaining).toBe(2);
     expect(result.allowed).toBe(true);
   });
@@ -27,7 +26,7 @@ describe('checkSlidingWindow', () => {
   it('returns 0 remaining when at capacity', () => {
     const now = 1_000_000;
     const timestamps = Array.from({ length: 5 }, (_, i) => now - i * 100);
-    const result = checkSlidingWindow(timestamps, config, now);
+    const { result } = hitSlidingWindow(timestamps, config, now, true);
     expect(result.remaining).toBe(0);
     expect(result.allowed).toBe(false);
   });
@@ -36,7 +35,7 @@ describe('checkSlidingWindow', () => {
     const now = 1_000_000;
     // 3 timestamps outside window, 2 inside
     const timestamps = [now - 15000, now - 12000, now - 11000, now - 1000, now - 500];
-    const result = checkSlidingWindow(timestamps, config, now);
+    const { result } = hitSlidingWindow(timestamps, config, now, true);
     expect(result.remaining).toBe(3);
     expect(result.allowed).toBe(true);
   });
@@ -44,14 +43,20 @@ describe('checkSlidingWindow', () => {
   it('sets reset to earliest valid timestamp + window', () => {
     const now = 1_000_000;
     const timestamps = [now - 5000, now - 1000];
-    const result = checkSlidingWindow(timestamps, config, now);
+    const { result } = hitSlidingWindow(timestamps, config, now, true);
     expect(result.reset).toBe((now - 5000) + 10_000);
   });
 
   it('sets reset to now + window when no timestamps', () => {
     const now = 1_000_000;
-    const result = checkSlidingWindow([], config, now);
+    const { result } = hitSlidingWindow([], config, now, true);
     expect(result.reset).toBe(now + 10_000);
+  });
+
+  it('does not push a timestamp when dryRun is true', () => {
+    const now = 1_000_000;
+    const { timestamps } = hitSlidingWindow([], config, now, true);
+    expect(timestamps).toHaveLength(0);
   });
 });
 

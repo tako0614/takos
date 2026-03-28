@@ -12,7 +12,7 @@ import { runs } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
 import { ok, err, classifyProxyError, type AgentExecutorEnv } from './executor-utils';
-import { decodeBase64ToBytes } from '../../shared/utils/encoding-utils';
+import { base64ToBytes } from '../../shared/utils/encoding-utils';
 
 type Env = AgentExecutorEnv;
 
@@ -147,7 +147,7 @@ export async function handleR2Proxy(path: string, prefix: string, body: Record<s
           value = null;
         } else if (encoding === 'base64') {
           if (typeof bodyBase64 !== 'string') return err('Missing bodyBase64 for base64 payload', 400);
-          value = decodeBase64ToBytes(bodyBase64);
+          value = base64ToBytes(bodyBase64);
         } else if (encoding === 'text') {
           if (typeof legacyBody !== 'string') return err('Missing body for text payload', 400);
           value = legacyBody;

@@ -29,28 +29,6 @@ export class CommonEnvOrchestrator {
     });
   }
 
-  async enqueueWorkerReconcile(params: {
-    spaceId: string;
-    workerId: string;
-    targetKeys?: string[];
-    trigger: CommonEnvReconcileTrigger;
-  }): Promise<void> {
-    await this.enqueueServiceReconcile({
-      spaceId: params.spaceId,
-      serviceId: params.workerId,
-      targetKeys: params.targetKeys,
-      trigger: params.trigger,
-    });
-  }
-
-  async reconcileWorkersForEnvKey(
-    spaceId: string,
-    envNameRaw: string,
-    trigger: CommonEnvReconcileTrigger = 'workspace_env_put'
-  ): Promise<void> {
-    await this.reconcileServicesForEnvKey(spaceId, envNameRaw, trigger);
-  }
-
   async reconcileServicesForEnvKey(
     spaceId: string,
     envNameRaw: string,
@@ -63,20 +41,6 @@ export class CommonEnvOrchestrator {
       serviceIds,
       targetKeys: [envName],
       trigger,
-    });
-  }
-
-  async reconcileWorkers(params: {
-    spaceId: string;
-    workerIds: string[];
-    keys?: string[];
-    trigger?: CommonEnvReconcileTrigger;
-  }): Promise<void> {
-    await this.reconcileServices({
-      spaceId: params.spaceId,
-      serviceIds: params.workerIds,
-      keys: params.keys,
-      trigger: params.trigger,
     });
   }
 

@@ -12,8 +12,7 @@ import { buildDurableObjectUrl } from '../../../shared/utils';
 import {
   fetchWithTimeout,
 } from '../../../application/services/execution/run-events';
-
-const MAX_EVENTS_PER_RESPONSE = 2000;
+import { MAX_EVENTS_PER_RESPONSE } from '../../../shared/config/limits';
 
 type RunNotifierNamespace = {
   idFromName(name: string): unknown;

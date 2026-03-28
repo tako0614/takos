@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { generateId, now } from '../../../shared/utils';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId } from '../../../shared/utils';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { generateExploreInvalidationUrls, hasWriteRole } from './routes';
 import { getDb } from '../../../infra/db';
@@ -10,6 +10,7 @@ import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { type ReleaseAsset, toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { sanitizeReleaseAssetFilename, buildAttachmentDisposition } from './release-shared';
+import { ok } from '../response-helpers';
 
 const releaseAssets = new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/releases/:tag/assets', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {
@@ -70,7 +71,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
   const fileNameLower = fileName.toLowerCase();
   const assetId = generateId();
   const r2Key = `release-assets/${repoId}/${releaseData.id}/${assetId}/${fileName}`;
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   let detectedContentType = 'application/octet-stream';
   if (fileNameLower.endsWith('.takopack')) {
@@ -244,10 +245,10 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
 
   await db.delete(repoReleaseAssets).where(eq(repoReleaseAssets.id, assetId));
   await db.update(repoReleases)
-    .set({ updatedAt: now() })
+    .set({ updatedAt: new Date().toISOString() })
     .where(eq(repoReleases.id, releaseData.id));
 
-  return c.json({ deleted: true });
+  return ok(c);
   })
   .get('/repos/:repoId/releases/:tag/assets', async (c) => {
   const user = c.get('user');

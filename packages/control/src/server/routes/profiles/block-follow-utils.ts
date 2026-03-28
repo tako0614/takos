@@ -2,6 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Database } from '../../../infra/db';
 import type { Env } from '../../../shared/types';
 import type { FollowUserResponse } from './dto';
+import { paginatedResponse } from '../../../shared/utils';
 import { createNotification } from '../../../application/services/notifications/service';
 import { isMutedBy } from './profile-queries';
 import {
@@ -102,7 +103,8 @@ export async function fetchFollowList(
     });
   }
 
-  return { users, total, has_more: offset + users.length < total };
+  const { has_more } = paginatedResponse(users, total, { limit, offset });
+  return { users, total, has_more };
 }
 
 export async function sendFollowNotificationIfNotMuted(

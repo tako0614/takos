@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, AgentTaskStatus } from '../../shared/types';
-import { parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
+import { parseLimit, parseOffset, type BaseVariables } from './route-auth';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
-import { checkSpaceAccess, generateId, now } from '../../shared/utils';
+import { checkSpaceAccess, generateId } from '../../shared/utils';
 import { createThread } from '../../application/services/threads/thread-service';
 import { analyzeTask } from '../../application/services/agent/workflow';
 import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../application/services/agent';
@@ -103,7 +103,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const normalizedModel = normalizeModelId(body.model);
     const taskId = generateId();
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const db = getDb(c.env.DB);
     const created = await db.insert(agentTasks).values({
@@ -249,18 +249,18 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     if (!updates.completedAt && body.status === 'completed') {
-      updates.completedAt = now();
+      updates.completedAt = new Date().toISOString();
     }
 
     if (!updates.startedAt && body.status === 'in_progress') {
-      updates.startedAt = now();
+      updates.startedAt = new Date().toISOString();
     }
 
     if (Object.keys(updates).length === 0) {
       throw new BadRequestError('No valid updates provided');
     }
 
-    updates.updatedAt = now();
+    updates.updatedAt = new Date().toISOString();
     const updated = await db.update(agentTasks).set(updates).where(eq(agentTasks.id, taskId)).returning().get();
     if (!updated) {
       throw new InternalError('Failed to update task');
@@ -333,7 +333,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       });
 
       const planJson = JSON.stringify(plan);
-      const timestamp = now();
+      const timestamp = new Date().toISOString();
 
       const db = getDb(c.env.DB);
       const updated = await db.update(agentTasks).set({

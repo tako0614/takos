@@ -1,5 +1,5 @@
 import { BadRequestError } from 'takos-common/errors';
-import { now } from '../../../shared/utils';
+
 import {
   getDb,
   serviceRuntimeSettings,
@@ -90,7 +90,7 @@ export async function saveRuntimeConfig(
   if (!serviceId) {
     throw new BadRequestError('Service runtime config requires a service identifier');
   }
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const compatibilityFlags = Array.from(new Set((params.compatibilityFlags || []).filter((flag) => typeof flag === 'string' && flag.trim().length > 0)));
   const limits = normalizeLimits(params.limits);
 

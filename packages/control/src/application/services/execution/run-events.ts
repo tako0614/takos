@@ -1,7 +1,7 @@
 import { getDb, runEvents } from '../../../infra/db';
 import type { Env } from '../../../shared/types';
 import type { PlatformServices } from '../../../platform/platform-config.ts';
-import { now } from '../../../shared/utils';
+
 import {
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
@@ -33,7 +33,7 @@ export async function persistRunEvent(
     runId,
     type,
     data: JSON.stringify(data),
-    createdAt: now(),
+    createdAt: new Date().toISOString(),
   }).returning({ id: runEvents.id }).get();
   return event.id;
 }

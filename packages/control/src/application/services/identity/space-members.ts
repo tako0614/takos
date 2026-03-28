@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { User, SpaceMembership, SpaceRole } from '../../../shared/types';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { resolveActorPrincipalId } from './principals';
 import { getDb, accounts, accountMemberships } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
@@ -124,7 +124,7 @@ export async function createSpaceMember(
   actorId: string,
   role: SpaceRole
 ): Promise<{ role: SpaceRole; created_at: string }> {
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
   await drizzle.insert(accountMemberships).values({
@@ -150,7 +150,7 @@ export async function updateSpaceMemberRole(
   const drizzle = getDb(db);
   await drizzle
     .update(accountMemberships)
-    .set({ role, updatedAt: now() })
+    .set({ role, updatedAt: new Date().toISOString() })
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),

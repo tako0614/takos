@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { now } from '../../../shared/utils';
+
 import {
   requireSpaceAccess,
-} from '../shared/route-auth';
+} from '../route-auth';
 import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { collectReachableObjectShas } from '../../../application/services/git-smart';
@@ -264,7 +264,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError('No valid updates provided');
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   data.updatedAt = timestamp;
 
   const updatedRepoArr = await db.update(repositories)

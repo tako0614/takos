@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import * as gitStore from '../../../application/services/git-smart';
 import { getContentTypeFromPath } from '../../../shared/utils/content-type';
 import { checkRepoAccess } from '../../../application/services/source/repos';

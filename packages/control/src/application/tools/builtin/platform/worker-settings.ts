@@ -311,7 +311,7 @@ export const workerEnvSetHandler: ToolHandler = async (args, context) => {
   });
 
   const commonEnvService = new CommonEnvService(context.env);
-  await commonEnvService.reconcileWorkerCommonEnv(ref.spaceId, ref.workerId, {
+  await commonEnvService.reconcileServiceCommonEnv(ref.spaceId, ref.workerId, {
     trigger: 'worker_env_patch',
   });
 

@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
 import { getRepositoryById } from '../../../application/services/identity/spaces';
 import { getDb } from '../../../infra/db';
 import { eq, desc } from 'drizzle-orm';
 import { repositories } from '../../../infra/db/schema';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
 import { InternalError } from 'takos-common/errors';
 
@@ -19,7 +19,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       user.id,
       ['owner', 'admin'],
       'Workspace not found or insufficient permissions'
-    );
+    );
+
     const spaceId = access.space.id;
 
     const db = getDb(c.env.DB);
@@ -40,7 +41,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     const repoId = generateId();
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     try {
       await db.insert(repositories).values({

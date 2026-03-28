@@ -57,36 +57,17 @@ function computeResetMs(
   return now + Math.max(0, msUntilFull);
 }
 
-export function checkTokenBucket(
-  state: TokenBucketState | undefined,
-  config: SlidingWindowConfig,
-  now: number = Date.now()
-): { state: TokenBucketState; result: SlidingWindowResult } {
-  const next = refill(state, config, now);
-  const remaining = Math.max(0, Math.floor(next.tokens));
-  const reset = computeResetMs(next.tokens, config, now);
-
-  return {
-    state: next,
-    result: {
-      remaining,
-      reset,
-      total: getCapacity(config),
-      allowed: remaining > 0,
-    },
-  };
-}
-
 export function hitTokenBucket(
   state: TokenBucketState | undefined,
   config: SlidingWindowConfig,
-  now: number = Date.now()
+  now: number = Date.now(),
+  dryRun: boolean = false
 ): { state: TokenBucketState; result: SlidingWindowResult } {
   const next = refill(state, config, now);
 
   const capacity = getCapacity(config);
   const allowed = capacity > 0 && next.tokens >= 1;
-  if (allowed) {
+  if (allowed && !dryRun) {
     next.tokens = Math.max(0, next.tokens - 1);
   }
 

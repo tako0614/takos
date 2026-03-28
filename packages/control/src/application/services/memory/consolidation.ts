@@ -4,7 +4,7 @@ import { LLMClient } from '../agent';
 import { getDb, memories } from '../../../infra/db';
 import { eq, and, or, lt, isNull, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { chatAndParseJsonArray } from './llm-parser';
-import { now } from '../../../shared/utils';
+
 import { logError } from '../../../shared/utils/logger';
 
 interface MergeGroup {
@@ -184,7 +184,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
           .set({
             content: group.merged,
             importance: maxImportance,
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           })
           .where(eq(memories.id, primary.id));
 
@@ -305,7 +305,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
           await db.update(memories)
             .set({
               summary,
-              updatedAt: now(),
+              updatedAt: new Date().toISOString(),
             })
             .where(eq(memories.id, memory.id));
           summarized++;

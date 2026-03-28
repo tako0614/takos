@@ -80,7 +80,7 @@ vi.mock('@/services/platform/workers', () => ({
 
 vi.mock('@/services/common-env', () => ({
   CommonEnvService: vi.fn(() => ({
-    reconcileWorkerCommonEnv: vi.fn(),
+    reconcileServiceCommonEnv: vi.fn(),
   })),
 }));
 

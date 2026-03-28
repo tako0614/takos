@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, now } from '../../../shared/utils';
-import { parseLimit, parseOffset } from '../shared/route-auth';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId } from '../../../shared/utils';
+import { parseLimit, parseOffset } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { generateExploreInvalidationUrls, hasWriteRole } from './routes';
@@ -13,6 +13,7 @@ import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError } from 'takos-common/errors';
 import { fetchReleaseWithDetails } from './release-shared';
+import { ok } from '../response-helpers';
 
 const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/releases', async (c) => {
@@ -189,7 +190,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   }
 
   const releaseId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const publishedAt = body.is_draft ? null : timestamp;
 
   await db.insert(repoReleases).values({
@@ -269,7 +270,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
     publishedAt?: string;
     updatedAt: string;
   } = {
-    updatedAt: now(),
+    updatedAt: new Date().toISOString(),
   };
 
   if (typeof body.name === 'string') {
@@ -284,7 +285,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   if (body.is_draft !== undefined) {
     updateData.isDraft = !!body.is_draft;
     if (existing.isDraft && !body.is_draft) {
-      updateData.publishedAt = now();
+      updateData.publishedAt = new Date().toISOString();
     }
   }
 
@@ -352,7 +353,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   await db.delete(repoReleases)
     .where(and(eq(repoReleases.repoId, repoId), eq(repoReleases.tag, tag)));
 
-  return c.json({ deleted: true });
+  return ok(c);
   })
   .get('/repos/:repoId/releases/latest', async (c) => {
   const user = c.get('user');

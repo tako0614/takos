@@ -1,7 +1,6 @@
 import { and, eq, like } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { accountMetadata, accounts, getDb } from '../../../infra/db';
-import { now } from '../../../shared/utils';
 
 const STORE_KEY_PREFIX = 'activitypub_store:';
 
@@ -278,7 +277,7 @@ export async function createActivityPubStore(
     throw new Error('store slug already exists');
   }
 
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
   const db = getDb(dbBinding);
   await db.insert(accountMetadata).values({
     accountId,
@@ -334,7 +333,7 @@ export async function updateActivityPubStore(
     summary: input.summary !== undefined ? input.summary : parsed.summary,
     iconUrl: input.iconUrl !== undefined ? input.iconUrl : parsed.iconUrl,
   });
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.update(accountMetadata)
     .set({

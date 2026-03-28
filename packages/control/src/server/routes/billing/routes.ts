@@ -6,11 +6,11 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../shared/route-auth';
+import type { BaseVariables } from '../route-auth';
 import { getDb } from '../../../infra/db';
 import { billingAccounts, usageRollups } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { now } from '../../../shared/utils';
+
 import {
   getOrCreateBillingAccount,
   addCredits,
@@ -432,9 +432,9 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
               planId: 'plan_plus',
               stripeCustomerId: fullSession.customer,
               stripeSubscriptionId: fullSession.subscription,
-              subscriptionStartedAt: now(),
+              subscriptionStartedAt: new Date().toISOString(),
               subscriptionPeriodEnd: null,
-              updatedAt: now(),
+              updatedAt: new Date().toISOString(),
             }).where(eq(billingAccounts.id, account.id));
           } else if (purchaseKind === PRO_TOPUP_PURCHASE_KIND) {
             if (fullSession.payment_status !== 'paid') {
@@ -448,7 +448,7 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
             await db.update(billingAccounts).set({
               planId: 'plan_payg',
               stripeCustomerId: fullSession.customer ?? account.stripeCustomerId ?? null,
-              updatedAt: now(),
+              updatedAt: new Date().toISOString(),
             }).where(eq(billingAccounts.id, account.id));
             await addCredits(c.env.DB, account.id, pack.creditsCents, `Pro top-up credit (${pack.id}, ${pack.creditsCents}¢)`);
           }
@@ -465,7 +465,7 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
         if (account && account.planId === 'plan_plus' && periodEnd) {
           await db.update(billingAccounts).set({
             subscriptionPeriodEnd: new Date(periodEnd * 1000).toISOString(),
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           }).where(eq(billingAccounts.id, account.id));
         }
       } else if (isEventType(event, 'customer.subscription.deleted')) {
@@ -481,7 +481,7 @@ export const billingWebhookHandler = new Hono<{ Bindings: Env }>()
             stripeSubscriptionId: null,
             subscriptionStartedAt: null,
             subscriptionPeriodEnd: null,
-            updatedAt: now(),
+            updatedAt: new Date().toISOString(),
           }).where(eq(billingAccounts.id, account.id));
         }
       }

@@ -11,36 +11,18 @@ export interface SlidingWindowConfig {
   windowMs: number;
 }
 
-export function checkSlidingWindow(
-  timestamps: number[],
-  config: SlidingWindowConfig,
-  now: number = Date.now()
-): SlidingWindowResult {
-  const windowStart = now - config.windowMs;
-  const validTimestamps = timestamps.filter((t) => t > windowStart);
-
-  const remaining = Math.max(0, config.maxRequests - validTimestamps.length);
-  const reset = validTimestamps.length > 0 ? validTimestamps[0] + config.windowMs : now + config.windowMs;
-
-  return {
-    remaining,
-    reset,
-    total: config.maxRequests,
-    allowed: remaining > 0,
-  };
-}
-
 export function hitSlidingWindow(
   timestamps: number[],
   config: SlidingWindowConfig,
-  now: number = Date.now()
+  now: number = Date.now(),
+  dryRun: boolean = false
 ): { timestamps: number[]; result: SlidingWindowResult } {
   const windowStart = now - config.windowMs;
   const validTimestamps = timestamps.filter((t) => t > windowStart);
 
   const allowed = validTimestamps.length < config.maxRequests;
 
-  if (allowed) {
+  if (allowed && !dryRun) {
     validTimestamps.push(now);
   }
 

@@ -1,4 +1,4 @@
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { Env } from '../../../shared/types';
 import { getDb, serviceCommonEnvAuditLogs } from '../../../infra/db';
 import type { D1Database } from '../../../shared/types/bindings.ts';

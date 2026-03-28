@@ -1,4 +1,4 @@
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import type { Env, SpaceRole, RunQueueMessage } from '../../../shared/types';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { checkThreadAccess } from '../threads/thread-service';
@@ -76,7 +76,7 @@ export async function createThreadRun(env: Env, input: CreateThreadRunInput): Pr
   const validatedModel = await resolveRunModel(env.DB, spaceId, input.model);
   const runInput = JSON.stringify(input.input || {});
   const agentType = input.agentType || 'default';
-  const createdAt = now();
+  const createdAt = new Date().toISOString();
   const rootThreadId = parentRun?.rootThreadId ?? parentRun?.threadId ?? input.threadId;
   const rootRunId = parentRun?.rootRunId ?? parentRun?.id ?? runId;
   const childThreadId = parentRun && parentRun.threadId !== input.threadId

@@ -6,7 +6,7 @@
 import { and, eq, desc, count as countFn } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { fetchRemoteOutbox } from './remote-store-client';
 import {
   listSubscribedStores,
@@ -112,7 +112,7 @@ export async function pollSingleStore(
       published: activity.published || null,
       seen: false,
       rawJson: JSON.stringify(activity),
-      createdAt: now(),
+      createdAt: new Date().toISOString(),
     });
     newCount++;
   }

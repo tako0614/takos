@@ -9,7 +9,7 @@ import type { AgentMessage, AgentConfig, AgentEvent } from './agent-models';
 import type { RunTerminalPayload } from '../run-notifier';
 import type { LLMClient } from './llm';
 import type { ToolExecutorLike } from '../../tools/executor';
-import type { ToolExecution } from './runner-types';
+import type { ToolExecution } from './runner-utils';
 import type { Env } from '../../../shared/types';
 import type { RunStatus } from '../../../shared/types';
 import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
@@ -26,7 +26,7 @@ import {
   addToolExecution,
   redactSensitiveArgs,
   MAX_TOTAL_TOOL_CALLS,
-} from './runner-types';
+} from './runner-utils';
 
 export interface SimpleLoopDeps {
   env: Env;

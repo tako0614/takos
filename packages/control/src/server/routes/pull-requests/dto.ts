@@ -6,7 +6,7 @@ import { getDb, type Database } from '../../../infra/db';
 import { inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 type PrRecord = SelectOf<typeof pullRequests>;
-import { toIsoString, toRequiredIsoString } from '../../../shared/utils';
+import { toIsoString } from '../../../shared/utils';
 
 export type UserLiteDto = {
   id: string;
@@ -162,8 +162,8 @@ export function toPullRequestRecord(record: PrRecord): PullRequestRecord {
     status: record.status as PullRequestStatus,
     authorType: record.authorType as AuthorType,
     authorId: record.authorId,
-    createdAt: toRequiredIsoString(record.createdAt),
-    updatedAt: toRequiredIsoString(record.updatedAt),
+    createdAt: toIsoString(record.createdAt),
+    updatedAt: toIsoString(record.updatedAt),
     mergedAt: toIsoString(record.mergedAt),
   };
 }
@@ -197,8 +197,8 @@ export function toPullRequestDto(
     comments_count: options.commentsCount,
     reviews_count: options.reviewsCount,
     is_mergeable: options.isMergeable,
-    created_at: toRequiredIsoString(pullRequest.createdAt),
-    updated_at: toRequiredIsoString(pullRequest.updatedAt),
+    created_at: toIsoString(pullRequest.createdAt),
+    updated_at: toIsoString(pullRequest.updatedAt),
     merged_at: toIsoString(mergedAt),
     closed_at: toIsoString(closedAt),
   };

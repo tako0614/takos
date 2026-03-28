@@ -8,7 +8,7 @@ import type {
   ReviewerType,
 } from '../../../shared/types';
 import type { AgentMessage } from '../agent/types';
-import { generateId, now, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { getWorkspaceModelSettings } from '../identity/spaces';
 import { LLMClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
 import { getDb, prReviews, prComments } from '../../../infra/db';
@@ -311,7 +311,7 @@ export async function runAiReview(options: {
 
   const db = getDb(env.DB);
   const reviewId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   const review = await db.insert(prReviews).values({
     id: reviewId,

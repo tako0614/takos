@@ -14,7 +14,7 @@ import { getDb } from '../../../infra/db';
 import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { parseLimit, parseOffset } from '../shared/route-auth';
+import { parseLimit, parseOffset } from '../route-auth';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from 'takos-common/errors';
 import {
   buildCatalogSuggestions,

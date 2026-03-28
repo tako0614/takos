@@ -18,7 +18,7 @@ import { indexCommit, getCommit } from '../git-smart/core/commit-index';
 import { createBranch, createTag } from '../git-smart/core/refs';
 import { getDb, repositories, repoRemotes } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { generateId, now } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { logInfo, logError } from '../../../shared/utils/logger';
 import { inferRepoName, normalizeGitUrl, sanitizeImportName } from './external-import-utils';
 
@@ -146,7 +146,7 @@ export async function importExternalRepository(
 
   // Step 4: Create repository record
   const repoId = generateId();
-  const timestamp = now();
+  const timestamp = new Date().toISOString();
 
   await db.insert(repositories).values({
     id: repoId,
@@ -302,7 +302,7 @@ export async function fetchRemoteUpdates(
     // Already up to date
     if (remote) {
       await db.update(repoRemotes)
-        .set({ lastFetchedAt: now() })
+        .set({ lastFetchedAt: new Date().toISOString() })
         .where(eq(repoRemotes.id, remote.id));
     }
     return { newCommits: 0, updatedBranches: [], newTags: [] };
@@ -355,7 +355,7 @@ export async function fetchRemoteUpdates(
   // Update last_fetched_at
   if (remote) {
     await db.update(repoRemotes)
-      .set({ lastFetchedAt: now() })
+      .set({ lastFetchedAt: new Date().toISOString() })
       .where(eq(repoRemotes.id, remote.id));
   }
 

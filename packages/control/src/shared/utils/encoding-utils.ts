@@ -37,14 +37,6 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Decode a base64 string to a Uint8Array using atob.
- * Alias for {@link base64ToBytes} for backward compatibility.
- */
-export function decodeBase64ToBytes(base64: string): Uint8Array {
-  return base64ToBytes(base64);
-}
-
 // --- Hash helpers ---
 
 /** Compute SHA-256 of a string or ArrayBuffer and return the hex digest. */

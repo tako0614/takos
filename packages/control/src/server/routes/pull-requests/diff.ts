@@ -1,8 +1,9 @@
 import * as gitStore from '../../../application/services/git-smart';
 import { decodeBlobContent } from '../../../shared/utils/unified-diff';
 import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
-import type { AuthenticatedRouteEnv } from '../shared/route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth';
 import { toGitBucket, type GitBucket } from './git-store';
+import { GIT_DIFF_MAX_FILE_BYTES, GIT_DIFF_MAX_LINES, GIT_DIFF_MAX_FILES } from '../../../shared/config/limits';
 
 export type FileStatus = 'added' | 'modified' | 'deleted';
 
@@ -154,9 +155,9 @@ async function computeDetailedFileDiffs(
   baseFiles: TreeFileEntry[],
   headFiles: TreeFileEntry[],
 ): Promise<{ files: DetailedDiffFile[]; truncated: boolean }> {
-  const MAX_FILES = 200;
-  const MAX_FILE_BYTES = 256 * 1024;
-  const MAX_LINES = 2000;
+  const MAX_FILES = GIT_DIFF_MAX_FILES;
+  const MAX_FILE_BYTES = GIT_DIFF_MAX_FILE_BYTES;
+  const MAX_LINES = GIT_DIFF_MAX_LINES;
 
   const baseMap = new Map(baseFiles.map((file) => [file.path, file.sha]));
   const headMap = new Map(headFiles.map((file) => [file.path, file.sha]));

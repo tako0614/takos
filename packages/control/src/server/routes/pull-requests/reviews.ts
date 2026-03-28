@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ReviewStatus, ReviewerType } from '../../../shared/types';
-import { generateId, now, toIsoString } from '../../../shared/utils';
-import { type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { generateId, toIsoString } from '../../../shared/utils';
+import { type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -141,7 +141,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const id = generateId();
     const reviewerType = 'user';
-    const timestamp = now();
+    const timestamp = new Date().toISOString();
 
     const review = await db.insert(prReviews).values({
       id,

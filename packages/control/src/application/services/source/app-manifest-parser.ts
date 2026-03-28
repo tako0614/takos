@@ -15,9 +15,84 @@ import {
   type AppService,
   type AppWorker,
   type AppEnvConfig,
+  type HealthCheck,
+  type LifecycleHooks,
+  type LifecycleHook,
+  type UpdateStrategy,
+  type ServiceBinding,
 } from './app-manifest-types';
 import { parseResources, validateResourceBindings } from './app-manifest-validation';
 import { validateTemplateReferences } from './app-manifest-template';
+
+// ============================================================
+// Semver validation
+// ============================================================
+
+const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*))?(?:\+([\da-zA-Z-]+(?:\.[\da-zA-Z-]+)*))?$/;
+
+function validateSemver(version: string): void {
+  if (!SEMVER_RE.test(version)) {
+    throw new Error(`spec.version must be valid semver (got "${version}")`);
+  }
+}
+
+// ============================================================
+// Health check parser
+// ============================================================
+
+function parseHealthCheck(raw: unknown, prefix: string): HealthCheck | undefined {
+  if (!raw) return undefined;
+  const record = asRecord(raw);
+  return {
+    path: asRequiredString(record.path, `${prefix}.healthCheck.path`),
+    ...(record.intervalSeconds != null ? { intervalSeconds: Number(record.intervalSeconds) } : {}),
+    ...(record.timeoutSeconds != null ? { timeoutSeconds: Number(record.timeoutSeconds) } : {}),
+    ...(record.unhealthyThreshold != null ? { unhealthyThreshold: Number(record.unhealthyThreshold) } : {}),
+  };
+}
+
+// ============================================================
+// Lifecycle hooks parser
+// ============================================================
+
+function parseLifecycle(specRecord: Record<string, unknown>): LifecycleHooks | undefined {
+  const raw = specRecord.lifecycle;
+  if (!raw) return undefined;
+  const record = asRecord(raw);
+  const parseHook = (hookRaw: unknown, name: string): LifecycleHook | undefined => {
+    if (!hookRaw) return undefined;
+    const hook = asRecord(hookRaw);
+    return {
+      command: asRequiredString(hook.command, `spec.lifecycle.${name}.command`),
+      ...(hook.timeoutSeconds != null ? { timeoutSeconds: Number(hook.timeoutSeconds) } : {}),
+    };
+  };
+  return {
+    ...(record.preApply ? { preApply: parseHook(record.preApply, 'preApply') } : {}),
+    ...(record.postApply ? { postApply: parseHook(record.postApply, 'postApply') } : {}),
+  };
+}
+
+// ============================================================
+// Update strategy parser
+// ============================================================
+
+function parseUpdateStrategy(specRecord: Record<string, unknown>): UpdateStrategy | undefined {
+  const raw = specRecord.update;
+  if (!raw) return undefined;
+  const record = asRecord(raw);
+  const strategy = asString(record.strategy, 'spec.update.strategy');
+  if (strategy && !['rolling', 'canary', 'blue-green'].includes(strategy)) {
+    throw new Error('spec.update.strategy must be rolling, canary, or blue-green');
+  }
+  return {
+    ...(strategy ? { strategy: strategy as UpdateStrategy['strategy'] } : {}),
+    ...(record.canaryWeight != null ? { canaryWeight: Number(record.canaryWeight) } : {}),
+    ...(record.healthCheck ? { healthCheck: String(record.healthCheck) } : {}),
+    ...(record.rollbackOnFailure != null ? { rollbackOnFailure: Boolean(record.rollbackOnFailure) } : {}),
+    ...(record.timeoutSeconds != null ? { timeoutSeconds: Number(record.timeoutSeconds) } : {}),
+  };
+}
 
 export function parseAppManifestYaml(raw: string): AppManifest {
   const parsed = YAML.parse(raw);
@@ -54,6 +129,8 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const workers = parseWorkers(specRecord, containers);
   const envConfig = parseEnvConfig(specRecord);
   const routes = parseRoutes(specRecord, workers, containers, services);
+  const lifecycle = parseLifecycle(specRecord);
+  const update = parseUpdateStrategy(specRecord);
 
   // Resources — pass a synthesised services map for validation
   const syntheticServices = buildSyntheticServicesFromWorkers(workers);
@@ -74,12 +151,31 @@ export function parseAppManifestYaml(raw: string): AppManifest {
     }
   }
 
+  // Validate version is valid semver
+  const version = asRequiredString(specRecord.version, 'spec.version');
+  validateSemver(version);
+
+  // Parse takos config with optional minVersion
+  let takosConfig: AppManifest['spec']['takos'] | undefined;
+  if (specRecord.takos) {
+    const takosRecord = asRecord(specRecord.takos);
+    const minVersion = asString(takosRecord.minVersion, 'spec.takos.minVersion');
+    if (minVersion) {
+      validateSemver(minVersion);
+    }
+    const baseTakos = asRecord(specRecord.takos) as unknown as NonNullable<AppManifest['spec']['takos']>;
+    takosConfig = {
+      ...baseTakos,
+      ...(minVersion ? { minVersion } : {}),
+    };
+  }
+
   return {
     apiVersion: 'takos.dev/v1alpha1',
     kind: 'App',
     metadata,
     spec: {
-      version: asRequiredString(specRecord.version, 'spec.version'),
+      version,
       ...(specDescription ? { description: specDescription } : {}),
       ...(specIcon ? { icon: specIcon } : {}),
       ...(specCategory ? { category: specCategory as AppManifest['spec']['category'] } : {}),
@@ -87,12 +183,14 @@ export function parseAppManifestYaml(raw: string): AppManifest {
       ...(specCapabilities ? { capabilities: specCapabilities } : {}),
       ...(envConfig ? { env: envConfig } : {}),
       ...(specRecord.oauth ? { oauth: asRecord(specRecord.oauth) as AppManifest['spec']['oauth'] } : {}),
-      ...(specRecord.takos ? { takos: asRecord(specRecord.takos) as AppManifest['spec']['takos'] } : {}),
+      ...(takosConfig ? { takos: takosConfig } : {}),
       ...(Object.keys(resources).length > 0 ? { resources } : {}),
       ...(Object.keys(containers).length > 0 ? { containers } : {}),
       ...(Object.keys(services).length > 0 ? { services } : {}),
       workers,
       ...(routes && routes.length > 0 ? { routes } : {}),
+      ...(lifecycle ? { lifecycle } : {}),
+      ...(update ? { update } : {}),
       ...(mcpServers ? { mcpServers } : {}),
       ...(fileHandlers ? { fileHandlers } : {}),
     },
@@ -134,6 +232,7 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
     if (!Number.isFinite(port) || port <= 0) {
       throw new Error(`spec.services.${name}.port must be a positive number`);
     }
+    const serviceHealthCheck = parseHealthCheck(s.healthCheck, `spec.services.${name}`);
     services[name] = {
       dockerfile: normalizeRepoPath(asRequiredString(s.dockerfile, `spec.services.${name}.dockerfile`)),
       port,
@@ -141,6 +240,7 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       ...(s.maxInstances ? { maxInstances: Number(s.maxInstances) } : {}),
       ...(s.ipv4 === true ? { ipv4: true } : {}),
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(s.env, `spec.services.${name}.env`); return v ? { env: v } : {}; })()),
+      ...(serviceHealthCheck ? { healthCheck: serviceHealthCheck } : {}),
     };
   }
   return services;
@@ -177,12 +277,14 @@ export function parseWorkers(
       });
     }
 
+    const workerHealthCheck = parseHealthCheck(workerSpec.healthCheck, `spec.workers.${workerName}`);
     workers[workerName] = {
       ...(containerRefs && containerRefs.length > 0 ? { containers: containerRefs } : {}),
       build,
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(workerSpec.env, `spec.workers.${workerName}.env`); return v ? { env: v } : {}; })()),
       ...(workerSpec.bindings ? parseWorkerBindings(workerName, workerSpec) : {}),
       ...(workerSpec.triggers ? parseWorkerTriggers(workerName, workerSpec) : {}),
+      ...(workerHealthCheck ? { healthCheck: workerHealthCheck } : {}),
     };
   }
 
@@ -288,7 +390,24 @@ function parseWorkerBindings(workerName: string, workerSpec: Record<string, unkn
   const analytics = asStringArray(bindingsRecord.analytics, `spec.workers.${workerName}.bindings.analytics`);
   const workflows = asStringArray(bindingsRecord.workflows, `spec.workers.${workerName}.bindings.workflows`);
   const durableObjectsArr = asStringArray(bindingsRecord.durableObjects, `spec.workers.${workerName}.bindings.durableObjects`);
-  const svc = asStringArray(bindingsRecord.services, `spec.workers.${workerName}.bindings.services`);
+
+  // services: string[] | { name, version }[] — both forms accepted
+  let services: ServiceBinding[] | undefined;
+  const servicesRaw = bindingsRecord.services;
+  if (servicesRaw != null) {
+    if (!Array.isArray(servicesRaw)) {
+      throw new Error(`spec.workers.${workerName}.bindings.services must be an array`);
+    }
+    services = servicesRaw.map((entry, i) => {
+      if (typeof entry === 'string') return entry;
+      const obj = asRecord(entry);
+      return {
+        name: asRequiredString(obj.name, `spec.workers.${workerName}.bindings.services[${i}].name`),
+        ...(obj.version ? { version: String(obj.version) } : {}),
+      };
+    });
+  }
+
   return {
     bindings: {
       ...(d1 ? { d1 } : {}),
@@ -299,7 +418,7 @@ function parseWorkerBindings(workerName: string, workerSpec: Record<string, unkn
       ...(analytics ? { analytics } : {}),
       ...(workflows ? { workflows } : {}),
       ...(durableObjectsArr ? { durableObjects: durableObjectsArr } : {}),
-      ...(svc ? { services: svc } : {}),
+      ...(services ? { services } : {}),
     },
   };
 }
