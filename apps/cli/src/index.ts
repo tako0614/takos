@@ -6,6 +6,7 @@ import { registerLoginCommand } from './commands/login.js';
 import { registerDeployCommand } from './commands/deploy.js';
 import { registerTaskCommands } from './commands/api.js';
 import { registerEndpointCommand } from './commands/endpoint.js';
+import { registerDeployGroupCommand } from './commands/deploy-group.js';
 import { isContainerMode, isAuthenticated } from './lib/config.js';
 import { cliExit, isCliCommandExit } from './lib/command-exit.js';
 
@@ -18,6 +19,7 @@ program
 
 registerLoginCommand(program);
 registerDeployCommand(program);
+registerDeployGroupCommand(program);
 registerEndpointCommand(program);
 registerTaskCommands(program);
 
@@ -26,7 +28,7 @@ program.hook('preAction', (thisCommand) => {
     ? process.argv[2].trim().toLowerCase()
     : thisCommand.name().toLowerCase();
 
-  if (['login', 'logout', 'help', 'endpoint'].includes(commandName)) {
+  if (['login', 'logout', 'help', 'endpoint', 'deploy-group'].includes(commandName)) {
     return;
   }
 
