@@ -256,7 +256,7 @@ export class AppDeploymentService {
     const packageFiles = new Map<string, ArrayBuffer | Uint8Array>();
     const buildSources: AppDeploymentBuildSource[] = [];
 
-    for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
+    for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
       if (service.type !== 'worker') continue;
       const build = service.build.fromWorkflow;
       const workflowContent = await readRepoTextFileAtCommit(this.env, target.treeSha, build.path);

@@ -21,55 +21,244 @@ function buildSourceLabels(source: AppDeploymentBuildSource): Record<string, str
   };
 }
 
-export function appManifestToBundleDocs(
+// ── New format types (inline until types merge) ──────────────────────────────
+
+/** Container definition in the new `spec.containers` section */
+interface ManifestContainer {
+  dockerfile: string;
+  port?: number;
+  instanceType?: string;
+  maxInstances?: number;
+  ipv4?: boolean;
+  env?: Record<string, string>;
+}
+
+/** Worker definition in the new `spec.workers` section */
+interface ManifestWorker {
+  build: {
+    fromWorkflow: {
+      path: string;
+      job: string;
+      artifact: string;
+      artifactPath: string;
+    };
+  };
+  env?: Record<string, string>;
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    vectorize?: string[];
+    queues?: string[];
+    analytics?: string[];
+    workflows?: string[];
+    durableObjects?: string[];
+    services?: string[];
+  };
+  triggers?: {
+    schedules?: Array<{ cron: string; export: string }>;
+    queues?: Array<{ queue: string; export: string }>;
+  };
+  containers?: string[];
+}
+
+/** Route in the new format uses `target` instead of `service` */
+interface ManifestRoute {
+  name?: string;
+  target?: string;
+  service?: string;
+  path?: string;
+  ingress?: string;
+  timeoutMs?: number;
+}
+
+/** Detect whether the manifest uses the new (workers/containers) format */
+function isNewFormat(spec: Record<string, unknown>): boolean {
+  return spec.workers != null || spec.containers != null;
+}
+
+// ── New-format bundle generation ─────────────────────────────────────────────
+
+function emitNewFormatDocs(
   manifest: AppManifest,
   buildSources: Map<string, AppDeploymentBuildSource>,
-): BundleDoc[] {
-  const docs: BundleDoc[] = [];
+  docs: BundleDoc[],
+): void {
+  const spec = manifest.spec as unknown as Record<string, unknown>;
+  const containers = (spec.containers || {}) as Record<string, ManifestContainer>;
+  const workers = (spec.workers || {}) as Record<string, ManifestWorker>;
+  const routes = (spec.routes || []) as ManifestRoute[];
 
-  docs.push({
-    apiVersion: 'takos.dev/v1alpha1',
-    kind: 'Package',
-    metadata: { name: manifest.metadata.name },
-    spec: {
-      ...(manifest.metadata.appId ? { appId: manifest.metadata.appId } : {}),
-      version: manifest.spec.version,
-      ...(manifest.spec.description ? { description: manifest.spec.description } : {}),
-      ...(manifest.spec.icon ? { icon: manifest.spec.icon } : {}),
-      ...(manifest.spec.category ? { category: manifest.spec.category } : {}),
-      ...(manifest.spec.tags ? { tags: manifest.spec.tags } : {}),
-      ...(manifest.spec.capabilities ? { capabilities: manifest.spec.capabilities } : {}),
-      ...(manifest.spec.env ? { env: manifest.spec.env } : {}),
-      ...(manifest.spec.oauth ? { oauth: manifest.spec.oauth } : {}),
-      ...(manifest.spec.takos ? { takos: manifest.spec.takos } : {}),
-      ...(manifest.spec.fileHandlers ? { fileHandlers: manifest.spec.fileHandlers } : {}),
-    },
-  });
+  // Track which containers are referenced by workers (non-standalone)
+  const workerReferencedContainers = new Set<string>();
+  for (const worker of Object.values(workers)) {
+    for (const cRef of worker.containers || []) {
+      workerReferencedContainers.add(cRef);
+    }
+  }
 
-  for (const [resourceName, resource] of Object.entries(manifest.spec.resources || {})) {
+  // ── Standalone containers ──────────────────────────────────────────────────
+  for (const [containerName, container] of Object.entries(containers)) {
+    if (workerReferencedContainers.has(containerName)) continue;
     docs.push({
       apiVersion: 'takos.dev/v1alpha1',
-      kind: 'Resource',
-      metadata: { name: resourceName },
+      kind: 'Workload',
+      metadata: { name: containerName },
       spec: {
-        type: resource.type,
-        ...(resource.binding ? { binding: resource.binding } : {}),
-        ...(resource.generate ? { generate: resource.generate } : {}),
-        ...(resource.type === 'vectorize' && resource.vectorize ? { vectorize: resource.vectorize } : {}),
-        ...(resource.type === 'queue' && resource.queue ? { queue: resource.queue } : {}),
-        ...(resource.type === 'analyticsEngine' && resource.analyticsEngine ? { analyticsEngine: resource.analyticsEngine } : {}),
-        ...(resource.type === 'workflow' && resource.workflow ? { workflow: resource.workflow } : {}),
-        ...(resource.type === 'durableObject' && resource.durableObject ? { durableObject: resource.durableObject } : {}),
-        ...(resource.migrations
-          ? typeof resource.migrations === 'string'
-            ? { migrations: resource.migrations }
-            : { migrations: resource.migrations.up, rollbackMigrations: resource.migrations.down }
-          : {}),
+        type: 'container',
+        pluginConfig: {
+          dockerfile: container.dockerfile,
+          ...(container.port != null ? { port: container.port } : {}),
+          ...(container.instanceType ? { instanceType: container.instanceType } : {}),
+          ...(container.maxInstances ? { maxInstances: container.maxInstances } : {}),
+          ...(container.ipv4 ? { ipv4: true } : {}),
+        },
+        ...(container.env ? { env: container.env } : {}),
       },
     });
   }
 
-  for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
+  // ── Workers ────────────────────────────────────────────────────────────────
+  for (const [workerName, worker] of Object.entries(workers)) {
+    const source = buildSources.get(workerName);
+    if (!source) {
+      throw new Error(`Build source is missing for worker: ${workerName}`);
+    }
+
+    // Resolve container references from the containers section
+    const resolvedContainers = (worker.containers || []).map((cRef) => {
+      const cDef = containers[cRef];
+      if (!cDef) {
+        throw new Error(`Worker '${workerName}' references unknown container '${cRef}'`);
+      }
+      return { name: cRef, ...cDef };
+    });
+
+    docs.push({
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'Workload',
+      metadata: {
+        name: workerName,
+        labels: buildSourceLabels(source),
+      },
+      spec: {
+        type: 'cloudflare.worker',
+        artifactRef: source.artifact_path,
+        pluginConfig: {
+          env: worker.env || {},
+          bindings: {
+            services: worker.bindings?.services || [],
+          },
+          ...(worker.triggers ? { triggers: worker.triggers } : {}),
+          ...(resolvedContainers.length > 0
+            ? {
+                containers: resolvedContainers.map((c) => ({
+                  name: c.name,
+                  dockerfile: c.dockerfile,
+                  port: c.port,
+                  ...(c.instanceType ? { instanceType: c.instanceType } : {}),
+                  ...(c.maxInstances ? { maxInstances: c.maxInstances } : {}),
+                })),
+              }
+            : {}),
+        },
+      },
+    });
+
+    // Emit child container Workload + Binding for each container attached to this worker
+    for (const c of resolvedContainers) {
+      docs.push({
+        apiVersion: 'takos.dev/v1alpha1',
+        kind: 'Workload',
+        metadata: { name: `${workerName}-${c.name}` },
+        spec: {
+          type: 'container',
+          parentRef: workerName,
+          pluginConfig: {
+            dockerfile: c.dockerfile,
+            port: c.port,
+            ...(c.instanceType ? { instanceType: c.instanceType } : {}),
+            ...(c.maxInstances ? { maxInstances: c.maxInstances } : {}),
+          },
+        },
+      });
+
+      docs.push({
+        apiVersion: 'takos.dev/v1alpha1',
+        kind: 'Binding',
+        metadata: { name: `${c.name}-container-to-${workerName}` },
+        spec: {
+          from: `${workerName}-${c.name}`,
+          to: workerName,
+          mount: {
+            as: `${c.name.toUpperCase().replace(/-/g, '_')}_CONTAINER`,
+            type: 'durableObject',
+          },
+        },
+      });
+    }
+  }
+
+  // ── Resource bindings (new format: iterate workers) ────────────────────────
+  const resources = manifest.spec.resources || {};
+  for (const [resourceName, resource] of Object.entries(resources)) {
+    if (!resource.binding) continue;
+    for (const [workerName, worker] of Object.entries(workers)) {
+      const bindingLists = worker.bindings || {};
+      const mountType = resource.type === 'secretRef' ? undefined : resource.type;
+      const inBindings = [
+        ...(bindingLists.d1 || []),
+        ...(bindingLists.r2 || []),
+        ...(bindingLists.kv || []),
+        ...(bindingLists.vectorize || []),
+        ...(bindingLists.queues || []),
+        ...(bindingLists.analytics || []),
+        ...(bindingLists.workflows || []),
+        ...(bindingLists.durableObjects || []),
+      ];
+      if (!inBindings.includes(resourceName) || !mountType) continue;
+      docs.push({
+        apiVersion: 'takos.dev/v1alpha1',
+        kind: 'Binding',
+        metadata: { name: `${resourceName}-to-${workerName}` },
+        spec: {
+          from: resourceName,
+          to: workerName,
+          mount: {
+            as: resource.binding,
+            type: mountType,
+          },
+        },
+      });
+    }
+  }
+
+  // ── Routes (new format: target instead of service) ─────────────────────────
+  for (const [index, route] of routes.entries()) {
+    const targetRef = route.target || route.service;
+    docs.push({
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'Endpoint',
+      metadata: { name: route.name || `route-${index + 1}` },
+      spec: {
+        protocol: 'http',
+        targetRef,
+        ...(route.ingress ? { ingressRef: route.ingress } : {}),
+        ...(route.path ? { path: route.path } : {}),
+        ...(route.timeoutMs != null ? { timeoutMs: route.timeoutMs } : {}),
+      },
+    });
+  }
+}
+
+// ── Legacy-format bundle generation ──────────────────────────────────────────
+
+function emitLegacyFormatDocs(
+  manifest: AppManifest,
+  buildSources: Map<string, AppDeploymentBuildSource>,
+  docs: BundleDoc[],
+): void {
+  for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
     if (service.type === 'container') {
       docs.push({
         apiVersion: 'takos.dev/v1alpha1',
@@ -162,7 +351,7 @@ export function appManifestToBundleDocs(
 
   for (const [resourceName, resource] of Object.entries(manifest.spec.resources || {})) {
     if (!resource.binding) continue;
-    for (const [serviceName, service] of Object.entries(manifest.spec.services)) {
+    for (const [serviceName, service] of Object.entries(manifest.spec.services || {})) {
       if (service.type !== 'worker') continue;
       const bindingLists = service.bindings || {};
       const mountType = resource.type === 'secretRef' ? undefined : resource.type;
@@ -194,20 +383,93 @@ export function appManifestToBundleDocs(
   }
 
   for (const [index, route] of (manifest.spec.routes || []).entries()) {
+    const routeAsAny = route as Record<string, unknown>;
+    const targetRef = (routeAsAny.target || routeAsAny.service) as string;
     docs.push({
       apiVersion: 'takos.dev/v1alpha1',
       kind: 'Endpoint',
       metadata: { name: route.name || `route-${index + 1}` },
       spec: {
         protocol: 'http',
-        targetRef: route.service,
+        targetRef,
         ...(route.ingress ? { ingressRef: route.ingress } : {}),
         ...(route.path ? { path: route.path } : {}),
         ...(route.timeoutMs != null ? { timeoutMs: route.timeoutMs } : {}),
       },
     });
   }
+}
 
+// ── Public entry point ───────────────────────────────────────────────────────
+
+export function appManifestToBundleDocs(
+  manifest: AppManifest,
+  buildSources: Map<string, AppDeploymentBuildSource>,
+): BundleDoc[] {
+  const docs: BundleDoc[] = [];
+
+  // Package doc
+  const envSpec: Record<string, unknown> = {};
+  if (manifest.spec.env) {
+    if ((manifest.spec.env as Record<string, unknown>).required) {
+      envSpec.required = (manifest.spec.env as Record<string, unknown>).required;
+    }
+    if ((manifest.spec.env as Record<string, unknown>).inject) {
+      envSpec.inject = (manifest.spec.env as Record<string, unknown>).inject;
+    }
+  }
+  docs.push({
+    apiVersion: 'takos.dev/v1alpha1',
+    kind: 'Package',
+    metadata: { name: manifest.metadata.name },
+    spec: {
+      ...(manifest.metadata.appId ? { appId: manifest.metadata.appId } : {}),
+      version: manifest.spec.version,
+      ...(manifest.spec.description ? { description: manifest.spec.description } : {}),
+      ...(manifest.spec.icon ? { icon: manifest.spec.icon } : {}),
+      ...(manifest.spec.category ? { category: manifest.spec.category } : {}),
+      ...(manifest.spec.tags ? { tags: manifest.spec.tags } : {}),
+      ...(manifest.spec.capabilities ? { capabilities: manifest.spec.capabilities } : {}),
+      ...(Object.keys(envSpec).length > 0 ? { env: envSpec } : manifest.spec.env ? { env: manifest.spec.env } : {}),
+      ...(manifest.spec.oauth ? { oauth: manifest.spec.oauth } : {}),
+      ...(manifest.spec.takos ? { takos: manifest.spec.takos } : {}),
+      ...(manifest.spec.fileHandlers ? { fileHandlers: manifest.spec.fileHandlers } : {}),
+    },
+  });
+
+  // Resources (shared between old and new format)
+  for (const [resourceName, resource] of Object.entries(manifest.spec.resources || {})) {
+    docs.push({
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'Resource',
+      metadata: { name: resourceName },
+      spec: {
+        type: resource.type,
+        ...(resource.binding ? { binding: resource.binding } : {}),
+        ...(resource.generate ? { generate: resource.generate } : {}),
+        ...(resource.type === 'vectorize' && resource.vectorize ? { vectorize: resource.vectorize } : {}),
+        ...(resource.type === 'queue' && resource.queue ? { queue: resource.queue } : {}),
+        ...(resource.type === 'analyticsEngine' && resource.analyticsEngine ? { analyticsEngine: resource.analyticsEngine } : {}),
+        ...(resource.type === 'workflow' && resource.workflow ? { workflow: resource.workflow } : {}),
+        ...(resource.type === 'durableObject' && resource.durableObject ? { durableObject: resource.durableObject } : {}),
+        ...(resource.migrations
+          ? typeof resource.migrations === 'string'
+            ? { migrations: resource.migrations }
+            : { migrations: resource.migrations.up, rollbackMigrations: resource.migrations.down }
+          : {}),
+      },
+    });
+  }
+
+  // Branch on new (workers/containers) vs legacy (services) format
+  const spec = manifest.spec as unknown as Record<string, unknown>;
+  if (isNewFormat(spec)) {
+    emitNewFormatDocs(manifest, buildSources, docs);
+  } else {
+    emitLegacyFormatDocs(manifest, buildSources, docs);
+  }
+
+  // MCP servers (shared)
   for (const server of manifest.spec.mcpServers || []) {
     docs.push({
       apiVersion: 'takos.dev/v1alpha1',

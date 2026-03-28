@@ -92,7 +92,58 @@ export type ContainerService = {
 
 export type AppService = WorkerService | ContainerService;
 
+// --- New format types (containers/workers/routes separation) ---
+
+/** Container definition (Docker image, runs as CF Container or standalone) */
+export type AppContainer = {
+  dockerfile: string;
+  port: number;
+  instanceType?: string;
+  maxInstances?: number;
+  ipv4?: boolean;
+  env?: Record<string, string>;
+};
+
+/** Worker definition (CF Workers) */
+export type AppWorker = {
+  containers?: string[]; // references to keys in spec.containers
+  build: WorkflowArtifactBuild;
+  env?: Record<string, string>;
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    vectorize?: string[];
+    queues?: string[];
+    analytics?: string[];
+    workflows?: string[];
+    durableObjects?: string[];
+    services?: string[];
+  };
+  triggers?: {
+    schedules?: Array<{ cron: string; export: string }>;
+    queues?: Array<{ queue: string; export: string }>;
+  };
+};
+
+/** Env configuration with template injection support */
+export type AppEnvConfig = {
+  required?: string[];
+  inject?: Record<string, string>; // template values: "{{routes.api.url}}"
+};
+
+// --- Route types ---
+
 export type AppRoute = {
+  name: string;
+  target: string;
+  path?: string;
+  ingress?: string;
+  timeoutMs?: number;
+};
+
+/** @deprecated Use AppRoute (with `target` field) instead */
+export type LegacyAppRoute = {
   name?: string;
   service: string;
   path?: string;
@@ -126,9 +177,7 @@ export type AppManifest = {
     category?: 'app' | 'service' | 'library' | 'template' | 'social';
     tags?: string[];
     capabilities?: string[];
-    env?: {
-      required?: string[];
-    };
+    env?: AppEnvConfig;
     oauth?: {
       clientName: string;
       redirectUris: string[];
@@ -140,7 +189,12 @@ export type AppManifest = {
       scopes: string[];
     };
     resources?: Record<string, AppResource>;
-    services: Record<string, AppService>;
+    // New format: containers + workers (mutually exclusive with services)
+    containers?: Record<string, AppContainer>;
+    workers?: Record<string, AppWorker>;
+    // Legacy format (mutually exclusive with containers/workers)
+    /** @deprecated Use containers + workers instead */
+    services?: Record<string, AppService>;
     routes?: AppRoute[];
     mcpServers?: AppMcpServer[];
     fileHandlers?: AppFileHandler[];

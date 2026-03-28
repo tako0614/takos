@@ -34,6 +34,7 @@ function createProgram(): Command {
   return program;
 }
 
+// Legacy-format manifest (services)
 const sampleManifest = {
   apiVersion: 'takos.dev/v1alpha1',
   kind: 'App',
@@ -78,6 +79,62 @@ const sampleManifest = {
       assets: {
         type: 'r2',
         binding: 'ASSETS',
+      },
+    },
+  },
+};
+
+// New-format manifest (workers/containers)
+const newFormatManifest = {
+  apiVersion: 'takos.dev/v1alpha1',
+  kind: 'App',
+  metadata: { name: 'test-app' },
+  spec: {
+    version: '1.0.0',
+    workers: {
+      api: {
+        build: {
+          fromWorkflow: {
+            path: '.takos/workflows/build.yml',
+            job: 'build',
+            artifact: 'api-worker',
+            artifactPath: 'dist/index.js',
+          },
+        },
+        bindings: {
+          d1: ['main-db'],
+        },
+        containers: ['browser'],
+      },
+    },
+    containers: {
+      browser: {
+        dockerfile: 'packages/browser-service/Dockerfile',
+        port: 8080,
+        instanceType: 'standard-2',
+        maxInstances: 25,
+      },
+      'standalone-runner': {
+        dockerfile: 'packages/runner/Dockerfile',
+        port: 9090,
+        ipv4: true,
+      },
+    },
+    resources: {
+      'main-db': {
+        type: 'd1',
+        binding: 'DB',
+      },
+    },
+    routes: [
+      { name: 'main', target: 'api', path: '/' },
+      { name: 'runner', target: 'standalone-runner', path: '/runner' },
+    ],
+    env: {
+      required: ['API_KEY'],
+      inject: {
+        MAIN_URL: '${{ routes.main.url }}',
+        RUNNER_URL: '${{ routes.runner.url }}',
       },
     },
   },
@@ -252,6 +309,93 @@ describe('deploy-group command', () => {
       'token-1',
       '--service',
       'nonexistent',
+    ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
+
+    logSpy.mockRestore();
+  });
+
+  it('accepts --worker and --container options', async () => {
+    mocks.loadAppManifest.mockResolvedValue(newFormatManifest);
+    mocks.deployGroup.mockResolvedValue({
+      groupName: 'test-app',
+      env: 'staging',
+      dryRun: true,
+      services: [
+        { name: 'api', type: 'worker', status: 'deployed', scriptName: 'test-app-api' },
+      ],
+      resources: [],
+      bindings: [],
+    });
+
+    const program = createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync([
+      'node',
+      'takos',
+      'deploy-group',
+      '--env',
+      'staging',
+      '--account-id',
+      'acct-1',
+      '--api-token',
+      'token-1',
+      '--dry-run',
+      '--worker',
+      'api',
+    ], { from: 'node' });
+
+    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
+      workerFilter: ['api'],
+    }));
+
+    logSpy.mockRestore();
+  });
+
+  it('accepts --base-domain option', async () => {
+    const program = createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await program.parseAsync([
+      'node',
+      'takos',
+      'deploy-group',
+      '--env',
+      'staging',
+      '--account-id',
+      'acct-1',
+      '--api-token',
+      'token-1',
+      '--dry-run',
+      '--base-domain',
+      'myapp.example.com',
+    ], { from: 'node' });
+
+    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
+      baseDomain: 'myapp.example.com',
+    }));
+
+    logSpy.mockRestore();
+  });
+
+  it('errors when --wrangler-config is used with --worker', async () => {
+    const program = createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await expect(program.parseAsync([
+      'node',
+      'takos',
+      'deploy-group',
+      '--env',
+      'staging',
+      '--account-id',
+      'acct-1',
+      '--api-token',
+      'token-1',
+      '--wrangler-config',
+      '/tmp/wrangler.toml',
+      '--worker',
+      'api',
     ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
 
     logSpy.mockRestore();
@@ -887,5 +1031,317 @@ describe('container deploy', () => {
     expect(svc.status).not.toBe('skipped');
     expect(svc.status).toBe('deployed');
     expect(svc.scriptName).toBe('runner');
+  });
+});
+
+describe('new-format (workers/containers) deploy', () => {
+  const newManifest = {
+    apiVersion: 'takos.dev/v1alpha1',
+    kind: 'App',
+    metadata: { name: 'new-app' },
+    spec: {
+      version: '2.0.0',
+      workers: {
+        api: {
+          build: {
+            fromWorkflow: {
+              path: '.takos/workflows/build.yml',
+              job: 'build',
+              artifact: 'api-worker',
+              artifactPath: 'dist/index.js',
+            },
+          },
+          bindings: {
+            d1: ['main-db'],
+          },
+          containers: ['browser'],
+        },
+        frontend: {
+          build: {
+            fromWorkflow: {
+              path: '.takos/workflows/build.yml',
+              job: 'build',
+              artifact: 'frontend-worker',
+              artifactPath: 'dist/frontend.js',
+            },
+          },
+        },
+      },
+      containers: {
+        browser: {
+          dockerfile: 'packages/browser/Dockerfile',
+          port: 8080,
+          instanceType: 'standard-2',
+          maxInstances: 25,
+        },
+        'standalone-runner': {
+          dockerfile: 'packages/runner/Dockerfile',
+          port: 9090,
+          ipv4: true,
+        },
+      },
+      resources: {
+        'main-db': {
+          type: 'd1',
+          binding: 'DB',
+        },
+      },
+      routes: [
+        { name: 'main', target: 'api', path: '/' },
+        { name: 'runner', target: 'standalone-runner', path: '/runner' },
+      ],
+    },
+  };
+
+  it('deploys workers and standalone containers in dry-run', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const result = await deployGroup({
+      manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      namespace: 'takos-staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    expect(result.groupName).toBe('new-app');
+    expect(result.dryRun).toBe(true);
+
+    // Standalone container (standalone-runner) should be deployed
+    const standaloneRunner = result.services.find(s => s.name === 'standalone-runner');
+    expect(standaloneRunner).toBeDefined();
+    expect(standaloneRunner!.type).toBe('container');
+    expect(standaloneRunner!.status).toBe('deployed');
+
+    // browser container should NOT appear as standalone (it's referenced by api worker)
+    const browserStandalone = result.services.find(s => s.name === 'browser' && s.type === 'container');
+    expect(browserStandalone).toBeUndefined();
+
+    // Workers should be deployed
+    const apiWorker = result.services.find(s => s.name === 'api');
+    expect(apiWorker).toBeDefined();
+    expect(apiWorker!.type).toBe('worker');
+    expect(apiWorker!.status).toBe('deployed');
+    expect(apiWorker!.error).toContain('CF container(s)');
+    expect(apiWorker!.error).toContain('browser');
+
+    const frontendWorker = result.services.find(s => s.name === 'frontend');
+    expect(frontendWorker).toBeDefined();
+    expect(frontendWorker!.type).toBe('worker');
+    expect(frontendWorker!.status).toBe('deployed');
+
+    // Resources
+    expect(result.resources).toHaveLength(1);
+    expect(result.resources[0].name).toBe('main-db');
+
+    // Bindings
+    const apiBinding = result.bindings.find(b => b.from === 'api' && b.to === 'main-db');
+    expect(apiBinding).toBeDefined();
+    expect(apiBinding!.type).toBe('d1');
+  });
+
+  it('filters by workerFilter', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const result = await deployGroup({
+      manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+      workerFilter: ['frontend'],
+    });
+
+    // Only frontend worker should be deployed
+    const workerServices = result.services.filter(s => s.type === 'worker');
+    expect(workerServices).toHaveLength(1);
+    expect(workerServices[0].name).toBe('frontend');
+
+    // No containers (both are filtered out: browser is a worker dep, standalone-runner is not in filter)
+    const containerServices = result.services.filter(s => s.type === 'container');
+    expect(containerServices).toHaveLength(0);
+  });
+
+  it('filters by containerFilter', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const result = await deployGroup({
+      manifest: newManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+      containerFilter: ['standalone-runner'],
+    });
+
+    // Only standalone-runner should be deployed
+    expect(result.services).toHaveLength(1);
+    expect(result.services[0].name).toBe('standalone-runner');
+    expect(result.services[0].type).toBe('container');
+  });
+
+  it('errors when worker references unknown container', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const badManifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'bad-app' },
+      spec: {
+        version: '1.0.0',
+        workers: {
+          api: {
+            build: {
+              fromWorkflow: {
+                path: '.takos/workflows/build.yml',
+                job: 'build',
+                artifact: 'api',
+                artifactPath: 'dist/index.js',
+              },
+            },
+            containers: ['nonexistent'],
+          },
+        },
+        containers: {},
+      },
+    };
+
+    const result = await deployGroup({
+      manifest: badManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    const apiService = result.services.find(s => s.name === 'api');
+    expect(apiService).toBeDefined();
+    expect(apiService!.status).toBe('failed');
+    expect(apiService!.error).toContain('nonexistent');
+  });
+});
+
+describe('template resolution', () => {
+  it('resolves template strings', async () => {
+    const { resolveTemplateString } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const context = {
+      routes: {
+        main: { url: 'https://app.example.com/', domain: 'app.example.com', path: '/' },
+      },
+      containers: {
+        runner: { ipv4: '1.2.3.4' },
+      },
+      workers: {
+        api: { url: 'https://api.workers.dev' },
+      },
+      resources: {
+        db: { id: 'db-123' },
+      },
+    };
+
+    expect(resolveTemplateString('${{ routes.main.url }}', context)).toBe('https://app.example.com/');
+    expect(resolveTemplateString('${{ containers.runner.ipv4 }}', context)).toBe('1.2.3.4');
+    expect(resolveTemplateString('${{ workers.api.url }}', context)).toBe('https://api.workers.dev');
+    expect(resolveTemplateString('${{ resources.db.id }}', context)).toBe('db-123');
+    // Unresolved templates remain as-is
+    expect(resolveTemplateString('${{ unknown.field }}', context)).toBe('${{ unknown.field }}');
+  });
+
+  it('buildTemplateContext creates context from deploy result', async () => {
+    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const deployResult = {
+      groupName: 'test-app',
+      env: 'staging',
+      dryRun: true,
+      services: [
+        { name: 'api', type: 'worker' as const, status: 'deployed' as const, url: 'https://api.workers.dev' },
+        { name: 'runner', type: 'container' as const, status: 'deployed' as const, url: '1.2.3.4' },
+      ],
+      resources: [
+        { name: 'main-db', type: 'd1', status: 'provisioned' as const, id: 'db-uuid-123' },
+      ],
+      bindings: [],
+    };
+
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'test-app' },
+      spec: {
+        version: '1.0.0',
+        routes: [
+          { name: 'main', target: 'api', path: '/' },
+        ],
+      },
+    };
+
+    const ctx = buildTemplateContext(deployResult, manifest, {
+      manifest,
+      env: 'staging',
+      accountId: 'a',
+      apiToken: 't',
+      baseDomain: 'myapp.example.com',
+    });
+
+    expect(ctx.routes.main).toEqual({
+      url: 'https://myapp.example.com/',
+      domain: 'myapp.example.com',
+      path: '/',
+    });
+    expect(ctx.workers.api).toEqual({ url: 'https://api.workers.dev' });
+    expect(ctx.containers.runner).toEqual({ ipv4: '1.2.3.4' });
+    expect(ctx.resources['main-db']).toEqual({ id: 'db-uuid-123' });
+  });
+
+  it('uses default baseDomain when not provided', async () => {
+    const { buildTemplateContext } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'my-cool-app' },
+      spec: {
+        version: '1.0.0',
+        routes: [
+          { name: 'home', target: 'frontend', path: '/home' },
+        ],
+      },
+    };
+
+    const ctx = buildTemplateContext(
+      { groupName: 'my-cool-app', env: 'staging', dryRun: true, services: [], resources: [], bindings: [] },
+      manifest,
+      { manifest, env: 'staging', accountId: 'a', apiToken: 't' },
+    );
+
+    expect(ctx.routes.home.domain).toBe('my-cool-app.app.example.com');
+    expect(ctx.routes.home.url).toBe('https://my-cool-app.app.example.com/home');
+  });
+});
+
+describe('legacy format backward compatibility', () => {
+  it('still deploys services-based manifest correctly', async () => {
+    const { deployGroup } = await vi.importActual<typeof import('../src/lib/group-deploy.js')>('../src/lib/group-deploy.js');
+
+    const result = await deployGroup({
+      manifest: sampleManifest as Parameters<typeof deployGroup>[0]['manifest'],
+      env: 'staging',
+      namespace: 'takos-staging-tenants',
+      accountId: 'acct-1',
+      apiToken: 'token-1',
+      dryRun: true,
+    });
+
+    expect(result.dryRun).toBe(true);
+    expect(result.groupName).toBe('test-app');
+    expect(result.services).toHaveLength(2);
+
+    const apiService = result.services.find(s => s.name === 'api');
+    expect(apiService).toBeDefined();
+    expect(apiService!.type).toBe('worker');
+    expect(apiService!.status).toBe('deployed');
   });
 });

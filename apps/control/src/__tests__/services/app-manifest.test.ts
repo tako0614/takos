@@ -74,7 +74,7 @@ spec:
         metric: 'euclidean',
       },
     });
-    const apiService = manifest.spec.services.api;
+    const apiService = manifest.spec.services!.api;
     expect(apiService.type).toBe('worker');
     if (apiService.type === 'worker') {
       expect(apiService.bindings?.vectorize).toEqual(['semantic-index']);
@@ -161,7 +161,7 @@ spec:
         maxRetries: 3,
       },
     });
-    const apiService = manifest.spec.services.api;
+    const apiService = manifest.spec.services!.api;
     expect(apiService.type).toBe('worker');
     if (apiService.type === 'worker') {
       expect(apiService.bindings).toMatchObject({
@@ -276,7 +276,7 @@ spec:
           artifactPath: dist/browser-host.js
 `);
 
-    const svc = manifest.spec.services['browser-host'];
+    const svc = manifest.spec.services!['browser-host'];
     expect(svc.type).toBe('worker');
     if (svc.type === 'worker') {
       expect(svc.containers).toHaveLength(1);
@@ -306,7 +306,7 @@ spec:
         port: 3000
 `);
 
-    const svc = manifest.spec.services['my-api'];
+    const svc = manifest.spec.services!['my-api'];
     expect(svc.type).toBe('container');
     if (svc.type === 'container') {
       expect(svc.container).toEqual({
@@ -506,6 +506,374 @@ spec:
         }),
       }),
     }));
+  });
+
+  // ============================================================
+  // New format: containers + workers + routes
+  // ============================================================
+
+  describe('new format (containers + workers)', () => {
+    it('parses containers and workers with separated sections', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: new-format-app
+spec:
+  version: 2.0.0
+  containers:
+    executor:
+      dockerfile: packages/executor/Dockerfile
+      port: 8080
+      instanceType: standard-2
+      maxInstances: 10
+      ipv4: true
+  workers:
+    browser-host:
+      containers: [executor]
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: build-browser-host
+          artifact: browser-host
+          artifactPath: dist/browser-host.js
+  routes:
+    - name: browser-api
+      target: browser-host
+      path: /api
+`);
+
+      expect(manifest.spec.containers).toBeDefined();
+      expect(manifest.spec.containers!.executor).toEqual({
+        dockerfile: 'packages/executor/Dockerfile',
+        port: 8080,
+        instanceType: 'standard-2',
+        maxInstances: 10,
+        ipv4: true,
+      });
+
+      expect(manifest.spec.workers).toBeDefined();
+      expect(manifest.spec.workers!['browser-host']).toEqual({
+        containers: ['executor'],
+        build: {
+          fromWorkflow: {
+            path: '.takos/workflows/deploy.yml',
+            job: 'build-browser-host',
+            artifact: 'browser-host',
+            artifactPath: 'dist/browser-host.js',
+          },
+        },
+      });
+
+      expect(manifest.spec.routes).toHaveLength(1);
+      expect(manifest.spec.routes![0]).toEqual({
+        name: 'browser-api',
+        target: 'browser-host',
+        path: '/api',
+      });
+
+      // services should not be set in new format
+      expect(manifest.spec.services).toBeUndefined();
+    });
+
+    it('validates worker container references', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-ref-app
+spec:
+  version: 1.0.0
+  containers:
+    executor:
+      dockerfile: Dockerfile
+      port: 8080
+  workers:
+    api:
+      containers: [nonexistent]
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+`)).toThrow(/references unknown container: nonexistent/);
+    });
+
+    it('validates route target references', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-route-app
+spec:
+  version: 1.0.0
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  routes:
+    - name: main
+      target: nonexistent
+`)).toThrow(/references unknown worker or container: nonexistent/);
+    });
+
+    it('requires name on routes in new format', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: nameless-route-app
+spec:
+  version: 1.0.0
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  routes:
+    - target: api
+`)).toThrow(/spec\.routes\[0\]\.name is required/);
+    });
+
+    it('rejects mixed services and workers', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: mixed-app
+spec:
+  version: 1.0.0
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  workers:
+    api2:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+`)).toThrow(/mutually exclusive/);
+    });
+
+    it('parses env.inject with template variables', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: template-app
+spec:
+  version: 1.0.0
+  env:
+    required: [API_KEY]
+    inject:
+      BROWSER_URL: "{{workers.browser-host.url}}"
+      ROUTE_URL: "{{routes.api.url}}"
+  workers:
+    browser-host:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/deploy.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+  routes:
+    - name: api
+      target: browser-host
+`);
+
+      expect(manifest.spec.env).toEqual({
+        required: ['API_KEY'],
+        inject: {
+          BROWSER_URL: '{{workers.browser-host.url}}',
+          ROUTE_URL: '{{routes.api.url}}',
+        },
+      });
+    });
+
+    it('rejects env.inject with invalid template references', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-template-app
+spec:
+  version: 1.0.0
+  env:
+    inject:
+      BAD_URL: "{{workers.nonexistent.url}}"
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+`)).toThrow(/template errors.*worker "nonexistent" not found/);
+    });
+
+    it('parses workers with bindings and triggers', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: full-worker-app
+spec:
+  version: 1.0.0
+  resources:
+    jobs:
+      type: queue
+      binding: JOBS
+    db:
+      type: d1
+      binding: DB
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      env:
+        NODE_ENV: production
+      bindings:
+        d1: [db]
+        queues: [jobs]
+      triggers:
+        schedules:
+          - cron: '*/5 * * * *'
+            export: handleCron
+        queues:
+          - queue: jobs
+            export: handleJob
+`);
+
+      const worker = manifest.spec.workers!.api;
+      expect(worker.env).toEqual({ NODE_ENV: 'production' });
+      expect(worker.bindings).toEqual({
+        d1: ['db'],
+        queues: ['jobs'],
+      });
+      expect(worker.triggers).toEqual({
+        schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
+        queues: [{ queue: 'jobs', export: 'handleJob' }],
+      });
+    });
+
+    it('parses container env', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: container-env-app
+spec:
+  version: 1.0.0
+  containers:
+    executor:
+      dockerfile: Dockerfile
+      port: 8080
+      env:
+        NODE_ENV: production
+        PORT: "8080"
+  workers:
+    api:
+      containers: [executor]
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+`);
+
+      expect(manifest.spec.containers!.executor.env).toEqual({
+        NODE_ENV: 'production',
+        PORT: '8080',
+      });
+    });
+  });
+
+  // ============================================================
+  // Legacy format backward compatibility
+  // ============================================================
+
+  describe('legacy format backward compatibility', () => {
+    it('still parses services format correctly', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: legacy-app
+spec:
+  version: 1.0.0
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+  routes:
+    - name: main
+      service: api
+      path: /
+`);
+
+      expect(manifest.spec.services).toBeDefined();
+      expect(manifest.spec.services!.api.type).toBe('worker');
+      // Legacy routes get normalized to new AppRoute shape with target
+      expect(manifest.spec.routes).toHaveLength(1);
+      expect(manifest.spec.routes![0].target).toBe('api');
+      expect(manifest.spec.routes![0].name).toBe('main');
+      // workers/containers should not be set
+      expect(manifest.spec.workers).toBeUndefined();
+      expect(manifest.spec.containers).toBeUndefined();
+    });
+
+    it('assigns route name from service when name omitted in legacy format', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: legacy-app
+spec:
+  version: 1.0.0
+  services:
+    api:
+      type: worker
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+  routes:
+    - service: api
+      path: /api
+`);
+
+      expect(manifest.spec.routes![0].name).toBe('api');
+      expect(manifest.spec.routes![0].target).toBe('api');
+    });
   });
 
 });
