@@ -12,6 +12,7 @@ import {
   type AppMcpServer,
   type AppFileHandler,
   type AppContainer,
+  type AppService,
   type AppWorker,
   type AppEnvConfig,
 } from './app-manifest-types';
@@ -39,10 +40,6 @@ export function parseAppManifestYaml(raw: string): AppManifest {
     ...(metadataAppId ? { appId: metadataAppId } : {}),
   };
 
-  if (specRecord.services != null) {
-    throw new Error('spec.services is no longer supported. Use spec.containers and spec.workers instead.');
-  }
-
   // --- shared optional fields ---
   const specDescription = asString(specRecord.description, 'spec.description');
   const specIcon = asString(specRecord.icon, 'spec.icon');
@@ -53,9 +50,10 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const fileHandlers = parseFileHandlers(specRecord);
 
   const containers = parseContainers(specRecord);
+  const services = parseServices(specRecord);
   const workers = parseWorkers(specRecord, containers);
   const envConfig = parseEnvConfig(specRecord);
-  const routes = parseRoutes(specRecord, workers, containers);
+  const routes = parseRoutes(specRecord, workers, containers, services);
 
   // Resources — pass a synthesised services map for validation
   const syntheticServices = buildSyntheticServicesFromWorkers(workers);
@@ -66,6 +64,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   if (envConfig?.inject) {
     const templateErrors = validateTemplateReferences(envConfig.inject, {
       containers,
+      services,
       workers,
       routes: routes || [],
       resources,
@@ -91,6 +90,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
       ...(specRecord.takos ? { takos: asRecord(specRecord.takos) as AppManifest['spec']['takos'] } : {}),
       ...(Object.keys(resources).length > 0 ? { resources } : {}),
       ...(Object.keys(containers).length > 0 ? { containers } : {}),
+      ...(Object.keys(services).length > 0 ? { services } : {}),
       workers,
       ...(routes && routes.length > 0 ? { routes } : {}),
       ...(mcpServers ? { mcpServers } : {}),
@@ -119,11 +119,31 @@ export function parseContainers(specRecord: Record<string, unknown>): Record<str
       port,
       ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
       ...(c.maxInstances ? { maxInstances: Number(c.maxInstances) } : {}),
-      ...(c.ipv4 === true ? { ipv4: true } : {}),
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(c.env, `spec.containers.${name}.env`); return v ? { env: v } : {}; })()),
     };
   }
   return containers;
+}
+
+export function parseServices(specRecord: Record<string, unknown>): Record<string, AppService> {
+  const servicesRecord = asRecord(specRecord.services);
+  const services: Record<string, AppService> = {};
+  for (const [name, value] of Object.entries(servicesRecord)) {
+    const s = asRecord(value);
+    const port = Number(s.port);
+    if (!Number.isFinite(port) || port <= 0) {
+      throw new Error(`spec.services.${name}.port must be a positive number`);
+    }
+    services[name] = {
+      dockerfile: normalizeRepoPath(asRequiredString(s.dockerfile, `spec.services.${name}.dockerfile`)),
+      port,
+      ...(s.instanceType ? { instanceType: String(s.instanceType) } : {}),
+      ...(s.maxInstances ? { maxInstances: Number(s.maxInstances) } : {}),
+      ...(s.ipv4 === true ? { ipv4: true } : {}),
+      ...(((): { env?: Record<string, string> } => { const v = asStringMap(s.env, `spec.services.${name}.env`); return v ? { env: v } : {}; })()),
+    };
+  }
+  return services;
 }
 
 export function parseWorkers(
@@ -199,6 +219,7 @@ function parseRoutes(
   specRecord: Record<string, unknown>,
   workers: Record<string, AppWorker>,
   containers: Record<string, AppContainer>,
+  services: Record<string, AppService> = {},
 ): AppRoute[] | undefined {
   const routesRaw = specRecord.routes;
   if (routesRaw == null) return undefined;
@@ -209,8 +230,8 @@ function parseRoutes(
     const name = asRequiredString(route.name, `spec.routes[${index}].name`);
     const ingress = asString(route.ingress, `spec.routes[${index}].ingress`);
 
-    if (!workers[target] && !containers[target]) {
-      throw new Error(`spec.routes[${index}].target references unknown worker or container: ${target}`);
+    if (!workers[target] && !containers[target] && !services[target]) {
+      throw new Error(`spec.routes[${index}].target references unknown worker, container, or service: ${target}`);
     }
     if (ingress && !workers[ingress]) {
       throw new Error(`spec.routes[${index}].ingress must reference a worker`);

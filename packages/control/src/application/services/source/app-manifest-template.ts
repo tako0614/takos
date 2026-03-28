@@ -1,6 +1,7 @@
 export interface TemplateContext {
   routes: Record<string, { url: string; domain: string; path: string }>;
-  containers: Record<string, { ipv4?: string; port: number }>;
+  containers: Record<string, { port: number }>;
+  services: Record<string, { ipv4?: string; port: number }>;
   workers: Record<string, { url: string }>;
   resources: Record<string, { id: string }>;
 }
@@ -53,6 +54,7 @@ export function validateTemplateReferences(
   inject: Record<string, string>,
   manifest: {
     containers?: Record<string, unknown>;
+    services?: Record<string, unknown>;
     workers?: Record<string, unknown>;
     routes?: Array<{ name: string }>;
     resources?: Record<string, unknown>;
@@ -75,6 +77,10 @@ export function validateTemplateReferences(
       } else if (section === 'containers') {
         if (!manifest.containers?.[name]) {
           errors.push(`${key}: container "${name}" not found`);
+        }
+      } else if (section === 'services') {
+        if (!manifest.services?.[name]) {
+          errors.push(`${key}: service "${name}" not found`);
         }
       } else if (section === 'workers') {
         if (!manifest.workers?.[name]) {

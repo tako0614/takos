@@ -29,7 +29,7 @@ env:
     BROWSER_API_URL: "{{routes.browser-api.url}}"
     EXECUTOR_API_URL: "{{routes.executor-api.url}}"
     DB_ID: "{{resources.main-db.id}}"
-    CONTAINER_IP: "{{containers.browser.ipv4}}"
+    SERVICE_IP: "{{services.my-api.ipv4}}"
 ```
 
 ### 参照できる値
@@ -39,30 +39,32 @@ env:
 | `{{routes.<name>.url}}` | `https://app.takos.jp/session` | ルートのフル URL |
 | `{{routes.<name>.domain}}` | `app.takos.jp` | ルートのドメイン |
 | `{{routes.<name>.path}}` | `/session` | ルートのパス |
-| `{{containers.<name>.ipv4}}` | `203.0.113.42` | コンテナの割当 IPv4 |
-| `{{containers.<name>.port}}` | `8080` | コンテナのポート |
+| `{{containers.<name>.port}}` | `8080` | CF Container のポート |
+| `{{services.<name>.ipv4}}` | `203.0.113.42` | 常設サービスの割当 IPv4 |
+| `{{services.<name>.port}}` | `3000` | 常設サービスのポート |
 | `{{workers.<name>.url}}` | `https://host.workers.dev` | ワーカーの URL |
 | `{{resources.<name>.id}}` | `abc-123` | リソース ID |
 
 存在しない名前を参照するとバリデーションエラーになる。
 
-### 使用例: コンテナのポートを注入
+### 使用例: 常設サービスの IP を注入
 
-コンテナの `port` を他の Worker やコンテナに注入する例。
+常設サービスの `ipv4` を他の Worker から参照する例。
 
 ```yaml
-containers:
+services:
   api-server:
     dockerfile: Dockerfile
     port: 3000
+    ipv4: true
 
 env:
   inject:
-    API_PORT: "{{containers.api-server.port}}"
-    API_IP: "{{containers.api-server.ipv4}}"
+    API_PORT: "{{services.api-server.port}}"
+    API_IP: "{{services.api-server.ipv4}}"
 ```
 
-`{{containers.api-server.port}}` はデプロイ時に `3000` に解決される。
+`{{services.api-server.port}}` はデプロイ時に `3000` に解決される。
 
 </div>
 

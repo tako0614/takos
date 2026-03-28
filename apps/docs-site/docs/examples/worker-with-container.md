@@ -116,28 +116,26 @@ export default {
 - `instanceType` でコンテナのスペックを指定できます（`basic`, `standard-2` など）
 - `maxInstances` で最大インスタンス数を制御します
 
-## containers と workers の使い分け
+## containers, services, workers の使い分け
 
-| | containers | workers |
-| --- | --- | --- |
-| 実行モデル | Docker コンテナ | CF Workers (V8 isolate) |
-| 用途 | Docker が必要な処理 | ルーティング、軽量処理 |
-| ビルド | Dockerfile | workflow artifact |
-| IPv4 割当 | `ipv4: true` で可能 | 不可 |
+| | containers | services | workers |
+| --- | --- | --- | --- |
+| 実行モデル | CF Containers (Durable Object) | 常設コンテナ (VPS) | CF Workers (V8 isolate) |
+| 用途 | Docker が必要な処理 (Worker に紐づく) | 独立稼働する Docker コンテナ | ルーティング、軽量処理 |
+| ビルド | Dockerfile | Dockerfile | workflow artifact |
+| IPv4 割当 | 不可 | `ipv4: true` で可能 | 不可 |
 
-## 独立稼働コンテナ
+## 常設サービス
 
-Worker に紐づけず、コンテナ単体で動かすこともできます。`ipv4: true` を指定すると専用 IPv4 が割り当てられます。
+Worker に紐づけず、コンテナ単体で独立稼働させる場合は `services` セクションを使います。`ipv4: true` を指定すると専用 IPv4 が割り当てられます。
 
 ```yaml
-containers:
+services:
   my-api:
     dockerfile: Dockerfile
     port: 3000
     ipv4: true
 ```
-
-この場合、Worker は自動生成されたホストエントリポイントで管理されます。
 
 ## 次のステップ
 

@@ -166,8 +166,8 @@ spec:
 
 **何で動かす?**
 - CF Workers だけで済む → `workers` だけ書く
-- Docker が必要 → `containers` + `workers` を書く
-- Docker だけで済む → `containers` に `ipv4: true` を付けて独立稼働させる
+- Docker が必要 (CF Containers) → `containers` + `workers` を��く
+- 常設コンテナが必要 → `services` を書く (`ipv4: true` で専用 IPv4 割当)
 
 **データを保存する?**
 - はい → `resources` に `d1` / `r2` / `kv` などを追加し、Worker の `bindings` で参照
@@ -184,7 +184,8 @@ spec:
 
 | セクション | 一言 | 詳細 |
 | --- | --- | --- |
-| `containers` | Docker コンテナの定義 | [Containers](/apps/containers) |
+| `containers` | CF Containers の定義 (Worker に紐づく) | [Containers](/apps/containers) |
+| `services` | 常設コンテナの定義 (VPS/独立稼働) | [Containers](/apps/containers) |
 | `workers` | CF Workers の定義 | [Workers](/apps/workers) |
 | `routes` | HTTP エンドポイントの公開 | [Routes](/apps/routes) |
 | `resources` | DB, Storage, Queue 等のリソース | 下記 |

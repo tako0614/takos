@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
+import { requireSpaceAccess, spaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
 import { zValidator } from '../zod-validator';
 import {
   createWorkspaceWithDefaultRepo,
@@ -90,35 +90,29 @@ export default new Hono<AuthenticatedRouteEnv>()
       repository,
     });
   })
-  .get('/:spaceId', async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
-
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+  .get('/:spaceId', spaceAccess(), async (c) => {
+    const { space, membership } = c.get('access');
 
     const { workspace, repository } = await getWorkspaceWithRepository(
       c.env,
-      access.space
+      space
     );
 
     return c.json({
       space: toWorkspaceResponse(workspace),
-      role: access.membership.role,
+      role: membership.role,
       repository,
     });
   })
-  .get('/:spaceId/export', async (c) => {
+  .get('/:spaceId/export', spaceAccess(), async (c) => {
     const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
-
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const { space } = c.get('access');
 
     const db = getDb(c.env.DB);
 
-    // Fetch accessible resource IDs via resourceAccess for this workspace
     const accessibleResourceIds = await db.select({ resourceId: resourceAccess.resourceId, permission: resourceAccess.permission })
       .from(resourceAccess)
-      .where(eq(resourceAccess.accountId, access.space.id))
+      .where(eq(resourceAccess.accountId, space.id))
       .all();
     const accessibleIdSet = new Set(accessibleResourceIds.map(r => r.resourceId));
     const accessPermissionMap = new Map(accessibleResourceIds.map(r => [r.resourceId, r.permission]));
@@ -126,13 +120,13 @@ export default new Hono<AuthenticatedRouteEnv>()
     const [repoRows, threadRows, resourceRows] = await Promise.all([
       db.select({ id: repositories.id, name: repositories.name, updatedAt: repositories.updatedAt })
         .from(repositories)
-        .where(eq(repositories.accountId, access.space.id))
+        .where(eq(repositories.accountId, space.id))
         .orderBy(desc(repositories.updatedAt))
         .all(),
       db.select({ id: threads.id, title: threads.title, status: threads.status, updatedAt: threads.updatedAt })
         .from(threads)
         .where(and(
-          eq(threads.accountId, access.space.id),
+          eq(threads.accountId, space.id),
           ne(threads.status, 'deleted'),
         ))
         .orderBy(desc(threads.updatedAt))
@@ -149,7 +143,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           ne(resources.status, 'deleted'),
           or(
             and(
-              eq(resources.accountId, access.space.id),
+              eq(resources.accountId, space.id),
               eq(resources.ownerAccountId, user.id),
             ),
             accessibleIdSet.size > 0 ? inArray(resources.id, Array.from(accessibleIdSet)) : undefined,
@@ -181,7 +175,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       }));
 
     return c.json({
-      space: toWorkspaceResponse(access.space),
+      space: toWorkspaceResponse(space),
       exported_at: exportedAt,
       repositories: repoRows.map((repo) => ({
         id: repo.id,
@@ -213,6 +207,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     });
   })
   .patch('/:spaceId',
+    spaceAccess({ roles: ['owner', 'admin'], message: 'Space not found or insufficient permissions' }),
     zValidator('json', z.object({
       name: z.string().optional(),
       ai_model: z.string().optional(),
@@ -220,17 +215,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       security_posture: z.enum(VALID_SECURITY_POSTURES).optional(),
     })),
     async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
+    const { space } = c.get('access');
     const body = c.req.valid('json');
-
-    const access = await requireSpaceAccess(
-      c,
-      spaceId,
-      user.id,
-      ['owner', 'admin'],
-      'Space not found or insufficient permissions'
-    );
 
     const updates: {
       name?: string;
@@ -267,7 +253,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError('Invalid provider');
       }
       if (!body.ai_model) {
-        const existingModel = normalizeModelId(access.space.ai_model) || DEFAULT_MODEL_ID;
+        const existingModel = normalizeModelId(space.ai_model) || DEFAULT_MODEL_ID;
         const inferredProvider = getModelProvider(existingModel);
         if (normalizedProvider !== inferredProvider) {
           throw new BadRequestError('Provider does not match model');
@@ -284,20 +270,17 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('No valid updates provided');
     }
 
-    const workspace = await updateWorkspace(c.env.DB, access.space.id, updates);
+    const workspace = await updateWorkspace(c.env.DB, space.id, updates);
     if (!workspace) {
       throw new BadRequestError('No valid updates provided');
     }
 
     return c.json({ space: toWorkspaceResponse(workspace) });
   })
-  .get('/:spaceId/model', async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
+  .get('/:spaceId/model', spaceAccess(), async (c) => {
+    const { space } = c.get('access');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-
-    const workspace = await getWorkspaceModelSettings(c.env.DB, access.space.id);
+    const workspace = await getWorkspaceModelSettings(c.env.DB, space.id);
 
     const model = normalizeModelId(workspace?.ai_model) || DEFAULT_MODEL_ID;
     const inferredProvider = getModelProvider(model);
@@ -312,6 +295,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     });
   })
   .patch('/:spaceId/model',
+    spaceAccess({ roles: ['owner', 'admin'], message: 'Space not found or insufficient permissions' }),
     zValidator('json', z.object({
       model: z.string().optional(),
       provider: z.string().optional(),
@@ -319,17 +303,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       ai_provider: z.string().optional(),
     })),
     async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
+    const { space } = c.get('access');
     const body = c.req.valid('json');
-
-    const access = await requireSpaceAccess(
-      c,
-      spaceId,
-      user.id,
-      ['owner', 'admin'],
-      'Space not found or insufficient permissions'
-    );
 
     const requestedModel = body.model || body.ai_model;
     const providerInput = body.provider || body.ai_provider;
@@ -349,7 +324,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('Provider does not match model');
     }
 
-    await updateWorkspaceModel(c.env.DB, access.space.id, model, provider);
+    await updateWorkspaceModel(c.env.DB, space.id, model, provider);
 
     return c.json({
       ai_model: model,
@@ -359,28 +334,16 @@ export default new Hono<AuthenticatedRouteEnv>()
       token_limit: resolveHistoryTokenBudget(model, c.env.MODEL_CONTEXT_WINDOWS),
     });
   })
-  .delete('/:spaceId', async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
+  .delete('/:spaceId', spaceAccess({ roles: ['owner'], message: 'Space not found or insufficient permissions' }), async (c) => {
+    const { space } = c.get('access');
 
-    const access = await requireSpaceAccess(
-      c,
-      spaceId,
-      user.id,
-      ['owner'],
-      'Space not found or insufficient permissions'
-    );
-
-    await deleteWorkspace(c.env.DB, access.space.id);
+    await deleteWorkspace(c.env.DB, space.id);
 
     return c.json({ success: true });
   })
-  .get('/:spaceId/sidebar-items', async (c) => {
-    const user = c.get('user');
-    const spaceId = c.req.param('spaceId');
+  .get('/:spaceId/sidebar-items', spaceAccess(), async (c) => {
+    const { space } = c.get('access');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-
-    const items = await getUISidebarItems(c.env.DB, access.space.id);
+    const items = await getUISidebarItems(c.env.DB, space.id);
     return c.json({ items });
   });

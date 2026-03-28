@@ -71,13 +71,22 @@ export interface ManifestContainerDef {
   port?: number;
   instanceType?: string;
   maxInstances?: number;
+  env?: Record<string, string>;
+}
+
+export interface ManifestServiceDef {
+  dockerfile: string;
+  port?: number;
+  instanceType?: string;
+  maxInstances?: number;
   ipv4?: boolean;
   env?: Record<string, string>;
 }
 
 export interface TemplateContext {
   routes: Record<string, { url: string; domain: string; path: string }>;
-  containers: Record<string, { ipv4?: string }>;
+  containers: Record<string, { port?: number }>;
+  services: Record<string, { ipv4?: string; port?: number }>;
   workers: Record<string, { url?: string }>;
   resources: Record<string, { id?: string }>;
 }
@@ -92,6 +101,7 @@ export interface GroupDeployOptions {
       resources?: Record<string, { type: 'd1' | 'r2' | 'kv' | 'secretRef'; binding?: string }>;
       workers?: Record<string, ManifestWorkerDef>;
       containers?: Record<string, ManifestContainerDef>;
+      services?: Record<string, ManifestServiceDef>;
       routes?: Array<{ name: string; target: string; path?: string }>;
       env?: { required?: string[]; inject?: Record<string, string> };
     };

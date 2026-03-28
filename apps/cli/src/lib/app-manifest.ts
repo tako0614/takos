@@ -252,10 +252,6 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
     ...optionalProp('appId', asString(metadataRecord.appId, 'metadata.appId')),
   };
 
-  if (specRecord.services != null) {
-    throw new Error('spec.services is no longer supported. Use spec.workers instead.');
-  }
-
   const workersRecord = asRecord(specRecord.workers);
   const workers: Record<string, WorkerService> = {};
   const workerNames = Object.keys(workersRecord);

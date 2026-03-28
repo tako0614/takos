@@ -33,7 +33,7 @@ export type BindingStatus = 'bound' | 'failed';
 
 export interface ServiceDeployResult {
   name: string;
-  type: 'worker' | 'container' | 'http';
+  type: 'worker' | 'container' | 'service' | 'http';
   status: ServiceDeployStatus;
   scriptName?: string;
   url?: string;

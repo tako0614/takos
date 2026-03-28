@@ -23,8 +23,17 @@ function buildSourceLabels(source: AppDeploymentBuildSource): Record<string, str
 
 // ── New format types (inline until types merge) ──────────────────────────────
 
-/** Container definition in the new `spec.containers` section */
+/** Container definition in the new `spec.containers` section (CF Containers) */
 interface ManifestContainer {
+  dockerfile: string;
+  port?: number;
+  instanceType?: string;
+  maxInstances?: number;
+  env?: Record<string, string>;
+}
+
+/** Service definition in the new `spec.services` section (常設コンテナ) */
+interface ManifestService {
   dockerfile: string;
   port?: number;
   instanceType?: string;
@@ -79,6 +88,7 @@ function emitNewFormatDocs(
 ): void {
   const spec = manifest.spec as unknown as Record<string, unknown>;
   const containers = (spec.containers || {}) as Record<string, ManifestContainer>;
+  const services = (spec.services || {}) as Record<string, ManifestService>;
   const workers = (spec.workers || {}) as Record<string, ManifestWorker>;
   const routes = (spec.routes || []) as ManifestRoute[];
 
@@ -90,7 +100,7 @@ function emitNewFormatDocs(
     }
   }
 
-  // ── Standalone containers ──────────────────────────────────────────────────
+  // ── Standalone containers (CF Containers not referenced by workers) ────────
   for (const [containerName, container] of Object.entries(containers)) {
     if (workerReferencedContainers.has(containerName)) continue;
     docs.push({
@@ -104,9 +114,28 @@ function emitNewFormatDocs(
           ...(container.port != null ? { port: container.port } : {}),
           ...(container.instanceType ? { instanceType: container.instanceType } : {}),
           ...(container.maxInstances ? { maxInstances: container.maxInstances } : {}),
-          ...(container.ipv4 ? { ipv4: true } : {}),
         },
         ...(container.env ? { env: container.env } : {}),
+      },
+    });
+  }
+
+  // ── Services (常設コンテナ) ────────────────────────────────────────────────
+  for (const [serviceName, service] of Object.entries(services)) {
+    docs.push({
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'Workload',
+      metadata: { name: serviceName },
+      spec: {
+        type: 'service',
+        pluginConfig: {
+          dockerfile: service.dockerfile,
+          ...(service.port != null ? { port: service.port } : {}),
+          ...(service.instanceType ? { instanceType: service.instanceType } : {}),
+          ...(service.maxInstances ? { maxInstances: service.maxInstances } : {}),
+          ...(service.ipv4 ? { ipv4: true } : {}),
+        },
+        ...(service.env ? { env: service.env } : {}),
       },
     });
   }

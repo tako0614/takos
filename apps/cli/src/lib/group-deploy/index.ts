@@ -25,6 +25,7 @@ export type {
   WorkerContainerSpec,
   ManifestWorkerDef,
   ManifestContainerDef,
+  ManifestServiceDef,
   TemplateContext,
   GroupDeployOptions,
   WranglerDirectDeployOptions,
