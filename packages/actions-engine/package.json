@@ -1,5 +1,5 @@
 {
-  "name": "@takos/actions-engine",
+  "name": "@takoserver/actions-engine",
   "version": "1.0.0",
   "private": true,
   "type": "module",

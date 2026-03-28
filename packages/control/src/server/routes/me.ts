@@ -10,7 +10,7 @@ import { getClientsByOwner, createClient, updateClient, deleteClient } from '../
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
 import { parseJsonBody, parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
-import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takos/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from '@takoserver/common/errors';
 import { logWarn } from '../../shared/utils/logger';
 import {
   ensureUserSettings,

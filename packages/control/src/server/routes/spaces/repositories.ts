@@ -6,7 +6,7 @@ import { eq, desc } from 'drizzle-orm';
 import { repositories } from '../../../infra/db/schema';
 import { generateId, now } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
-import { InternalError } from '@takos/common/errors';
+import { InternalError } from '@takoserver/common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/:spaceId/init-repo', async (c) => {

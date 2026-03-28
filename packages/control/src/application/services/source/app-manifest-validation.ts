@@ -1,4 +1,4 @@
-import { parseWorkflow, validateWorkflow, type Workflow } from '@takos/actions-engine';
+import { parseWorkflow, validateWorkflow, type Workflow } from '@takoserver/actions-engine';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import {
   asRecord,

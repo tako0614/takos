@@ -1,4 +1,4 @@
-import type { WorkflowDiagnostic } from '@takos/actions-engine';
+import type { WorkflowDiagnostic } from '@takoserver/actions-engine';
 
 export type AppMetadata = {
   name: string;

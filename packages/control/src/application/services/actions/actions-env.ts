@@ -1,4 +1,4 @@
-import type { Job, Workflow } from '@takos/actions-engine';
+import type { Job, Workflow } from '@takoserver/actions-engine';
 
 export interface WorkflowDispatchEnvOptions {
   workflow: Workflow;

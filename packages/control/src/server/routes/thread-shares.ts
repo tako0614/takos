@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { type BaseVariables } from './shared/route-auth';
-import { BadRequestError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import { checkThreadAccess } from '../../application/services/threads/thread-service';

@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import { forbidden } from '@takos/common/middleware/hono';
+import { forbidden } from '@takoserver/common/middleware/hono';
 
 export const SPACE_SCOPE_MISMATCH_ERROR = 'Token workspace scope does not match requested workspace';
 

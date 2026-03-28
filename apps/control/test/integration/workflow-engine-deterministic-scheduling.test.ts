@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, Queue, R2Bucket } from '@cloudflare/workers-types';
-import type { Workflow } from '@takos/actions-engine';
+import type { Workflow } from '@takoserver/actions-engine';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -14,8 +14,8 @@ vi.mock('@/infra/db', async (importOriginal) => ({ ...(await importOriginal<type
   getDb: mocks.getDb,
 }));
 
-vi.mock('@takos/actions-engine', async () => {
-  const actual = await vi.importActual<typeof import('@takos/actions-engine')>('@takos/actions-engine');
+vi.mock('@takoserver/actions-engine', async () => {
+  const actual = await vi.importActual<typeof import('@takoserver/actions-engine')>('@takoserver/actions-engine');
   return {
     ...actual,
     parseWorkflow: mocks.parseWorkflow,

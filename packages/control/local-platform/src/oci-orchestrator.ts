@@ -1,5 +1,5 @@
 /**
- * OCI orchestrator module for @takos/control-local-platform.
+ * OCI orchestrator module for @takoserver/control-local-platform.
  *
  * Re-exports the platform-agnostic OCI orchestrator API from the parent
  * control package, then adds a direct-entrypoint guard so this file can be

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env, MessageRole } from '../../shared/types';
 import { parseLimit, parseOffset, type BaseVariables } from './shared/route-auth';
-import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
 import { logError } from '../../shared/utils/logger';
 import { zValidator } from './zod-validator';
 import {

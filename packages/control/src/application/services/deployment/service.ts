@@ -36,7 +36,7 @@ import { detectStuckDeployments, resetStuckDeployment } from './state';
 import { getDb, services } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, InternalError, NotFoundError } from '@takoserver/common/errors';
 import {
   resolveDeploymentArtifactBaseRef,
   resolveDeploymentServiceId,

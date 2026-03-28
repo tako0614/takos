@@ -12,7 +12,7 @@ import {
 import { getDb, accounts, authIdentities } from '../../../infra/db';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html';
-import { BadRequestError, AuthorizationError } from '@takos/common/errors';
+import { BadRequestError, AuthorizationError } from '@takoserver/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
 
 function normalizeServiceName(value: string | null | undefined): string {

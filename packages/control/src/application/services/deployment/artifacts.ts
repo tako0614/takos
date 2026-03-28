@@ -9,7 +9,7 @@ import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.t
 import { decrypt, decryptEnvVars, maskEnvVars, type EncryptedData } from '../../../shared/utils/crypto';
 import { computeSHA256, constantTimeEqual } from '../../../shared/utils/hash';
 import type { Deployment, DeploymentEnv } from './models';
-import { InternalError, NotFoundError, ValidationError } from '@takos/common/errors';
+import { InternalError, NotFoundError, ValidationError } from '@takoserver/common/errors';
 
 export async function getBundleContent(env: DeploymentEnv, deployment: Deployment): Promise<string> {
   if (!deployment.bundle_r2_key || !env.WORKER_BUNDLES) {

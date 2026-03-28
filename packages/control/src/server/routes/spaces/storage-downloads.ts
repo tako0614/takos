@@ -15,7 +15,7 @@ import { createZipStream } from '../../../shared/utils/zip-stream';
 import { getDb } from '../../../infra/db';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { accountStorageFiles } from '../../../infra/db/schema';
-import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
 import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()

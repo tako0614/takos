@@ -42,7 +42,7 @@ importers:
 
   apps/cli:
     dependencies:
-      '@takos/actions-engine':
+      '@takoserver/actions-engine':
         specifier: workspace:*
         version: link:../../packages/actions-engine
       chalk:
@@ -109,13 +109,13 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
-      '@takos/actions-engine':
+      '@takoserver/actions-engine':
         specifier: workspace:*
         version: link:../../packages/actions-engine
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../../packages/common
-      '@takos/control':
+      '@takoserver/control':
         specifier: workspace:*
         version: link:../../packages/control
       drizzle-orm:
@@ -161,7 +161,7 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
-      '@takos/control-local-platform':
+      '@takoserver/control-local-platform':
         specifier: workspace:*
         version: link:../../packages/control/local-platform
       '@types/react':
@@ -209,7 +209,7 @@ importers:
 
   apps/runtime:
     dependencies:
-      '@takos/runtime-service':
+      '@takoserver/runtime-service':
         specifier: workspace:*
         version: link:../../packages/runtime-service
     devDependencies:
@@ -262,7 +262,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.12.8)
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../common
       hono:
@@ -342,10 +342,10 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
-      '@takos/actions-engine':
+      '@takoserver/actions-engine':
         specifier: workspace:*
         version: link:../actions-engine
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../common
       drizzle-orm:
@@ -384,10 +384,10 @@ importers:
       '@libsql/client':
         specifier: ^0.17.0
         version: 0.17.0
-      '@takos/actions-engine':
+      '@takoserver/actions-engine':
         specifier: workspace:*
         version: link:../../actions-engine
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../../common
       drizzle-orm:
@@ -415,16 +415,16 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.12.8)
-      '@takos/actions-engine':
+      '@takoserver/actions-engine':
         specifier: workspace:*
         version: link:../actions-engine
-      '@takos/agent-core':
+      '@takoserver/agent-core':
         specifier: workspace:*
         version: link:../agent-core
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../common
-      '@takos/control':
+      '@takoserver/control':
         specifier: workspace:*
         version: link:../control
       hono:
@@ -461,7 +461,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.12.8)
-      '@takos/common':
+      '@takoserver/common':
         specifier: workspace:*
         version: link:../common
       hono:

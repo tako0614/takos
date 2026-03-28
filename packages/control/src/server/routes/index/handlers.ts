@@ -9,7 +9,7 @@ import { logError, logInfo } from '../../../shared/utils/logger';
 import { indexFile, runIndexJob } from './jobs';
 import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './index-context';
 import { scheduleBackground } from './index-context';
-import { BadRequestError, NotFoundError, InternalError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, InternalError } from '@takoserver/common/errors';
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const user = c.get('user');

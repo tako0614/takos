@@ -5,7 +5,7 @@ import type { Repository } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { requireSpaceAccess } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError, ConflictError, InternalError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, ConflictError, InternalError, NotFoundError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { sanitizeRepoName } from './routes';

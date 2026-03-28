@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 
 interface UseCreateSpaceFormOptions {
   onCreate: (name: string, description: string) => Promise<void>;

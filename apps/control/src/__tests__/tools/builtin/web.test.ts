@@ -4,7 +4,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // Mock the isPrivateIP validation
-vi.mock('@takos/common/validation', () => ({
+vi.mock('@takoserver/common/validation', () => ({
   isPrivateIP: vi.fn((ip: string) => {
     // Simplified private IP check for testing
     if (ip === '127.0.0.1' || ip === '10.0.0.1' || ip === '192.168.1.1') return true;

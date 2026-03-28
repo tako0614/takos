@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
-import { NotFoundError, InternalError, GoneError } from '@takos/common/errors';
+import { NotFoundError, InternalError, GoneError } from '@takoserver/common/errors';
 import {
   deleteWorkflowArtifactById,
   getWorkflowArtifactById,

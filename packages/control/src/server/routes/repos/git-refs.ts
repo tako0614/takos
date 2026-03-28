@@ -6,7 +6,7 @@ import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { toGitBucket } from './routes';
-import { BadRequestError, NotFoundError, AuthorizationError, ConflictError, InternalError, isAppError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, AuthorizationError, ConflictError, InternalError, isAppError } from '@takoserver/common/errors';
 import { logError } from '../../../shared/utils/logger';
 import { WRITE_ROLES, sigTimestampToIso, getCommitSha } from './git-shared';
 

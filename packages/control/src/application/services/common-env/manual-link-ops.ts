@@ -1,6 +1,6 @@
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { generateId, now } from '../../../shared/utils';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
 import { normalizeEnvName, uniqueEnvNames } from './crypto';

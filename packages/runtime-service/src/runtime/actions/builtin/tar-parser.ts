@@ -1,5 +1,5 @@
 import { gunzipSync } from 'zlib';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 
 export interface ParsedTarEntry {
   path: string;

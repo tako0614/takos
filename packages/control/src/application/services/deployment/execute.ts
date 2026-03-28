@@ -38,7 +38,7 @@ import { deployments, getDb, services } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
 import { logError } from '../../../shared/utils/logger';
-import { InternalError, NotFoundError } from '@takos/common/errors';
+import { InternalError, NotFoundError } from '@takoserver/common/errors';
 import {
   getDeploymentProviderRegistry,
   resolveDeploymentArtifactRef,

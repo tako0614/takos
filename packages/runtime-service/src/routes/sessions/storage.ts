@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 import {
   HEARTBEAT_ASSUMED_INTERVAL_MS,
   HEARTBEAT_INTERVAL_MS,

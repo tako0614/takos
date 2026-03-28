@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { parseLimit } from '../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import { createDeploymentService } from '../../../application/services/deployment/index';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider';
@@ -12,7 +12,7 @@ import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.t
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
-import { NotFoundError } from '@takos/common/errors';
+import { NotFoundError } from '@takoserver/common/errors';
 
 const MAX_BUNDLE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB (Cloudflare Workers paid plan limit)
 

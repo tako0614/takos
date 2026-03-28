@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
 import { TAKOS_ACCESS_TOKEN_ENV_NAME, createCommonEnvService } from '../../../application/services/common-env';
@@ -11,7 +11,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { serviceCommonEnvLinks } from '../../../infra/db/schema';
 import { logError } from '../../../shared/utils/logger';
-import { NotFoundError, InternalError } from '@takos/common/errors';
+import { NotFoundError, InternalError } from '@takoserver/common/errors';
 
 const workerBuiltinsSchema = z.object({
   TAKOS_ACCESS_TOKEN: z.object({

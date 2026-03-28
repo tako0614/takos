@@ -21,8 +21,8 @@ import {
 import type { ActiveJob } from '../../runtime/actions/job-manager.js';
 import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.js';
 import type { StartJobRequest } from './action-types.js';
-import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
-import { ErrorCodes } from '@takos/common/errors';
+import { badRequest, forbidden, internalError, notFound } from '@takoserver/common/middleware/hono';
+import { ErrorCodes } from '@takoserver/common/errors';
 
 const app = new Hono();
 

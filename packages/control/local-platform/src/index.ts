@@ -1,5 +1,5 @@
 /**
- * Public barrel for @takos/control-local-platform.
+ * Public barrel for @takoserver/control-local-platform.
  *
  * Each sub-module (runtime, worker, oci-orchestrator) re-exports the core API
  * from the parent control package (`../../src/local-platform/`) AND layers on

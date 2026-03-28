@@ -16,7 +16,7 @@ import { generateId } from '../../../shared/utils';
 import type { IndexJobQueueMessage } from '../../../shared/types';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from '@takoserver/common/errors';
 
 function getPathFromRouteOrQuery(c: Context<AuthenticatedRouteEnv>): string {
   const routePath = c.req.param('path') || '';

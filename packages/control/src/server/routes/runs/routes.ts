@@ -9,7 +9,7 @@ import {
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
 import { checkSpaceAccess, generateId, now, toIsoString } from '../../../shared/utils';
-import { BadRequestError, NotFoundError, AppError, ErrorCodes } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, AppError, ErrorCodes } from '@takoserver/common/errors';
 import { checkRunAccess } from './access';
 import {
   persistAndEmitEvent,

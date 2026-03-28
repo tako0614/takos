@@ -12,7 +12,7 @@ import {
 } from '../shared/config.js';
 import { pushLog } from '../runtime/logging.js';
 import { isPathWithinBase } from '../runtime/paths.js';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 import { generateTempSuffix } from '../shared/temp-id.js';
 
 const logger = createLogger({ service: 'takos-runtime' });

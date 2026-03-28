@@ -13,7 +13,7 @@ import {
 import { isProbablyBinary } from '../../runtime/validation.js';
 import { resolveSessionWorkDir } from './session-utils.js';
 import { OwnerBindingError, SymlinkNotAllowedError, SymlinkEscapeError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.js';
-import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
+import { badRequest, forbidden, internalError, notFound } from '@takoserver/common/middleware/hono';
 
 function handleRouteError(c: Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { filterSafeEnv } from '../utils/env-filter.js';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 import { gracefulKill } from '../utils/process-kill.js';
 
 const logger = createLogger({ service: 'takos-runtime' });

@@ -1,4 +1,4 @@
-import type { Step } from '@takos/actions-engine';
+import type { Step } from '@takoserver/actions-engine';
 import type { StepExecutionContext, StepExecutionResult, RuntimeStepResponse } from './workflow-types';
 import { runtimeJson } from './workflow-runtime-client';
 

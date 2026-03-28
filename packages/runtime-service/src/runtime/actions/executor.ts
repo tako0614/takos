@@ -4,7 +4,7 @@ import { pushLog } from '../logging.js';
 import { validateCommand } from '../validation.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
 import * as builtinActions from './builtin/index.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import { resolvePathWithin } from '../paths.js';
 import {
   failureResult,

@@ -1,5 +1,5 @@
 // Re-export types from backend shared models to avoid duplication.
-import type { User as BackendUser } from '@takos/control/shared/types';
+import type { User as BackendUser } from '@takoserver/control/shared/types';
 
 /**
  * Frontend User: picks the fields needed by the UI layer.

@@ -8,7 +8,7 @@ import { repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { type ReleaseAsset, toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from '@takos/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from '@takoserver/common/errors';
 import { sanitizeReleaseAssetFilename, buildAttachmentDisposition } from './release-shared';
 
 const releaseAssets = new Hono<AuthenticatedRouteEnv>()

@@ -8,7 +8,7 @@ import { isValidSessionId, validateGitRef, validateGitAuthorName, validateGitAut
 import { sessionStore } from './storage.js';
 import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId } from './session-utils.js';
 import { OwnerBindingError } from '../../shared/errors.js';
-import { badRequest, forbidden, notFound, internalError } from '@takos/common/middleware/hono';
+import { badRequest, forbidden, notFound, internalError } from '@takoserver/common/middleware/hono';
 
 const app = new Hono();
 

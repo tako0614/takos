@@ -1,5 +1,5 @@
 import type { Queue, D1Database } from '../../../shared/types/bindings.ts';
-import { createExecutionPlan, type Workflow, type Job } from '@takos/actions-engine';
+import { createExecutionPlan, type Workflow, type Job } from '@takoserver/actions-engine';
 import { generateId } from '../../../shared/utils';
 import { getDb, workflowSecrets, workflowJobs, workflowSteps } from '../../../infra/db';
 import { eq } from 'drizzle-orm';

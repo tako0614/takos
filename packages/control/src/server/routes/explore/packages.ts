@@ -15,7 +15,7 @@ import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
 import { parseLimit, parseOffset } from '../shared/route-auth';
-import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from '@takos/common/errors';
+import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from '@takoserver/common/errors';
 import {
   buildCatalogSuggestions,
   EXPLORE_CATEGORIES,

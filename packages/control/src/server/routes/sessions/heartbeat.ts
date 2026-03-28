@@ -3,7 +3,7 @@ import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { checkSpaceAccess, now, toIsoString } from '../../../shared/utils';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
-import { BadRequestError, AuthorizationError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, AuthorizationError, NotFoundError } from '@takoserver/common/errors';
 import type {
   JwtHeartbeatPayload,
   SessionContext,

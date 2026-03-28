@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import { createLogger } from '@takos/common/logger';
-import { isPrivateIP, isLocalhost } from '@takos/common/validation';
+import { createLogger } from '@takoserver/common/logger';
+import { isPrivateIP, isLocalhost } from '@takoserver/common/validation';
 import { BrowserManager } from './browser-manager.js';
 import type {
   BrowserAction,

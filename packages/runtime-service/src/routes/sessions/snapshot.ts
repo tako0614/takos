@@ -9,7 +9,7 @@ import {
 import { isProbablyBinary } from '../../runtime/validation.js';
 import { resolveSessionWorkDir } from './session-utils.js';
 import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.js';
-import { forbidden, internalError } from '@takos/common/middleware/hono';
+import { forbidden, internalError } from '@takoserver/common/middleware/hono';
 
 function handleRouteError(c: import('hono').Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);

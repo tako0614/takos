@@ -3,7 +3,7 @@
  */
 
 import type { Env } from '../../../shared/types';
-import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, InternalError, NotFoundError } from '@takoserver/common/errors';
 import type { WfpContext, WorkerBinding } from './wfp-contracts';
 
 // ---------------------------------------------------------------------------

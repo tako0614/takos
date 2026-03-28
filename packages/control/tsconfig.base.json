@@ -24,10 +24,10 @@
       "@/types": ["packages/control/src/shared/types/index.ts"],
       "@/types/*": ["packages/control/src/shared/types/*"],
       "@/utils/*": ["packages/control/src/shared/utils/*"],
-      "@takos/actions-engine": ["packages/actions-engine/src/index.ts"],
-      "@takos/actions-engine/*": ["packages/actions-engine/src/*"],
-      "@takos/common": ["packages/common/src/index.ts"],
-      "@takos/common/*": ["packages/common/src/*"]
+      "@takoserver/actions-engine": ["packages/actions-engine/src/index.ts"],
+      "@takoserver/actions-engine/*": ["packages/actions-engine/src/*"],
+      "@takoserver/common": ["packages/common/src/index.ts"],
+      "@takoserver/common/*": ["packages/common/src/*"]
     }
   }
 }

@@ -4,7 +4,7 @@
  */
 
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 
 const logger = createLogger({ service: 'browserd' });
 

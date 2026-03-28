@@ -6,7 +6,7 @@ function normalizeHostname(hostname: string): string {
     .replace(/^\[([^\]]+)\]$/, '$1');
   return stripped.endsWith('.') ? stripped.slice(0, -1) : stripped;
 }
-import { isPrivateIP } from '@takos/common/validation';
+import { isPrivateIP } from '@takoserver/common/validation';
 import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
 
 export const WEB_FETCH: ToolDefinition = {

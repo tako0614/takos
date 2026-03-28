@@ -6,7 +6,7 @@ import path from 'path';
 import { Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import { badRequest, internalError, notFound } from '@takos/common/middleware/hono';
+import { badRequest, internalError, notFound } from '@takoserver/common/middleware/hono';
 import { REPOS_BASE_DIR } from '../../shared/config.js';
 import { isPathWithinBase, verifyPathWithinAfterAccess } from '../../runtime/paths.js';
 import { validateGitName } from '../../runtime/validation.js';

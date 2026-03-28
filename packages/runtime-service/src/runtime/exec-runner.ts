@@ -12,7 +12,7 @@ import { runCommand } from './command.js';
 import { resolvePathWithin, verifyPathWithinAfterAccess } from './paths.js';
 import { validateCommandLine } from './validation.js';
 import { execTempDirManager } from '../utils/temp-dir.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 
 // ---------------------------------------------------------------------------
 // Types

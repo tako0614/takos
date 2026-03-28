@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 // Mock workspace dependencies
-vi.mock('@takos/common/logger', () => ({
+vi.mock('@takoserver/common/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),
@@ -11,8 +11,8 @@ vi.mock('@takos/common/logger', () => ({
   }),
 }));
 
-vi.mock('@takos/agent-core/executor-utils', async () => {
-  const actual = await vi.importActual<typeof import('@takos/agent-core/executor-utils')>('@takos/agent-core/executor-utils');
+vi.mock('@takoserver/agent-core/executor-utils', async () => {
+  const actual = await vi.importActual<typeof import('@takoserver/agent-core/executor-utils')>('@takoserver/agent-core/executor-utils');
   return actual;
 });
 
@@ -22,7 +22,7 @@ import {
   buildRuntimeStartPayload,
   createExecutorApp,
 } from '../executor-config.js';
-import { createConcurrencyGuard } from '@takos/agent-core/executor-utils';
+import { createConcurrencyGuard } from '@takoserver/agent-core/executor-utils';
 
 // ---------------------------------------------------------------------------
 // buildExecutorRuntimeConfig

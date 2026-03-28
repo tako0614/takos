@@ -24,7 +24,7 @@ vi.mock('@/services/execution/workflow-engine', () => ({
 
 import { executeStep } from '@/queues/workflow-steps';
 import type { StepExecutionContext } from '@/queues/workflow-types';
-import type { Step } from '@takos/actions-engine';
+import type { Step } from '@takoserver/actions-engine';
 
 function createContext(overrides: Partial<StepExecutionContext> = {}): StepExecutionContext {
   return {

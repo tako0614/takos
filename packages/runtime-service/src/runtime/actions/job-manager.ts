@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 import { pushLog } from '../logging.js';
 import { type SecretsSanitizer } from './secrets.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';

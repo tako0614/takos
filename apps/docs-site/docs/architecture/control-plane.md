@@ -66,7 +66,7 @@ host worker は request の入口であると同時に、container から contro
 
 ## takos-computer の分離
 
-takos-computer は元々 takos control plane の一部（`@takos/control-hosts` パッケージ）として browser-host と executor-host を提供していましたが、独立リポジトリに分離されました。
+takos-computer は元々 takos control plane の一部（`@takoserver/control-hosts` パッケージ）として browser-host と executor-host を提供していましたが、独立リポジトリに分離されました。
 
 ### 分離前
 

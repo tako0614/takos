@@ -1,5 +1,5 @@
 import type { D1Database, ExecutionContext, Queue, R2Bucket } from '../../../shared/types/bindings.ts';
-import { parseWorkflow, type BranchFilter, type PullRequestTriggerConfig, type Workflow, type WorkflowTrigger } from '@takos/actions-engine';
+import { parseWorkflow, type BranchFilter, type PullRequestTriggerConfig, type Workflow, type WorkflowTrigger } from '@takoserver/actions-engine';
 import { getDb, pullRequests, repositories } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import type { WorkflowJobQueueMessage } from '../../../shared/types';

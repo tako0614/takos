@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import { parse as parseYaml } from 'yaml';
 import type { ActionRuns, ActionOutputDefinition } from './composite-executor.js';
 import { cloneAndCheckout } from '../git.js';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

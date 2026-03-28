@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// Mock playwright-core and @takos/common before importing app
+// Mock playwright-core and @takoserver/common before importing app
 vi.mock('playwright-core', () => ({
   chromium: {
     launchPersistentContext: vi.fn(),
   },
 }));
 
-vi.mock('@takos/common/logger', () => ({
+vi.mock('@takoserver/common/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('@takos/common/logger', () => ({
   }),
 }));
 
-vi.mock('@takos/common/validation', () => ({
+vi.mock('@takoserver/common/validation', () => ({
   isPrivateIP: (ip: string) => ip.startsWith('10.') || ip.startsWith('192.168.'),
   isLocalhost: (hostname: string) => hostname === 'localhost' || hostname === '127.0.0.1',
 }));
