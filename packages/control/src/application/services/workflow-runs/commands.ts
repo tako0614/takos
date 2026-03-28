@@ -4,7 +4,7 @@ import {
   validateWorkflow,
   type Workflow,
   type WorkflowDiagnostic,
-} from '@takos/actions-engine';
+} from '@takoserver/actions-engine';
 import { generateId, now } from '../../../shared/utils';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows } from '../../../infra/db';
 import { eq, and, inArray, max } from 'drizzle-orm';

@@ -1,5 +1,5 @@
 /**
- * @takos/common - Shared utilities for Takos services
+ * @takoserver/common - Shared utilities for Takos services
  *
  * This package provides common utilities used across all takos packages:
  * - ID generation (generateId)

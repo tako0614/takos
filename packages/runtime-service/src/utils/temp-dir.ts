@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { createLogger } from '@takos/common/logger';
+import { createLogger } from '@takoserver/common/logger';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

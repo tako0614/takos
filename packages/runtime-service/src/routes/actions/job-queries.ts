@@ -3,7 +3,7 @@ import {
   jobManager,
   sanitizeOutputs,
 } from '../../runtime/actions/job-manager.js';
-import { notFound } from '@takos/common/middleware/hono';
+import { notFound } from '@takoserver/common/middleware/hono';
 
 const app = new Hono();
 

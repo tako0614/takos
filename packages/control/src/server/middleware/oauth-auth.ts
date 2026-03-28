@@ -6,7 +6,7 @@ import { getSession, getSessionIdFromCookie } from '../../application/services/i
 import { getCachedUser } from '../../application/services/identity/user-cache';
 import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
 import { extractBearerToken } from '../../shared/utils';
-import { AuthenticationError } from '@takos/common/errors';
+import { AuthenticationError } from '@takoserver/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
 export interface OAuthContext {

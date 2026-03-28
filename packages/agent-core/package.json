@@ -1,5 +1,5 @@
 {
-  "name": "@takos/agent-core",
+  "name": "@takoserver/agent-core",
   "version": "1.0.0",
   "private": true,
   "type": "module",

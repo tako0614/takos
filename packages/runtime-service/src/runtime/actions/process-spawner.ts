@@ -4,7 +4,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { pushLog } from '../logging.js';
 import { SANDBOX_LIMITS } from '../../shared/config.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import { gracefulKill } from '../../utils/process-kill.js';
 import type { ExecutorStepResult } from './executor.js';
 

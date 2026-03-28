@@ -7,7 +7,7 @@ import { getDb } from '../../infra/db';
 import { threads, messages } from '../../infra/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { InMemoryRateLimiter } from '../../shared/utils/rate-limiter';
-import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from '@takos/common/errors';
+import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from '@takoserver/common/errors';
 
 type Variables = Record<string, never>;
 

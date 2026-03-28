@@ -25,7 +25,7 @@ import { toWorkspaceResponse } from '../../../application/services/identity/resp
 import { getDb } from '../../../infra/db';
 import { eq, ne, and, or, desc, inArray } from 'drizzle-orm';
 import { repositories, threads, resources, resourceAccess } from '../../../infra/db/schema';
-import { BadRequestError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
 
 const VALID_SECURITY_POSTURES = ['standard', 'restricted_egress'] as const;
 

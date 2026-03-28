@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
 import { parseJsonBody, parseLimit, parseOffset, requireTenantSource, requireSpaceAccess, type BaseVariables } from './shared/route-auth';
 import { createGitService } from '../../application/services/source/git';
-import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, InternalError, NotFoundError } from '@takoserver/common/errors';
 import { logError } from '../../shared/utils/logger';
 
 const git = new Hono<{ Bindings: Env; Variables: BaseVariables }>();

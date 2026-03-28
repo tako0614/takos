@@ -4,7 +4,7 @@ import type { ResourceType } from '../../../shared/types';
 import { generateId, now } from '../../../shared/utils';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import {
   checkResourceAccess,
@@ -26,7 +26,7 @@ import { accountMemberships, resourceAccess, resources, accounts } from '../../.
 import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
 import { logError } from '../../../shared/utils/logger';
-import { NotFoundError, AuthorizationError, InternalError } from '@takos/common/errors';
+import { NotFoundError, AuthorizationError, InternalError } from '@takoserver/common/errors';
 import { getPlatformSqlBinding } from '../../../platform/accessors.ts';
 import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
 

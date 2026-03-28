@@ -13,7 +13,7 @@ import {
 import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
 import { isValidSessionId, validateCommandLine } from '../../runtime/validation.js';
 import { sessionStore } from './storage.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import { writeAuditLog } from '../../utils/audit-log.js';
 import {
   getSessionOwnerSub,
@@ -21,7 +21,7 @@ import {
   parseRequiredSessionSpaceIds,
   resolveSessionWorkDir,
 } from './session-utils.js';
-import { forbidden, badRequest, internalError } from '@takos/common/middleware/hono';
+import { forbidden, badRequest, internalError } from '@takoserver/common/middleware/hono';
 import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.js';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 

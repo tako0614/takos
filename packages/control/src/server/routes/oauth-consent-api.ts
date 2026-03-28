@@ -28,7 +28,7 @@ import {
   normalizeUserCode,
 } from '../../application/services/oauth/device';
 import { getClientById } from '../../application/services/oauth/client';
-import { AuthorizationError, AuthenticationError } from '@takos/common/errors';
+import { AuthorizationError, AuthenticationError } from '@takoserver/common/errors';
 import {
   isDeviceUserCodeLimited,
   recordDeviceUserCodeAttempt,

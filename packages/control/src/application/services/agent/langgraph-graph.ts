@@ -13,7 +13,7 @@ import {
   messagesStateReducer,
 } from '@langchain/langgraph/web';
 import { ChatOpenAI } from '@langchain/openai';
-import { ServiceUnavailableError } from '@takos/common/errors';
+import { ServiceUnavailableError } from '@takoserver/common/errors';
 import {
   BaseMessage,
   AIMessage,

@@ -5,7 +5,7 @@ import { getDb } from '../../../infra/db';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, or, desc, asc, like, inArray, count } from 'drizzle-orm';
 import { parseLimit, parseOffset } from '../shared/route-auth';
-import { NotFoundError } from '@takos/common/errors';
+import { NotFoundError } from '@takoserver/common/errors';
 
 type Variables = {
   user?: User;

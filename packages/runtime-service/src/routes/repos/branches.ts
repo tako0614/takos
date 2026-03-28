@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { runGitCommand } from '../../runtime/git.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import {
   getVerifiedRepoPath,
   validateRef,
   requireRepoParams,
 } from './repo-validation.js';
-import { badRequest, internalError, notFound } from '@takos/common/middleware/hono';
-import { ErrorCodes } from '@takos/common/errors';
+import { badRequest, internalError, notFound } from '@takoserver/common/middleware/hono';
+import { ErrorCodes } from '@takoserver/common/errors';
 
 const app = new Hono();
 

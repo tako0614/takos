@@ -11,7 +11,7 @@ import {
   importFilesToDefaultBranch,
   type FileEntry,
 } from './git-write-operations';
-import { BadRequestError, NotFoundError, InternalError, isAppError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, InternalError, isAppError } from '@takoserver/common/errors';
 import { logError } from '../../../shared/utils/logger';
 import {
   WRITE_ROLES,

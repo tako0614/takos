@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import type { Resource } from '../types';
 import type { D1QueryResult, D1TableData } from '../views/workers/types';
 

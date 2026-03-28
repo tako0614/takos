@@ -28,8 +28,8 @@ import type { Context } from 'hono';
 import type { SpaceAccess } from '../../application/services/identity/space-access';
 import type { SpaceRole } from '../../shared/types';
 import { checkSpaceAccess } from '../../application/services/identity/space-access';
-import { AppError } from '@takos/common/errors';
-import type { ErrorCode } from '@takos/common/errors';
+import { AppError } from '@takoserver/common/errors';
+import type { ErrorCode } from '@takoserver/common/errors';
 
 /** Map HTTP status codes to the appropriate AppError subclass. */
 const STATUS_TO_ERROR_CODE: Record<number, ErrorCode> = {

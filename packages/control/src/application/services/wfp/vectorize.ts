@@ -2,7 +2,7 @@
  * Vectorize index methods for WFPService.
  */
 
-import { InternalError } from '@takos/common/errors';
+import { InternalError } from '@takoserver/common/errors';
 import type { WfpContext } from './wfp-contracts';
 
 // ---------------------------------------------------------------------------

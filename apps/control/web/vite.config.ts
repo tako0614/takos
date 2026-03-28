@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
       alias: {
-        '@takos/control/shared/types': resolve(__dirname, '../../../packages/control/src/shared/types/index.ts'),
+        '@takoserver/control/shared/types': resolve(__dirname, '../../../packages/control/src/shared/types/index.ts'),
       },
     },
     build: {

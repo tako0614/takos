@@ -7,9 +7,9 @@ import {
   MAX_EXEC_TOTAL_BYTES,
 } from '../../shared/config.js';
 import { writeAuditLog, type AuditEntry } from '../../utils/audit-log.js';
-import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
-import { ErrorCodes } from '@takos/common/errors';
-import { createLogger } from '@takos/common/logger';
+import { badRequest, forbidden, internalError, notFound } from '@takoserver/common/middleware/hono';
+import { ErrorCodes } from '@takoserver/common/errors';
+import { createLogger } from '@takoserver/common/logger';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
 import { validateRuntimeExecEnv } from '../../utils/env-filter.js';
 

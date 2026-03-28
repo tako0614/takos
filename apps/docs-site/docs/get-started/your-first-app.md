@@ -4,7 +4,7 @@
 
 ## 前提
 
-- `@takos/cli` がインストール済み（[Get Started](/get-started/) 参照）
+- `@takoserver/cli` がインストール済み（[Get Started](/get-started/) 参照）
 - `takos login` でログイン済み
 - Cloudflare アカウント ID と API トークンを用意
 

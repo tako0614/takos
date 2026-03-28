@@ -1,5 +1,5 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { InternalError, ConflictError } from '@takos/common/errors';
+import { InternalError, ConflictError } from '@takoserver/common/errors';
 import { decrypt, type EncryptedData } from '../../../shared/utils/crypto';
 import {
   type ReconcileUpdate,

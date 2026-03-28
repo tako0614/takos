@@ -3,12 +3,12 @@ import type {
   RunExecutorExecutionEnv,
   RunExecutorRuntimeConfig,
   StartPayload,
-} from '@takos/agent-core/run-executor';
+} from '@takoserver/agent-core/run-executor';
 import {
   parseStartPayload,
   createConcurrencyGuard,
   type ConcurrencyGuard,
-} from '@takos/agent-core/executor-utils';
+} from '@takoserver/agent-core/executor-utils';
 
 type ExecutorLogger = {
   info(msg: string, meta?: Record<string, unknown>): void;

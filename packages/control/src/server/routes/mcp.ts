@@ -26,7 +26,7 @@ import { requireSpaceAccess } from './shared/route-auth';
 import { zValidator } from './zod-validator';
 import { escapeHtml } from './auth/html';
 import { logError, logWarn } from '../../shared/utils/logger';
-import { AuthenticationError, BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from '@takos/common/errors';
+import { AuthenticationError, BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from '@takoserver/common/errors';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
 
 // ---------------------------------------------------------------------------

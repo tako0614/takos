@@ -3,7 +3,7 @@
  */
 
 import { billingAccounts, billingPlans, billingPlanQuotas, billingPlanRates, billingPlanFeatures } from '../../../infra/db';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { eq, and } from 'drizzle-orm';
 import type { Database } from '../../../infra/db';
 import type { MeterType, BillingAccountWithPlan } from './billing-types';

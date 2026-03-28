@@ -12,7 +12,7 @@ import {
   AppError,
   ErrorCodes,
   type ErrorCode,
-} from '@takos/common/errors';
+} from '@takoserver/common/errors';
 
 const STATUS_TO_CODE: Record<number, ErrorCode> = {
   400: ErrorCodes.BAD_REQUEST,

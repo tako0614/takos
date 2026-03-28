@@ -1,5 +1,5 @@
 /**
- * Worker module for @takos/control-local-platform.
+ * Worker module for @takoserver/control-local-platform.
  *
  * Re-exports the platform-agnostic worker API from the parent control package,
  * then adds a direct-entrypoint guard so this file can be executed as a

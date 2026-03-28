@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import type { AuthenticatedRouteEnv } from '../shared/route-auth';
 import type { OAuthContext } from '../../middleware/oauth-auth';
 import { StorageError } from '../../../application/services/source/space-storage';
-import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError, PayloadTooLargeError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError, PayloadTooLargeError } from '@takoserver/common/errors';
 import { RateLimiters } from '../../../shared/utils/rate-limiter';
 
 export const storageBulkLimiter = RateLimiters.sensitive();

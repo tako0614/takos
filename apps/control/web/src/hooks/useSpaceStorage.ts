@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { StorageFile } from '../types';
 import { rpc, rpcJson } from '../lib/rpc';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 
 interface UseSpaceStorageReturn {
   files: StorageFile[];

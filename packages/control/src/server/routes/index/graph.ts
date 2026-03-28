@@ -6,7 +6,7 @@ import type { SpaceFile } from '../../../shared/types';
 import { checkSpaceAccess, generateId, now } from '../../../shared/utils';
 import type { IndexContext } from './index-context';
 import { resolvePath } from './index-context';
-import { BadRequestError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
 
 export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
   const user = c.get('user');

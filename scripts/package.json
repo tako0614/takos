@@ -1,5 +1,5 @@
 {
-  "name": "@takos/scripts",
+  "name": "@takoserver/scripts",
   "version": "1.0.0",
   "private": true,
   "type": "module",

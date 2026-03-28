@@ -8,7 +8,7 @@ import type {
   ReviewStatus,
   PullRequestCommentAuthorType,
   Repository as BackendRepository,
-} from '@takos/control/shared/types';
+} from '@takoserver/control/shared/types';
 
 /**
  * Frontend Repository: extends the backend core with UI-specific enriched

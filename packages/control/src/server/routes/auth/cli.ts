@@ -7,7 +7,7 @@ import { getDb, accounts, authIdentities } from '../../../infra/db';
 import type { OptionalAuthRouteEnv } from '../shared/route-auth';
 import { validateCliCallbackUrl } from './provisioning';
 import { escapeHtml, errorPage, warningPage } from './html';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
 
 const CLI_STATE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;

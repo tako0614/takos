@@ -90,7 +90,7 @@ export async function callRuntimeRequest(
     return response;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      const { GatewayTimeoutError } = await import('@takos/common/errors');
+      const { GatewayTimeoutError } = await import('@takoserver/common/errors');
       throw new GatewayTimeoutError(`takos-runtime request timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
     throw err;

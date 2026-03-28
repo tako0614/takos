@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
 import { parseJsonBody, parseLimit, parseOffset, type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';

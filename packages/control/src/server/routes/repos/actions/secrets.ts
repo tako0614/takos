@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { parseJsonBody } from '../../shared/route-auth';
 import type { AuthenticatedRouteEnv } from '../../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
 import { getDb } from '../../../../infra/db';
 import { workflowSecrets } from '../../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { encrypt, generateId, now } from '../../../../shared/utils';
-import { NotFoundError, InternalError } from '@takos/common/errors';
+import { NotFoundError, InternalError } from '@takoserver/common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/secrets', async (c) => {

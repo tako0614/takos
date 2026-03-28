@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ReviewStatus, ReviewerType } from '../../../shared/types';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { type AuthenticatedRouteEnv } from '../shared/route-auth';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import { getDb } from '../../../infra/db';
@@ -15,7 +15,7 @@ import { createNotification } from '../../../application/services/notifications/
 import type { PullRequestCommentDto, PullRequestReviewDto } from './dto';
 import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { NotFoundError, InternalError } from '@takos/common/errors';
+import { NotFoundError, InternalError } from '@takoserver/common/errors';
 
 function toReviewStatus(value: string): ReviewStatus {
   if (value === 'approved' || value === 'changes_requested' || value === 'commented') {

@@ -5,7 +5,7 @@ import type {
   ServiceType,
   ServiceStatus,
   AppType,
-} from '@takos/control/shared/types';
+} from '@takoserver/control/shared/types';
 
 /**
  * Frontend Worker (maps to backend Service): includes enriched fields

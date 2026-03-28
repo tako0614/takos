@@ -1,4 +1,4 @@
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 import { normalizeEnvName } from './crypto';
 import { isReservedSpaceCommonEnvKey } from './crypto';
 import type { LinkSource, ServiceLinkRow, SyncState } from './repository';

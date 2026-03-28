@@ -7,7 +7,7 @@ vi.mock('playwright-core', () => ({
   },
 }));
 
-vi.mock('@takos/common/logger', () => ({
+vi.mock('@takoserver/common/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),

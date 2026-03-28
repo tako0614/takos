@@ -4,7 +4,7 @@ import type { Env } from '../../shared/types';
 import { now } from '../../shared/utils';
 import { validateUsername } from '../../shared/utils/reserved-usernames';
 import { type BaseVariables } from './shared/route-auth';
-import { BadRequestError, ConflictError } from '@takos/common/errors';
+import { BadRequestError, ConflictError } from '@takoserver/common/errors';
 import { zValidator } from './zod-validator';
 import { getDb } from '../../infra/db';
 import { accounts } from '../../infra/db/schema';

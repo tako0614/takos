@@ -8,14 +8,14 @@ import {
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
 } from '../../runtime/paths.js';
-import { getErrorMessage } from '@takos/common/errors';
+import { getErrorMessage } from '@takoserver/common/errors';
 import {
   validateRef,
   validateTargetDir,
 } from './repo-validation.js';
 import { isBoundaryViolationError } from '../../shared/errors.js';
-import { badRequest, forbidden, internalError, notFound } from '@takos/common/middleware/hono';
-import { ErrorCodes } from '@takos/common/errors';
+import { badRequest, forbidden, internalError, notFound } from '@takoserver/common/middleware/hono';
+import { ErrorCodes } from '@takoserver/common/errors';
 import branchRoutes from './branches.js';
 import contentRoutes from './content.js';
 

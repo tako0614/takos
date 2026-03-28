@@ -36,7 +36,7 @@ export {
 
 // --- ID generation ---
 
-export { generateId } from '@takos/common/id';
+export { generateId } from '@takoserver/common/id';
 
 // --- Rate limiting ---
 

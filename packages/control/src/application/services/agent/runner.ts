@@ -29,7 +29,7 @@ import { getAgentConfig } from './runner-config';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { RunTerminalPayload } from '../run-notifier';
 import { logError, logWarn } from '../../../shared/utils/logger';
-import { AppError, AuthenticationError, InternalError } from '@takos/common/errors';
+import { AppError, AuthenticationError, InternalError } from '@takoserver/common/errors';
 import {
   handleSuccessfulRunCompletion,
   handleCancelledRun,

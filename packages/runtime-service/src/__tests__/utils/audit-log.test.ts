@@ -22,7 +22,7 @@ vi.mock('fs/promises', async () => {
   };
 });
 
-vi.mock('@takos/common/logger', () => ({
+vi.mock('@takoserver/common/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),

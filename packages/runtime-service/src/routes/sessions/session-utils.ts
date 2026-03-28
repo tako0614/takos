@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { sessionStore } from './storage.js';
-import { badRequest } from '@takos/common/middleware/hono';
+import { badRequest } from '@takoserver/common/middleware/hono';
 
 // ---------------------------------------------------------------------------
 // Owner extraction

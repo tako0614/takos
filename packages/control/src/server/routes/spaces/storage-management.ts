@@ -16,7 +16,7 @@ import type { StorageFileResponse } from '../../../application/services/source/s
 import { getDb } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema';
-import { BadRequestError, NotFoundError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError } from '@takoserver/common/errors';
 import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations';
 
 const app = new Hono<AuthenticatedRouteEnv>()

@@ -44,7 +44,7 @@ import {
   isEventType,
 } from './stripe';
 import { logError } from '../../../shared/utils/logger';
-import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError } from '@takos/common/errors';
+import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError } from '@takoserver/common/errors';
 
 export {
   getConfiguredProTopupPacks,

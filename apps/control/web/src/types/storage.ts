@@ -1,5 +1,5 @@
 // Re-export types from backend shared models to avoid duplication.
-import type { SpaceStorageFile, SpaceStorageFileType } from '@takos/control/shared/types';
+import type { SpaceStorageFile, SpaceStorageFileType } from '@takoserver/control/shared/types';
 
 /** Frontend-only: directory listing entry used by the storage browser. */
 export interface DirectoryEntry {

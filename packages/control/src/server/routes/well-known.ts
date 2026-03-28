@@ -12,7 +12,7 @@ import type { Env } from '../../shared/types';
 import type { OAuthServerMetadata } from '../../shared/types/oauth';
 import { ALL_SCOPES, DEVICE_CODE_GRANT_TYPE } from '../../shared/types/oauth';
 import { logError } from '../../shared/utils/logger';
-import { InternalError } from '@takos/common/errors';
+import { InternalError } from '@takoserver/common/errors';
 
 const wellKnown = new Hono<{ Bindings: Env }>();
 

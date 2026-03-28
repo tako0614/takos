@@ -16,7 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@takos/control/shared/types": ["../../../packages/control/src/shared/types/index.ts"]
+      "@takoserver/control/shared/types": ["../../../packages/control/src/shared/types/index.ts"]
     }
   },
   "include": ["src/**/*", "*.ts"],

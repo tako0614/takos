@@ -1,7 +1,7 @@
 import { eq, ne, and, or, desc, asc, like, inArray, sql } from 'drizzle-orm';
 import { accounts, repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
 import type { Database } from '../../../infra/db';
-import { BadRequestError } from '@takos/common/errors';
+import { BadRequestError } from '@takoserver/common/errors';
 
 export interface ReleaseAsset {
   id: string;
