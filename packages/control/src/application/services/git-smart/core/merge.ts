@@ -5,7 +5,7 @@
  */
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { MergeConflictType, MergeConflict } from '../types';
+import type { MergeConflictType, MergeConflict } from '../git-objects';
 import { buildTreeFromPaths, flattenTree } from './tree-ops';
 
 interface TreeFileEntry {

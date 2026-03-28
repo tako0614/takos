@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useReducer, type FormEvent } from 'react';
 import { Icons } from '../../../lib/Icons';
 import { useToast } from '../../../store/toast';
 import { formatShortDate } from '../../../lib/format';
@@ -30,21 +30,57 @@ interface ReleaseListProps {
   repoId: string;
 }
 
+interface FormData {
+  tag: string;
+  name: string;
+  description: string;
+  isPrerelease: boolean;
+  isDraft: boolean;
+}
+
+const initialFormData: FormData = {
+  tag: '',
+  name: '',
+  description: '',
+  isPrerelease: false,
+  isDraft: false,
+};
+
+type FetchState = {
+  releases: Release[];
+  loading: boolean;
+  error: string | null;
+};
+
+type FetchAction =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; releases: Release[] }
+  | { type: 'FETCH_ERROR'; error: string };
+
+function fetchReducer(state: FetchState, action: FetchAction): FetchState {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { ...state, loading: true, error: null };
+    case 'FETCH_SUCCESS':
+      return { releases: action.releases, loading: false, error: null };
+    case 'FETCH_ERROR':
+      return { ...state, loading: false, error: action.error };
+  }
+}
+
 export function ReleaseList({ repoId }: ReleaseListProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const [releases, setReleases] = useState<Release[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [{ releases, loading, error }, dispatch] = useReducer(fetchReducer, {
+    releases: [],
+    loading: true,
+    error: null,
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRelease, setEditingRelease] = useState<Release | null>(null);
 
-  const [formTag, setFormTag] = useState('');
-  const [formName, setFormName] = useState('');
-  const [formDescription, setFormDescription] = useState('');
-  const [formIsPrerelease, setFormIsPrerelease] = useState(false);
-  const [formIsDraft, setFormIsDraft] = useState(false);
+  const [formData, setFormData] = useState<FormData>(initialFormData);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -53,25 +89,19 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
 
   const fetchReleases = async () => {
     try {
-      setLoading(true);
+      dispatch({ type: 'FETCH_START' });
       const res = await rpc.repos[':repoId'].releases.$get({
         param: { repoId },
       });
       const data = await rpcJson<{ releases?: Release[] }>(res);
-      setReleases(data.releases || []);
+      dispatch({ type: 'FETCH_SUCCESS', releases: data.releases || [] });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('unknownError'));
-    } finally {
-      setLoading(false);
+      dispatch({ type: 'FETCH_ERROR', error: err instanceof Error ? err.message : t('unknownError') });
     }
   };
 
   const resetForm = () => {
-    setFormTag('');
-    setFormName('');
-    setFormDescription('');
-    setFormIsPrerelease(false);
-    setFormIsDraft(false);
+    setFormData(initialFormData);
     setEditingRelease(null);
   };
 
@@ -81,11 +111,13 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
   };
 
   const openEditModal = (release: Release) => {
-    setFormTag(release.tag);
-    setFormName(release.name || '');
-    setFormDescription(release.description || '');
-    setFormIsPrerelease(release.is_prerelease);
-    setFormIsDraft(release.is_draft);
+    setFormData({
+      tag: release.tag,
+      name: release.name || '',
+      description: release.description || '',
+      isPrerelease: release.is_prerelease,
+      isDraft: release.is_draft,
+    });
     setEditingRelease(release);
     setShowCreateModal(true);
   };
@@ -97,16 +129,16 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!formTag.trim()) return;
+    if (!formData.tag.trim()) return;
 
     setSaving(true);
     try {
       const body = {
-        tag: formTag.trim(),
-        name: formName.trim() || null,
-        description: formDescription.trim() || null,
-        is_prerelease: formIsPrerelease,
-        is_draft: formIsDraft,
+        tag: formData.tag.trim(),
+        name: formData.name.trim() || null,
+        description: formData.description.trim() || null,
+        is_prerelease: formData.isPrerelease,
+        is_draft: formData.isDraft,
       };
 
       if (editingRelease) {
@@ -300,8 +332,8 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <Input
               type="text"
               placeholder="v1.0.0"
-              value={formTag}
-              onChange={e => setFormTag(e.target.value)}
+              value={formData.tag}
+              onChange={e => setFormData(prev => ({ ...prev, tag: e.target.value }))}
               required
               autoFocus
               disabled={!!editingRelease}
@@ -316,8 +348,8 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <Input
               type="text"
               placeholder="Version 1.0.0"
-              value={formName}
-              onChange={e => setFormName(e.target.value)}
+              value={formData.name}
+              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
             />
           </div>
 
@@ -325,8 +357,8 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{t('description')}</label>
             <Textarea
               placeholder={t('releaseNotes')}
-              value={formDescription}
-              onChange={e => setFormDescription(e.target.value)}
+              value={formData.description}
+              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={5}
               resize="vertical"
             />
@@ -336,8 +368,8 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={formIsPrerelease}
-                onChange={e => setFormIsPrerelease(e.target.checked)}
+                checked={formData.isPrerelease}
+                onChange={e => setFormData(prev => ({ ...prev, isPrerelease: e.target.checked }))}
                 className="w-4 h-4 rounded accent-zinc-900"
                 style={{ borderColor: 'var(--color-border-primary)' }}
               />
@@ -350,8 +382,8 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={formIsDraft}
-                onChange={e => setFormIsDraft(e.target.checked)}
+                checked={formData.isDraft}
+                onChange={e => setFormData(prev => ({ ...prev, isDraft: e.target.checked }))}
                 className="w-4 h-4 rounded accent-zinc-900"
                 style={{ borderColor: 'var(--color-border-primary)' }}
               />
@@ -373,7 +405,7 @@ export function ReleaseList({ repoId }: ReleaseListProps) {
             <Button
               type="submit"
               variant="primary"
-              disabled={saving || !formTag.trim()}
+              disabled={saving || !formData.tag.trim()}
               isLoading={saving}
             >
               {editingRelease ? t('updateRelease') : t('createRelease')}

@@ -12,7 +12,7 @@ import type {
   RoutingBindings,
   RoutingRecord,
   RoutingTarget,
-} from './types';
+} from './routing-models';
 import type { PlatformExecutionContext } from '../../../shared/types/bindings.ts';
 import { logWarn } from '../../../shared/utils/logger';
 

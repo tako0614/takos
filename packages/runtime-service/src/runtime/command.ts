@@ -2,19 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { Readable } from 'stream';
 import { pushLog } from './logging.js';
 import { filterSafeEnv } from '../utils/env-filter.js';
-
-/** Grace period before SIGKILL after sending SIGTERM. */
-const GRACEFUL_KILL_TIMEOUT_MS = 5_000;
-
-function gracefulKill(child: ChildProcess): NodeJS.Timeout {
-  child.kill('SIGTERM');
-  return setTimeout(() => {
-    const stillRunning = child.exitCode === null && child.signalCode === null;
-    if (stillRunning) {
-      child.kill('SIGKILL');
-    }
-  }, GRACEFUL_KILL_TIMEOUT_MS);
-}
+import { gracefulKill } from '../utils/process-kill.js';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_COMMAND_TIMEOUT_MS = 24 * 60 * 60 * 1000;

@@ -37,7 +37,7 @@ export function shouldResetRunToQueuedOnContainerError(
 /**
  * Function signature for the agent runner's `executeRun`.
  * Used for dependency injection — callers pass the concrete implementation
- * (resolved from @takos/control-agent/public-runner) into agent-core's executor.
+ * (resolved from @takos/control/agent/public-runner) into agent-core's executor.
  */
 export type ExecuteRunFn = (
   env: Record<string, unknown>,
@@ -228,156 +228,33 @@ async function fetchApiKeys(controlRpc: ControlRpcClient): Promise<{
   return controlRpc.fetchApiKeys();
 }
 
-function createControlRpcRunIo(
-  controlRpc: ControlRpcClient,
-): {
-  getRunBootstrap: (input: {
-    runId: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getRunBootstrap']>>>;
-  getRunRecord: (input: {
-    runId: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getRunRecord']>>>;
-  getRunStatus: (input: {
-    runId: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getRunStatus']>>>;
-  getConversationHistory: (input: {
-    runId: string;
-    threadId: string;
-    spaceId: string;
-    aiModel: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getConversationHistory']>>>;
-  resolveSkillPlan: (input: {
-    runId: string;
-    threadId: string;
-    spaceId: string;
-    agentType: string;
-    history: Array<{
-      role: 'user' | 'assistant' | 'system' | 'tool';
-      content: string;
-      tool_calls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-      tool_call_id?: string;
-    }>;
-    availableToolNames: string[];
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['resolveSkillPlan']>>>;
-  getMemoryActivation: (input: {
-    spaceId: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getMemoryActivation']>>>;
-  finalizeMemoryOverlay: (input: {
-    runId: string;
-    spaceId: string;
-    claims: Array<{
-      id: string;
-      accountId: string;
-      claimType: 'fact' | 'preference' | 'decision' | 'observation';
-      subject: string;
-      predicate: string;
-      object: string;
-      confidence: number;
-      status: 'active' | 'superseded' | 'retracted';
-      supersededBy: string | null;
-      sourceRunId: string | null;
-      createdAt: string;
-      updatedAt: string;
-    }>;
-    evidence: Array<{
-      id: string;
-      accountId: string;
-      claimId: string;
-      kind: 'supports' | 'contradicts' | 'context';
-      sourceType: 'tool_result' | 'user_message' | 'agent_inference' | 'memory_recall';
-      sourceRef: string | null;
-      content: string;
-      trust: number;
-      taint: string | null;
-      createdAt: string;
-    }>;
-  }) => Promise<void>;
-  addMessage: (input: {
-    runId: string;
-    threadId: string;
-    message: {
-      role: 'user' | 'assistant' | 'system' | 'tool';
-      content: string;
-      tool_calls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-      tool_call_id?: string;
-    };
-    metadata?: Record<string, unknown>;
-  }) => Promise<void>;
-  updateRunStatus: (input: {
-    runId: string;
-    status: 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-    usage: { inputTokens: number; outputTokens: number };
-    output?: string;
-    error?: string;
-  }) => Promise<void>;
-  getCurrentSessionId: (input: { runId: string; spaceId: string }) => Promise<string | null>;
-  isCancelled: (input: { runId: string }) => Promise<boolean>;
-  getToolCatalog: (input: {
-    runId: string;
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['getToolCatalog']>>>;
-  executeTool: (input: {
-    runId: string;
-    toolCall: {
-      id: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    };
-  }) => Promise<Awaited<ReturnType<ControlRpcClient['executeTool']>>>;
-  cleanupToolExecutor: (input: { runId: string }) => Promise<void>;
-  emitRunEvent: (input: {
-    runId: string;
-    type: 'started' | 'thinking' | 'tool_call' | 'tool_result' | 'message' | 'artifact' | 'completed' | 'error' | 'cancelled' | 'progress';
-    data: Record<string, unknown>;
-    sequence: number;
-    skipDb?: boolean;
-  }) => Promise<void>;
-} {
+/**
+ * Adapt a ControlRpcClient to the runIo interface expected by AgentRunner.
+ *
+ * Most methods are pure passthroughs. The handful that differ just unwrap
+ * `{ runId }` into a plain string because ControlRpcClient takes `runId: string`
+ * while AgentRunnerIo consistently uses `{ runId: string }` input objects.
+ */
+function createControlRpcRunIo(controlRpc: ControlRpcClient) {
   return {
-    getRunBootstrap(input) {
-      return controlRpc.getRunBootstrap(input.runId);
-    },
-    getRunRecord(input) {
-      return controlRpc.getRunRecord(input.runId);
-    },
-    getRunStatus(input) {
-      return controlRpc.getRunStatus(input.runId);
-    },
-    getConversationHistory(input) {
-      return controlRpc.getConversationHistory(input);
-    },
-    resolveSkillPlan(input) {
-      return controlRpc.resolveSkillPlan(input);
-    },
-    getMemoryActivation(input) {
-      return controlRpc.getMemoryActivation(input);
-    },
-    finalizeMemoryOverlay(input) {
-      return controlRpc.finalizeMemoryOverlay(input);
-    },
-    addMessage(input) {
-      return controlRpc.addMessage(input);
-    },
-    updateRunStatus(input) {
-      return controlRpc.updateRunStatus(input);
-    },
-    getCurrentSessionId(input) {
-      return controlRpc.getCurrentSessionId(input);
-    },
-    isCancelled(input) {
-      return controlRpc.isCancelled(input.runId);
-    },
-    getToolCatalog(input) {
-      return controlRpc.getToolCatalog(input.runId);
-    },
-    executeTool(input) {
-      return controlRpc.executeTool(input);
-    },
-    cleanupToolExecutor(input) {
-      return controlRpc.cleanupToolExecutor(input.runId);
-    },
-    emitRunEvent(input) {
-      return controlRpc.emitRunEvent(input);
-    },
+    // --- Methods that unwrap { runId } → plain string ---
+    getRunBootstrap: (input: { runId: string }) => controlRpc.getRunBootstrap(input.runId),
+    getRunRecord: (input: { runId: string }) => controlRpc.getRunRecord(input.runId),
+    getRunStatus: (input: { runId: string }) => controlRpc.getRunStatus(input.runId),
+    isCancelled: (input: { runId: string }) => controlRpc.isCancelled(input.runId),
+    getToolCatalog: (input: { runId: string }) => controlRpc.getToolCatalog(input.runId),
+    cleanupToolExecutor: (input: { runId: string }) => controlRpc.cleanupToolExecutor(input.runId),
+
+    // --- Pure passthroughs (input shape matches ControlRpcClient) ---
+    getConversationHistory: (input: Parameters<ControlRpcClient['getConversationHistory']>[0]) => controlRpc.getConversationHistory(input),
+    resolveSkillPlan: (input: Parameters<ControlRpcClient['resolveSkillPlan']>[0]) => controlRpc.resolveSkillPlan(input),
+    getMemoryActivation: (input: Parameters<ControlRpcClient['getMemoryActivation']>[0]) => controlRpc.getMemoryActivation(input),
+    finalizeMemoryOverlay: (input: Parameters<ControlRpcClient['finalizeMemoryOverlay']>[0]) => controlRpc.finalizeMemoryOverlay(input),
+    addMessage: (input: Parameters<ControlRpcClient['addMessage']>[0]) => controlRpc.addMessage(input),
+    updateRunStatus: (input: Parameters<ControlRpcClient['updateRunStatus']>[0]) => controlRpc.updateRunStatus(input),
+    getCurrentSessionId: (input: Parameters<ControlRpcClient['getCurrentSessionId']>[0]) => controlRpc.getCurrentSessionId(input),
+    executeTool: (input: Parameters<ControlRpcClient['executeTool']>[0]) => controlRpc.executeTool(input),
+    emitRunEvent: (input: Parameters<ControlRpcClient['emitRunEvent']>[0]) => controlRpc.emitRunEvent(input),
   };
 }
 

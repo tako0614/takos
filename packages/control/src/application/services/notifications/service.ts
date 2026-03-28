@@ -13,7 +13,7 @@ import {
   type NotificationChannel,
   type NotificationPreferenceMatrix,
   type NotificationType,
-} from './types';
+} from './notification-models';
 
 // ── Zod schemas for API input validation ──
 

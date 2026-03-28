@@ -31,7 +31,7 @@ import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
 import { logError, logInfo, logWarn } from './shared/utils/logger';
 import { AppError, RateLimitError, isAppError } from '@takos/common/errors';
 import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
-import type { ControlPlatform } from './platform/types.ts';
+import type { ControlPlatform } from './platform/platform-config.ts';
 import { setPlatformContext } from './platform/context.ts';
 import { getPlatformConfig, getPlatformServices } from './platform/accessors.ts';
 import { createExecutorProxyRouter } from './runtime/executor-proxy-api';

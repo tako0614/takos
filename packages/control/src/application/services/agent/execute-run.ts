@@ -5,7 +5,7 @@
  */
 
 import type { Env } from '../../../shared/types';
-import type { AgentContext } from './types';
+import type { AgentContext } from './agent-models';
 import { AgentRunner, type AgentRunnerIo } from './runner';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 

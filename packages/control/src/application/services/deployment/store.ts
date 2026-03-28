@@ -2,7 +2,7 @@ import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
-import type { ArtifactKind, Deployment, DeploymentEvent } from './types';
+import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
 
 type DeploymentInsert = typeof deployments.$inferInsert;
 type DeploymentUpdate = Partial<typeof deployments.$inferInsert>;

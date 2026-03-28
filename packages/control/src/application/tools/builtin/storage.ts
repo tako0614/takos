@@ -1,5 +1,5 @@
 // Security: S07 (R2 workspace-scoped), S08 (D1 safe queries), S09 (KV namespace-restricted)
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { KV_TOOLS, KV_HANDLERS } from './storage/kv';
 import { D1_TOOLS, D1_HANDLERS } from './storage/d1';
 import { R2_TOOLS, R2_HANDLERS } from './storage/r2';

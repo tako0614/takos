@@ -1,5 +1,5 @@
 /**
- * Tests for cf-types.ts
+ * Tests for node-cf-bindings.ts
  *
  * This module defines structural interfaces for Cloudflare-shaped bindings
  * used in Node.js environments. These tests verify the type contracts are
@@ -26,9 +26,9 @@ import type {
   Queue,
   Fetcher,
   KVNamespace,
-} from '../cf-types.js';
+} from '../node-cf-bindings.js';
 
-describe('cf-types structural contracts', () => {
+describe('node-cf-bindings structural contracts', () => {
   describe('D1Database', () => {
     it('accepts a conforming D1Database implementation', () => {
       const db: D1Database = {
@@ -168,7 +168,7 @@ describe('cf-types structural contracts', () => {
 
   describe('QueueSendOptions', () => {
     it('supports contentType and delaySeconds', () => {
-      const opts: import('../cf-types.js').QueueSendOptions = {
+      const opts: import('../node-cf-bindings.js').QueueSendOptions = {
         contentType: 'json',
         delaySeconds: 30,
       };

@@ -5,7 +5,7 @@
  */
 
 import type { AgentRunnerIo } from './runner';
-import type { AgentMessage, AgentEvent } from './types';
+import type { AgentMessage, AgentEvent } from './agent-models';
 import type { ToolExecutorLike } from '../../tools/executor';
 import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills';
 import { emitSkillLoadOutcome } from './skills';

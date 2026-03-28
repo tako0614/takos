@@ -1,6 +1,6 @@
 import type { Resource } from '../../../types';
 import { ResourceDetail } from '../ResourceDetail';
-import type { ResourceDetailTab } from '../types';
+import type { ResourceDetailTab } from '../worker-models';
 import {
   getResourceStatusBgClass,
   getResourceTypeIcon,

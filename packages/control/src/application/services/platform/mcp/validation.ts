@@ -6,7 +6,7 @@
 
 import type { Env } from '../../../../shared/types';
 import { isLocalhost, isPrivateIP } from '@takos/common/validation';
-import type { McpEndpointUrlOptions } from './types';
+import type { McpEndpointUrlOptions } from './mcp-models';
 
 // ---------------------------------------------------------------------------
 // Helpers

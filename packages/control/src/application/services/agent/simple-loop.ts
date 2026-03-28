@@ -5,7 +5,7 @@
  * when no LLM API key is configured.
  */
 
-import type { AgentMessage, AgentConfig, AgentEvent } from './types';
+import type { AgentMessage, AgentConfig, AgentEvent } from './agent-models';
 import type { RunTerminalPayload } from '../run-notifier';
 import type { LLMClient } from './llm';
 import type { ToolExecutorLike } from '../../tools/executor';

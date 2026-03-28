@@ -11,8 +11,8 @@ import type {
   ContainerServiceDef,
   ProvisionedResource,
   ServiceDeployResult,
-} from './types.js';
-import { execCommand } from './helpers.js';
+} from './deploy-models.js';
+import { execCommand } from './cloudflare-helpers.js';
 
 // ── Container Deploy Helpers ─────────────────────────────────────────────
 

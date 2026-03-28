@@ -137,13 +137,32 @@ export class EmbeddingsService {
   }
 
   async removeFile(spaceId: string, fileId: string): Promise<void> {
+    // Look up the file's size from D1 to derive the actual upper bound
+    // on chunk count, instead of the old hardcoded limit of 100.
+    const drizzle = getDb(this.db);
+    const file = await drizzle
+      .select({ size: filesTable.size })
+      .from(filesTable)
+      .where(eq(filesTable.id, fileId))
+      .get();
+
+    // Each chunk is roughly MAX_CHUNK_SIZE tokens (~2KB). Use a generous
+    // estimate: 1 chunk per 1 KB of source, plus a margin.  If the file
+    // row is already gone we still attempt deletion with a reasonable cap.
+    const estimatedChunks = file ? Math.ceil(file.size / 1024) + 2 : 500;
+
     const prefix = `${spaceId}:${fileId}:`;
     const ids: string[] = [];
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < estimatedChunks; i++) {
       ids.push(`${prefix}${i}`);
     }
 
-    await this.vectorize.deleteByIds(ids);
+    if (ids.length === 0) return;
+
+    const batchSize = 100;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      await this.vectorize.deleteByIds(ids.slice(i, i + batchSize));
+    }
   }
 
   async search(

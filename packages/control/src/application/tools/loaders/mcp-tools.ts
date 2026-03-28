@@ -1,4 +1,4 @@
-import type { ToolDefinition, RegisteredTool } from '../types';
+import type { ToolDefinition, RegisteredTool } from '../tool-definitions';
 import type { Env, SpaceRole } from '../../../shared/types';
 import { getDb, mcpServers } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';

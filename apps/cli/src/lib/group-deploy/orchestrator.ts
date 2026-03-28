@@ -13,8 +13,8 @@ import type {
   WranglerConfig,
   WorkerContainerSpec,
   WorkerServiceDef,
-} from './types.js';
-import { execCommand } from './helpers.js';
+} from './deploy-models.js';
+import { execCommand } from './cloudflare-helpers.js';
 import { provisionResources } from './provisioner.js';
 import { generateWranglerConfig, serializeWranglerToml } from './wrangler-config.js';
 import { deployContainerWithWrangler, serializeContainerWranglerToml } from './container.js';

@@ -10,7 +10,7 @@ import {
   formatBillingDate,
   sortBillingTopupPacks,
 } from './settings-billing';
-import { Section } from './settings-shared';
+import { Section } from './SettingsShared';
 
 export function SettingsBilling({ user }: { user: User | null }) {
   const { t, lang } = useI18n();

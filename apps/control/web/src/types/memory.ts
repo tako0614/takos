@@ -3,7 +3,7 @@
 import type {
   Memory as BackendMemory,
   Reminder as BackendReminder,
-} from '@takos/control-shared/types';
+} from '@takos/control/shared/types';
 
 /**
  * Frontend Memory: omits `user_id` and `thread_id` since the UI always

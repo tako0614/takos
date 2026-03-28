@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/types.ts';
+import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/routing-models.ts';
 
 type RoutingState = Record<string, RoutingRecord>;
 

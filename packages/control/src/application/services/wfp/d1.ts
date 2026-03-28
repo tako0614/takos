@@ -3,7 +3,7 @@
  */
 
 import { InternalError } from '@takos/common/errors';
-import type { WfpContext, D1QueryResult } from './types';
+import type { WfpContext, D1QueryResult } from './wfp-contracts';
 import { sanitizeTableName, extractD1Results } from './worker-metadata';
 
 // ---------------------------------------------------------------------------

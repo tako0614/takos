@@ -7,7 +7,7 @@
  */
 
 import type { Env } from '../../../shared/types';
-import type { AgentContext, AgentEvent } from './types';
+import type { AgentContext, AgentEvent } from './agent-models';
 import { SnapshotManager } from '../sync/snapshot';
 import { generateId } from '../../../shared/utils';
 import { getDb, sessions, accounts, accountMetadata, files, runs } from '../../../infra/db';

@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { ControlPlatform } from './types.ts';
+import type { ControlPlatform } from './platform-config.ts';
 
 export type PlatformContextVariables<TBindings extends object = object> = {
   platform?: ControlPlatform<TBindings>;

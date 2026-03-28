@@ -1,5 +1,5 @@
 import { createClient } from 'redis';
-import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/types.ts';
+import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/routing-models.ts';
 import type { QueueBinding } from '../shared/types/bindings.ts';
 import type { LocalQueue, LocalQueueRecord } from './queue-runtime.ts';
 import { logWarn } from '../shared/utils/logger.ts';

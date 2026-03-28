@@ -8,7 +8,7 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { decrypt, decryptEnvVars, maskEnvVars, type EncryptedData } from '../../../shared/utils/crypto';
 import { computeSHA256, constantTimeEqual } from '../../../shared/utils/hash';
-import type { Deployment, DeploymentEnv } from './types';
+import type { Deployment, DeploymentEnv } from './models';
 import { InternalError, NotFoundError, ValidationError } from '@takos/common/errors';
 
 export async function getBundleContent(env: DeploymentEnv, deployment: Deployment): Promise<string> {

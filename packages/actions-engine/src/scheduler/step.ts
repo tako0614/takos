@@ -16,7 +16,7 @@ import type {
   StepResult,
   ExecutionContext,
   ActionResolver,
-} from '../types.js';
+} from '../workflow-models.js';
 import { parseGitHubEnvFile } from '../context.js';
 import {
   evaluateCondition,

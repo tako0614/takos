@@ -20,7 +20,7 @@ import {
   SystemMessage,
   ToolMessage,
 } from '@langchain/core/messages';
-import type { ToolDefinition } from '../../tools/types';
+import type { ToolDefinition } from '../../tools/tool-definitions';
 import type { ToolExecutorLike } from '../../tools/executor';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import { estimateTokens } from './prompt-budget';

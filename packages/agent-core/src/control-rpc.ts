@@ -1,14 +1,30 @@
-export type ControlRpcCapability = 'control';
+import type {
+  AgentMessage,
+  ApiKeysResponse,
+  ControlRpcCapability,
+  ControlRpcMemoryActivation,
+  ControlRpcRunBootstrap,
+  ControlRpcRunContext,
+  ControlRpcRunRecord,
+  ControlRpcRunStatus,
+  ControlRpcSkillPlan,
+  ControlRpcTokenSource,
+  ControlRpcToolCatalog,
+  MemoryClaim,
+  MemoryEvidence,
+  ServiceScopedPayload,
+} from './control-rpc-types.js';
 
-type ControlRpcTokenSource = {
-  tokenForPath(path: string): string;
-};
-
-type ServiceScopedPayload = {
-  runId: string;
-  serviceId?: string;
-  workerId?: string;
-};
+export type {
+  ControlRpcCapability,
+  ControlRpcMemoryActivation,
+  ControlRpcRunBootstrap,
+  ControlRpcRunContext,
+  ControlRpcRunRecord,
+  ControlRpcRunStatus,
+  ControlRpcSkillPlan,
+  ControlRpcToolCatalog,
+} from './control-rpc-types.js';
 
 function normalizeServiceScopedPayload<T extends ServiceScopedPayload>(payload: T): T & { serviceId: string; workerId: string } {
   const serviceId = payload.serviceId ?? payload.workerId;
@@ -21,164 +37,6 @@ function normalizeServiceScopedPayload<T extends ServiceScopedPayload>(payload: 
     workerId: payload.workerId ?? serviceId,
   };
 }
-
-type ApiKeysResponse = {
-  openai?: string | null;
-  anthropic?: string | null;
-  google?: string | null;
-};
-
-type AgentMessage = {
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  tool_calls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-  tool_call_id?: string;
-};
-
-type ToolParameter = {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-  description: string;
-  enum?: string[];
-  items?: ToolParameter;
-  default?: unknown;
-  properties?: Record<string, ToolParameter>;
-  required?: string[];
-};
-
-type ControlRpcToolDefinition = {
-  name: string;
-  description: string;
-  category: string;
-  required_roles?: string[];
-  required_capabilities?: string[];
-  parameters: {
-    type: 'object';
-    properties: Record<string, ToolParameter>;
-    required?: string[];
-  };
-};
-
-type SkillCatalogEntry = {
-  id: string;
-  name: string;
-  description: string;
-  triggers: string[];
-  source: string;
-  category?: string;
-  locale?: string;
-  version?: string;
-  activation_tags?: string[];
-  execution_contract: {
-    preferred_tools: string[];
-    durable_output_hints: string[];
-    output_modes: string[];
-    required_mcp_servers: string[];
-    template_ids: string[];
-  };
-  availability: 'available' | 'warning' | 'unavailable';
-  availability_reasons: string[];
-};
-
-type SkillContext = SkillCatalogEntry & {
-  instructions: string;
-  priority?: number;
-  metadata?: Record<string, unknown>;
-};
-
-type SkillSelection = {
-  skill: SkillContext;
-  score: number;
-  reasons: string[];
-};
-
-export type ControlRpcSkillPlan = {
-  success: boolean;
-  error?: string;
-  skillLocale: 'ja' | 'en';
-  availableSkills: SkillCatalogEntry[];
-  selectedSkills: SkillSelection[];
-  activatedSkills: SkillContext[];
-};
-
-type MemoryClaim = {
-  id: string;
-  accountId: string;
-  claimType: 'fact' | 'preference' | 'decision' | 'observation';
-  subject: string;
-  predicate: string;
-  object: string;
-  confidence: number;
-  status: 'active' | 'superseded' | 'retracted';
-  supersededBy: string | null;
-  sourceRunId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type MemoryPath = {
-  id: string;
-  accountId: string;
-  startClaimId: string;
-  endClaimId: string;
-  hopCount: number;
-  pathClaims: string[];
-  pathRelations: string[];
-  pathSummary: string | null;
-  minConfidence: number;
-  createdAt: string;
-};
-
-type MemoryActivationBundle = {
-  claim: MemoryClaim;
-  evidenceCount: number;
-  paths: MemoryPath[];
-};
-
-export type ControlRpcMemoryActivation = {
-  bundles: MemoryActivationBundle[];
-  segment: string;
-  hasContent: boolean;
-};
-
-type MemoryEvidence = {
-  id: string;
-  accountId: string;
-  claimId: string;
-  kind: 'supports' | 'contradicts' | 'context';
-  sourceType: 'tool_result' | 'user_message' | 'agent_inference' | 'memory_recall';
-  sourceRef: string | null;
-  content: string;
-  trust: number;
-  taint: string | null;
-  createdAt: string;
-};
-
-export type ControlRpcRunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | null;
-export type ControlRpcRunContext = {
-  status: ControlRpcRunStatus;
-  threadId: string | null;
-  sessionId: string | null;
-  lastUserMessage: string | null;
-};
-export type ControlRpcRunRecord = {
-  status: ControlRpcRunStatus;
-  input: string | null;
-  parentRunId: string | null;
-};
-
-export type ControlRpcRunBootstrap = {
-  status: ControlRpcRunStatus;
-  spaceId: string;
-  sessionId: string | null;
-  threadId: string;
-  userId: string;
-  agentType: string;
-};
-
-export type ControlRpcToolCatalog = {
-  tools: ControlRpcToolDefinition[];
-  mcpFailedServers: string[];
-};
 
 function timeoutSignal(ms: number): AbortSignal {
   return AbortSignal.timeout(ms);
@@ -248,9 +106,9 @@ export class ControlRpcClient {
   async fetchApiKeys(): Promise<{ openai?: string; anthropic?: string; google?: string }> {
     const result = await this.post<ApiKeysResponse>('/rpc/control/api-keys', {});
     return {
-      openai: result.openai ?? undefined,
-      anthropic: result.anthropic ?? undefined,
-      google: result.google ?? undefined,
+      openai: result.openai,
+      anthropic: result.anthropic,
+      google: result.google,
     };
   }
 
@@ -379,29 +237,33 @@ export function createStaticControlRpcTokenSource(token: string): ControlRpcToke
   };
 }
 
+const CONTROL_RPC_PATHS = new Set([
+  '/rpc/control/heartbeat',
+  '/rpc/control/run-status',
+  '/rpc/control/run-record',
+  '/rpc/control/run-bootstrap',
+  '/rpc/control/run-fail',
+  '/rpc/control/run-reset',
+  '/rpc/control/api-keys',
+  '/rpc/control/billing-run-usage',
+  '/rpc/control/run-context',
+  '/rpc/control/no-llm-complete',
+  '/rpc/control/conversation-history',
+  '/rpc/control/skill-plan',
+  '/rpc/control/memory-activation',
+  '/rpc/control/memory-finalize',
+  '/rpc/control/add-message',
+  '/rpc/control/update-run-status',
+  '/rpc/control/current-session',
+  '/rpc/control/is-cancelled',
+  '/rpc/control/tool-catalog',
+  '/rpc/control/tool-execute',
+  '/rpc/control/tool-cleanup',
+  '/rpc/control/run-event',
+]);
+
 export function isControlRpcPath(path: string): boolean {
-  return path === '/rpc/control/heartbeat'
-    || path === '/rpc/control/run-status'
-    || path === '/rpc/control/run-record'
-    || path === '/rpc/control/run-bootstrap'
-    || path === '/rpc/control/run-fail'
-    || path === '/rpc/control/run-reset'
-    || path === '/rpc/control/api-keys'
-    || path === '/rpc/control/billing-run-usage'
-    || path === '/rpc/control/run-context'
-    || path === '/rpc/control/no-llm-complete'
-    || path === '/rpc/control/conversation-history'
-    || path === '/rpc/control/skill-plan'
-    || path === '/rpc/control/memory-activation'
-    || path === '/rpc/control/memory-finalize'
-    || path === '/rpc/control/add-message'
-    || path === '/rpc/control/update-run-status'
-    || path === '/rpc/control/current-session'
-    || path === '/rpc/control/is-cancelled'
-    || path === '/rpc/control/tool-catalog'
-    || path === '/rpc/control/tool-execute'
-    || path === '/rpc/control/tool-cleanup'
-    || path === '/rpc/control/run-event';
+  return CONTROL_RPC_PATHS.has(path);
 }
 
 export function getRequiredControlRpcCapability(path: string): ControlRpcCapability | null {

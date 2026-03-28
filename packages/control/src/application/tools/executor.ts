@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult, ToolCall, ContainerStartFailure, ToolDefinition } from './types';
+import type { ToolContext, ToolResult, ToolCall, ContainerStartFailure, ToolDefinition } from './tool-definitions';
 import type { Env } from '../../shared/types';
 import type { SpaceRole } from '../../shared/types';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../shared/types/bindings.ts';
@@ -7,7 +7,7 @@ import { CapabilityRegistry } from './capability-registry';
 import { CircuitBreaker, type CircuitStats } from './circuit-breaker';
 import { resolveAllowedCapabilities } from '../services/platform/capabilities';
 import { buildToolDescriptor } from './descriptor-builder';
-import type { ToolObserver } from '../services/memory-graph/types';
+import type { ToolObserver } from '../services/memory-graph/graph-models';
 import { checkIdempotency, completeOperation } from './idempotency';
 import { logError, logInfo, logWarn } from '../../shared/utils/logger';
 import { MAX_TOOL_OUTPUT_SIZE, MAX_PARALLEL_TOOL_EXECUTIONS } from '../../shared/config/limits';

@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import type { Snapshot, SnapshotTree, BlobFetcher } from './types';
+import type { Snapshot, SnapshotTree, BlobFetcher } from './models';
 import { generateId, now, toIsoString } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, snapshots, blobs, files, sessions, sessionFiles, accounts } from '../../../infra/db';

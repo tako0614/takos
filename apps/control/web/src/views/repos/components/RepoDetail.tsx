@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useReducer } from 'react';
 import type { ReactNode } from 'react';
 import { Icons } from '../../../lib/Icons';
 import type { Repository, Branch } from '../../../types';
@@ -19,6 +19,72 @@ import { toSafeHref } from '../../../lib/safeHref';
 
 type TabType = 'code' | 'search' | 'commits' | 'branches' | 'pull-requests' | 'releases' | 'actions';
 
+interface SelectedFile {
+  path: string | null;
+  line: number | null;
+}
+
+interface StarState {
+  starred: boolean;
+  count: number;
+}
+
+type ReadmeState =
+  | { status: 'idle'; content: null }
+  | { status: 'loading'; content: string | null }
+  | { status: 'done'; content: string | null };
+
+type ReadmeAction =
+  | { type: 'fetch' }
+  | { type: 'resolve'; content: string | null };
+
+function readmeReducer(state: ReadmeState, action: ReadmeAction): ReadmeState {
+  switch (action.type) {
+    case 'fetch':
+      return { status: 'loading', content: state.content };
+    case 'resolve':
+      return { status: 'done', content: action.content };
+  }
+}
+
+const README_CANDIDATES = ['README.md', 'readme.md', 'README', 'readme.txt'] as const;
+
+const NON_RETRYABLE_ERRORS = new Set([
+  'Ref not found',
+  'Commit object missing',
+  'Commit tree missing',
+  'Repository not found',
+]);
+
+async function resolveReadmeContent(repoId: string, branch: string): Promise<string | null> {
+  for (const filename of README_CANDIDATES) {
+    try {
+      const res = await repoBlob(repoId, branch, { path: filename });
+
+      if (res.ok) {
+        const data = await rpcJson<{ content?: string }>(res);
+        if (data.content) return data.content;
+      }
+
+      const apiError = await res.json().then(
+        (body) => (body as { error?: string })?.error || '',
+        () => '',
+      );
+
+      if (res.status === 404 && (apiError === 'File not found' || apiError === 'Path not found')) {
+        continue;
+      }
+
+      if (res.status >= 500 || res.status === 409 || NON_RETRYABLE_ERRORS.has(apiError)) {
+        break;
+      }
+    } catch {
+      // network error – try next candidate
+    }
+  }
+  return null;
+}
+
 interface RepoDetailProps {
   spaceId: string;
   repo: Repository;
@@ -35,61 +101,20 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
   const [activeTab, setActiveTab] = useState<TabType>('code');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>(repo.default_branch);
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [selectedFileLine, setSelectedFileLine] = useState<number | null>(null);
-  const [isStarred, setIsStarred] = useState(repo.is_starred ?? false);
-  const [starsCount, setStarsCount] = useState(repo.stars);
+  const [selectedFile, setSelectedFile] = useState<SelectedFile>({ path: null, line: null });
+  const [star, setStar] = useState<StarState>({ starred: repo.is_starred ?? false, count: repo.stars });
   const [forksCount, setForksCount] = useState(repo.forks);
   const [showForkModal, setShowForkModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [readme, setReadme] = useState<string | null>(null);
-  const [readmeLoading, setReadmeLoading] = useState(false);
+  const [readmeState, dispatchReadme] = useReducer(readmeReducer, { status: 'idle', content: null });
 
   const fetchReadme = useCallback(async () => {
-    setReadmeLoading(true);
+    dispatchReadme({ type: 'fetch' });
     try {
-      const nonRetryableErrors = new Set([
-        'Ref not found',
-        'Commit object missing',
-        'Commit tree missing',
-        'Repository not found',
-      ]);
-
-      for (const filename of ['README.md', 'readme.md', 'README', 'readme.txt']) {
-        try {
-          const res = await repoBlob(repo.id, currentBranch, { path: filename });
-          if (res.ok) {
-            const data = await rpcJson<{ content?: string }>(res);
-            if (data.content) {
-              setReadme(data.content);
-              return;
-            }
-          }
-
-          let apiError = '';
-          try {
-            const body = await res.json() as { error?: string };
-            apiError = body?.error || '';
-          } catch {
-            apiError = '';
-          }
-
-          if (res.status === 404 && (apiError === 'File not found' || apiError === 'Path not found')) {
-            continue;
-          }
-
-          if (res.status >= 500 || res.status === 409 || nonRetryableErrors.has(apiError)) {
-            break;
-          }
-        } catch {
-          // continue to next filename
-        }
-      }
-      setReadme(null);
+      const content = await resolveReadmeContent(repo.id, currentBranch);
+      dispatchReadme({ type: 'resolve', content });
     } catch {
-      setReadme(null);
-    } finally {
-      setReadmeLoading(false);
+      dispatchReadme({ type: 'resolve', content: null });
     }
   }, [repo.id, currentBranch]);
 
@@ -119,7 +144,7 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
     if (!fallbackBranch) return;
 
     setCurrentBranch(fallbackBranch);
-    setSelectedFilePath(null);
+    setSelectedFile({ path: null, line: null });
   }, [branches, currentBranch]);
 
   const toggleStar = async () => {
@@ -127,21 +152,17 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
       onRequireLogin?.();
       return;
     }
-    const wasStarred = isStarred;
-    const previousCount = starsCount;
-
-    setIsStarred(!wasStarred);
-    setStarsCount(previousCount + (wasStarred ? -1 : 1));
+    const prev = star;
+    setStar({ starred: !prev.starred, count: prev.count + (prev.starred ? -1 : 1) });
 
     try {
-      if (wasStarred) {
+      if (prev.starred) {
         await rpc.repos[':repoId'].star.$delete({ param: { repoId: repo.id } });
       } else {
         await rpc.repos[':repoId'].star.$post({ param: { repoId: repo.id } });
       }
     } catch {
-      setIsStarred(wasStarred);
-      setStarsCount(previousCount);
+      setStar(prev);
     }
   };
 
@@ -177,13 +198,11 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
   };
 
   const handleFileSelect = (path: string) => {
-    setSelectedFilePath(path);
-    setSelectedFileLine(null);
+    setSelectedFile({ path, line: null });
   };
 
   const handleBackToTree = () => {
-    setSelectedFilePath(null);
-    setSelectedFileLine(null);
+    setSelectedFile({ path: null, line: null });
   };
 
   const tabs: { id: TabType; label: string; icon: ReactNode }[] = [
@@ -229,12 +248,12 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
             <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
               <button
                 className={`flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${
-                  isStarred ? 'text-amber-500' : ''
+                  star.starred ? 'text-amber-500' : ''
                 }`}
                 onClick={toggleStar}
               >
                 <Icons.Sparkles className="w-3.5 h-3.5" />
-                <span>{starsCount}</span>
+                <span>{star.count}</span>
               </button>
               <button
                 className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
@@ -292,7 +311,7 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
             currentBranch={currentBranch}
             onBranchChange={(branch) => {
               setCurrentBranch(branch);
-              setSelectedFilePath(null);
+              setSelectedFile({ path: null, line: null });
             }}
           />
 
@@ -315,12 +334,12 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
           <RepoDetailFiles
             repo={repo}
             currentBranch={currentBranch}
-            selectedFilePath={selectedFilePath}
-            selectedFileLine={selectedFileLine}
-            readme={readme}
-            readmeLoading={readmeLoading}
+            selectedFilePath={selectedFile.path}
+            selectedFileLine={selectedFile.line}
+            readme={readmeState.content}
+            readmeLoading={readmeState.status === 'loading'}
             safeHomepage={safeHomepage}
-            starsCount={starsCount}
+            starsCount={star.count}
             forksCount={forksCount}
             branches={branches}
             isAuthenticated={isAuthenticated}
@@ -338,8 +357,7 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
             repoId={repo.id}
             branch={currentBranch}
             onOpenFile={(path, line) => {
-              setSelectedFilePath(path);
-              setSelectedFileLine(typeof line === 'number' ? line : null);
+              setSelectedFile({ path, line: typeof line === 'number' ? line : null });
               setActiveTab('code');
             }}
           />

@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolContext, RuntimeExecResponse } from '../types';
+import type { ToolDefinition, ToolHandler, ToolContext, RuntimeExecResponse } from '../tool-definitions';
 import { getDb, sessionRepos, sessions } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { emitRunUsageEvent } from '../../services/offload/usage-client';

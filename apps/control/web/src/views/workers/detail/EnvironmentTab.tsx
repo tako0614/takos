@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useI18n } from '../../../store/i18n';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
-import type { EnvVar } from '../types';
+import type { EnvVar } from '../worker-models';
 
 export interface EnvironmentTabProps {
   envVars: EnvVar[];

@@ -9,7 +9,7 @@
  * from scoring and resolution logic.
  */
 
-import type { AgentConfig, AgentMessage, AgentEvent } from './types';
+import type { AgentConfig, AgentMessage, AgentEvent } from './agent-models';
 import type { ToolExecutorLike } from '../../tools/executor';
 import { getDb, runs, threads } from '../../../infra/db';
 import { eq } from 'drizzle-orm';

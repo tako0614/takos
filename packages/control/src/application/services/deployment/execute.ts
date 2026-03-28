@@ -7,7 +7,7 @@
  */
 import { safeJsonParseOrDefault } from '../../../shared/utils';
 import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state';
-import type { Deployment, DeploymentEnv } from './types';
+import type { Deployment, DeploymentEnv } from './models';
 import {
   createDeploymentProvider,
   parseDeploymentTargetConfig,

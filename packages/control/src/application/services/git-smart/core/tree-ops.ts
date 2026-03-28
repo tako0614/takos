@@ -5,8 +5,8 @@
  */
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { TreeEntry } from '../types';
-import { FILE_MODES } from '../types';
+import type { TreeEntry } from '../git-objects';
+import { FILE_MODES } from '../git-objects';
 import { putTree, putBlob, getTreeEntries, getBlob } from './object-store';
 
 const DEFAULT_MAX_FLATTEN_DEPTH = 50;

@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { getDb, infoUnits, repositories, edges, nodes } from '../../../infra/db';
 import { eq, and, like, desc, inArray, or } from 'drizzle-orm';
 import type { Database } from '../../../infra/db';

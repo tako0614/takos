@@ -17,7 +17,7 @@ import type {
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
-} from '../types.ts';
+} from '../platform-config.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
 
 // ---------------------------------------------------------------------------

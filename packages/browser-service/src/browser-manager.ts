@@ -56,21 +56,22 @@ interface TabInfo {
 // Action handlers
 // ---------------------------------------------------------------------------
 
-type ActionHandler = (page: Page, action: BrowserAction) => Promise<string>;
+type ActionOf<T extends BrowserAction['type']> = Extract<BrowserAction, { type: T }>;
 
-const actionHandlers: Record<string, ActionHandler> = {
-  click: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'click' }>;
+type ActionHandlerMap = {
+  [K in BrowserAction['type']]: (page: Page, action: ActionOf<K>) => Promise<string>;
+};
+
+const actionHandlers: ActionHandlerMap = {
+  click: async (page, a) => {
     await page.click(a.selector, { button: a.button, clickCount: a.clickCount });
     return `Clicked ${a.selector}`;
   },
-  type: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'type' }>;
+  type: async (page, a) => {
     await page.fill(a.selector, a.text);
     return `Typed into ${a.selector}`;
   },
-  scroll: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'scroll' }>;
+  scroll: async (page, a) => {
     const amount = a.amount ?? 500;
     if (a.selector) {
       const element = await page.$(a.selector);
@@ -83,45 +84,47 @@ const actionHandlers: Record<string, ActionHandler> = {
     }
     return `Scrolled ${a.direction} by ${amount}px`;
   },
-  select: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'select' }>;
+  select: async (page, a) => {
     await page.selectOption(a.selector, a.value);
     return `Selected "${a.value}" in ${a.selector}`;
   },
-  hover: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'hover' }>;
+  hover: async (page, a) => {
     await page.hover(a.selector);
     return `Hovered over ${a.selector}`;
   },
-  press: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'press' }>;
+  press: async (page, a) => {
     const keyCombo = a.modifiers?.length
       ? [...a.modifiers, a.key].join('+')
       : a.key;
     await page.keyboard.press(keyCombo);
     return `Pressed ${keyCombo}`;
   },
-  check: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'check' }>;
+  check: async (page, a) => {
     await page.check(a.selector);
     return `Checked ${a.selector}`;
   },
-  uncheck: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'uncheck' }>;
+  uncheck: async (page, a) => {
     await page.uncheck(a.selector);
     return `Unchecked ${a.selector}`;
   },
-  focus: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'focus' }>;
+  focus: async (page, a) => {
     await page.focus(a.selector);
     return `Focused ${a.selector}`;
   },
-  clear: async (page, action) => {
-    const a = action as Extract<BrowserAction, { type: 'clear' }>;
+  clear: async (page, a) => {
     await page.fill(a.selector, '');
     return `Cleared ${a.selector}`;
   },
 };
+
+/** Type-safe dispatch: narrows `action` to the handler's expected variant. */
+function dispatchAction(page: Page, action: BrowserAction): Promise<string> {
+  const handler = actionHandlers[action.type] as (
+    page: Page,
+    action: BrowserAction,
+  ) => Promise<string>;
+  return handler(page, action);
+}
 
 // ---------------------------------------------------------------------------
 // BrowserManager
@@ -186,11 +189,7 @@ export class BrowserManager {
 
   async action(action: BrowserAction): Promise<{ ok: true; message: string }> {
     const page = this.requirePage();
-    const handler = actionHandlers[action.type];
-    if (!handler) {
-      throw new Error(`Unknown action type: ${action.type}`);
-    }
-    const message = await handler(page, action);
+    const message = await dispatchAction(page, action);
     return { ok: true, message };
   }
 

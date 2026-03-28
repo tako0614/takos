@@ -4,7 +4,7 @@
 
 import type { Env } from '../../../shared/types';
 import { BadRequestError, InternalError, NotFoundError } from '@takos/common/errors';
-import type { WfpContext, WorkerBinding } from './types';
+import type { WfpContext, WorkerBinding } from './wfp-contracts';
 
 // ---------------------------------------------------------------------------
 // Deployment orchestration

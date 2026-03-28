@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import type { MemoryType, ReminderTriggerType, ReminderPriority } from '../../../shared/types';
 import { getDb, memories, reminders } from '../../../infra/db';
 import { eq, and, like, desc, sql } from 'drizzle-orm';

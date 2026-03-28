@@ -1,6 +1,6 @@
 import { useI18n } from '../../../store/i18n';
 import type { TranslationKey } from '../../../i18n';
-import { STATUS_ORDER, type TaskFilter } from './types';
+import { STATUS_ORDER, type TaskFilter } from './task-work-types';
 
 interface TaskFiltersProps {
   activeFilter: TaskFilter;

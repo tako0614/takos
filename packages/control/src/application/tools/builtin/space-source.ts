@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { checkRepoAccess } from '../../services/source/repos';
 import { listCatalogItems } from '../../services/source/explore';
 import { forkWithWorkflows } from '../../services/source/fork';

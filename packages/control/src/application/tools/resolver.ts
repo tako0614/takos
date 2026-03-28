@@ -1,5 +1,5 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
-import type { ToolDefinition, RegisteredTool, ToolCategory } from './types';
+import type { ToolDefinition, RegisteredTool, ToolCategory } from './tool-definitions';
 import type { Env } from '../../shared/types';
 import type { SpaceRole } from '../../shared/types';
 import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin';

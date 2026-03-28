@@ -1,7 +1,7 @@
 import { Icons } from '../../../../lib/Icons';
 import { useI18n } from '../../../../store/i18n';
-import type { WorkflowRunDetail, JobLogState } from './types';
-import { statusBadge } from './types';
+import type { WorkflowRunDetail, JobLogState } from './actions-types';
+import { statusBadge } from './actions-types';
 import { JobCard } from './JobCard';
 import { Button } from '../../../../components/ui/Button';
 import { Card } from '../../../../components/ui/Card';

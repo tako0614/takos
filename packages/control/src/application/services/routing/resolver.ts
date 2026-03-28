@@ -10,7 +10,7 @@ import type {
   RoutingTarget,
   StoredHttpEndpoint,
   WeightedDeploymentTarget,
-} from './types';
+} from './routing-models';
 
 function isRoutingTarget(value: unknown): value is RoutingTarget {
   if (!value || typeof value !== 'object') return false;

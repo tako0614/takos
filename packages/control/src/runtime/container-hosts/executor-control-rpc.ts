@@ -11,7 +11,7 @@ import { runs, runEvents } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
 import { persistMessage } from '../../application/services/agent/message-persistence';
-import type { AgentMessage } from '../../application/services/agent/types';
+import type { AgentMessage } from '../../application/services/agent/agent-models';
 import {
   buildConversationHistory,
   updateRunStatusImpl,
@@ -19,7 +19,7 @@ import {
 import { resolveSkillPlanForRun } from '../../application/services/agent/skills';
 import { createToolExecutor, type ToolExecutorLike } from '../../application/tools/executor';
 import { AGENT_DISABLED_BUILTIN_TOOLS } from '../../application/tools/tool-policy';
-import type { ToolCall } from '../../application/tools/types';
+import type { ToolCall } from '../../application/tools/tool-definitions';
 import {
   getActiveClaims,
   countEvidenceForClaims,

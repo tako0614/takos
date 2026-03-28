@@ -12,7 +12,7 @@
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
 import { sha1Bytes, concatBytes, hexFromBuffer } from '../core/sha1';
 import { getObject } from '../core/object-store';
-import type { GitObjectType } from '../types';
+import type { GitObjectType } from '../git-objects';
 
 const PACK_SIGNATURE = new Uint8Array([0x50, 0x41, 0x43, 0x4B]); // "PACK"
 const PACK_VERSION = 2;

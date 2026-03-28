@@ -12,7 +12,7 @@ import {
   getServiceRegistry,
 } from './shared.ts';
 import type { PlatformEnvRecord } from './shared.ts';
-import type { ControlPlatform, PlatformServiceBinding } from '../types.ts';
+import type { ControlPlatform, PlatformServiceBinding } from '../platform-config.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
 
 function createWorkersDispatchDeploymentRegistry(env: Record<string, unknown>) {

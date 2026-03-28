@@ -7,7 +7,7 @@ import {
   getPriorityClasses,
   parsePlan,
   resolveAgentTypeLabel,
-} from './types';
+} from './task-work-types';
 
 interface TaskCardProps {
   task: AgentTask;

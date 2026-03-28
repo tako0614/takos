@@ -3,8 +3,8 @@
  */
 import { randomBytes } from 'node:crypto';
 
-import type { ProvisionedResource, ResourceProvisionResult } from './types.js';
-import { cfApi, resourceCfName, toBinding } from './helpers.js';
+import type { ProvisionedResource, ResourceProvisionResult } from './deploy-models.js';
+import { cfApi, resourceCfName, toBinding } from './cloudflare-helpers.js';
 
 // ── Resource Provisioner ─────────────────────────────────────────────────────
 

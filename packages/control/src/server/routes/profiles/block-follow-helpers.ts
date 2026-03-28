@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Database } from '../../../infra/db';
 import type { Env } from '../../../shared/types';
-import type { FollowUserResponse } from './types';
+import type { FollowUserResponse } from './dto';
 import { createNotification } from '../../../application/services/notifications/service';
 import { isMutedBy } from './profile-queries';
 import {

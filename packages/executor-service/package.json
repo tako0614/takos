@@ -13,8 +13,7 @@
     "@takos/actions-engine": "workspace:*",
     "@takos/agent-core": "workspace:*",
     "@takos/common": "workspace:*",
-    "@takos/control-agent": "workspace:*",
-    "@takos/control-core": "workspace:*",
+    "@takos/control": "workspace:*",
     "hono": "^4.12.4",
     "jszip": "^3.10.1",
     "yaml": "^2.5.1"

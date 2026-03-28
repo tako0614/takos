@@ -7,7 +7,7 @@
  * - evaluator.ts: Expression parsing and evaluation
  */
 import { MAX_EXPRESSION_SIZE } from '../constants.js';
-import type { ExecutionContext } from '../types.js';
+import type { ExecutionContext } from '../workflow-models.js';
 import { ExpressionError, tokenize } from './tokenizer.js';
 import { ExpressionEvaluator } from './evaluator.js';
 

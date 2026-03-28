@@ -6,7 +6,7 @@
  */
 
 import type { RunStatus, Env } from '../../../shared/types';
-import type { AgentMessage, ToolCall } from './types';
+import type { AgentMessage, ToolCall } from './agent-models';
 import { getDb, runs, threads, messages } from '../../../infra/db';
 import { and, eq, sql, desc } from 'drizzle-orm';
 import { resolveHistoryTokenBudget } from './model-catalog';

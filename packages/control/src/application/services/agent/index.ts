@@ -7,7 +7,7 @@ export type {
   AgentConfig,
   AgentEventType,
   AgentEvent,
-} from './types';
+} from './agent-models';
 export { AgentRunner, executeRun } from './runner';
 export { D1CheckpointSaver } from './langgraph-agent';
 export type { ModelProvider, ModelOption, SupportedModelId } from './model-catalog';

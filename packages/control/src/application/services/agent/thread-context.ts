@@ -6,7 +6,7 @@ import { eq, and, gt, inArray, desc, asc } from 'drizzle-orm';
 import { now, toIsoString } from '../../../shared/utils';
 import { createMultiModelClient, getProviderFromModel } from './llm';
 import { DEFAULT_MODEL_ID } from './model-catalog';
-import type { AgentMessage } from './types';
+import type { AgentMessage } from './agent-models';
 import { logWarn } from '../../../shared/utils/logger';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';

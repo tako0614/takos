@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 
 import { WRANGLER_TOML_PATH } from './constants.ts';
-import { escapeRegExp } from './utils.ts';
+import { escapeRegExp } from './sql-helpers.ts';
 
 export function parseTomlPrimitive(rawValue: string): string {
   const trimmed = rawValue.trim();

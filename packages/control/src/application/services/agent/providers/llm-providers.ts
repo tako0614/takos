@@ -3,7 +3,7 @@
  * Supports OpenAI, Anthropic Claude, and Google Gemini
  */
 
-import type { AgentMessage, AgentTool, ToolCall } from '../types';
+import type { AgentMessage, AgentTool, ToolCall } from '../agent-models';
 import { logError } from '../../../../shared/utils/logger';
 import {
   DEFAULT_MODEL_ID,

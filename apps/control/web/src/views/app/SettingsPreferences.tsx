@@ -4,7 +4,7 @@ import { rpc, rpcJson } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
 import { Button } from '../../components/ui';
 import type { UserSettings } from '../../types';
-import { Section, Toggle } from './settings-shared';
+import { Section, Toggle } from './SettingsShared';
 
 export function SettingsPreferences({
   userSettings,

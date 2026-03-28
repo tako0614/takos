@@ -21,7 +21,7 @@ import {
   NOTIFICATION_TYPES,
   type NotificationChannel,
   type NotificationType,
-} from '../../application/services/notifications/types';
+} from '../../application/services/notifications/notification-models';
 
 type NotificationContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 type NotificationNotifierNamespace = {

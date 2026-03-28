@@ -8,7 +8,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Tool as McpTool } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition } from './tool-definitions';
 import { logWarn } from '../../shared/utils/logger';
 
 export type { McpTool };

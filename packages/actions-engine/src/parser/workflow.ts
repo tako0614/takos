@@ -7,7 +7,7 @@ import type {
   ParsedWorkflow,
   WorkflowDiagnostic,
   WorkflowTrigger,
-} from '../types.js';
+} from '../workflow-models.js';
 import { normalizeNeedsInput } from '../scheduler/job.js';
 
 /**

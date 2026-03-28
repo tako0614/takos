@@ -3,7 +3,7 @@ import {
   selectRouteRefFromHttpEndpointSet,
   selectRouteRefFromRoutingTarget,
 } from '../../application/services/routing/service.ts';
-import type { RoutingStore, RoutingTarget } from '../../application/services/routing/types.ts';
+import type { RoutingStore, RoutingTarget } from '../../application/services/routing/routing-models.ts';
 import type {
   ControlPlatform,
   PlatformConfig,
@@ -12,7 +12,7 @@ import type {
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
-} from '../types.ts';
+} from '../platform-config.ts';
 
 export type PlatformEnvRecord = Record<string, unknown>;
 

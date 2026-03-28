@@ -11,6 +11,6 @@
     "noUnusedParameters": false,
     "noImplicitReturns": true
   },
-  "include": ["src/index.ts", "src/runtime-service-shim.d.ts"],
+  "include": ["src/index.ts"],
   "exclude": ["node_modules", "dist"]
 }

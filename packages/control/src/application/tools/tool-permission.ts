@@ -5,7 +5,7 @@
  * previously inlined in ToolExecutor.
  */
 
-import type { ToolContext, ToolDefinition } from './types';
+import type { ToolContext, ToolDefinition } from './tool-definitions';
 import { canRoleAccessTool, filterToolsForRole } from './tool-policy';
 import { getRequiredCapabilitiesForTool } from './capabilities';
 import { ToolError, ErrorCodes } from './tool-error-classifier';

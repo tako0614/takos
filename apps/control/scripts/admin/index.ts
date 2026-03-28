@@ -7,7 +7,7 @@
  */
 
 // types.ts
-export type { DeployEnvironment, GlobalOptions, ResolvedConfig, D1Statement, AuditEntry } from './types.ts';
+export type { DeployEnvironment, GlobalOptions, ResolvedConfig, D1Statement, AuditEntry } from './admin-types.ts';
 
 // constants.ts
 export {
@@ -26,20 +26,14 @@ export {
   TENANT_R2_PREFIXES,
 } from './constants.ts';
 
-// utils.ts
-export {
-  print,
-  fail,
-  nowIso,
-  randomId,
-  sqlLiteral,
-  sqlNullable,
-  escapeRegExp,
-  appendAuditLog,
-  takeFlag,
-  takeOption,
-  parsePositiveInt,
-} from './utils.ts';
+// cli-helpers.ts
+export { print, fail, takeFlag, takeOption, parsePositiveInt } from './cli-helpers.ts';
+
+// sql-helpers.ts
+export { sqlLiteral, sqlNullable, escapeRegExp } from './sql-helpers.ts';
+
+// common-helpers.ts
+export { nowIso, randomId, appendAuditLog } from './common-helpers.ts';
 
 // toml.ts
 export {

@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../types';
+import type { ToolHandler } from '../tool-definitions';
 import {
   FILE_READ,
   FILE_WRITE,
@@ -10,14 +10,14 @@ import {
   FILE_COPY,
   FILE_TOOLS,
 } from './file/definitions';
-import { fileReadHandler } from './file/handlers/read';
-import { fileWriteHandler } from './file/handlers/write';
-import { fileWriteBinaryHandler } from './file/handlers/write-binary';
-import { fileListHandler } from './file/handlers/list';
-import { fileDeleteHandler } from './file/handlers/delete';
-import { fileMkdirHandler } from './file/handlers/mkdir';
-import { fileRenameHandler } from './file/handlers/rename';
-import { fileCopyHandler } from './file/handlers/copy';
+import { fileReadHandler } from './file/handler-read';
+import { fileWriteHandler } from './file/handler-write';
+import { fileWriteBinaryHandler } from './file/handler-write-binary';
+import { fileListHandler } from './file/handler-list';
+import { fileDeleteHandler } from './file/handler-delete';
+import { fileMkdirHandler } from './file/handler-mkdir';
+import { fileRenameHandler } from './file/handler-rename';
+import { fileCopyHandler } from './file/handler-copy';
 
 export {
   FILE_READ,

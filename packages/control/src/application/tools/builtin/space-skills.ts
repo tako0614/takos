@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolParameter } from '../types';
+import type { ToolDefinition, ToolHandler, ToolParameter } from '../tool-definitions';
 import {
   createSkill,
   describeAgentSkill,

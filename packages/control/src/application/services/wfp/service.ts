@@ -29,7 +29,7 @@ export type {
   WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './types';
+} from './wfp-contracts';
 export type {
   AssetManifestEntry,
   AssetUploadFile,
@@ -46,7 +46,7 @@ import type {
   CloudflareBindingRecord,
   CreateWorkerOptions,
   WfpContext,
-} from './types';
+} from './wfp-contracts';
 import type {
   AssetManifestEntry,
   AssetUploadFile,

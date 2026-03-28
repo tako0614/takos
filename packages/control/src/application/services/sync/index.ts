@@ -1,5 +1,5 @@
 // types
-export type { Session } from './types';
+export type { Session } from './models';
 
 // runtime-session
 export { RuntimeSessionManager } from './runtime-session';

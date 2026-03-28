@@ -1,5 +1,5 @@
 import type { Env, MessageRole } from '../../../shared/types';
-import type { AgentMessage } from './types';
+import type { AgentMessage } from './agent-models';
 import { getDb, messages } from '../../../infra/db';
 import { eq, sql } from 'drizzle-orm';
 import { generateId } from '../../../shared/utils';

@@ -1,5 +1,5 @@
-import type { ToolObserver } from '../memory-graph/types';
-import type { ToolCall, ToolDefinition, ToolResult } from '../../tools/types';
+import type { ToolObserver } from '../memory-graph/graph-models';
+import type { ToolCall, ToolDefinition, ToolResult } from '../../tools/tool-definitions';
 import type { ToolExecutorLike } from '../../tools/executor';
 
 type RemoteToolCatalog = {

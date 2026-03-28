@@ -9,7 +9,7 @@ import { getSpaceLocale } from '../../services/identity/locale';
 import {
   buildDelegationPacket,
 } from '../../services/agent/delegation';
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
 

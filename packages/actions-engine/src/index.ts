@@ -53,7 +53,7 @@ export type {
   ExecutionPlan,
   StepExecutor,
   ActionResolver,
-} from './types.js';
+} from './workflow-models.js';
 
 // Parser — public API
 export { parseWorkflow } from './parser/workflow.js';

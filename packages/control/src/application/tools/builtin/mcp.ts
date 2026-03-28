@@ -7,7 +7,7 @@
  * mcp_remove_server - Remove a registered MCP server
  */
 
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import {
   registerExternalMcpServer,
   listMcpServers,

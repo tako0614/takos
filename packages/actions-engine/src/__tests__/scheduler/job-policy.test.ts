@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { JobResult, Step, StepResult } from '../../types.js';
+import { normalizeNeedsInput } from '../../scheduler/job.js';
 import {
   classifyStepControl,
   createCompletedJobResult,
   createInProgressJobResult,
   finalizeJobResult,
   getDependencySkipReason,
-  normalizeNeedsInput,
-} from '../../scheduler/job.js';
+} from '../../scheduler/job-policy.js';
 
 describe('job policy helpers', () => {
   it('normalizes job needs definitions', () => {

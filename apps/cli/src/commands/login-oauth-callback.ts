@@ -124,94 +124,89 @@ interface CallbackServerState {
   reject: (error: unknown) => void;
 }
 
-function createCleanupAndSettle(server: Server, state: CallbackServerState): (result: CleanupResult) => Promise<void> {
-  return async function cleanupAndSettle({ token, error }: CleanupResult): Promise<void> {
-    if (state.timeoutId) {
-      clearTimeout(state.timeoutId);
-      state.timeoutId = null;
-    }
+async function cleanupAndSettle(server: Server, state: CallbackServerState, { token, error }: CleanupResult): Promise<void> {
+  if (state.timeoutId) {
+    clearTimeout(state.timeoutId);
+    state.timeoutId = null;
+  }
 
-    try {
-      await closeServerAsync(server);
-    } catch {
-      // ignore close errors
-    }
+  try {
+    await closeServerAsync(server);
+  } catch {
+    // ignore close errors
+  }
 
-    if (state.settled) return;
-    state.settled = true;
+  if (state.settled) return;
+  state.settled = true;
 
-    if (error !== undefined) {
-      state.reject(error);
-      return;
-    }
+  if (error !== undefined) {
+    state.reject(error);
+    return;
+  }
 
-    state.resolve(token);
-  };
+  state.resolve(token);
 }
 
-function createFailureHandler(
+async function handleFailure(
+  server: Server,
   state: CallbackServerState,
-  cleanupAndSettle: (result: CleanupResult) => Promise<void>,
   onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
-): (input: CallbackFailureHandlingInput) => Promise<void> {
-  return async function handleFailure({
-    code,
-    pageMessage,
-    log,
-    response,
-  }: CallbackFailureHandlingInput): Promise<void> {
-    if (state.settled) {
-      return;
-    }
+  { code, pageMessage, log, response }: CallbackFailureHandlingInput,
+): Promise<void> {
+  if (state.settled) {
+    return;
+  }
 
-    if (response && pageMessage) {
-      sendErrorPage(response, pageMessage);
-    }
+  if (response && pageMessage) {
+    sendErrorPage(response, pageMessage);
+  }
 
-    log();
-    onFailure?.(code);
-    await cleanupAndSettle({ token: null });
-  };
+  log();
+  onFailure?.(code);
+  await cleanupAndSettle(server, state, { token: null });
 }
 
-function createCallbackRequestHandler(
+async function handleCallbackRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  server: Server,
+  state: CallbackServerState,
   oauthState: string,
-  handleFailure: (input: CallbackFailureHandlingInput) => Promise<void>,
-  cleanupAndSettle: (result: CleanupResult) => Promise<void>,
-): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  return async function handleCallbackRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const requestUrl = new URL(req.url || '/', 'http://localhost');
+  onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
+): Promise<void> {
+  const requestUrl = new URL(req.url || '/', 'http://localhost');
 
-    if (requestUrl.pathname !== '/callback') {
-      res.writeHead(404);
-      res.end('Not found');
-      return;
-    }
+  if (requestUrl.pathname !== '/callback') {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
 
-    const callbackParams = await parseCallbackParams(req);
-    const result = validateCallbackPayload(callbackParams, oauthState);
+  const callbackParams = await parseCallbackParams(req);
+  const result = validateCallbackPayload(callbackParams, oauthState);
 
-    if (!result.ok) {
-      await handleFailure({
-        code: result.code,
-        pageMessage: result.pageMessage,
-        log: () => logAuthFailure(result.logMessage),
-        response: res,
-      });
-      return;
-    }
+  if (!result.ok) {
+    await handleFailure(server, state, onFailure, {
+      code: result.code,
+      pageMessage: result.pageMessage,
+      log: () => logAuthFailure(result.logMessage),
+      response: res,
+    });
+    return;
+  }
 
-    sendSuccessPage(res);
-    logAuthSuccess();
-    await cleanupAndSettle({ token: result.token });
-  };
+  sendSuccessPage(res);
+  logAuthSuccess();
+  await cleanupAndSettle(server, state, { token: result.token });
 }
 
 function setupLoginTimeout(
-  handleFailure: (input: CallbackFailureHandlingInput) => Promise<void>,
+  server: Server,
+  state: CallbackServerState,
+  onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
 ): NodeJS.Timeout {
   return setTimeout(() => {
-    void handleFailure({
+    void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.TIMEOUT,
       log: () => {
         console.log(chalk.red('\nAuthentication timed out'));
@@ -222,10 +217,11 @@ function setupLoginTimeout(
 
 function handleServerListening(
   server: Server,
+  state: CallbackServerState,
   apiUrl: string,
   oauthState: string,
   openAuthUrl: (authUrl: string) => Promise<void>,
-  handleFailure: (input: CallbackFailureHandlingInput) => Promise<void>,
+  onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
 ): void {
   const address = server.address();
   if (typeof address !== 'object' || !address) {
@@ -233,7 +229,7 @@ function handleServerListening(
   }
 
   if (address.address !== BIND_ADDRESS && address.address !== '::1') {
-    void handleFailure({
+    void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.UNEXPECTED_BIND_ADDRESS,
       log: () => {
         console.log(chalk.red(`\nSecurity error: Server bound to unexpected address: ${address.address}`));
@@ -269,14 +265,13 @@ export async function runOAuthCallbackServer({
     };
 
     const server = createServer();
-    const cleanupAndSettle = createCleanupAndSettle(server, state);
-    const handleFailure = createFailureHandler(state, cleanupAndSettle, onFailure);
-    const handleRequest = createCallbackRequestHandler(oauthState, handleFailure, cleanupAndSettle);
 
-    server.on('request', (req, res) => { void handleRequest(req, res); });
+    server.on('request', (req, res) => {
+      void handleCallbackRequest(req, res, server, state, oauthState, onFailure);
+    });
 
     server.on('error', (err) => {
-      void handleFailure({
+      void handleFailure(server, state, onFailure, {
         code: OAUTH_CALLBACK_FAILURE_CODES.SERVER_ERROR,
         log: () => {
           console.log(chalk.red(`\nServer error: ${err.message}`));
@@ -285,9 +280,9 @@ export async function runOAuthCallbackServer({
     });
 
     server.listen(0, BIND_ADDRESS, () => {
-      handleServerListening(server, apiUrl, oauthState, openAuthUrl, handleFailure);
+      handleServerListening(server, state, apiUrl, oauthState, openAuthUrl, onFailure);
     });
 
-    state.timeoutId = setupLoginTimeout(handleFailure);
+    state.timeoutId = setupLoginTimeout(server, state, onFailure);
   });
 }

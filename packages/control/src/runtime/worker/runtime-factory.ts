@@ -5,7 +5,7 @@ import type { WorkerEnv as Env } from './env';
 import type { IndexJobQueueMessage } from '../../shared/types';
 import { logError } from '../../shared/utils/logger';
 import { buildWorkersWorkerPlatform } from '../../platform/adapters/workers.ts';
-import type { ControlPlatform } from '../../platform/types.ts';
+import type { ControlPlatform } from '../../platform/platform-config.ts';
 
 // Lazy imports to keep cold-start fast — only load what's needed per invocation.
 

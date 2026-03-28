@@ -18,9 +18,7 @@ vi.mock('../../shared/config.js', () => ({
   MAX_LOG_LINES: 100_000,
 }));
 
-import { _testInternals, s3Client } from '../../storage/r2.js';
-
-const { downloadWorkspaceFiles, uploadWorkspaceFiles } = _testInternals;
+import { downloadSpaceFiles, uploadSpaceFiles, s3Client } from '../../storage/r2.js';
 
 async function createTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -44,7 +42,7 @@ describe('r2 symlink boundary hardening', () => {
       const sendSpy = vi.spyOn(s3Client, 'send');
       const logs: string[] = [];
 
-      const uploaded = await uploadWorkspaceFiles('ws-upload', workspaceDir, ['escape.txt'], logs);
+      const uploaded = await uploadSpaceFiles('ws-upload', workspaceDir, ['escape.txt'], logs);
 
       expect(uploaded).toBe(0);
       expect(sendSpy).not.toHaveBeenCalled();
@@ -93,7 +91,7 @@ describe('r2 symlink boundary hardening', () => {
       });
 
       const logs: string[] = [];
-      const downloaded = await downloadWorkspaceFiles('ws-download', workspaceDir, logs);
+      const downloaded = await downloadSpaceFiles('ws-download', workspaceDir, logs);
       const outsideFile = path.join(outsideDir, 'evil.txt');
       const outsideFileExists = await fs.stat(outsideFile).then(() => true).catch(() => false);
 

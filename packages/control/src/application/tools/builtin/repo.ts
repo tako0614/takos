@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { getDb, sessionRepos, sessions, repositories } from '../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
 import { requireContainerSession } from './container/availability';

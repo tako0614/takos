@@ -1,4 +1,4 @@
-import type { Claim, Evidence, ClaimInsert, EvidenceInsert } from './types';
+import type { Claim, Evidence, ClaimInsert, EvidenceInsert } from './graph-models';
 
 const MAX_OVERLAY_CLAIMS = 200;
 const MAX_EVIDENCE_CONTENT = 2048;

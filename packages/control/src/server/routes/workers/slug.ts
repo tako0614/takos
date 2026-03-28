@@ -8,7 +8,7 @@ import { getDb } from '../../../infra/db';
 import { eq, and, or, ne } from 'drizzle-orm';
 import { services } from '../../../infra/db/schema-services';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing/service';
-import type { RoutingTarget } from '../../../application/services/routing/types';
+import type { RoutingTarget } from '../../../application/services/routing/routing-models';
 import { createServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, ConflictError, InternalError } from '@takos/common/errors';

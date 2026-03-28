@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useI18n } from '../../store/i18n';
 import type { Resource } from '../../types';
-import type { ResourceDetailTab } from './types';
+import type { ResourceDetailTab } from './worker-models';
 import { Breadcrumb } from '../../components/ui/Breadcrumb';
 import { ResourceOverviewTab } from './tabs/ResourceOverviewTab';
 import { D1ExplorerTab } from './tabs/D1ExplorerTab';

@@ -21,8 +21,8 @@ export type {
   RefUpdateResult,
   MergeConflictType,
   MergeConflict,
-} from './types';
-export { FILE_MODES, SHA1_PATTERN, isValidSha } from './types';
+} from './git-objects';
+export { FILE_MODES, SHA1_PATTERN, isValidSha } from './git-objects';
 
 // --- Core object operations ---
 export {

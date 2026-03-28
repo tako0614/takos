@@ -13,7 +13,7 @@
  * - workflow-session.ts -- runtime session management
  */
 
-import type { AgentMessage } from './types';
+import type { AgentMessage } from './agent-models';
 import { createLLMClient } from './llm';
 import { generateId } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';

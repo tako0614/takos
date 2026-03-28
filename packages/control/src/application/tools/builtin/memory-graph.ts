@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { searchClaims, getPathsForClaim, getEvidenceForClaim } from '../../services/memory-graph/claim-store';
 
 export const MEMORY_GRAPH_RECALL: ToolDefinition = {

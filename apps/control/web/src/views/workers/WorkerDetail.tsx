@@ -13,7 +13,7 @@ import type {
   WorkerDomain,
   WorkerSettingsTab,
   VerificationInfo,
-} from './types';
+} from './worker-models';
 import {
   getWorkerDisplayHostname,
   getWorkerDisplayName,

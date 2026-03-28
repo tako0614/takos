@@ -1,7 +1,7 @@
 import type { Env, RunStatus } from '../../../shared/types';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { ToolExecutorLike } from '../../tools/executor';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './types';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models';
 import type { ToolExecution } from './runner-types';
 import type { LLMClient, ModelProvider } from './llm';
 import {

@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentTool } from './types';
+import type { AgentMessage, AgentTool } from './agent-models';
 import {
   createProvider,
   getProviderFromModel,

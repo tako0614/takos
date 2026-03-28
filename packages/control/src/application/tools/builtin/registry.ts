@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../types';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { FILE_TOOLS, FILE_HANDLERS } from './file';
 import { RUNTIME_TOOLS, RUNTIME_HANDLERS } from './runtime-tool-executor';
 import { STORAGE_TOOLS, STORAGE_HANDLERS } from './storage';

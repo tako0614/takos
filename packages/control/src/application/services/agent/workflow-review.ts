@@ -5,7 +5,7 @@
  * LLM-based analysis, and review persistence.
  */
 
-import type { AgentMessage } from './types';
+import type { AgentMessage } from './agent-models';
 import type { WorkflowContext, ReviewResult } from './workflow-types';
 import { extractJsonFromLLMResponse, REVIEW_PROMPT } from './workflow-types';
 import { createLLMClient } from './llm';
