@@ -669,6 +669,87 @@ spec:
 `)).toThrow(/template errors.*worker "nonexistent" not found/);
     });
 
+    it('rejects mcpServers that specify both route and endpoint', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-mcp-app
+spec:
+  version: 1.0.0
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  routes:
+    - name: api
+      target: api
+  mcpServers:
+    - name: api-mcp
+      route: api
+      endpoint: https://example.com/mcp
+`)).toThrow(/must not specify both endpoint and route/);
+    });
+
+    it('rejects mcpServers that reference unknown routes', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: missing-route-mcp
+spec:
+  version: 1.0.0
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  routes:
+    - name: api
+      target: api
+  mcpServers:
+    - name: api-mcp
+      route: missing
+`)).toThrow(/route references unknown route: missing/);
+    });
+
+    it('rejects mcpServers authSecretRef that is not a secretRef resource', () => {
+      expect(() => parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: bad-auth-secret
+spec:
+  version: 1.0.0
+  resources:
+    db:
+      type: d1
+      binding: DB
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/api.js
+  routes:
+    - name: api
+      target: api
+  mcpServers:
+    - name: api-mcp
+      route: api
+      authSecretRef: db
+`)).toThrow(/authSecretRef must reference a secretRef resource: db/);
+    });
+
     it('parses workers with bindings and triggers', () => {
       const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1

@@ -4,6 +4,8 @@
 
 takos-computer と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker が必要な場合に使います。
 
+この例は現行の `takos deploy-group` で読める構成に合わせています。Store 経由の `takos deploy` / app-deployments はまだ end-to-end ではありません。
+
 ## app.yml
 
 ```yaml

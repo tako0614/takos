@@ -1,4 +1,4 @@
-export { createCommonEnvDeps, type CommonEnvDeps } from './service';
+export { createCommonEnvDeps, type CommonEnvDeps } from './deps';
 export { TAKOS_ACCESS_TOKEN_ENV_NAME } from './takos-builtins';
 export { runCommonEnvScheduledMaintenance } from './maintenance';
 export { listSpaceCommonEnv, upsertSpaceCommonEnv, ensureSystemCommonEnv, deleteSpaceCommonEnv, } from './space-env-ops';

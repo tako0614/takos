@@ -26,5 +26,4 @@ export declare class CommonEnvOrchestrator {
     }>;
     enqueuePeriodicDriftSweep(limit?: number): Promise<number>;
 }
-export { CommonEnvOrchestrator as ServiceCommonEnvOrchestrator };
 //# sourceMappingURL=orchestrator.d.ts.map

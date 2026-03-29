@@ -47,10 +47,9 @@ takos thread create /THREAD_ID/messages --body '{"content":"hello"}'
 takos run list /THREAD_ID
 
 # App deploy
-takos deploy --space SPACE_ID --repo REPO_ID --ref main
+takos deploy-group --space SPACE_ID --env-file .env --allow-no-domain
 takos deploy validate
-takos deploy status --space SPACE_ID
-takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
+takos apply --spec deploy.json
 ```
 
 Common task verbs:
@@ -130,12 +129,12 @@ The following are removed intentionally:
 
 ## App Deploy Contract
 
-`takos deploy` is the canonical repo-local app deploy flow.
+`takos deploy` is removed in the current implementation.
 
 - Source of truth: `.takos/app.yml`
-- Build model: deploy references latest successful workflow artifact defined in `app.yml`
-- Deploy request: `repo_id + ref + ref_type` to `/api/spaces/:spaceId/app-deployments`
-- Internal transport: control-plane generated internal package
+- Active flows: `takos deploy-group` for group deploys, `takos apply` for prepared specs
+- Validation: `takos deploy validate` validates local manifest/workflow references
+- Removed surface: `/api/spaces/:spaceId/app-deployments` remains unavailable and returns `410 Gone`
 
 ## Container Mode
 

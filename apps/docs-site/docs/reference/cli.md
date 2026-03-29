@@ -75,7 +75,7 @@ stream 系 domain は追加で `watch`・`follow` を持つ。
 | `takos login` | ログイン（ブラウザ OAuth） |
 | `takos whoami` | ログイン中のユーザーを表示 |
 | `takos logout` | ログアウト |
-| `takos deploy` | Store 経由のアプリデプロイ |
+| `takos deploy` | Store 経由 app deploy の contract（current implementation では未接続） |
 | `takos deploy-group` | ローカルからの直接デプロイ |
 | `takos endpoint` | 接続先の確認・切り替え |
 
@@ -113,7 +113,7 @@ stream 系 domain は追加で `watch`・`follow` を持つ。
 
 ## `takos deploy` サブコマンド
 
-Store 経由の app deploy。リポジトリの `.takos/app.yml` を使い、最新の CI アーティファクトでデプロイする。
+Store 経由の app deploy contract。リポジトリの `.takos/app.yml` を使い、最新の CI アーティファクトでデプロイする設計ですが、current implementation では end-to-end に接続されていません。
 
 ```bash
 takos deploy --repo repo_abc --ref main
@@ -136,8 +136,8 @@ takos deploy --repo repo_abc --ref main
 | コマンド | 説明 |
 |---|---|
 | `takos deploy validate` | ローカルの `.takos/app.yml` をバリデーション |
-| `takos deploy status [id]` | デプロイ一覧の表示 or 特定デプロイの詳細 |
-| `takos deploy rollback <id>` | 指定デプロイへのロールバック |
+| `takos deploy status [id]` | デプロイ一覧の表示 or 特定デプロイの詳細（contract） |
+| `takos deploy rollback <id>` | 指定デプロイへのロールバック（contract） |
 
 ---
 

@@ -1,6 +1,5 @@
 /**
- * Server routes barrel — re-exports the major route modules
- * for use as `takos-control/server/routes`.
+ * Server routes entrypoint for `takos-control/server/routes`.
  */
 export * from './api';
 export * from './rpc-types';
@@ -23,3 +22,4 @@ export {
 
 // OAuth
 export { default as oauthRouter } from './oauth/routes';
+export { default as indexRoutes } from './index/routes';

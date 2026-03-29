@@ -4,57 +4,18 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "WebWorker", "DOM.Iterable"],
-    "types": ["@cloudflare/workers-types", "vitest/globals"],
+    "types": ["@cloudflare/workers-types"],
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "emitDeclarationOnly": true,
     "outDir": "./dist/types",
-    "rootDir": "../..",
+    "rootDir": "./src",
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx",
-    "baseUrl": ".",
-    "paths": {
-      // All @/ paths resolve to packages/control/src/. Keep in sync with
-      // packages/control/tsconfig.base.json (which uses baseUrl "../.."
-      // and therefore omits the "../../" prefix on targets).
-
-      // Broad directory aliases — map top-level src subdirs directly.
-      "@/application/*": ["../../packages/control/src/application/*"],
-      "@/infra/*": ["../../packages/control/src/infra/*"],
-      "@/local-platform/*": ["../../packages/control/src/local-platform/*"],
-      "@/platform/*": ["../../packages/control/src/platform/*"],
-      "@/runtime/*": ["../../packages/control/src/runtime/*"],
-      "@/server/*": ["../../packages/control/src/server/*"],
-      "@/shared/*": ["../../packages/control/src/shared/*"],
-
-      // Shortcut aliases — remap deep paths to convenient short prefixes.
-      // These take priority over the broad aliases above when both match.
-      "@/services/*": ["../../packages/control/src/application/services/*"],
-      "@/routes/*": ["../../packages/control/src/server/routes/*"],
-      "@/middleware/*": ["../../packages/control/src/server/middleware/*"],
-      "@/tools/*": ["../../packages/control/src/application/tools/*"],
-      "@/durable-objects/*": ["../../packages/control/src/runtime/durable-objects/*"],
-      "@/queues/*": ["../../packages/control/src/runtime/queues/*"],
-      "@/runner/*": ["../../packages/control/src/runtime/runner/*"],
-      "@/worker/*": ["../../packages/control/src/runtime/worker/*"],
-      "@/container-hosts/*": ["../../packages/control/src/runtime/container-hosts/*"],
-      "@/indexer/*": ["../../packages/control/src/runtime/indexer/*"],
-      "@/db": ["../../packages/control/src/infra/db/index.ts"],
-      "@/db/*": ["../../packages/control/src/infra/db/*"],
-      "@/types": ["../../packages/control/src/shared/types/index.ts"],
-      "@/types/*": ["../../packages/control/src/shared/types/*"],
-      "@/utils": ["../../packages/control/src/shared/utils/index.ts"],
-      "@/utils/*": ["../../packages/control/src/shared/utils/*"]
-    }
+    "jsxImportSource": "hono/jsx"
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "test/**/*.ts",
-    "test/**/*.tsx",
-    "../../packages/control/src/**/*.ts",
-    "../../packages/control/src/**/*.tsx",
-    "web/vite.config.ts"
+    "src/**/*.tsx"
   ],
-  "exclude": ["node_modules", "web/src/**/*"]
+  "exclude": ["node_modules", "dist", "src/__tests__/**/*", "test/**/*", "web/**/*"]
 }

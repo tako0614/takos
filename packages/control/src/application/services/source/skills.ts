@@ -8,9 +8,16 @@ import {
   listLocalizedOfficialSkills,
   normalizeCustomSkillMetadata,
   resolveSkillLocale,
+  type LocalizedOfficialSkill,
   validateCustomSkillMetadata,
 } from '../agent/official-skills';
-import { applySkillAvailability, type SkillCatalogEntry, type SkillContext } from '../agent/skills';
+import {
+  applySkillAvailability,
+  cloneExecutionContract,
+  toSkillCatalogEntry,
+  type SkillCatalogEntry,
+  type SkillContext,
+} from '../agent/skills';
 import type { CustomSkillMetadata, SkillLocale } from '../agent/skill-contracts';
 import { hasSkillTemplate, listSkillTemplates } from '../agent/skill-templates';
 import { listMcpServers } from '../platform/mcp';
@@ -28,15 +35,15 @@ export class SkillMetadataValidationError extends Error {
 
 export interface SkillRow {
   id: string;
-  space_id: string;
+  spaceId: string;
   name: string;
   description: string | null;
   instructions: string;
   triggers: string | null;
   metadata: string;
   enabled: boolean;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export function parseTriggers(triggers: string | null) {
@@ -71,8 +78,8 @@ export function formatSkill(skill: SkillRow) {
     source: 'custom' as const,
     editable: true,
     enabled: skill.enabled,
-    created_at: skill.created_at,
-    updated_at: skill.updated_at,
+    created_at: skill.createdAt,
+    updated_at: skill.updatedAt,
   };
 }
 
@@ -102,6 +109,48 @@ function toCustomSkillContext(skill: SkillRow): SkillContext {
   };
 }
 
+function toAvailableOfficialSkill(skill: LocalizedOfficialSkill): SkillContext {
+  return {
+    ...skill,
+    triggers: [...skill.triggers],
+    activation_tags: [...skill.activation_tags],
+    source: 'official',
+    execution_contract: cloneExecutionContract(skill.execution_contract),
+    availability: 'available',
+    availability_reasons: [],
+  };
+}
+
+type SkillAvailabilityDetails = {
+  availableMcpServerNames: string[];
+  availableTemplateIds: string[];
+};
+
+async function getSkillAvailabilityDetails(db: D1Database, spaceId: string): Promise<SkillAvailabilityDetails> {
+  const templateIds = listSkillTemplates().map((template) => template.id);
+  const enabledMcpServers = await listMcpServers(db, spaceId);
+
+  return {
+    availableMcpServerNames: enabledMcpServers
+      .filter((server) => server.enabled)
+      .map((server) => server.name),
+    availableTemplateIds: templateIds,
+  };
+}
+
+async function listAvailableOfficialSkillContexts(
+  db: D1Database,
+  spaceId: string,
+  locale: SkillLocale,
+  availability?: SkillAvailabilityDetails,
+): Promise<SkillContext[]> {
+  const details = availability ?? await getSkillAvailabilityDetails(db, spaceId);
+  return applySkillAvailability(
+    listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+    details,
+  );
+}
+
 function toSkillRow(s: {
   id: string;
   accountId: string;
@@ -116,15 +165,15 @@ function toSkillRow(s: {
 }): SkillRow {
   return {
     id: s.id,
-    space_id: s.accountId,
+    spaceId: s.accountId,
     name: s.name,
     description: s.description,
     instructions: s.instructions,
     triggers: s.triggers,
     metadata: s.metadata || '{}',
     enabled: s.enabled,
-    created_at: (s.createdAt == null ? null : typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString()),
-    updated_at: (s.updatedAt == null ? null : typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString()),
+    createdAt: typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString(),
+    updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString(),
   };
 }
 
@@ -312,69 +361,27 @@ export async function listEnabledCustomSkillContext(db: D1Database, spaceId: str
   return rows.map((skill) => toCustomSkillContext(toSkillRow(skill)));
 }
 
-function localizeCustomSkillCatalog(skill: SkillContext): SkillCatalogEntry {
-  return {
-    id: skill.id,
-    name: skill.name,
-    description: skill.description,
-    triggers: [...skill.triggers],
-    source: skill.source,
-    category: skill.category,
-    locale: skill.locale,
-    version: skill.version,
-    activation_tags: [...(skill.activation_tags ?? [])],
-    execution_contract: {
-      preferred_tools: [...skill.execution_contract.preferred_tools],
-      durable_output_hints: [...skill.execution_contract.durable_output_hints],
-      output_modes: [...skill.execution_contract.output_modes],
-      required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
-      template_ids: [...skill.execution_contract.template_ids],
-    },
-    availability: skill.availability,
-    availability_reasons: [...skill.availability_reasons],
-  };
-}
-
 export async function listSkillCatalog(
   db: D1Database,
   spaceId: string,
   localeInput?: { preferredLocale?: string | null; acceptLanguage?: string | null; textSamples?: string[] },
 ): Promise<{ locale: SkillLocale; available_skills: SkillCatalogEntry[] }> {
-  const customSkills = await listEnabledCustomSkillContext(db, spaceId);
   const locale = resolveSkillLocale(localeInput);
-  const enabledMcpServers = (await listMcpServers(db, spaceId))
-    .filter((server) => server.enabled)
-    .map((server) => server.name);
-  const templateIds = listSkillTemplates().map((template) => template.id);
+  const [customSkills, availability] = await Promise.all([
+    listEnabledCustomSkillContext(db, spaceId),
+    getSkillAvailabilityDetails(db, spaceId),
+  ]);
   const officialSkills = applySkillAvailability(
-    listLocalizedOfficialSkills(locale).map((skill) => ({
-      ...skill,
-      source: 'official' as const,
-      execution_contract: {
-        preferred_tools: [...skill.execution_contract.preferred_tools],
-        durable_output_hints: [...skill.execution_contract.durable_output_hints],
-        output_modes: [...skill.execution_contract.output_modes],
-        required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
-        template_ids: [...skill.execution_contract.template_ids],
-      },
-      availability: 'available' as const,
-      availability_reasons: [],
-    })),
-    {
-      availableMcpServerNames: enabledMcpServers,
-      availableTemplateIds: templateIds,
-    },
+    listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+    availability,
   );
-  const customSkillsWithAvailability = applySkillAvailability(customSkills, {
-    availableMcpServerNames: enabledMcpServers,
-    availableTemplateIds: templateIds,
-  });
+  const customSkillsWithAvailability = applySkillAvailability(customSkills, availability);
 
   return {
     locale,
     available_skills: [
-      ...officialSkills,
-      ...customSkillsWithAvailability.map((skill) => localizeCustomSkillCatalog(skill)),
+      ...officialSkills.map(toSkillCatalogEntry),
+      ...customSkillsWithAvailability.map(toSkillCatalogEntry),
     ],
   };
 }
@@ -393,52 +400,14 @@ export async function listOfficialSkillsCatalog(
   localeInput?: { preferredLocale?: string | null; acceptLanguage?: string | null; textSamples?: string[] },
 ) {
   const locale = resolveSkillLocale(localeInput);
-  const enabledMcpServers = (await listMcpServers(db, spaceId))
-    .filter((server) => server.enabled)
-    .map((server) => server.name);
-  const templateIds = listSkillTemplates().map((template) => template.id);
-  const officialSkills = applySkillAvailability(
-    listLocalizedOfficialSkills(locale).map((skill) => ({
-      ...skill,
-      source: 'official' as const,
-      execution_contract: {
-        preferred_tools: [...skill.execution_contract.preferred_tools],
-        durable_output_hints: [...skill.execution_contract.durable_output_hints],
-        output_modes: [...skill.execution_contract.output_modes],
-        required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
-        template_ids: [...skill.execution_contract.template_ids],
-      },
-      availability: 'available' as const,
-      availability_reasons: [],
-    })),
-    {
-      availableMcpServerNames: enabledMcpServers,
-      availableTemplateIds: templateIds,
-    },
-  );
+  const availability = await getSkillAvailabilityDetails(db, spaceId);
+  const officialSkills = await listAvailableOfficialSkillContexts(db, spaceId, locale, availability);
   return {
     locale,
     skills: officialSkills.map((skill) => ({
-      id: skill.id,
-      name: skill.name,
-      description: skill.description,
-      triggers: [...skill.triggers],
-      source: 'official' as const,
+      ...toSkillCatalogEntry(skill),
       editable: false,
-      category: skill.category,
       enabled: true,
-      locale,
-      version: skill.version,
-      activation_tags: [...(skill.activation_tags ?? [])],
-      execution_contract: {
-        preferred_tools: [...skill.execution_contract.preferred_tools],
-        durable_output_hints: [...skill.execution_contract.durable_output_hints],
-        output_modes: [...skill.execution_contract.output_modes],
-        required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
-        template_ids: [...skill.execution_contract.template_ids],
-      },
-      availability: skill.availability,
-      availability_reasons: [...skill.availability_reasons],
     })),
   };
 }
@@ -454,49 +423,13 @@ export async function getOfficialSkillCatalogEntry(
   if (!skill) {
     return null;
   }
-  const enabledMcpServers = (await listMcpServers(db, spaceId))
-    .filter((server) => server.enabled)
-    .map((server) => server.name);
-  const templateIds = listSkillTemplates().map((template) => template.id);
-  const [withAvailability] = applySkillAvailability([{
-    ...skill,
-    source: 'official' as const,
-    execution_contract: {
-      preferred_tools: [...skill.execution_contract.preferred_tools],
-      durable_output_hints: [...skill.execution_contract.durable_output_hints],
-      output_modes: [...skill.execution_contract.output_modes],
-      required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
-      template_ids: [...skill.execution_contract.template_ids],
-    },
-    availability: 'available' as const,
-    availability_reasons: [],
-  }], {
-    availableMcpServerNames: enabledMcpServers,
-    availableTemplateIds: templateIds,
-  });
-
+  const availability = await getSkillAvailabilityDetails(db, spaceId);
+  const [withAvailability] = applySkillAvailability([toAvailableOfficialSkill(skill)], availability);
   return {
-    id: withAvailability.id,
-    name: withAvailability.name,
-    description: withAvailability.description,
+    ...toSkillCatalogEntry(withAvailability),
     instructions: withAvailability.instructions,
-    triggers: [...withAvailability.triggers],
-    source: 'official' as const,
     editable: false,
-    category: withAvailability.category,
     enabled: true,
-    locale,
-    version: withAvailability.version,
-    activation_tags: [...(withAvailability.activation_tags ?? [])],
-    execution_contract: {
-      preferred_tools: [...withAvailability.execution_contract.preferred_tools],
-      durable_output_hints: [...withAvailability.execution_contract.durable_output_hints],
-      output_modes: [...withAvailability.execution_contract.output_modes],
-      required_mcp_servers: [...withAvailability.execution_contract.required_mcp_servers],
-      template_ids: [...withAvailability.execution_contract.template_ids],
-    },
-    availability: withAvailability.availability,
-    availability_reasons: [...withAvailability.availability_reasons],
   };
 }
 

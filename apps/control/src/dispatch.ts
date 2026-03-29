@@ -1,3 +1,3 @@
-// Wrangler entry point — re-exports the dispatch namespace from takos-control
-export * from '../../../packages/control/src/dispatch.ts';
-export { default } from '../../../packages/control/src/dispatch.ts';
+// Wrangler entry point — re-exports the dispatch namespace from the takos-control package API.
+export * from 'takos-control/core/dispatch';
+export { default } from 'takos-control/core/dispatch';

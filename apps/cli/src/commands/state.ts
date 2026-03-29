@@ -12,7 +12,7 @@
  *   takos state show <key>                -- Show details for a specific entry
  *   takos state import <key> <id>         -- Import an existing resource into state
  *   takos state rm <key>                  -- Remove entry from state (does NOT delete the actual resource)
- *   takos state refresh                   -- Reconcile state with provider (remove orphaned entries)
+ *   takos state refresh                   -- Verify live resources where possible and remove confirmed orphans
  *   takos state sync                      -- Synchronise local and remote state
  */
 import { Command } from 'commander';
@@ -20,7 +20,7 @@ import chalk from 'chalk';
 import { readState, writeState, getStateDir, getStateFilePath } from '../lib/state/state-file.js';
 import type { StateAccessOptions } from '../lib/state/state-file.js';
 import { refreshState } from '../lib/state/refresh.js';
-import type { RefreshableProvider } from '../lib/state/refresh.js';
+import { createStateRefreshProvider } from '../lib/state/cloudflare-refresh-provider.js';
 import { syncState } from '../lib/state/sync.js';
 import { cliExit } from '../lib/command-exit.js';
 import { printJson } from '../lib/cli-utils.js';
@@ -61,19 +61,6 @@ function resolveStateKey(state: TakosState, key: string): {
 
 function toAccessOpts(options: { offline?: boolean }): StateAccessOptions {
   return options.offline ? { offline: true } : {};
-}
-
-/**
- * Stub provider for `state refresh` — always returns true (resource exists).
- *
- * Real providers can implement the RefreshableProvider interface to
- * actually verify resource existence. This stub ensures `state refresh`
- * works even without a concrete provider, serving as a no-op baseline.
- */
-class StubRefreshProvider implements RefreshableProvider {
-  async checkResourceExists(_type: string, _id: string, _name: string): Promise<boolean> {
-    return true;
-  }
 }
 
 export function registerStateCommand(program: Command): void {
@@ -351,12 +338,14 @@ export function registerStateCommand(program: Command): void {
   // ── state refresh ───────────────────────────────────────────────────────────
   stateCmd
     .command('refresh')
-    .description('Reconcile state with provider — remove entries for resources that no longer exist')
+    .description('Verify live resources where possible and remove confirmed orphaned entries')
     .option('--group <name>', 'Group name', 'default')
     .option('--json', 'Output as JSON')
     .option('--offline', 'Force file-based state (skip API)')
     .option('--dry-run', 'Show what would change without modifying state')
-    .action(async (options: { group: string; json?: boolean; offline?: boolean; dryRun?: boolean }) => {
+    .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
+    .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
+    .action(async (options: { group: string; json?: boolean; offline?: boolean; dryRun?: boolean; accountId?: string; apiToken?: string }) => {
       const cwd = process.cwd();
       const group = options.group;
       const stateDir = getStateDir(cwd);
@@ -373,9 +362,11 @@ export function registerStateCommand(program: Command): void {
         return;
       }
 
-      // Use a stub provider for now. Real provider integration can be
-      // added later by passing the resolved provider here.
-      const provider: RefreshableProvider = new StubRefreshProvider();
+      const provider = createStateRefreshProvider({
+        provider: state.provider,
+        accountId: options.accountId?.trim() || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || undefined,
+        apiToken: options.apiToken?.trim() || process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || undefined,
+      });
 
       // Work on a copy for dry-run; mutate the original otherwise
       const workingState = options.dryRun
@@ -389,7 +380,10 @@ export function registerStateCommand(program: Command): void {
         return;
       }
 
-      if (result.changes.length === 0) {
+      const removed = result.changes.filter((c) => c.action === 'removed').length;
+      const warnings = result.changes.filter((c) => c.action === 'warning').length;
+
+      if (removed === 0 && warnings === 0) {
         console.log(chalk.green('State is consistent — no orphaned entries found.'));
         return;
       }
@@ -402,11 +396,10 @@ export function registerStateCommand(program: Command): void {
       }
       console.log('');
 
-      const removed = result.changes.filter((c) => c.action === 'removed').length;
-      const warnings = result.changes.filter((c) => c.action === 'warning').length;
-
       if (options.dryRun) {
         console.log(chalk.dim(`Dry run: ${removed} removal(s), ${warnings} warning(s). No changes written.`));
+      } else if (removed === 0) {
+        console.log(chalk.yellow(`Verification completed with ${warnings} warning(s). No changes written.`));
       } else {
         await writeState(stateDir, group, state, accessOpts);
         console.log(chalk.green(`Refreshed: ${removed} removed, ${warnings} warning(s).`));

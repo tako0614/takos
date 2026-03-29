@@ -11,7 +11,7 @@ mcpServers:
     transport: streamable-http
 ```
 
-`route` は `spec.routes` の `name` を参照する。
+`route` は `spec.routes` の `name` を参照する。現行 parser は `route` / `endpoint` の排他を厳密に検証しないので、実運用ではどちらか 1 つに寄せるのが安全。
 
 ## 認証付き
 
@@ -35,7 +35,7 @@ mcpServers:
 
 ## endpoint と route の使い分け
 
-MCP Server のエンドポイント指定には `route` と `endpoint` の 2 つの方法がある。**両方を同時に指定するとエラー**になる。
+MCP Server のエンドポイント指定には `route` と `endpoint` の 2 つの方法がある。設計上は排他だが、現行 parser はこの制約を強制しない。
 
 ### route（推奨）
 

@@ -3,7 +3,7 @@
 Takos を Google Cloud Platform にホストする方法。このページは **takos オペレーター**向け。Cloud Run 上で Node.js の local-platform adapter を使って takos を動かす。
 
 ::: info アプリ開発者へ
-アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+このページは takos オペレーター向けです。GCP provider は current docs では experimental / partial 扱いで、アプリ開発者向けの current surface は Cloudflare-backed `takos deploy-group` です。
 :::
 
 ## リソースマッピング

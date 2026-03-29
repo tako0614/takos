@@ -13,7 +13,7 @@ import {
 import { handleGraphNeighbors } from './graph';
 import { BadRequestError } from 'takos-common/errors';
 
-const index = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
+const indexRoutes = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 
 const expensiveIndexRateLimiter = new InMemoryRateLimiter({
   maxRequests: 5,
@@ -26,9 +26,9 @@ const expensiveIndexRateLimiter = new InMemoryRateLimiter({
   },
 });
 
-index.get('/spaces/:spaceId/index/status', handleIndexStatus);
+indexRoutes.get('/spaces/:spaceId/index/status', handleIndexStatus);
 
-index.post('/spaces/:spaceId/index/vectorize', expensiveIndexRateLimiter.middleware(), async (c) => {
+indexRoutes.post('/spaces/:spaceId/index/vectorize', expensiveIndexRateLimiter.middleware(), async (c) => {
   const body = await parseJsonBody<{
     force_reindex?: boolean;
   }>(c, {});
@@ -38,13 +38,13 @@ index.post('/spaces/:spaceId/index/vectorize', expensiveIndexRateLimiter.middlew
   return handleVectorizeIndex(c, body);
 });
 
-index.post('/spaces/:spaceId/index/rebuild', expensiveIndexRateLimiter.middleware(), handleRebuildIndex);
+indexRoutes.post('/spaces/:spaceId/index/rebuild', expensiveIndexRateLimiter.middleware(), handleRebuildIndex);
 
-index.post('/spaces/:spaceId/index/file', async (c) => {
+indexRoutes.post('/spaces/:spaceId/index/file', async (c) => {
   const body = await parseJsonBody<{ path: string }>(c);
   return handleIndexFile(c, body);
 });
 
-index.get('/spaces/:spaceId/graph/neighbors', handleGraphNeighbors);
+indexRoutes.get('/spaces/:spaceId/graph/neighbors', handleGraphNeighbors);
 
-export default index;
+export default indexRoutes;

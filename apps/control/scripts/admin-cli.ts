@@ -13,7 +13,7 @@
  *   npx tsx scripts/admin-cli.ts moderation ban USER_ID --reason "abuse"
  */
 
-import { sanitizeErrorMessage } from '../../../packages/control/src/application/services/wfp/client.ts';
+import { sanitizeErrorMessage } from 'takos-control/core/wfp-client';
 import {
   type GlobalOptions,
   type ResolvedConfig,

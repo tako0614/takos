@@ -1,3 +1,3 @@
-// Wrangler entry point — re-exports the browser host worker from takos-control
-export * from '../../../packages/control/src/runtime/container-hosts/browser-session-host.ts';
-export { default } from '../../../packages/control/src/runtime/container-hosts/browser-session-host.ts';
+// Wrangler entry point — re-exports the browser host worker from the takos-control package API.
+export * from 'takos-control/runtime/container-hosts/browser-session-host';
+export { default } from 'takos-control/runtime/container-hosts/browser-session-host';

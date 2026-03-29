@@ -319,7 +319,9 @@ describe('platform architecture contract', () => {
     expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/start-server.ts'))).toBe(false);
     expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/run-public-entrypoint.mjs'))).toBe(false);
     expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/node-runtime.ts'))).toBe(false);
-    expect(existsSync(path.join(appRootDir, '../../packages/control/src/local-platform/node-runtime.ts'))).toBe(false);
+    expect(
+      existsSync(path.join(appRootDir, '..', '..', ['packages', 'control', 'src', 'local-platform', 'node-runtime.ts'].join('/')))
+    ).toBe(false);
   });
 
   it('keeps local bootstrap off Node loader registration concerns', () => {
