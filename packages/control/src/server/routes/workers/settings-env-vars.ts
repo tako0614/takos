@@ -4,7 +4,7 @@ import type { AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { CommonEnvService } from '../../../application/services/common-env';
+import { createCommonEnvDeps, markRequiredKeysLocallyOverriddenForService } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env-handlers';
 import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
 import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
@@ -73,18 +73,18 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
       variables: normalizedVariables,
     });
 
-    const commonEnvService = new CommonEnvService(c.env);
+    const deps = createCommonEnvDeps(c.env);
     const actor = await buildCommonEnvActor(c, user.id);
     const linkedKeyCandidates = normalizedVariables
       .map((v) => normalizeCommonEnvName(v.name))
       .filter((name): name is string => Boolean(name));
-    await commonEnvService.markRequiredKeysLocallyOverriddenForService({
+    await markRequiredKeysLocallyOverriddenForService(deps.manualLink, {
       spaceId: worker.space_id,
       serviceId: worker.id,
       keys: linkedKeyCandidates,
       actor,
     });
-    await commonEnvService.reconcileServiceCommonEnv(worker.space_id, worker.id, {
+    await deps.reconciler.reconcileServiceCommonEnv(worker.space_id, worker.id, {
       trigger: 'worker_env_patch',
     });
 

@@ -41,6 +41,7 @@ import mcpRoutes from './mcp';
 import appDeployments from './app-deployments';
 import oauthConsentApi from './oauth-consent-api';
 import browserSessions from './browser-sessions';
+import groupsRouter from './groups';
 import { createRunSseRouter } from './runs/sse';
 import { createNotificationSseRouter } from './notifications-sse';
 import { requireAnyAuth } from '../middleware/oauth-auth';
@@ -364,6 +365,7 @@ export function createApiRouter({
   apiRouter.route('/', pullRequests); // Pull request routes for code review
   apiRouter.route('/', appDeployments); // App deployment routes at /api/spaces/:id/app-deployments
   apiRouter.route('/', browserSessions); // Browser session routes at /api/browser-sessions/:id
+  apiRouter.route('/', groupsRouter); // Group management routes at /api/spaces/:id/groups
   // ================================================================
   // 7. Billing routes (webhook is public; management is authenticated)
   // ================================================================

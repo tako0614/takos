@@ -6,12 +6,12 @@ import type {
   OAuthClientStatus,
   ClientRegistrationRequest,
   ClientRegistrationResponse,
+  JsonStringArray,
 } from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
+import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth';
 import { generateRandomString, generateId } from './pkce';
 import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash';
 import { parseScopes, validateScopes } from './scopes';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 
@@ -29,10 +29,10 @@ function toApiClient(row: OAuthClientRow): OAuthClient {
     client_uri: row.clientUri ?? null,
     policy_uri: row.policyUri ?? null,
     tos_uri: row.tosUri ?? null,
-    redirect_uris: row.redirectUris,
-    grant_types: row.grantTypes,
-    response_types: row.responseTypes,
-    allowed_scopes: row.allowedScopes,
+    redirect_uris: row.redirectUris as JsonStringArray,
+    grant_types: row.grantTypes as JsonStringArray,
+    response_types: row.responseTypes as JsonStringArray,
+    allowed_scopes: row.allowedScopes as JsonStringArray,
     owner_id: row.ownerAccountId ?? null,
     registration_access_token_hash: row.registrationAccessTokenHash ?? null,
     status: row.status as OAuthClientStatus,
@@ -132,10 +132,10 @@ export async function createClient(
     clientUri: request.client_uri ?? null,
     policyUri: request.policy_uri ?? null,
     tosUri: request.tos_uri ?? null,
-    redirectUris: JSON.stringify(request.redirect_uris),
-    grantTypes: JSON.stringify(grantTypes),
-    responseTypes: JSON.stringify(responseTypes),
-    allowedScopes: JSON.stringify(requestedScopes),
+    redirectUris: JSON.stringify(request.redirect_uris) as JsonStringArray,
+    grantTypes: JSON.stringify(grantTypes) as JsonStringArray,
+    responseTypes: JSON.stringify(responseTypes) as JsonStringArray,
+    allowedScopes: JSON.stringify(requestedScopes) as JsonStringArray,
     ownerAccountId: ownerId ?? null,
     registrationAccessTokenHash,
     status: 'active',
@@ -185,7 +185,7 @@ export async function updateClient(
 
   if (updates.redirect_uris) {
     validateRedirectUris(updates.redirect_uris);
-    updateData.redirectUris = JSON.stringify(updates.redirect_uris);
+    updateData.redirectUris = JSON.stringify(updates.redirect_uris) as JsonStringArray;
   }
 
   if (updates.logo_uri !== undefined) {
@@ -210,7 +210,7 @@ export async function updateClient(
     if (!valid) {
       throw new Error(`Unknown scopes: ${unknown.join(', ')}`);
     }
-    updateData.allowedScopes = JSON.stringify(scopes);
+    updateData.allowedScopes = JSON.stringify(scopes) as JsonStringArray;
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -290,7 +290,7 @@ export async function validateRegistrationToken(
 }
 
 export function validateRedirectUri(client: OAuthClient, redirectUri: string): boolean {
-  const registeredUris = safeJsonParseOrDefault<string[]>(client.redirect_uris, []);
+  const registeredUris = parseJsonStringArray(client.redirect_uris);
   return registeredUris.includes(redirectUri);
 }
 
@@ -333,14 +333,14 @@ function isLocalhost(hostname: string): boolean {
 }
 
 export function supportsGrantType(client: OAuthClient, grantType: string): boolean {
-  const grantTypes = safeJsonParseOrDefault<string[]>(client.grant_types, []);
+  const grantTypes = parseJsonStringArray(client.grant_types);
   return grantTypes.includes(grantType);
 }
 
 export function getClientAllowedScopes(client: OAuthClient): string[] {
-  return safeJsonParseOrDefault<string[]>(client.allowed_scopes, []);
+  return parseJsonStringArray(client.allowed_scopes);
 }
 
 export function getClientRedirectUris(client: OAuthClient): string[] {
-  return safeJsonParseOrDefault<string[]>(client.redirect_uris, []);
+  return parseJsonStringArray(client.redirect_uris);
 }

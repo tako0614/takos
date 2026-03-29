@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ClientRegistrationRequest } from '../../../shared/types/oauth';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
+import { parseJsonStringArray } from '../../../shared/types/oauth';
 import { parseJsonBody } from '../route-auth';
 import {
   createClient,
@@ -99,10 +99,10 @@ oauthRegister.get('/register/:clientId', async (c) => {
   return c.json({
     client_id: client.client_id,
     client_name: client.name,
-    redirect_uris: safeJsonParseOrDefault<string[]>(client.redirect_uris, []),
-    grant_types: safeJsonParseOrDefault<string[]>(client.grant_types, []),
-    response_types: safeJsonParseOrDefault<string[]>(client.response_types, []),
-    scope: safeJsonParseOrDefault<string[]>(client.allowed_scopes, []).join(' '),
+    redirect_uris: parseJsonStringArray(client.redirect_uris),
+    grant_types: parseJsonStringArray(client.grant_types),
+    response_types: parseJsonStringArray(client.response_types),
+    scope: parseJsonStringArray(client.allowed_scopes).join(' '),
     client_uri: client.client_uri,
     logo_uri: client.logo_uri,
     policy_uri: client.policy_uri,
@@ -148,10 +148,10 @@ oauthRegister.put('/register/:clientId', async (c) => {
     return c.json({
       client_id: updated.client_id,
       client_name: updated.name,
-      redirect_uris: safeJsonParseOrDefault<string[]>(updated.redirect_uris, []),
-      grant_types: safeJsonParseOrDefault<string[]>(updated.grant_types, []),
-      response_types: safeJsonParseOrDefault<string[]>(updated.response_types, []),
-      scope: safeJsonParseOrDefault<string[]>(updated.allowed_scopes, []).join(' '),
+      redirect_uris: parseJsonStringArray(updated.redirect_uris),
+      grant_types: parseJsonStringArray(updated.grant_types),
+      response_types: parseJsonStringArray(updated.response_types),
+      scope: parseJsonStringArray(updated.allowed_scopes).join(' '),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Update failed';

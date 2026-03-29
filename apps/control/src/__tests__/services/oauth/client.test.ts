@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
-import type { OAuthClient } from '@/types/oauth';
+import type { OAuthClient, JsonStringArray } from '@/types/oauth';
 import {
   validateRedirectUri,
   validateRedirectUris,
@@ -12,6 +12,11 @@ import {
 // ---------------------------------------------------------------------------
 // Pure function tests (no DB mocks needed)
 // ---------------------------------------------------------------------------
+
+/** Helper to create a {@link JsonStringArray} from a native array in tests. */
+function jsonArray(arr: string[]): JsonStringArray {
+  return JSON.stringify(arr) as JsonStringArray;
+}
 
 function makeClient(overrides: Partial<OAuthClient> = {}): OAuthClient {
   return {
@@ -25,10 +30,10 @@ function makeClient(overrides: Partial<OAuthClient> = {}): OAuthClient {
     client_uri: null,
     policy_uri: null,
     tos_uri: null,
-    redirect_uris: JSON.stringify(['https://example.com/callback']),
-    grant_types: JSON.stringify(['authorization_code', 'refresh_token']),
-    response_types: JSON.stringify(['code']),
-    allowed_scopes: JSON.stringify(['openid', 'profile']),
+    redirect_uris: jsonArray(['https://example.com/callback']),
+    grant_types: jsonArray(['authorization_code', 'refresh_token']),
+    response_types: jsonArray(['code']),
+    allowed_scopes: jsonArray(['openid', 'profile']),
     owner_id: null,
     registration_access_token_hash: null,
     status: 'active',
@@ -41,7 +46,7 @@ function makeClient(overrides: Partial<OAuthClient> = {}): OAuthClient {
 describe('validateRedirectUri', () => {
   it('returns true when URI is in the registered list', () => {
     const client = makeClient({
-      redirect_uris: JSON.stringify([
+      redirect_uris: jsonArray([
         'https://example.com/callback',
         'https://other.example.com/auth',
       ]),
@@ -58,7 +63,7 @@ describe('validateRedirectUri', () => {
 
   it('does exact string matching (no normalization)', () => {
     const client = makeClient({
-      redirect_uris: JSON.stringify(['https://example.com/callback']),
+      redirect_uris: jsonArray(['https://example.com/callback']),
     });
 
     // Trailing slash is different
@@ -66,12 +71,12 @@ describe('validateRedirectUri', () => {
   });
 
   it('returns false when redirect_uris is invalid JSON', () => {
-    const client = makeClient({ redirect_uris: 'not-json' });
+    const client = makeClient({ redirect_uris: 'not-json' as JsonStringArray });
     expect(validateRedirectUri(client, 'https://example.com/callback')).toBe(false);
   });
 
   it('returns false for empty redirect_uris', () => {
-    const client = makeClient({ redirect_uris: '[]' });
+    const client = makeClient({ redirect_uris: '[]' as JsonStringArray });
     expect(validateRedirectUri(client, 'https://example.com/callback')).toBe(false);
   });
 });
@@ -128,7 +133,7 @@ describe('validateRedirectUris', () => {
 describe('supportsGrantType', () => {
   it('returns true when grant type is in the list', () => {
     const client = makeClient({
-      grant_types: JSON.stringify(['authorization_code', 'refresh_token']),
+      grant_types: jsonArray(['authorization_code', 'refresh_token']),
     });
 
     expect(supportsGrantType(client, 'authorization_code')).toBe(true);
@@ -137,14 +142,14 @@ describe('supportsGrantType', () => {
 
   it('returns false when grant type is not in the list', () => {
     const client = makeClient({
-      grant_types: JSON.stringify(['authorization_code']),
+      grant_types: jsonArray(['authorization_code']),
     });
 
     expect(supportsGrantType(client, 'client_credentials')).toBe(false);
   });
 
   it('returns false for invalid JSON', () => {
-    const client = makeClient({ grant_types: 'not-json' });
+    const client = makeClient({ grant_types: 'not-json' as JsonStringArray });
     expect(supportsGrantType(client, 'authorization_code')).toBe(false);
   });
 });
@@ -152,14 +157,14 @@ describe('supportsGrantType', () => {
 describe('getClientAllowedScopes', () => {
   it('parses and returns the allowed scopes', () => {
     const client = makeClient({
-      allowed_scopes: JSON.stringify(['openid', 'profile', 'spaces:read']),
+      allowed_scopes: jsonArray(['openid', 'profile', 'spaces:read']),
     });
 
     expect(getClientAllowedScopes(client)).toEqual(['openid', 'profile', 'spaces:read']);
   });
 
   it('returns empty array for invalid JSON', () => {
-    const client = makeClient({ allowed_scopes: 'bad' });
+    const client = makeClient({ allowed_scopes: 'bad' as JsonStringArray });
     expect(getClientAllowedScopes(client)).toEqual([]);
   });
 });
@@ -167,14 +172,14 @@ describe('getClientAllowedScopes', () => {
 describe('getClientRedirectUris', () => {
   it('parses and returns redirect URIs', () => {
     const client = makeClient({
-      redirect_uris: JSON.stringify(['https://a.com/cb', 'https://b.com/cb']),
+      redirect_uris: jsonArray(['https://a.com/cb', 'https://b.com/cb']),
     });
 
     expect(getClientRedirectUris(client)).toEqual(['https://a.com/cb', 'https://b.com/cb']);
   });
 
   it('returns empty array for invalid JSON', () => {
-    const client = makeClient({ redirect_uris: '{bad}' });
+    const client = makeClient({ redirect_uris: '{bad}' as JsonStringArray });
     expect(getClientRedirectUris(client)).toEqual([]);
   });
 });

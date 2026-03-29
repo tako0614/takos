@@ -4,7 +4,17 @@ import type { AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { TAKOS_ACCESS_TOKEN_ENV_NAME, CommonEnvService } from '../../../application/services/common-env';
+import {
+  TAKOS_ACCESS_TOKEN_ENV_NAME,
+  createCommonEnvDeps,
+  listServiceCommonEnvLinks,
+  listServiceBuiltins,
+  listServiceManualLinkNames,
+  setServiceManualLinks,
+  patchServiceManualLinks,
+  upsertServiceTakosAccessTokenConfig,
+  deleteServiceTakosAccessTokenConfig,
+} from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env-handlers';
 import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
 import { getDb } from '../../../infra/db';
@@ -67,9 +77,9 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = new CommonEnvService(c.env);
-    const links = await commonEnvService.listServiceCommonEnvLinks(worker.space_id, worker.id);
-    const builtins = await commonEnvService.listServiceBuiltins(worker.space_id, worker.id);
+    const deps = createCommonEnvDeps(c.env);
+    const links = await listServiceCommonEnvLinks(deps.serviceLink, worker.space_id, worker.id);
+    const builtins = await listServiceBuiltins(deps.serviceLink, worker.space_id, worker.id);
     return c.json({ links, builtins });
   } catch (err) {
     logError('Failed to get service common env links', err, { module: 'routes/services/settings' });
@@ -97,9 +107,9 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = new CommonEnvService(c.env);
-    const currentManualKeys = await commonEnvService.listServiceManualLinkNames(worker.space_id, worker.id);
-    const currentBuiltins = await commonEnvService.listServiceBuiltins(worker.space_id, worker.id);
+    const deps = createCommonEnvDeps(c.env);
+    const currentManualKeys = await listServiceManualLinkNames(deps.serviceLink, worker.space_id, worker.id);
+    const currentBuiltins = await listServiceBuiltins(deps.serviceLink, worker.space_id, worker.id);
     const currentTakosLink = await getCurrentTakosAccessTokenLinkPresence(c.env, worker.space_id, worker.id);
     const nextManualKeys = (body.keys || []).map((key) => normalizeCommonEnvName(key) ?? key).filter(Boolean) as string[];
     const nextEffectiveHasTakosAccessToken = nextManualKeys.includes(TAKOS_ACCESS_TOKEN_ENV_NAME) || currentTakosLink.required;
@@ -127,26 +137,26 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
     }
 
     const actor = await buildCommonEnvActor(c, user.id);
-    await commonEnvService.setServiceManualLinks({
+    await setServiceManualLinks(deps.manualLink, {
       spaceId: worker.space_id,
       serviceId: worker.id,
       keys: nextManualKeys,
       actor,
     });
     if (!nextEffectiveHasTakosAccessToken) {
-      await commonEnvService.deleteServiceTakosAccessTokenConfig({
+      await deleteServiceTakosAccessTokenConfig(deps.manualLink, {
         spaceId: worker.space_id,
         serviceId: worker.id,
       });
     } else if (body.builtins?.TAKOS_ACCESS_TOKEN) {
-      await commonEnvService.upsertServiceTakosAccessTokenConfig({
+      await upsertServiceTakosAccessTokenConfig(deps.manualLink, {
         spaceId: worker.space_id,
         serviceId: worker.id,
         scopes: body.builtins.TAKOS_ACCESS_TOKEN.scopes,
       });
     }
-    const links = await commonEnvService.listServiceCommonEnvLinks(worker.space_id, worker.id);
-    const builtins = await commonEnvService.listServiceBuiltins(worker.space_id, worker.id);
+    const links = await listServiceCommonEnvLinks(deps.serviceLink, worker.space_id, worker.id);
+    const builtins = await listServiceBuiltins(deps.serviceLink, worker.space_id, worker.id);
     return c.json({ success: true, links, builtins });
   } catch (err) {
     logError('Failed to update service common env links', err, { module: 'routes/services/settings' });
@@ -193,9 +203,9 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const commonEnvService = new CommonEnvService(c.env);
-    const currentManualKeys = await commonEnvService.listServiceManualLinkNames(worker.space_id, worker.id);
-    const currentBuiltins = await commonEnvService.listServiceBuiltins(worker.space_id, worker.id);
+    const deps = createCommonEnvDeps(c.env);
+    const currentManualKeys = await listServiceManualLinkNames(deps.serviceLink, worker.space_id, worker.id);
+    const currentBuiltins = await listServiceBuiltins(deps.serviceLink, worker.space_id, worker.id);
     const currentTakosLink = await getCurrentTakosAccessTokenLinkPresence(c.env, worker.space_id, worker.id);
     const nextSet = hasSet
       ? new Set((body.set || []).map((key) => normalizeCommonEnvName(key) ?? key).filter(Boolean) as string[])
@@ -237,7 +247,7 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
     }
 
     const actor = await buildCommonEnvActor(c, user.id);
-    const diff = await commonEnvService.patchServiceManualLinks({
+    const diff = await patchServiceManualLinks(deps.manualLink, {
       spaceId: worker.space_id,
       serviceId: worker.id,
       add: body.add,
@@ -246,19 +256,19 @@ const settingsCommonEnv = new Hono<AuthenticatedRouteEnv>()
       actor,
     });
     if (!nextEffectiveHasTakosAccessToken) {
-      await commonEnvService.deleteServiceTakosAccessTokenConfig({
+      await deleteServiceTakosAccessTokenConfig(deps.manualLink, {
         spaceId: worker.space_id,
         serviceId: worker.id,
       });
     } else if (body.builtins?.TAKOS_ACCESS_TOKEN) {
-      await commonEnvService.upsertServiceTakosAccessTokenConfig({
+      await upsertServiceTakosAccessTokenConfig(deps.manualLink, {
         spaceId: worker.space_id,
         serviceId: worker.id,
         scopes: body.builtins.TAKOS_ACCESS_TOKEN.scopes,
       });
     }
-    const links = await commonEnvService.listServiceCommonEnvLinks(worker.space_id, worker.id);
-    const builtins = await commonEnvService.listServiceBuiltins(worker.space_id, worker.id);
+    const links = await listServiceCommonEnvLinks(deps.serviceLink, worker.space_id, worker.id);
+    const builtins = await listServiceBuiltins(deps.serviceLink, worker.space_id, worker.id);
     return c.json({ success: true, diff, links, builtins });
   } catch (err) {
     logError('Failed to patch service common env links', err, { module: 'routes/services/settings' });

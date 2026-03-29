@@ -1,5 +1,4 @@
 import { type WorkerBinding, WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { PlatformDeployProviderConfig } from '../../../platform/platform-config.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
 import type {
   ArtifactKind,
@@ -34,10 +33,10 @@ export type DeploymentProvider = {
   cleanupDeploymentArtifact?(artifactRef: string): Promise<void>;
 };
 
-export type DeploymentProviderConfigRecord = PlatformDeployProviderConfig;
-
-export type DeploymentProviderRegistryLike = {
-  get(name: DeploymentProviderName): DeploymentProviderConfigRecord | undefined;
+export type WfpDeploymentProviderEnv = {
+  CF_ACCOUNT_ID?: string;
+  CF_API_TOKEN?: string;
+  WFP_DISPATCH_NAMESPACE?: string;
 };
 
 type OciDeploymentOrchestratorConfig = {
@@ -46,15 +45,8 @@ type OciDeploymentOrchestratorConfig = {
   fetchImpl?: typeof fetch;
 };
 
-export type WfpDeploymentProviderEnv = {
-  CF_ACCOUNT_ID?: string;
-  CF_API_TOKEN?: string;
-  WFP_DISPATCH_NAMESPACE?: string;
-};
-
 type DeploymentProviderFactoryConfig = OciDeploymentOrchestratorConfig & {
   cloudflareEnv?: WfpDeploymentProviderEnv;
-  providerRegistry?: DeploymentProviderRegistryLike;
 };
 
 type PersistedDeploymentContract = Pick<Deployment, 'provider_name' | 'target_json'>;
@@ -318,41 +310,35 @@ export function createDeploymentProvider(
   deployment: PersistedDeploymentContract,
   config: DeploymentProviderFactoryConfig = {},
 ): DeploymentProvider {
-  const registryEntry = config.providerRegistry?.get(deployment.provider_name);
+  switch (deployment.provider_name) {
+    case 'oci':
+    case 'ecs':
+    case 'cloud-run':
+    case 'k8s':
+      return createOciDeploymentProvider(deployment, {
+        orchestratorUrl: config.orchestratorUrl,
+        orchestratorToken: config.orchestratorToken,
+        fetchImpl: config.fetchImpl,
+      });
 
-  if (deployment.provider_name === 'oci'
-    || deployment.provider_name === 'ecs'
-    || deployment.provider_name === 'cloud-run'
-    || deployment.provider_name === 'k8s') {
-    return createOciDeploymentProvider(deployment, {
-      orchestratorUrl: registryEntry?.name === 'oci'
-        ? registryEntry.config.orchestratorUrl
-        : config.orchestratorUrl,
-      orchestratorToken: registryEntry?.name === 'oci'
-        ? registryEntry.config.orchestratorToken
-        : config.orchestratorToken,
-      fetchImpl: config.fetchImpl,
-    });
+    case 'workers-dispatch': {
+      const wfpEnv = config.cloudflareEnv;
+      const accountId = wfpEnv?.CF_ACCOUNT_ID;
+      const apiToken = wfpEnv?.CF_API_TOKEN;
+      const dispatchNamespace = wfpEnv?.WFP_DISPATCH_NAMESPACE;
+
+      if (!accountId || !apiToken || !dispatchNamespace) {
+        throw new Error('workers-dispatch deployment requires WFP environment');
+      }
+
+      return createWorkersDispatchDeploymentProvider(new WFPService({
+        CF_ACCOUNT_ID: accountId,
+        CF_API_TOKEN: apiToken,
+        WFP_DISPATCH_NAMESPACE: dispatchNamespace,
+      }));
+    }
+
+    default:
+      throw new Error(`Unknown deployment provider: ${deployment.provider_name}`);
   }
-
-  const wfpEnv = config.cloudflareEnv;
-  const accountId = registryEntry?.name === 'workers-dispatch'
-    ? registryEntry.config.accountId
-    : wfpEnv?.CF_ACCOUNT_ID;
-  const apiToken = registryEntry?.name === 'workers-dispatch'
-    ? registryEntry.config.apiToken
-    : wfpEnv?.CF_API_TOKEN;
-  const dispatchNamespace = registryEntry?.name === 'workers-dispatch'
-    ? registryEntry.config.dispatchNamespace
-    : wfpEnv?.WFP_DISPATCH_NAMESPACE;
-
-  if (!accountId || !apiToken || !dispatchNamespace) {
-    throw new Error('workers-dispatch deployment requires WFP environment');
-  }
-
-  return createWorkersDispatchDeploymentProvider(new WFPService({
-    CF_ACCOUNT_ID: accountId,
-    CF_API_TOKEN: apiToken,
-    WFP_DISPATCH_NAMESPACE: dispatchNamespace,
-  }));
 }

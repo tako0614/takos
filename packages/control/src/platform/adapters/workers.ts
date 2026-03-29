@@ -4,7 +4,6 @@ import type { DispatchEnv } from '../../dispatch.ts';
 import { renderPdfWithCloudflareBrowser } from '../providers/cloudflare/pdf-render.ts';
 import {
   buildPlatform,
-  createDeploymentProviderRegistry,
   createPlatformConfig,
   createPlatformServices,
   createRoutingService,
@@ -14,27 +13,6 @@ import {
 import type { PlatformEnvRecord } from './shared.ts';
 import type { ControlPlatform, PlatformServiceBinding } from '../platform-config.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
-
-function createWorkersDispatchDeploymentRegistry(env: Record<string, unknown>) {
-  const accountId = typeof env.CF_ACCOUNT_ID === 'string' ? env.CF_ACCOUNT_ID : undefined;
-  const apiToken = typeof env.CF_API_TOKEN === 'string' ? env.CF_API_TOKEN : undefined;
-  const zoneId = typeof env.CF_ZONE_ID === 'string' ? env.CF_ZONE_ID : undefined;
-  const dispatchNamespace = typeof env.WFP_DISPATCH_NAMESPACE === 'string' ? env.WFP_DISPATCH_NAMESPACE : undefined;
-  if (!accountId || !apiToken || !dispatchNamespace) {
-    return undefined;
-  }
-  return createDeploymentProviderRegistry([
-    {
-      name: 'workers-dispatch',
-      config: {
-        accountId,
-        apiToken,
-        zoneId,
-        dispatchNamespace,
-      },
-    },
-  ], 'workers-dispatch');
-}
 
 function buildWorkersPlatform<TBindings extends object>(env: TBindings & PlatformEnvRecord): ControlPlatform<TBindings> {
   const config = createPlatformConfig({
@@ -114,7 +92,6 @@ function buildWorkersPlatform<TBindings extends object>(env: TBindings & Platfor
     },
     documents,
     serviceRegistry: getServiceRegistry(env),
-    deploymentProviders: createWorkersDispatchDeploymentRegistry(env),
   });
 
   return buildPlatform('workers', env, config, services);

@@ -5,6 +5,7 @@ import { api } from '../lib/api.js';
 import { getConfig } from '../lib/config.js';
 import { validateAppManifest } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
+import { printJson } from '../lib/cli-utils.js';
 
 type DeployCommandOptions = {
   space?: string;
@@ -23,10 +24,6 @@ function resolveSpaceId(spaceOverride?: string): string {
     cliExit(1);
   }
   return spaceId;
-}
-
-function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function inferCurrentBranch(): Promise<string | null> {

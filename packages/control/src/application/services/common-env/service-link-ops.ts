@@ -22,7 +22,7 @@ import {
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
 import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
-import { runInTransaction } from './db-utils';
+
 
 export interface ServiceLinkDeps {
   env: Env;
@@ -40,7 +40,7 @@ export async function ensureRequiredServiceLinks(deps: ServiceLinkDeps, params: 
   if (keys.length === 0 || params.serviceIds.length === 0) return;
 
   const timestamp = new Date().toISOString();
-  await runInTransaction(deps, async () => {
+  await deps.txManager.runInTransaction(async () => {
     for (const serviceId of params.serviceIds) {
       for (const key of keys) {
         const result = await getDb(deps.env.DB).insert(serviceCommonEnvLinks)

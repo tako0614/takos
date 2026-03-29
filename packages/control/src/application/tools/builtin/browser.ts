@@ -6,13 +6,17 @@
 
 import type { ToolDefinition, ToolHandler } from '../tool-definitions';
 import { BROWSER_TOOL_DEFINITIONS } from './browser/definitions';
-import { browserOpenHandler } from './browser/handler-open';
-import { browserGotoHandler } from './browser/handler-goto';
-import { browserActionHandler } from './browser/handler-action';
-import { browserScreenshotHandler } from './browser/handler-screenshot';
-import { browserExtractHandler } from './browser/handler-extract';
-import { browserHtmlHandler } from './browser/handler-html';
-import { browserCloseHandler } from './browser/handler-close';
+import {
+  browserOpenHandler,
+  browserGotoHandler,
+  browserCloseHandler,
+} from './browser/navigation-handlers';
+import {
+  browserActionHandler,
+  browserScreenshotHandler,
+  browserExtractHandler,
+  browserHtmlHandler,
+} from './browser/interaction-handlers';
 
 export const BROWSER_TOOLS: ToolDefinition[] = BROWSER_TOOL_DEFINITIONS;
 

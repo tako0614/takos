@@ -197,10 +197,10 @@ function AccessTokensList({
                   </span>
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                  <code className="font-mono">{token.tokenPrefix}...</code>
-                  <span>{t('createdDate', { date: new Date(token.createdAt).toLocaleDateString() })}</span>
-                  {token.expiresAt && (
-                    <span>{t('expiresDate', { date: new Date(token.expiresAt).toLocaleDateString() })}</span>
+                  <code className="font-mono">{token.token_prefix}...</code>
+                  <span>{t('createdDate', { date: new Date(token.created_at).toLocaleDateString() })}</span>
+                  {token.expires_at && (
+                    <span>{t('expiresDate', { date: new Date(token.expires_at).toLocaleDateString() })}</span>
                   )}
                 </div>
               </div>

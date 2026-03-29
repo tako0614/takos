@@ -21,6 +21,7 @@ type PlanCommandOptions = {
   manifest?: string;
   env: string;
   group: string;
+  offline?: boolean;
 };
 
 export function registerPlanCommand(program: Command): void {
@@ -30,6 +31,7 @@ export function registerPlanCommand(program: Command): void {
     .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
     .option('--env <env>', 'Target environment', 'staging')
     .option('--group <name>', 'Target group (default: "default")', 'default')
+    .option('--offline', 'Force file-based state (skip API)')
     .action(async (options: PlanCommandOptions) => {
       // Step 1: Load manifest
       let manifestPath: string;
@@ -53,11 +55,12 @@ export function registerPlanCommand(program: Command): void {
 
       // Step 2: Read current state (null if not found)
       const group = options.group;
+      const accessOpts = options.offline ? { offline: true as const } : {};
       let currentState: TakosState | null = null;
       try {
-        currentState = await readState(getStateDir(process.cwd()), group);
+        currentState = await readState(getStateDir(process.cwd()), group, accessOpts);
       } catch {
-        // No state file yet -- treat as fresh deployment
+        // No state yet -- treat as fresh deployment
       }
 
       // Step 3: Compute diff

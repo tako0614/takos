@@ -40,17 +40,16 @@ import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
 import { logError } from '../../../shared/utils/logger';
 import { InternalError, NotFoundError } from 'takos-common/errors';
 import {
-  getDeploymentProviderRegistry,
   resolveDeploymentArtifactRef,
   parseRuntimeConfig,
   extractErrorMessage,
-} from './deployment-artifacts';
+} from './artifact-refs';
 import {
   getBundleContent,
   verifyBundleIntegrity,
   getWasmContent,
   decryptBindings,
-} from './artifacts';
+} from './artifact-io';
 
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
@@ -99,7 +98,6 @@ export async function executeDeploymentPipeline(
 
     const deployArtifactRef = deploymentArtifactRef;
     const provider = createDeploymentProvider(deployment, {
-      providerRegistry: getDeploymentProviderRegistry(env),
       cloudflareEnv: env,
       orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
@@ -328,7 +326,6 @@ export async function executeDeploymentPipeline(
       workerHostname,
       deploymentArtifactRef,
       provider: createDeploymentProvider(deployment, {
-        providerRegistry: getDeploymentProviderRegistry(env),
         cloudflareEnv: env,
         orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
         orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,

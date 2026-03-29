@@ -18,6 +18,7 @@ import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
+import { resolveAccountId, resolveApiToken, printJson } from '../lib/cli-utils.js';
 import { readState, getStateDir } from '../lib/state/state-file.js';
 import { computeDiff } from '../lib/state/diff.js';
 import type { TakosState } from '../lib/state/state-types.js';
@@ -41,31 +42,8 @@ type DeployGroupCommandOptions = {
   container?: string[];
   baseDomain?: string;
   wranglerConfig?: string;
+  offline?: boolean;
 };
-
-function resolveAccountId(override?: string): string {
-  const accountId = override || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
-  if (!accountId.trim()) {
-    console.log(chalk.red('Cloudflare account ID is required.'));
-    console.log(chalk.dim('Pass --account-id, or set CLOUDFLARE_ACCOUNT_ID.'));
-    cliExit(1);
-  }
-  return accountId.trim();
-}
-
-function resolveApiToken(override?: string): string {
-  const apiToken = override || process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || '';
-  if (!apiToken.trim()) {
-    console.log(chalk.red('Cloudflare API token is required.'));
-    console.log(chalk.dim('Pass --api-token, or set CLOUDFLARE_API_TOKEN.'));
-    cliExit(1);
-  }
-  return apiToken.trim();
-}
-
-function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
 
 function printApplyResult(result: ApplyResult, env: string, groupName: string, dryRun?: boolean): void {
   const titlePrefix = dryRun ? '[DRY RUN] ' : '';
@@ -147,6 +125,7 @@ export function registerDeployGroupCommand(program: Command): void {
     .option('--base-domain <domain>', 'Base domain for template resolution')
     .option('--wrangler-config <path>', 'Deploy using a wrangler.toml directly')
     .option('--json', 'Machine-readable JSON output')
+    .option('--offline', 'Force file-based state (skip API)')
     .action(async (options: DeployGroupCommandOptions) => {
       const accountId = resolveAccountId(options.accountId);
       const apiToken = resolveApiToken(options.apiToken);
@@ -210,11 +189,12 @@ export function registerDeployGroupCommand(program: Command): void {
       // Read current state and compute diff
       const group = options.group || manifest.metadata.name;
       const stateDir = getStateDir(process.cwd());
+      const accessOpts = options.offline ? { offline: true as const } : {};
       let currentState: TakosState | null = null;
       try {
-        currentState = await readState(stateDir, group);
+        currentState = await readState(stateDir, group, accessOpts);
       } catch {
-        // No state file yet
+        // No state yet
       }
 
       const diff = computeDiff(manifest, currentState);

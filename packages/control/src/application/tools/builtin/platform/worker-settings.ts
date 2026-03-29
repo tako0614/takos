@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { CommonEnvService } from '../../../services/common-env';
+import { createCommonEnvDeps } from '../../../services/common-env';
 import { DeploymentService } from '../../../services/deployment/index';
 import { ServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
 import { normalizeCommonEnvName } from '../../../services/common-env/crypto';
@@ -310,8 +310,8 @@ export const workerEnvSetHandler: ToolHandler = async (args, context) => {
     })),
   });
 
-  const commonEnvService = new CommonEnvService(context.env);
-  await commonEnvService.reconcileServiceCommonEnv(ref.spaceId, ref.workerId, {
+  const deps = createCommonEnvDeps(context.env);
+  await deps.reconciler.reconcileServiceCommonEnv(ref.spaceId, ref.workerId, {
     trigger: 'worker_env_patch',
   });
 

@@ -15,7 +15,7 @@ import {
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from './takos-builtins';
 import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
-import { runInTransaction } from './db-utils';
+
 
 export interface ManualLinkDeps {
   env: Env;
@@ -143,7 +143,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
   let addedOut: string[] = [];
   let removedOut: string[] = [];
 
-  await runInTransaction(deps, async () => {
+  await deps.txManager.runInTransaction(async () => {
     const actuallyAdded: string[] = [];
     const actuallyRemoved: string[] = [];
 
@@ -349,7 +349,7 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
   const changedKeys = rows.map((row) => normalizeEnvName(row.envName));
   const timestamp = new Date().toISOString();
 
-  await runInTransaction(deps, async () => {
+  await deps.txManager.runInTransaction(async () => {
     await getDb(deps.env.DB).update(serviceCommonEnvLinks)
       .set({
         syncState: 'overridden',

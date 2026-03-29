@@ -9,7 +9,7 @@ import type {
   TokenResponse,
   OAuthClient,
 } from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
+import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth';
 import { generateRandomString, generateId } from './pkce';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb } from '../../../infra/db';
@@ -458,12 +458,7 @@ export async function generateTokenResponse(
   let refreshToken: string | undefined;
 
   if (includeRefreshToken) {
-    let grantTypes: string[];
-    try {
-      grantTypes = JSON.parse(client.grant_types) as string[];
-    } catch {
-      grantTypes = [];
-    }
+    const grantTypes = parseJsonStringArray(client.grant_types);
     if (grantTypes.includes('refresh_token')) {
       const refresh = generateRefreshToken();
       refreshToken = refresh.token;

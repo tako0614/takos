@@ -140,6 +140,12 @@ export {
   workflows,
 } from './schema-workflows';
 
+// Groups
+export {
+  groups,
+  groupEntities,
+} from './schema-groups';
+
 // Workers
 export {
   apps,

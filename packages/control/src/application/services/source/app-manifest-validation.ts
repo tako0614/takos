@@ -147,7 +147,7 @@ export function parseResources(
         };
         return Object.keys(limits).length > 0 ? { limits } : {};
       })()),
-    };
+    } as AppResource;
   }
 
   for (const [resourceName, resource] of Object.entries(resources)) {

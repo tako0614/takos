@@ -7,8 +7,6 @@ import type { RoutingStore, RoutingTarget } from '../../application/services/rou
 import type {
   ControlPlatform,
   PlatformConfig,
-  PlatformDeployProviderConfig,
-  PlatformDeployProviderRegistry,
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
@@ -63,7 +61,6 @@ type PlatformServiceInputs = {
   serviceRegistry?: {
     get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
-  deploymentProviders?: PlatformDeployProviderRegistry;
   sseNotifier?: PlatformServices['sseNotifier'];
 };
 
@@ -78,25 +75,6 @@ export function createPlatformConfig(input: PlatformConfigInput): PlatformConfig
     platformPublicKey: input.platformPublicKey,
     encryptionKey: input.encryptionKey,
     serviceInternalJwtIssuer: input.serviceInternalJwtIssuer,
-  };
-}
-
-export function createDeploymentProviderRegistry(
-  providers: PlatformDeployProviderConfig[],
-  defaultName?: PlatformDeployProviderRegistry['defaultName'],
-): PlatformDeployProviderRegistry | undefined {
-  if (providers.length === 0) {
-    return undefined;
-  }
-
-  return {
-    defaultName,
-    list() {
-      return [...providers];
-    },
-    get(name) {
-      return providers.find((provider) => provider.name === name);
-    },
   };
 }
 
@@ -141,7 +119,6 @@ export function createPlatformServices(input: PlatformServiceInputs): PlatformSe
     assets: input.assets ?? {},
     documents: input.documents ?? {},
     serviceRegistry: input.serviceRegistry,
-    deploymentProviders: input.deploymentProviders,
     sseNotifier: input.sseNotifier,
   };
 }

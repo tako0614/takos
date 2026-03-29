@@ -9,6 +9,7 @@ import type { TakosState, ContainerState } from '../state/state-types.js';
 import { readState, writeState, getStateDir } from '../state/state-file.js';
 import { deployContainerWithWrangler } from '../group-deploy/container.js';
 import type { ContainerServiceDef, GroupDeployOptions } from '../group-deploy/deploy-models.js';
+import { createEmptyState } from '../empty-state.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,24 +31,6 @@ export interface ContainerEntry {
   name: string;
   deployedAt: string;
   imageHash: string;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
-  return {
-    version: 1,
-    provider: 'cloudflare',
-    env: opts.env,
-    group: opts.group,
-    groupName: opts.groupName || 'takos',
-    updatedAt: new Date().toISOString(),
-    resources: {},
-    workers: {},
-    containers: {},
-    services: {},
-    routes: {},
-  };
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────

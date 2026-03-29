@@ -20,8 +20,8 @@ COPY --chown=takos:takos apps/control ./apps/control
 COPY --chown=takos:takos scripts ./scripts
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @takos/common build
-RUN pnpm --filter @takos/actions-engine build
+RUN pnpm --filter takos-common build
+RUN pnpm --filter takos-actions-engine build
 
 USER takos
 ENV NODE_ENV=production

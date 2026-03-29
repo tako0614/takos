@@ -10,6 +10,7 @@ import type { TakosState, ResourceState } from '../state/state-types.js';
 import type { ProvisionResult } from '../group-deploy/resource-provider.js';
 import { resolveProvider } from '../group-deploy/provisioner.js';
 import { readState, writeState, getStateDir } from '../state/state-file.js';
+import { createEmptyState } from '../empty-state.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,24 +32,6 @@ export interface ResourceEntry {
   id: string;
   binding: string;
   createdAt: string;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
-  return {
-    version: 1,
-    provider: 'cloudflare',
-    env: opts.env,
-    group: opts.group,
-    groupName: opts.groupName || 'takos',
-    updatedAt: new Date().toISOString(),
-    resources: {},
-    workers: {},
-    containers: {},
-    services: {},
-    routes: {},
-  };
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────

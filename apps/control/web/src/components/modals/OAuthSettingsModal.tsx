@@ -20,11 +20,11 @@ export interface OAuthConsent {
 export interface PersonalAccessToken {
   id: string;
   name: string;
-  tokenPrefix: string;
+  token_prefix: string;
   scopes: string;
-  expiresAt: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
 }
 
 export interface OAuthClientDev {

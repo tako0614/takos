@@ -42,18 +42,18 @@ import {
   resolveDeploymentServiceId,
   snapshotFromOverride,
   assertMatchingIdempotentRequest,
-} from './deployment-artifacts';
+} from './artifact-refs';
 // Re-export for backward compatibility — external code imports buildDeploymentArtifactRef / DeploymentEnv from here.
-export { buildDeploymentArtifactRef } from './deployment-artifacts';
+export { buildDeploymentArtifactRef } from './artifact-refs';
 export type { DeploymentEnv } from './models';
-import { buildDeploymentArtifactRef } from './deployment-artifacts';
+import { buildDeploymentArtifactRef } from './artifact-refs';
 import { executeDeploymentPipeline } from './execute';
 import { executeRollback } from './rollback-orchestrator';
 import {
   getEnvVars,
   getMaskedEnvVars,
   decryptBindings,
-} from './artifacts';
+} from './artifact-io';
 
 export class DeploymentService {
   private encryptionKey: string;

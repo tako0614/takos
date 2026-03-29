@@ -12,7 +12,15 @@ import type {
   R2HTTPMetadataLike,
   R2RangeLike,
 } from './r2-compat-types.ts';
-import { emptyChecksums } from './r2-compat-utils.ts';
+
+/** Build an empty R2Checksums-compatible object. */
+function emptyChecksums(): R2ChecksumsLike {
+  return {
+    toJSON() {
+      return {};
+    },
+  };
+}
 
 /** Type guard for GCS SDK errors that carry a numeric `code` property. */
 function isGcsError(err: unknown): err is Error & { code: number } {

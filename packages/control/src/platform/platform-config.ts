@@ -1,4 +1,3 @@
-import type { DeploymentProviderName } from '../application/services/deployment/models.ts';
 import type {
   ResolvedRouting,
   RoutingStore,
@@ -77,12 +76,6 @@ export type PlatformDeployProviderConfig =
   | CloudRunDeployProviderConfig
   | K8sDeployProviderConfig;
 
-export type PlatformDeployProviderRegistry = {
-  defaultName?: DeploymentProviderName;
-  list(): PlatformDeployProviderConfig[];
-  get(name: DeploymentProviderName): PlatformDeployProviderConfig | undefined;
-};
-
 export type PlatformConfig = {
   adminDomain: string;
   tenantBaseDomain: string;
@@ -154,7 +147,6 @@ export type PlatformServices = {
   serviceRegistry?: {
     get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
   };
-  deploymentProviders?: PlatformDeployProviderRegistry;
   /** SSE-based event notifier for Node.js environments (WebSocket alternative). */
   sseNotifier?: {
     emit(channel: string, event: { type: string; data: unknown; event_id?: number }): void;

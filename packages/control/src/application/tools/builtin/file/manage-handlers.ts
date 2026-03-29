@@ -1,7 +1,51 @@
+/**
+ * File management (destructive) operation handlers.
+ *
+ * Consolidates: file_delete, file_rename.
+ */
+
 import type { ToolHandler } from '../../types';
 import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session';
 import { isBinaryFile } from './limits';
-import { logWarn } from '../../../../shared/utils/logger';
+import { logError, logWarn } from '../../../../shared/utils/logger';
+import { setupFileOperation, handleSessionApiResponse } from './file-operations';
+
+/* ------------------------------------------------------------------ */
+/*  file_delete                                                        */
+/* ------------------------------------------------------------------ */
+
+export const fileDeleteHandler: ToolHandler = async (args, context) => {
+  const { path, sessionId } = await setupFileOperation(args, context);
+
+  const r2Key = `session-files/${context.spaceId}/${sessionId}/${path}`;
+
+  const [runtimeResult, r2Result] = await Promise.allSettled([
+    callSessionApi(context, '/session/file/delete', { path }),
+    context.storage?.delete(r2Key),
+  ]);
+
+  if (r2Result.status === 'rejected') {
+    logWarn(`R2 backup delete failed for ${path}`, { module: 'tools/builtin/file/manage-handlers', detail: r2Result.reason });
+  }
+
+  if (runtimeResult.status === 'rejected') {
+    logError('Runtime delete failed', runtimeResult.reason, { module: 'tools/builtin/file/manage-handlers' });
+    throw new Error(`Failed to delete file: ${runtimeResult.reason}`);
+  }
+
+  const response = runtimeResult.value;
+  if (response.status === 404) {
+    throw new Error(`File not found: ${path}`);
+  }
+
+  await handleSessionApiResponse(response, 'delete file');
+
+  return `Deleted file: ${path}`;
+};
+
+/* ------------------------------------------------------------------ */
+/*  file_rename                                                        */
+/* ------------------------------------------------------------------ */
 
 export const fileRenameHandler: ToolHandler = async (args, context) => {
   const mountPath = await resolveMountPath(
@@ -72,12 +116,12 @@ export const fileRenameHandler: ToolHandler = async (args, context) => {
         }
       );
     } catch (err) {
-      logWarn(`R2 backup rename write failed for ${newPath}`, { module: 'tools/builtin/file/handler-rename', detail: err });
+      logWarn(`R2 backup rename write failed for ${newPath}`, { module: 'tools/builtin/file/manage-handlers', detail: err });
     }
     try {
       await context.storage.delete(r2KeyOld);
     } catch (err) {
-      logWarn(`R2 backup rename delete failed for ${oldPath}`, { module: 'tools/builtin/file/handler-rename', detail: err });
+      logWarn(`R2 backup rename delete failed for ${oldPath}`, { module: 'tools/builtin/file/manage-handlers', detail: err });
     }
   }
 

@@ -8,7 +8,6 @@
 import type { AgentMessage } from './agent-models';
 import type { WorkflowContext, ReviewResult } from './workflow-types';
 import { REVIEW_PROMPT } from './workflow-types';
-import { extractJsonFromLLMResponse } from './workflow-utils';
 import { LLMClient } from './llm';
 import { getDb, pullRequests, prReviews } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
@@ -53,7 +52,10 @@ export async function executeReview(
 
   let reviewResult: ReviewResult;
   try {
-    reviewResult = JSON.parse(extractJsonFromLLMResponse(response.content)) as ReviewResult;
+    const jsonBody = response.content.trim().startsWith('{')
+      ? response.content.trim()
+      : response.content.trim().replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    reviewResult = JSON.parse(jsonBody) as ReviewResult;
   } catch (parseError) {
     logError('Failed to parse review JSON', parseError, { module: 'services/agent/workflow-review' });
     reviewResult = {

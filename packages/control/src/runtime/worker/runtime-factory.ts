@@ -20,10 +20,8 @@ export function createWorkerRuntime(
     const platform = await buildPlatform(env);
     const runtimeBindings = {
       ...platform.bindings,
-      DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
       PLATFORM: platform,
     } as Env & {
-      DEPLOYMENT_PROVIDER_REGISTRY?: ControlPlatform<Env>['services']['deploymentProviders'];
       PLATFORM?: ControlPlatform<Env>;
     };
     const { default: egress } = await import('./egress');
@@ -37,10 +35,8 @@ export function createWorkerRuntime(
     const platform = await buildPlatform(env);
     const bindings = {
       ...platform.bindings,
-      DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
       PLATFORM: platform,
     } as Env & {
-      DEPLOYMENT_PROVIDER_REGISTRY?: ControlPlatform<Env>['services']['deploymentProviders'];
       PLATFORM?: ControlPlatform<Env>;
     };
     const queueName = batch.queue.replace(/-staging$/i, '');
@@ -98,10 +94,8 @@ export function createWorkerRuntime(
     const platform = await buildPlatform(env);
     const bindings = {
       ...platform.bindings,
-      DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
       PLATFORM: platform,
     } as Env & {
-      DEPLOYMENT_PROVIDER_REGISTRY?: ControlPlatform<Env>['services']['deploymentProviders'];
       PLATFORM?: ControlPlatform<Env>;
     };
     const { default: runner } = await import('../runner/index');
