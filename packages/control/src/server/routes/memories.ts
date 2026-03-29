@@ -8,7 +8,8 @@ import type {
   ReminderPriority,
 } from '../../shared/types';
 import { checkSpaceAccess } from '../../application/services/identity/space-access';
-import { parseLimit, parseOffset, requireSpaceAccess, type BaseVariables } from './route-auth';
+import { requireSpaceAccess, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 import {
@@ -48,8 +49,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const validatedQuery = c.req.valid('query');
     const type = validatedQuery.type as MemoryType | undefined;
     const category = validatedQuery.category;
-    const limit = parseLimit(validatedQuery.limit, 50, 100);
-    const offset = parseOffset(validatedQuery.offset);
+    const { limit, offset } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
     const memoryList = await listMemories(c.env.DB, access.space.id, {
       type,
@@ -82,7 +82,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const validatedQuery = c.req.valid('query');
     const query = (validatedQuery.q || '').trim();
     const type = validatedQuery.type as MemoryType | undefined;
-    const limit = parseLimit(validatedQuery.limit, 20, 100);
+    const { limit } = parsePagination(validatedQuery, { maxLimit: 100 });
 
     const memoriesResult = await searchMemories(
       c.env.DB,
@@ -228,7 +228,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const validatedQuery = c.req.valid('query');
     const status = validatedQuery.status as ReminderStatus | undefined;
-    const limit = parseLimit(validatedQuery.limit, 50, 100);
+    const { limit } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
     const reminders = await listReminders(c.env.DB, access.space.id, {
       status,

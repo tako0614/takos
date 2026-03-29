@@ -14,6 +14,8 @@ import { registerWorkerCommand } from './commands/worker.js';
 import { registerResourceCommand } from './commands/resource.js';
 import { registerContainerCommand } from './commands/container.js';
 import { registerServiceCommand } from './commands/service.js';
+import { registerGroupCommand } from './commands/group.js';
+import { registerRouteCommand } from './commands/route.js';
 import { isContainerMode, isAuthenticated } from './lib/config.js';
 import { cliExit, isCliCommandExit } from './lib/command-exit.js';
 
@@ -34,6 +36,8 @@ registerWorkerCommand(program);
 registerResourceCommand(program);
 registerContainerCommand(program);
 registerServiceCommand(program);
+registerGroupCommand(program);
+registerRouteCommand(program);
 registerEndpointCommand(program);
 registerTaskCommands(program);
 
@@ -42,7 +46,7 @@ program.hook('preAction', (thisCommand) => {
     ? process.argv[2].trim().toLowerCase()
     : thisCommand.name().toLowerCase();
 
-  if (['login', 'logout', 'help', 'endpoint', 'deploy-group', 'plan', 'apply', 'state', 'worker', 'resource', 'container', 'service'].includes(commandName)) {
+  if (['login', 'logout', 'help', 'endpoint', 'deploy-group', 'plan', 'apply', 'state', 'worker', 'resource', 'container', 'service', 'group', 'route'].includes(commandName)) {
     return;
   }
 

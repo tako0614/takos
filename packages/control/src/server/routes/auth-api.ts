@@ -14,7 +14,7 @@ import {
   deleteAuthSession,
   isValidAvatarUrl,
 } from '../../application/services/identity/auth-utils';
-import { extractBearerToken } from '../../shared/utils';
+
 import { BadRequestError, AuthenticationError, ConflictError } from 'takos-common/errors';
 import { zValidator } from './zod-validator';
 
@@ -145,7 +145,8 @@ authApi.patch('/profile',
 
 // POST /api/auth/logout - Logout (invalidate D1 session)
 authApi.post('/logout', async (c) => {
-  const token = extractBearerToken(c.req.header('Authorization'));
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
   if (token) {
     await deleteAuthSession(c.env.DB, token);
   }

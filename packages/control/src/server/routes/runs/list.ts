@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { checkThreadAccess } from '../../../application/services/threads/thread-service';
-import { parseLimit } from '../route-auth';
 import type { Hono } from 'hono';
 import type { Env } from '../../../shared/types';
 import type { BaseVariables } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { NotFoundError, BadRequestError } from 'takos-common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
@@ -12,7 +12,6 @@ import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
 import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization';
-import { toIsoString } from '../../../shared/utils';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -54,7 +53,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
       const threadId = c.req.param('threadId');
       const runsQuery = c.req.valid('query' as never) as { active_only?: string; limit?: string; cursor?: string };
       const activeOnly = runsQuery.active_only === '1';
-      const limit = parseLimit(runsQuery.limit, 50, 200);
+      const { limit } = parsePagination(runsQuery, { limit: 50, maxLimit: 200 });
       const cursor = runsQuery.cursor;
 
       const access = await checkThreadAccess(c.env.DB, threadId, user.id);
@@ -100,7 +99,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
       const runsList = result.map((row) => runRowToApi(asRunRow({ ...row, spaceId: row.accountId })));
       const lastRow = result[result.length - 1];
       const nextCursor = result.length === limit && lastRow
-        ? encodeRunListCursor(toIsoString(lastRow.createdAt), lastRow.id)
+        ? encodeRunListCursor((lastRow.createdAt == null ? null : typeof lastRow.createdAt === 'string' ? lastRow.createdAt : lastRow.createdAt.toISOString()), lastRow.id)
         : null;
       const normalizedCursor = parsedCursor
         ? (parsedCursor.runId

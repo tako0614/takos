@@ -1,5 +1,10 @@
 /**
- * D1 database methods for WFPService.
+ * D1 database methods for the WFP (Workers for Platforms) service.
+ *
+ * Manages Cloudflare D1 (SQLite) databases that are bound to tenant workers.
+ * Provides creation, deletion, raw SQL execution, type-safe querying, table
+ * introspection (list tables, column info, row counts), and result extraction
+ * helpers.
  */
 
 import { InternalError } from 'takos-common/errors';

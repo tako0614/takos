@@ -9,7 +9,7 @@ import {
   handleIndexStatus,
   handleRebuildIndex,
   handleVectorizeIndex,
-} from './handlers';
+} from './index-handlers';
 import { handleGraphNeighbors } from './graph';
 import { BadRequestError } from 'takos-common/errors';
 

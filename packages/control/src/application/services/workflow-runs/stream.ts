@@ -1,7 +1,20 @@
 import { getDb, workflowRuns } from '../../../infra/db';
 import { and, eq } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { buildSanitizedDOHeaders } from '../../../shared/utils/do-header-utils';
+
+const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
+
+function buildSanitizedDOHeaders(
+  source: HeadersInit | undefined,
+  trustedOverrides: Record<string, string>,
+): Record<string, string> {
+  const headers = new Headers(source);
+  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
+  for (const [key, value] of Object.entries(trustedOverrides)) headers.set(key, value);
+  const result: Record<string, string> = {};
+  headers.forEach((v, k) => { result[k] = v; });
+  return result;
+}
 
 type DurableObjectFetchLike = {
   fetch(input: string | URL, init?: RequestInit): Promise<Response>;

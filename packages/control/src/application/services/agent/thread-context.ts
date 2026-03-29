@@ -3,7 +3,6 @@ import type { Env, DbEnv, AiEnv } from '../../../shared/types';
 type ThreadContextEnv = DbEnv & AiEnv;
 import { getDb, accounts, threads, messages } from '../../../infra/db';
 import { eq, and, gt, inArray, desc, asc } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { LLMClient, getProviderFromModel } from './llm';
 import { DEFAULT_MODEL_ID } from './model-catalog';
 import type { AgentMessage } from './agent-models';
@@ -344,7 +343,7 @@ export async function indexThreadContext(params: {
         messageId: m.id,
         sequence: m.sequence,
         role: m.role,
-        createdAt: toIsoString(m.createdAt) ?? new Date(0).toISOString(),
+        createdAt: (m.createdAt == null ? null : typeof m.createdAt === 'string' ? m.createdAt : m.createdAt.toISOString()) ?? new Date(0).toISOString(),
         content: truncateText(m.content ?? '', 1000),
       },
     }));

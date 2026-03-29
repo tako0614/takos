@@ -1,9 +1,12 @@
 /**
- * Binding formatting helpers for WFP.
+ * Binding formatting helpers for the WFP (Workers for Platforms) service.
  *
  * Extracted from service.ts to keep the facade thin.
  * These functions convert domain-level WorkerBinding objects into the
- * wire format expected by the Cloudflare API.
+ * wire format expected by the Cloudflare API when deploying or updating
+ * tenant workers. Supports all Cloudflare binding types: plain_text,
+ * secret_text, D1, R2, KV, Queues, Analytics Engine, Workflows, Vectorize,
+ * Service bindings, and Durable Object namespaces.
  */
 
 import type { WorkerBinding, CloudflareBindingRecord } from './wfp-contracts';

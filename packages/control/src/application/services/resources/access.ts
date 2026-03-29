@@ -2,7 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { ResourcePermission } from '../../../shared/types';
 import { getDb, resourceAccess } from '../../../infra/db';
 import { eq, and, inArray } from 'drizzle-orm';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { toApiResourceAccess } from './format';
 import { getResourceById } from './store';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
@@ -39,7 +39,7 @@ export async function listResourceAccess(db: D1Database, resourceId: string) {
       accountId: ra.accountId,
       permission: ra.permission,
       grantedByAccountId: ra.grantedByAccountId,
-      createdAt: toIsoString(ra.createdAt),
+      createdAt: (ra.createdAt == null ? null : typeof ra.createdAt === 'string' ? ra.createdAt : ra.createdAt.toISOString()),
     }),
     workspace_name: ra.accountName,
   }));

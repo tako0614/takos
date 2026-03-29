@@ -10,7 +10,7 @@ import {
   buildDelegationPacket,
 } from '../../services/agent/delegation';
 import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
 
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['completed', 'failed', 'cancelled']);
@@ -200,7 +200,7 @@ async function loadChildRun(
     run: childRun,
     artifacts: childArtifacts.map((artifact) => ({
       ...artifact,
-      created_at: toIsoString(artifact.created_at),
+      created_at: (artifact.created_at == null ? null : typeof artifact.created_at === 'string' ? artifact.created_at : artifact.created_at.toISOString()),
     })),
   };
 }
@@ -214,7 +214,7 @@ function buildWaitAgentResponse(result: { run: ChildRunRow; artifacts: ArtifactS
     root_thread_id: result.run.rootThreadId ?? result.run.threadId,
     status: result.run.status,
     timed_out: timedOut,
-    completed_at: result.run.completedAt ? toIsoString(result.run.completedAt) : null,
+    completed_at: result.run.completedAt ? (result.run.completedAt == null ? null : typeof result.run.completedAt === 'string' ? result.run.completedAt : result.run.completedAt.toISOString()) : null,
     final_response: terminal ? extractFinalResponse(result.run.output) : null,
     error: terminal ? result.run.error : null,
     artifacts: result.artifacts,

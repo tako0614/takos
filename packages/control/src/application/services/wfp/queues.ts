@@ -1,5 +1,9 @@
 /**
- * Queue methods for WFPService.
+ * Queue methods for the WFP (Workers for Platforms) service.
+ *
+ * Manages Cloudflare Queues that are bound to tenant workers. Provides
+ * creation (with optional delivery delay), listing, deletion by ID, and
+ * deletion by name.
  */
 
 import { InternalError } from 'takos-common/errors';

@@ -18,6 +18,7 @@ export type ResourceType = 'd1' | 'r2' | 'kv' | 'queue' | 'vectorize' | 'secretR
 export interface CreateResourceOpts {
   type: ResourceType;
   binding?: string;
+  group: string;
   env: string;
   groupName?: string;
   accountId: string;
@@ -34,17 +35,19 @@ export interface ResourceEntry {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function createEmptyState(opts: { env: string; groupName?: string }): TakosState {
+function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
   return {
     version: 1,
     provider: 'cloudflare',
     env: opts.env,
+    group: opts.group,
     groupName: opts.groupName || 'takos',
     updatedAt: new Date().toISOString(),
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
   };
 }
 
@@ -55,6 +58,7 @@ function createEmptyState(opts: { env: string; groupName?: string }): TakosState
  */
 export async function createResource(name: string, opts: CreateResourceOpts): Promise<ProvisionResult> {
   const groupName = opts.groupName || 'takos';
+  const group = opts.group;
   const provider = resolveProvider({
     accountId: opts.accountId,
     apiToken: opts.apiToken,
@@ -62,7 +66,7 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
     env: opts.env,
   });
 
-  const resourceName = `${groupName}-${opts.env}-${name}`;
+  const resourceName = `${group}-${opts.env}-${name}`;
 
   let result: ProvisionResult;
   switch (opts.type) {
@@ -92,7 +96,7 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
   // Persist to state
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = (await readState(stateDir)) || createEmptyState(opts);
+  const state = (await readState(stateDir, group)) || createEmptyState(opts);
   state.resources[name] = {
     type: opts.type,
     id: result.id || resourceName,
@@ -100,7 +104,7 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
     createdAt: new Date().toISOString(),
   };
   state.updatedAt = new Date().toISOString();
-  await writeState(stateDir, state);
+  await writeState(stateDir, group, state);
 
   return result;
 }
@@ -108,10 +112,10 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
 /**
  * List all resources tracked in local state.
  */
-export async function listResources(): Promise<ResourceEntry[]> {
+export async function listResources(group: string): Promise<ResourceEntry[]> {
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (!state) return [];
 
   return Object.entries(state.resources).map(([name, r]: [string, ResourceState]) => ({
@@ -124,20 +128,22 @@ export async function listResources(): Promise<ResourceEntry[]> {
 }
 
 /**
- * Delete a resource from state. The actual cloud resource deletion is
- * provider-specific and marked as TODO for now (wrangler d1 delete, etc.).
+ * Delete a resource from local state.
+ *
+ * Note: provider-specific cloud deletion (e.g. wrangler d1 delete) is not
+ * yet implemented. Only the local state entry is removed.
  */
 export async function deleteResource(
   name: string,
-  _opts: { accountId: string; apiToken: string },
+  _opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  // TODO: provider-specific deletion (wrangler d1 delete, etc.)
+  const group = _opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (state) {
     delete state.resources[name];
     state.updatedAt = new Date().toISOString();
-    await writeState(stateDir, state);
+    await writeState(stateDir, group, state);
   }
 }

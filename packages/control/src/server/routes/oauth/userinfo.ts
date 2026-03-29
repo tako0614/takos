@@ -5,12 +5,13 @@ import { getDb } from '../../../infra/db';
 import { accounts } from '../../../infra/db/schema';
 import { eq } from 'drizzle-orm';
 import type { PublicRouteEnv } from '../route-auth';
-import { extractBearerToken } from '../../../shared/utils';
+
 
 const oauthUserinfo = new Hono<PublicRouteEnv>();
 
 oauthUserinfo.get('/userinfo', async (c) => {
-  const token = extractBearerToken(c.req.header('Authorization'));
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
 
   if (!token) {
     return c.json(

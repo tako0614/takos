@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { toIsoString } from '../../../shared/utils';
 import { checkRepoAccess } from '../../../application/services/source/repos';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { generateExploreInvalidationUrls } from './routes';
@@ -155,8 +154,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       stars: star.repoStars,
       forks: star.repoForks,
       is_starred: true,
-      created_at: toIsoString(star.repoCreatedAt),
-      updated_at: toIsoString(star.repoUpdatedAt),
+      created_at: (star.repoCreatedAt == null ? null : typeof star.repoCreatedAt === 'string' ? star.repoCreatedAt : star.repoCreatedAt.toISOString()),
+      updated_at: (star.repoUpdatedAt == null ? null : typeof star.repoUpdatedAt === 'string' ? star.repoUpdatedAt : star.repoUpdatedAt.toISOString()),
       workspace: {
         id: star.accountId,
         name: star.accountName,

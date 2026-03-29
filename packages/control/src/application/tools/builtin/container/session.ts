@@ -3,7 +3,6 @@ import type { D1Database } from '../../../../shared/types/bindings.ts';
 import { getDb, sessions } from '../../../../infra/db';
 import { eq } from 'drizzle-orm';
 import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler';
-import { toIsoString } from '../../../../shared/utils';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../../shared/constants';
 
 export async function callSessionApi(
@@ -58,8 +57,8 @@ export async function checkSessionHealth(
   const session = {
     id: sessionResult.id,
     status: sessionResult.status,
-    last_heartbeat: toIsoString(sessionResult.lastHeartbeat),
-    created_at: toIsoString(sessionResult.createdAt) ?? new Date(0).toISOString(),
+    last_heartbeat: (sessionResult.lastHeartbeat == null ? null : typeof sessionResult.lastHeartbeat === 'string' ? sessionResult.lastHeartbeat : sessionResult.lastHeartbeat.toISOString()),
+    created_at: (sessionResult.createdAt == null ? null : typeof sessionResult.createdAt === 'string' ? sessionResult.createdAt : sessionResult.createdAt.toISOString()) ?? new Date(0).toISOString(),
   };
 
   if (session.status !== 'running') {

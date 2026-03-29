@@ -1,10 +1,208 @@
 import type { Context, Next } from 'hono';
-import {
-  hitSlidingWindow,
-  cleanupExpiredEntries,
-  enforceKeyLimit,
-  type SlidingWindowResult,
-} from './sliding-window';
+import { logWarn } from './logger';
+
+// ---------------------------------------------------------------------------
+// Sliding Window
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of a sliding-window rate-limit check, indicating whether the
+ * request is allowed and how many requests remain in the current window.
+ */
+export interface SlidingWindowResult {
+  remaining: number;
+  reset: number;
+  total: number;
+  allowed: boolean;
+}
+
+/**
+ * Configuration for both sliding-window and token-bucket rate limiters.
+ */
+export interface SlidingWindowConfig {
+  maxRequests: number;
+  windowMs: number;
+}
+
+/**
+ * Evaluate a sliding-window rate limit against a list of request timestamps.
+ *
+ * Returns the (possibly updated) timestamp list and the rate-limit verdict.
+ * When `dryRun` is true the timestamp list is not mutated.
+ */
+export function hitSlidingWindow(
+  timestamps: number[],
+  config: SlidingWindowConfig,
+  now: number = Date.now(),
+  dryRun: boolean = false
+): { timestamps: number[]; result: SlidingWindowResult } {
+  const windowStart = now - config.windowMs;
+  const validTimestamps = timestamps.filter((t) => t > windowStart);
+
+  const allowed = validTimestamps.length < config.maxRequests;
+
+  if (allowed && !dryRun) {
+    validTimestamps.push(now);
+  }
+
+  const remaining = Math.max(0, config.maxRequests - validTimestamps.length);
+  const reset = validTimestamps.length > 0 ? validTimestamps[0] + config.windowMs : now + config.windowMs;
+
+  return {
+    timestamps: validTimestamps,
+    result: {
+      remaining,
+      reset,
+      total: config.maxRequests,
+      allowed,
+    },
+  };
+}
+
+/**
+ * Remove entries whose timestamps have all expired outside the given window.
+ * Entries with at least one valid timestamp are pruned to only valid ones.
+ */
+export function cleanupExpiredEntries(
+  entries: Map<string, number[]>,
+  windowMs: number,
+  now: number = Date.now()
+): void {
+  const windowStart = now - windowMs;
+
+  for (const [key, timestamps] of entries.entries()) {
+    const valid = timestamps.filter((t) => t > windowStart);
+    if (valid.length === 0) {
+      entries.delete(key);
+    } else {
+      entries.set(key, valid);
+    }
+  }
+}
+
+/** Extra entries to evict beyond the limit to avoid repeated evictions. */
+const KEY_EVICTION_BUFFER = 100;
+
+/**
+ * Evict the oldest keys from a Map when its size exceeds `maxKeys`.
+ * Returns the number of entries removed.
+ */
+export function enforceKeyLimit(entries: Map<string, number[]>, maxKeys: number): number {
+  if (entries.size < maxKeys) {
+    return 0;
+  }
+
+  const entriesToRemove = Math.max(
+    0,
+    Math.min(entries.size - maxKeys + KEY_EVICTION_BUFFER, entries.size)
+  );
+
+  let removed = 0;
+  for (const key of entries.keys()) {
+    if (removed >= entriesToRemove) break;
+    entries.delete(key);
+    removed++;
+  }
+
+  if (removed > 0) {
+    logWarn(`Rate limiter: Force-removed ${removed} entries due to key limit`, { module: 'utils/sliding-window' });
+  }
+
+  return removed;
+}
+
+// ---------------------------------------------------------------------------
+// Token Bucket
+// ---------------------------------------------------------------------------
+
+export interface TokenBucketState {
+  tokens: number;
+  lastRefillMs: number;
+}
+
+function getCapacity(config: SlidingWindowConfig): number {
+  return Math.max(0, Math.floor(config.maxRequests));
+}
+
+function getRatePerMs(config: SlidingWindowConfig): number {
+  if (!Number.isFinite(config.windowMs) || config.windowMs <= 0) return 0;
+  const capacity = getCapacity(config);
+  return capacity / config.windowMs;
+}
+
+function refill(
+  state: TokenBucketState | undefined,
+  config: SlidingWindowConfig,
+  now: number
+): TokenBucketState {
+  const capacity = getCapacity(config);
+  const ratePerMs = getRatePerMs(config);
+
+  const lastRefillMs = state?.lastRefillMs ?? now;
+  let tokens = state?.tokens ?? capacity;
+
+  if (capacity === 0 || ratePerMs === 0) {
+    return { tokens: 0, lastRefillMs: now };
+  }
+
+  const deltaMs = Math.max(0, now - lastRefillMs);
+  tokens = Math.min(capacity, tokens + deltaMs * ratePerMs);
+
+  return { tokens, lastRefillMs: now };
+}
+
+function computeResetMs(
+  tokens: number,
+  config: SlidingWindowConfig,
+  now: number
+): number {
+  const capacity = getCapacity(config);
+  const ratePerMs = getRatePerMs(config);
+
+  if (capacity === 0 || ratePerMs === 0) {
+    return now + Math.max(0, config.windowMs);
+  }
+
+  if (tokens < 1) {
+    const msUntilNext = Math.ceil((1 - tokens) / ratePerMs);
+    return now + Math.max(0, msUntilNext);
+  }
+
+  const msUntilFull = Math.ceil((capacity - tokens) / ratePerMs);
+  return now + Math.max(0, msUntilFull);
+}
+
+export function hitTokenBucket(
+  state: TokenBucketState | undefined,
+  config: SlidingWindowConfig,
+  now: number = Date.now(),
+  dryRun: boolean = false
+): { state: TokenBucketState; result: SlidingWindowResult } {
+  const next = refill(state, config, now);
+
+  const capacity = getCapacity(config);
+  const allowed = capacity > 0 && next.tokens >= 1;
+  if (allowed && !dryRun) {
+    next.tokens = Math.max(0, next.tokens - 1);
+  }
+
+  const remaining = Math.max(0, Math.floor(next.tokens));
+  const reset = computeResetMs(next.tokens, config, now);
+
+  return {
+    state: next,
+    result: {
+      remaining,
+      reset,
+      total: capacity,
+      allowed,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// In-Memory Rate Limiter
+// ---------------------------------------------------------------------------
 
 /** Milliseconds per second, used to convert ms timestamps to seconds for HTTP headers. */
 const MS_PER_SECOND = 1000;

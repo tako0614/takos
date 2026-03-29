@@ -72,7 +72,8 @@ function confirmPrompt(message: string): Promise<boolean> {
 function filterDiffByTargets(diff: DiffResult, targets: string[]): DiffResult {
   if (targets.length === 0) return diff;
   const filtered = diff.entries.filter((entry: DiffEntry) => {
-    const key = `${entry.category === 'resource' ? 'resources' : entry.category === 'worker' ? 'workers' : entry.category === 'container' ? 'containers' : 'services'}.${entry.name}`;
+    const categoryPlural = entry.category === 'resource' ? 'resources' : entry.category === 'worker' ? 'workers' : entry.category === 'container' ? 'containers' : entry.category === 'route' ? 'routes' : 'services';
+    const key = `${categoryPlural}.${entry.name}`;
     return targets.some(target => key === target || key.endsWith(`.${target}`) || entry.name === target);
   });
   const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
@@ -136,7 +137,7 @@ export function registerApplyCommand(program: Command): void {
     .option('--auto-approve', 'Skip interactive confirmation prompt')
     .option('--target <key...>', 'Apply only specific resources/services (e.g. resources.db, workers.web)')
     .option('--namespace <name>', 'Dispatch namespace')
-    .option('--group <name>', 'Group name override')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
@@ -167,9 +168,10 @@ export function registerApplyCommand(program: Command): void {
 
       // Step 2: Read current state
       const stateDir = getStateDir(process.cwd());
+      const group = options.group || 'default';
       let currentState: TakosState | null = null;
       try {
-        currentState = await readState(stateDir);
+        currentState = await readState(stateDir, group);
       } catch {
         // No state file yet
       }
@@ -223,6 +225,7 @@ export function registerApplyCommand(program: Command): void {
       const groupName = options.group || manifest.metadata.name;
 
       const applyResult = await applyDiff(diff, manifest, {
+        group,
         env: options.env,
         accountId,
         apiToken,

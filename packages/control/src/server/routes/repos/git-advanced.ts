@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { parseLimit } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -70,7 +70,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
   const repoId = c.req.param('repoId');
   const { q: qRaw, ref: refRaw, limit: limitRaw, case_sensitive, path_prefix } = c.req.valid('query');
   const q = (qRaw || '').trim();
-  const limit = parseLimit(limitRaw, 50, 200);
+  const { limit } = parsePagination({ limit: limitRaw }, { limit: 50, maxLimit: 200 });
   const caseSensitive = case_sensitive === '1' || case_sensitive === 'true';
   const pathPrefixRaw = (path_prefix || '').trim();
 
@@ -205,7 +205,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const repoId = c.req.param('repoId');
   const q = (c.req.query('q') || '').trim();
-  const limit = parseLimit(c.req.query('limit'), 10, 50);
+  const { limit } = parsePagination(c.req.query(), { limit: 10, maxLimit: 50 });
   const pathPrefix = (c.req.query('path_prefix') || '').trim();
 
   if (!q) {
@@ -287,7 +287,7 @@ async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
   const ref = c.req.param('ref');
   if (!ref) throw new BadRequestError('Missing ref');
   const rawPath = getPathFromRouteOrQuery(c);
-  const limit = parseLimit(c.req.query('limit'), 50, 200);
+  const { limit } = parsePagination(c.req.query(), { limit: 50, maxLimit: 200 });
 
   if (!rawPath) {
     throw new BadRequestError('path is required');

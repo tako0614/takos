@@ -99,18 +99,6 @@ export function requireTenantSource(
   return c.env.TENANT_SOURCE;
 }
 
-export function parseLimit(value: string | undefined, fallback: number, max: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(parsed, max);
-}
-
-export function parseOffset(value: string | undefined, fallback = 0): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return parsed;
-}
-
 export async function parseJsonBody<T>(c: AnyCtx, fallback: T): Promise<T>;
 export async function parseJsonBody<T>(c: AnyCtx, fallback?: T | null): Promise<T | null>;
 export async function parseJsonBody<T>(

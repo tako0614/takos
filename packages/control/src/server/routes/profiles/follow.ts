@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, toIsoString, parsePagination, paginatedResponse } from '../../../shared/utils';
+import { generateId, parsePagination, paginatedResponse } from '../../../shared/utils';
 import { createNotification } from '../../../application/services/notifications/service';
 import { type OptionalAuthRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
@@ -158,7 +158,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
         bio: row.requesterBio,
         is_following: followingSet.has(row.requesterId),
       },
-      created_at: toIsoString(row.createdAt),
+      created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
     };
   });
 

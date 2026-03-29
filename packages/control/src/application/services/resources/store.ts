@@ -3,7 +3,6 @@ import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from 
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { toApiResource } from './format';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
 
@@ -34,9 +33,9 @@ function toApiResourceRow(r: {
     ...r,
     ownerId: r.ownerAccountId,
     spaceId: r.accountId,
-    lastUsedAt: toIsoString(r.lastUsedAt),
-    createdAt: toIsoString(r.createdAt) ?? new Date(0).toISOString(),
-    updatedAt: toIsoString(r.updatedAt) ?? new Date(0).toISOString(),
+    lastUsedAt: (r.lastUsedAt == null ? null : typeof r.lastUsedAt === 'string' ? r.lastUsedAt : r.lastUsedAt.toISOString()),
+    createdAt: (r.createdAt == null ? null : typeof r.createdAt === 'string' ? r.createdAt : r.createdAt.toISOString()) ?? new Date(0).toISOString(),
+    updatedAt: (r.updatedAt == null ? null : typeof r.updatedAt === 'string' ? r.updatedAt : r.updatedAt.toISOString()) ?? new Date(0).toISOString(),
   });
 }
 

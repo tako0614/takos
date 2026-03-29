@@ -1,10 +1,5 @@
 /** Shared types and helpers for Durable Object implementations. */
 
-// buildSanitizedDOHeaders lives in shared/utils so it can be consumed by
-// routes, application, and runtime layers without crossing architectural
-// boundaries.  Re-export here for backward-compatible runtime-internal imports.
-export { buildSanitizedDOHeaders } from '../../shared/utils/do-header-utils';
-
 export function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 }

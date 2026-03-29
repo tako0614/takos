@@ -5,7 +5,7 @@ import { parseScopes } from '../../application/services/oauth/scopes';
 import { getSession, getSessionIdFromCookie } from '../../application/services/identity/session';
 import { getCachedUser } from '../../application/services/identity/user-cache';
 import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
-import { extractBearerToken } from '../../shared/utils';
+
 import { AuthenticationError } from 'takos-common/errors';
 import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 
@@ -27,7 +27,8 @@ export function requireOAuthAuth(
   return async (c, next) => {
     const dbBinding = getPlatformSqlBinding(c);
     const config = getPlatformConfig(c);
-    const token = extractBearerToken(c.req.header('Authorization'));
+    const authorizationHeader = c.req.header('Authorization');
+    const token = authorizationHeader?.startsWith('Bearer ') ? authorizationHeader.slice(7).trim() || null : null;
 
     if (!token) {
       return c.json(
@@ -195,7 +196,7 @@ export function requireAnyAuth(
     }
 
     // OAuth Bearer path — scopes enforced by requireOAuthAuth
-    if (extractBearerToken(c.req.header('Authorization'))) {
+    if (c.req.header('Authorization')?.startsWith('Bearer ')) {
       return requireOAuthAuth(requiredScopes)(c, next);
     }
 

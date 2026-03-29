@@ -1,5 +1,4 @@
 import type { Resource, ResourceAccess, ResourcePermission, ResourceStatus, ResourceType, ServiceBinding } from '../../../shared/types';
-import { toIsoString } from '../../../shared/utils';
 
 export function toApiResource(r: {
   id: string;
@@ -31,9 +30,9 @@ export function toApiResource(r: {
     metadata: r.metadata,
     size_bytes: r.sizeBytes,
     item_count: r.itemCount,
-    last_used_at: toIsoString(r.lastUsedAt),
-    created_at: toIsoString(r.createdAt) ?? new Date(0).toISOString(),
-    updated_at: toIsoString(r.updatedAt) ?? new Date(0).toISOString(),
+    last_used_at: (r.lastUsedAt == null ? null : typeof r.lastUsedAt === 'string' ? r.lastUsedAt : r.lastUsedAt.toISOString()),
+    created_at: (r.createdAt == null ? null : typeof r.createdAt === 'string' ? r.createdAt : r.createdAt.toISOString()) ?? new Date(0).toISOString(),
+    updated_at: (r.updatedAt == null ? null : typeof r.updatedAt === 'string' ? r.updatedAt : r.updatedAt.toISOString()) ?? new Date(0).toISOString(),
   } as Resource;
 }
 
@@ -51,7 +50,7 @@ export function toApiResourceAccess(ra: {
     space_id: ra.accountId,
     permission: ra.permission as ResourcePermission,
     granted_by: ra.grantedByAccountId,
-    created_at: toIsoString(ra.createdAt) ?? new Date(0).toISOString(),
+    created_at: (ra.createdAt == null ? null : typeof ra.createdAt === 'string' ? ra.createdAt : ra.createdAt.toISOString()) ?? new Date(0).toISOString(),
   } as ResourceAccess;
 }
 
@@ -71,6 +70,6 @@ export function toApiServiceBinding(wb: {
     binding_name: wb.bindingName,
     binding_type: wb.bindingType,
     config: wb.config,
-    created_at: toIsoString(wb.createdAt) ?? new Date(0).toISOString(),
+    created_at: (wb.createdAt == null ? null : typeof wb.createdAt === 'string' ? wb.createdAt : wb.createdAt.toISOString()) ?? new Date(0).toISOString(),
   } as ServiceBinding;
 }

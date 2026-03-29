@@ -1,5 +1,4 @@
 import type { Run, RunStatus } from '../../../shared/types';
-import { toIsoString } from '../../../shared/utils';
 
 export type RunRow = {
   id: string;
@@ -44,7 +43,7 @@ export type D1CountRow = {
 };
 
 function toNullableIsoString(value: string | Date | null): string | null {
-  return value ? toIsoString(value) : null;
+  return value == null ? null : typeof value === 'string' ? value : value.toISOString();
 }
 
 export const runSelect = {
@@ -97,6 +96,6 @@ export function runRowToApi(row: RunRow): Run {
     worker_heartbeat: toNullableIsoString(serviceHeartbeat),
     started_at: toNullableIsoString(row.startedAt),
     completed_at: toNullableIsoString(row.completedAt),
-    created_at: toIsoString(row.createdAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }

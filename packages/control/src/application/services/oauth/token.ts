@@ -14,12 +14,11 @@ import { generateRandomString, generateId } from './pkce';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb } from '../../../infra/db';
 import { eq, and, lt, isNull } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 
 type OAuthTokenRow = SelectOf<typeof oauthTokens>;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
-  return toIsoString(value);
+  return (value == null ? null : typeof value === 'string' ? value : value.toISOString());
 }
 
 interface AccessTokenJwtPayload {
@@ -59,8 +58,8 @@ function toApiToken(row: OAuthTokenRow): OAuthToken {
     revoked_reason: row.revokedReason ?? null,
     used_at: toOptionalIsoString(row.usedAt),
     token_family: row.tokenFamily ?? null,
-    expires_at: toIsoString(row.expiresAt),
-    created_at: toIsoString(row.createdAt),
+    expires_at: (row.expiresAt == null ? null : typeof row.expiresAt === 'string' ? row.expiresAt : row.expiresAt.toISOString()),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }
 

@@ -2,13 +2,12 @@ import { getDb } from '../../../infra/db';
 import { runEvents } from '../../../infra/db/schema';
 import { eq, and, gt, asc } from 'drizzle-orm';
 import type { Env, RunStatus } from '../../../shared/types';
-import { toIsoString } from '../../../shared/utils';
 import type { PersistedRunEvent } from '../../../application/services/offload/run-events';
 import { getRunEventsAfterFromR2 } from '../../../application/services/offload/run-events';
 import {
   deriveTerminalStatusFromRunEvent,
 } from '../../../application/services/run-notifier';
-import { buildDurableObjectUrl } from '../../../shared/utils';
+
 import {
   fetchWithTimeout,
 } from '../../../application/services/execution/run-events';
@@ -78,7 +77,7 @@ async function getNotifierBufferedEvents(
   const stub = namespace.get(id);
   const res = await fetchWithTimeout(
     stub,
-    new Request(buildDurableObjectUrl(`/events?after=${afterEventId}`), {
+    new Request(`https://internal.do/events?after=${afterEventId}`, {
       headers: { 'X-Takos-Internal': '1' },
     }),
   );
@@ -121,7 +120,7 @@ async function fetchRunEventsAfter(
       event_id: e.id,
       type: e.type,
       data: e.data,
-      created_at: toIsoString(e.createdAt),
+      created_at: (e.createdAt == null ? null : typeof e.createdAt === 'string' ? e.createdAt : e.createdAt.toISOString()),
     });
   }
 

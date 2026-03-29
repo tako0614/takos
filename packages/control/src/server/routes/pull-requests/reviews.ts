@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ReviewStatus, ReviewerType } from '../../../shared/types';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
@@ -52,7 +52,7 @@ function toReviewDto(
     status: toReviewStatus(review.status),
     body: review.body,
     analysis: review.analysis,
-    created_at: toIsoString(review.createdAt),
+    created_at: (review.createdAt == null ? null : typeof review.createdAt === 'string' ? review.createdAt : review.createdAt.toISOString()),
     author: resolveActorLite({
       actorType: review.reviewerType,
       actorId: review.reviewerId,

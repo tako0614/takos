@@ -1,7 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, repoReleases, repoReleaseAssets, repositories, accounts } from '../../../infra/db';
 import { eq, and, desc, asc, like, sql } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { toReleaseAssets } from './repo-release-assets';
 import type { Database } from '../../../infra/db';
 
@@ -449,7 +448,7 @@ export async function suggestPackages(
         release: {
           id: release.id,
           tag: release.tag,
-          published_at: toIsoString(release.publishedAt),
+          published_at: (release.publishedAt == null ? null : typeof release.publishedAt === 'string' ? release.publishedAt : release.publishedAt.toISOString()),
         },
         asset: {
           id: primaryAsset.id,
@@ -458,7 +457,7 @@ export async function suggestPackages(
           download_count: primaryAsset.download_count,
         },
         total_downloads: totalDownloads,
-        published_at: toIsoString(release.publishedAt),
+        published_at: (release.publishedAt == null ? null : typeof release.publishedAt === 'string' ? release.publishedAt : release.publishedAt.toISOString()),
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
@@ -594,7 +593,7 @@ function toPackageDto(
     release: {
       id: pkg.release.id,
       tag: pkg.release.tag,
-      published_at: toIsoString(pkg.release.publishedAt),
+      published_at: (pkg.release.publishedAt == null ? null : typeof pkg.release.publishedAt === 'string' ? pkg.release.publishedAt : pkg.release.publishedAt.toISOString()),
     },
     asset: {
       id: pkg.primaryAsset.id,
@@ -603,7 +602,7 @@ function toPackageDto(
       download_count: pkg.primaryAsset.download_count,
     },
     total_downloads: pkg.totalDownloads,
-    published_at: toIsoString(pkg.release.publishedAt),
+    published_at: (pkg.release.publishedAt == null ? null : typeof pkg.release.publishedAt === 'string' ? pkg.release.publishedAt : pkg.release.publishedAt.toISOString()),
     rating_avg: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_avg ?? null,
     rating_count: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_count ?? 0,
     publish_status: publishStatus,

@@ -14,7 +14,7 @@ import {
   HostContainerRuntime,
 } from './container-runtime.ts';
 import { generateProxyToken } from './executor-proxy-config';
-import { extractBearerToken } from '../../shared/utils';
+
 import { constantTimeEqual } from '../../shared/utils/hash';
 import { validateRuntimeHostEnv, createEnvGuard } from '../../shared/utils/validate-env';
 import { logError, logWarn } from '../../shared/utils/logger';
@@ -177,7 +177,8 @@ export default {
 
     // /forward/* — proxy endpoints called by the runtime container
     if (path.startsWith('/forward/')) {
-      const token = extractBearerToken(request.headers.get('Authorization'));
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
       if (!token) return unauthorized();
 
       // Verify token via DO RPC

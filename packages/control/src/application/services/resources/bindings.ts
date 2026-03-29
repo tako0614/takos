@@ -1,7 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, serviceBindings, services } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { toApiServiceBinding } from './format';
 import { getResourceById } from './store';
 
@@ -33,7 +32,7 @@ export async function listServiceBindings(db: D1Database, resourceId: string) {
       bindingName: wb.bindingName,
       bindingType: wb.bindingType,
       config: wb.config,
-      createdAt: toIsoString(wb.createdAt),
+      createdAt: (wb.createdAt == null ? null : typeof wb.createdAt === 'string' ? wb.createdAt : wb.createdAt.toISOString()),
     }),
     service_hostname: wb.serviceHostname,
     service_slug: wb.serviceSlug,

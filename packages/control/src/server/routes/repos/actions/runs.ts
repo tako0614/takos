@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit, parseOffset } from '../../route-auth';
 import type { AuthenticatedRouteEnv } from '../../route-auth';
+import { parsePagination } from '../../../../shared/utils';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../../zod-validator';
 import { checkRepoAccess } from '../../../../application/services/source/repos';
@@ -38,8 +38,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const repoId = c.req.param('repoId');
     const { workflow, status, branch, event, limit: limitRaw, offset: offsetRaw } = c.req.valid('query');
-    const limit = parseLimit(limitRaw, 20, 100);
-    const offset = parseOffset(offsetRaw);
+    const { limit, offset } = parsePagination({ limit: limitRaw, offset: offsetRaw });
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
     if (!repoAccess) {

@@ -24,6 +24,7 @@ import type { AppManifest } from '../app-manifest.js';
 // ---------------------------------------------------------------------------
 
 export interface ApplyOpts {
+  group: string;
   env: string;
   accountId: string;
   apiToken: string;
@@ -254,6 +255,7 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   container: 1,
   worker: 2,
   service: 3,
+  route: 4,
 };
 
 function topologicalSort(entries: DiffEntry[], manifest: AppManifest): DiffEntry[] {
@@ -332,7 +334,7 @@ function topoSortDFS(
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle hooks (stub — executed as shell commands in future)
+// Lifecycle hooks
 // ---------------------------------------------------------------------------
 
 type LifecycleHook = string | string[];
@@ -341,16 +343,20 @@ async function runLifecycleHook(
   _hook: LifecycleHook,
   _opts: ApplyOpts,
 ): Promise<void> {
-  // TODO: execute shell command(s) described in hook
+  throw new Error(
+    'runLifecycleHook is not yet implemented. Lifecycle hooks (preApply / postApply) cannot be executed.',
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Template injection (stub)
+// Template injection
 // ---------------------------------------------------------------------------
 
 async function resolveAndInjectTemplates(
   _manifest: AppManifest,
   _opts: ApplyOpts,
 ): Promise<void> {
-  // TODO: resolve {{ baseDomain }} etc. and inject into env vars
+  throw new Error(
+    'resolveAndInjectTemplates is not yet implemented. Template variable injection (e.g. {{ baseDomain }}) is not available.',
+  );
 }

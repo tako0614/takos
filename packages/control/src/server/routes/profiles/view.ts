@@ -4,8 +4,8 @@ import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './
 import { getDb } from '../../../infra/db';
 import { repositories, repoStars, accounts } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
-import { parseLimit, parseOffset, type OptionalAuthRouteEnv } from '../route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
+import { parsePagination, paginatedResponse } from '../../../shared/utils';
 import { NotFoundError } from 'takos-common/errors';
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
@@ -43,7 +43,7 @@ profilesView.get(':username', async (c) => {
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: toIsoString(repo.updatedAt),
+    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
   }));
 
   const isSelf = !!currentUser && currentUser.id === profileUser.id;
@@ -74,8 +74,7 @@ profilesView.get(':username', async (c) => {
 profilesView.get('/:username/repos', async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query());
   const sort = c.req.query('sort') || 'updated';
   const order = c.req.query('order') || 'desc';
   const db = getDb(c.env.DB);
@@ -119,21 +118,20 @@ profilesView.get('/:username/repos', async (c) => {
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: toIsoString(repo.updatedAt),
+    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
   }));
 
+  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
   return c.json({
-    repos,
-    total,
-    has_more: offset + repos.length < total,
+    repos: items,
+    ...pagination,
   });
 });
 
 profilesView.get('/:username/stars', async (c) => {
   const currentUser = c.get('user');
   const username = c.req.param('username');
-  const limit = parseLimit(c.req.query('limit'), 20, 100);
-  const offset = parseOffset(c.req.query('offset'));
+  const { limit, offset } = parsePagination(c.req.query());
   const db = getDb(c.env.DB);
 
   const profileUser = await getUserByUsername(c.env.DB, username);
@@ -198,15 +196,15 @@ profilesView.get('/:username/stars', async (c) => {
       stars: starData.repoStars,
       forks: starData.repoForks,
       is_starred: starredSet.has(starData.repoId),
-      updated_at: toIsoString(starData.repoUpdatedAt),
-      starred_at: toIsoString(starData.starCreatedAt),
+      updated_at: (starData.repoUpdatedAt == null ? null : typeof starData.repoUpdatedAt === 'string' ? starData.repoUpdatedAt : starData.repoUpdatedAt.toISOString()),
+      starred_at: (starData.starCreatedAt == null ? null : typeof starData.starCreatedAt === 'string' ? starData.starCreatedAt : starData.starCreatedAt.toISOString()),
     };
   });
 
+  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
   return c.json({
-    repos,
-    total,
-    has_more: offset + repos.length < total,
+    repos: items,
+    ...pagination,
   });
 });
 

@@ -33,7 +33,7 @@ import {
   isDeviceUserCodeLimited,
   recordDeviceUserCodeAttempt,
   clearDeviceUserCodeAttempts,
-} from '../../shared/utils/device-auth-rate-limit';
+} from '../../application/services/oauth/device-auth-rate-limit';
 import type { PublicRouteEnv } from './route-auth';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
 

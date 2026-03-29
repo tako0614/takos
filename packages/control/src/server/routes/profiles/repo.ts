@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import type { Context, Handler } from 'hono';
 import * as gitStore from '../../../application/services/git-smart';
-import { parseLimit, type OptionalAuthRouteEnv } from '../route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { findRepoByUsernameAndName } from './profile-queries';
 import { getDb } from '../../../infra/db';
 import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
@@ -67,8 +67,8 @@ profilesRepo.get('/:username/:repoName', async (c) => {
       stars: repo.stars,
       forks: repo.forks,
       owner_username: owner.username,
-      created_at: toIsoString(repo.created_at),
-      updated_at: toIsoString(repo.updated_at),
+      created_at: (repo.created_at == null ? null : typeof repo.created_at === 'string' ? repo.created_at : repo.created_at.toISOString()),
+      updated_at: (repo.updated_at == null ? null : typeof repo.updated_at === 'string' ? repo.updated_at : repo.updated_at.toISOString()),
     },
     workspace: {
       name: workspace.name,
@@ -259,7 +259,7 @@ profilesRepo.get('/:username/:repoName/commits', async (c) => {
   const user = c.get('user');
   const username = c.req.param('username');
   const repoName = c.req.param('repoName');
-  const limit = parseLimit(c.req.query('limit'), 50, 100);
+  const { limit } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
   const branch = c.req.query('branch');
 
   const result = await findRepoByUsernameAndName(

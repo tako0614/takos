@@ -3,7 +3,7 @@ import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { oauthConsents, oauthClients } from '../../../infra/db';
 import type { OAuthConsent } from '../../../shared/types/oauth';
 import { generateId } from './pkce';
-import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { revokeAllUserClientTokens } from './token';
@@ -17,8 +17,8 @@ function toApiConsent(row: OAuthConsentRow): OAuthConsent {
     client_id: row.clientId,
     scopes: row.scopes,
     status: row.status as 'active' | 'revoked',
-    granted_at: toIsoString(row.grantedAt),
-    updated_at: toIsoString(row.updatedAt),
+    granted_at: (row.grantedAt == null ? null : typeof row.grantedAt === 'string' ? row.grantedAt : row.grantedAt.toISOString()),
+    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
   };
 }
 

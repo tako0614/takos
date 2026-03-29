@@ -2,7 +2,7 @@ import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/t
 import type { Env } from '../../../shared/types';
 import { getDb, runs, runEvents, infoUnits, nodes, edges, sessionRepos, repositories } from '../../../infra/db';
 import { eq, and, asc } from 'drizzle-orm';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getRunEventsAfterFromR2 } from '../offload/run-events';
 import { logWarn } from '../../../shared/utils/logger';
 
@@ -256,7 +256,7 @@ export class InfoUnitIndexer {
           .all()
         ).map((event) => ({
           ...event,
-          createdAt: toIsoString(event.createdAt) ?? new Date(0).toISOString(),
+          createdAt: (event.createdAt == null ? null : typeof event.createdAt === 'string' ? event.createdAt : event.createdAt.toISOString()) ?? new Date(0).toISOString(),
         }));
 
     const entries = events

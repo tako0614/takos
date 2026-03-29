@@ -1,5 +1,5 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db';
 import { eq, and, ne, desc } from 'drizzle-orm';
 
@@ -401,7 +401,7 @@ export class GitService {
       insertions: commit.insertions,
       deletions: commit.deletions,
       tree_hash: commit.treeHash,
-      created_at: toIsoString(commit.createdAt),
+      created_at: (commit.createdAt == null ? null : typeof commit.createdAt === 'string' ? commit.createdAt : commit.createdAt.toISOString()),
     };
   }
 

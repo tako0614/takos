@@ -1,5 +1,8 @@
 /**
- * KV namespace methods for WFPService.
+ * KV namespace methods for the WFP (Workers for Platforms) service.
+ *
+ * Manages Cloudflare Workers KV namespaces that are bound to tenant workers.
+ * Provides creation and deletion of KV namespaces via the Cloudflare API.
  */
 
 import { InternalError } from 'takos-common/errors';

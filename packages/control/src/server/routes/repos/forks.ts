@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { Repository } from '../../../shared/types';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { requireSpaceAccess } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError, ConflictError, InternalError, NotFoundError } from 'takos-common/errors';
@@ -137,8 +137,8 @@ export default new Hono<AuthenticatedRouteEnv>()
     stars: forkedRepoData.stars,
     forks: forkedRepoData.forks,
     git_enabled: forkedRepoData.gitEnabled,
-    created_at: toIsoString(forkedRepoData.createdAt),
-    updated_at: toIsoString(forkedRepoData.updatedAt),
+    created_at: (forkedRepoData.createdAt == null ? null : typeof forkedRepoData.createdAt === 'string' ? forkedRepoData.createdAt : forkedRepoData.createdAt.toISOString()),
+    updated_at: (forkedRepoData.updatedAt == null ? null : typeof forkedRepoData.updatedAt === 'string' ? forkedRepoData.updatedAt : forkedRepoData.updatedAt.toISOString()),
   } : null;
 
   const sourceAccount = await db.select({

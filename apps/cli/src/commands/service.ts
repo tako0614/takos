@@ -92,6 +92,7 @@ export function registerServiceCommand(program: Command): void {
           dockerfile: options.dockerfile,
           port: options.port,
           ipv4: options.ipv4,
+          group: options.group,
           env: options.env,
           groupName: options.group,
           accountId,
@@ -125,10 +126,11 @@ export function registerServiceCommand(program: Command): void {
   serviceCmd
     .command('list')
     .description('List all tracked services')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { group: string; json?: boolean }) => {
       try {
-        const services = await listServices();
+        const services = await listServices(options.group);
 
         if (options.json) {
           process.stdout.write(`${JSON.stringify(services, null, 2)}\n`);
@@ -160,14 +162,15 @@ export function registerServiceCommand(program: Command): void {
   serviceCmd
     .command('delete <name>')
     .description('Delete a service from state (does NOT delete the actual service)')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
-    .action(async (name: string, options: { accountId?: string; apiToken?: string }) => {
+    .action(async (name: string, options: { group: string; accountId?: string; apiToken?: string }) => {
       const accountId = resolveAccountId(options.accountId);
       const apiToken = resolveApiToken(options.apiToken);
 
       try {
-        await deleteService(name, { accountId, apiToken });
+        await deleteService(name, { group: options.group, accountId, apiToken });
         console.log(chalk.green(`Removed service '${name}' from state.`));
         console.log(chalk.dim('The actual service was NOT deleted.'));
       } catch (error) {

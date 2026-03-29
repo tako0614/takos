@@ -1,6 +1,5 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { toIsoString } from '../../../shared/utils';
 import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
 import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos';
@@ -22,7 +21,7 @@ import {
   performPullRequestMerge,
   validateConflictResolutionPath,
 } from './merge';
-import { toGitBucket } from './git-store';
+import { toGitBucket } from '../../../shared/utils/git-bucket';
 import { logError } from '../../../shared/utils/logger';
 import { BadRequestError, NotFoundError, InternalError, AppError } from 'takos-common/errors';
 import { findPullRequest } from './read-model';
@@ -115,7 +114,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         body: mergeResult.pullRequest.description,
         state: 'closed',
         merged: true,
-        mergedAt: toIsoString(mergeResult.pullRequest.mergedAt),
+        mergedAt: (mergeResult.pullRequest.mergedAt == null ? null : typeof mergeResult.pullRequest.mergedAt === 'string' ? mergeResult.pullRequest.mergedAt : mergeResult.pullRequest.mergedAt.toISOString()),
         headRef: mergeResult.pullRequest.headBranch,
         headSha: mergeResult.headSha,
         baseRef: mergeResult.pullRequest.baseBranch,

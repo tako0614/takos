@@ -15,12 +15,12 @@ import type {
  * These values are the single source of truth for all port numbers.
  * TypeScript source files should import this constant directly.
  *
- * The following non-TS config files duplicate these values and must be
- * kept in sync manually when changing:
- *   - .env.self-host                            (TAKOS_CONTROL_WEB_PORT etc.)
+ * NOTE: There is no auto-generation step for .env templates yet.
+ * When changing port numbers here, you MUST update ALL of the following
+ * non-TS config files manually to keep them in sync:
  *   - .env.local.example                        (TAKOS_CONTROL_WEB_PORT etc.)
- *   - apps/control/.env.self-host.example       (TAKOS_CONTROL_WEB_PORT etc.)
- *   - apps/runtime/.env.example                 (TAKOS_API_URL)
+ *   - .env.self-host                            (TAKOS_CONTROL_WEB_PORT etc.)
+ *   - apps/runtime/.env.example                 (TAKOS_API_URL port)
  *   - scripts/local-smoke.mjs                   (defaults object)
  *   - deploy/helm/takos/values.yaml             (port fields)
  */

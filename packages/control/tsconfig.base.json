@@ -8,7 +8,21 @@
     "noEmit": true,
     "baseUrl": "../..",
     "paths": {
-      "@/*": ["packages/control/src/*"],
+      // All @/ paths resolve to packages/control/src/ subdirectories.
+      // Keep in sync with apps/control/tsconfig.json (which uses baseUrl "."
+      // and therefore prefixes all targets with "../../").
+
+      // Broad directory aliases — map top-level src subdirs directly.
+      "@/application/*": ["packages/control/src/application/*"],
+      "@/infra/*": ["packages/control/src/infra/*"],
+      "@/local-platform/*": ["packages/control/src/local-platform/*"],
+      "@/platform/*": ["packages/control/src/platform/*"],
+      "@/runtime/*": ["packages/control/src/runtime/*"],
+      "@/server/*": ["packages/control/src/server/*"],
+      "@/shared/*": ["packages/control/src/shared/*"],
+
+      // Shortcut aliases — remap deep paths to convenient short prefixes.
+      // These take priority over the broad aliases above when both match.
       "@/services/*": ["packages/control/src/application/services/*"],
       "@/routes/*": ["packages/control/src/server/routes/*"],
       "@/middleware/*": ["packages/control/src/server/middleware/*"],
@@ -23,7 +37,10 @@
       "@/db/*": ["packages/control/src/infra/db/*"],
       "@/types": ["packages/control/src/shared/types/index.ts"],
       "@/types/*": ["packages/control/src/shared/types/*"],
+      "@/utils": ["packages/control/src/shared/utils/index.ts"],
       "@/utils/*": ["packages/control/src/shared/utils/*"],
+
+      // Workspace package aliases
       "takos-actions-engine": ["packages/actions-engine/src/index.ts"],
       "takos-actions-engine/*": ["packages/actions-engine/src/*"],
       "takos-common": ["packages/common/src/index.ts"],

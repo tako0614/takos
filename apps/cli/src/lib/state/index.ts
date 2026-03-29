@@ -4,6 +4,7 @@ export type {
   WorkerState,
   ContainerState,
   ServiceState,
+  RouteState,
 } from './state-types.js';
 
 export {
@@ -11,6 +12,8 @@ export {
   writeState,
   getStateDir,
   getStateFilePath,
+  deleteStateFile,
+  listStateGroups,
 } from './state-file.js';
 
 export type {

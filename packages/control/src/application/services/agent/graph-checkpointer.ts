@@ -16,7 +16,6 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import { BadRequestError, InternalError } from 'takos-common/errors';
 import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db';
 import { eq, and, lt, desc } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 
@@ -519,7 +518,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           ).get();
 
           if (beforeRow) {
-            beforeTs = toIsoString(beforeRow.ts) ?? undefined;
+            beforeTs = (beforeRow.ts == null ? null : typeof beforeRow.ts === 'string' ? beforeRow.ts : beforeRow.ts.toISOString()) ?? undefined;
           }
         }
       }

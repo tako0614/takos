@@ -3,7 +3,6 @@
  */
 
 import type { Job } from 'takos-actions-engine';
-import { toIsoString } from '../../../shared/utils';
 import type { WorkflowJobDefinition, WorkflowShell } from '../../../shared/types';
 import type { DrizzleWorkflowRun, WorkflowRunRecord } from './workflow-engine-types';
 
@@ -64,12 +63,12 @@ export function toRunRecord(run: DrizzleWorkflowRun): WorkflowRunRecord {
     actor_id: run.actorAccountId,
     status: run.status,
     conclusion: run.conclusion,
-    queued_at: toIsoString(run.queuedAt),
-    started_at: toIsoString(run.startedAt),
-    completed_at: toIsoString(run.completedAt),
+    queued_at: (run.queuedAt == null ? null : typeof run.queuedAt === 'string' ? run.queuedAt : run.queuedAt.toISOString()),
+    started_at: (run.startedAt == null ? null : typeof run.startedAt === 'string' ? run.startedAt : run.startedAt.toISOString()),
+    completed_at: (run.completedAt == null ? null : typeof run.completedAt === 'string' ? run.completedAt : run.completedAt.toISOString()),
     inputs: run.inputs,
     run_number: run.runNumber,
     run_attempt: run.runAttempt,
-    created_at: toIsoString(run.createdAt) ?? new Date(0).toISOString(),
+    created_at: (run.createdAt == null ? null : typeof run.createdAt === 'string' ? run.createdAt : run.createdAt.toISOString()) ?? new Date(0).toISOString(),
   };
 }

@@ -1,3 +1,12 @@
+/**
+ * Static-asset upload helpers for the WFP (Workers for Platforms) service.
+ *
+ * Implements the Cloudflare Assets upload flow: create an upload session with
+ * a content-hash manifest, upload only the files that are not already cached,
+ * and receive a completion JWT that is attached to the worker deployment
+ * metadata so the assets are served alongside the worker.
+ */
+
 import type { WFPConfig, CFAPIResponse } from './client';
 import { CF_API_BASE, sanitizeErrorMessage } from './client';
 import type { WfpClient } from './client';

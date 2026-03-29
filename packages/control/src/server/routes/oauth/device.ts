@@ -23,7 +23,7 @@ import {
   isDeviceUserCodeLimited,
   recordDeviceUserCodeAttempt,
   clearDeviceUserCodeAttempts,
-} from '../../../shared/utils/device-auth-rate-limit';
+} from '../../../application/services/oauth/device-auth-rate-limit';
 import { deviceCodeEntryPage, deviceConsentPage, deviceResultPage, errorPage } from '../auth/html';
 import { serveSpaFallback } from '../../../shared/utils/spa-fallback';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';

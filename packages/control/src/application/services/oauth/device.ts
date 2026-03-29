@@ -7,12 +7,11 @@ import { generateId, generateRandomString } from './pkce';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb } from '../../../infra/db';
 import { eq, and, isNull } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 
 type OAuthDeviceCodeRow = SelectOf<typeof oauthDeviceCodes>;
 
 function toOptionalIsoString(value: string | Date | null | undefined): string | null {
-  return toIsoString(value);
+  return (value == null ? null : typeof value === 'string' ? value : value.toISOString());
 }
 
 function toApiDeviceCode(row: OAuthDeviceCodeRow): OAuthDeviceCode {
@@ -29,9 +28,9 @@ function toApiDeviceCode(row: OAuthDeviceCodeRow): OAuthDeviceCode {
     approved_at: toOptionalIsoString(row.approvedAt),
     denied_at: toOptionalIsoString(row.deniedAt),
     used_at: toOptionalIsoString(row.usedAt),
-    expires_at: toIsoString(row.expiresAt),
-    created_at: toIsoString(row.createdAt),
-    updated_at: toIsoString(row.updatedAt),
+    expires_at: (row.expiresAt == null ? null : typeof row.expiresAt === 'string' ? row.expiresAt : row.expiresAt.toISOString()),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
   };
 }
 

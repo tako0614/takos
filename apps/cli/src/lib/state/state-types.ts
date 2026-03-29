@@ -1,13 +1,22 @@
+export interface RouteState {
+  target: string;
+  path?: string;
+  domain?: string;
+  url?: string;
+}
+
 export interface TakosState {
   version: 1;
   provider: string; // 'cloudflare' | 'aws' | 'gcp' | 'k8s' | 'docker'
   env: string;
+  group: string;
   groupName: string;
   updatedAt: string;
   resources: Record<string, ResourceState>;
   workers: Record<string, WorkerState>;
   containers: Record<string, ContainerState>;
   services: Record<string, ServiceState>;
+  routes: Record<string, RouteState>;
 }
 
 export interface ResourceState {

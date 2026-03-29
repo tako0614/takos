@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { ClientRegistrationRequest } from '../../../shared/types/oauth';
-import { safeJsonParseOrDefault, extractBearerToken } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { parseJsonBody } from '../route-auth';
 import {
   createClient,
@@ -22,7 +22,8 @@ oauthRegister.use('/register', registerRateLimiter.middleware());
 oauthRegister.use('/register/*', registerRateLimiter.middleware());
 
 oauthRegister.post('/register', async (c) => {
-  const bearerToken = extractBearerToken(c.req.header('Authorization'));
+  const postAuthHeader = c.req.header('Authorization');
+  const bearerToken = postAuthHeader?.startsWith('Bearer ') ? postAuthHeader.slice(7).trim() || null : null;
   if (!bearerToken) {
     return c.json({ error: 'invalid_token', error_description: 'Bearer token required' }, 401);
   }
@@ -78,7 +79,8 @@ oauthRegister.post('/register', async (c) => {
 
 oauthRegister.get('/register/:clientId', async (c) => {
   const clientId = c.req.param('clientId');
-  const token = extractBearerToken(c.req.header('Authorization'));
+  const getAuthHeader = c.req.header('Authorization');
+  const token = getAuthHeader?.startsWith('Bearer ') ? getAuthHeader.slice(7).trim() || null : null;
 
   if (!token) {
     return c.json({ error: 'invalid_token' }, 401);
@@ -110,7 +112,8 @@ oauthRegister.get('/register/:clientId', async (c) => {
 
 oauthRegister.put('/register/:clientId', async (c) => {
   const clientId = c.req.param('clientId');
-  const token = extractBearerToken(c.req.header('Authorization'));
+  const putAuthHeader = c.req.header('Authorization');
+  const token = putAuthHeader?.startsWith('Bearer ') ? putAuthHeader.slice(7).trim() || null : null;
 
   if (!token) {
     return c.json({ error: 'invalid_token' }, 401);
@@ -158,7 +161,8 @@ oauthRegister.put('/register/:clientId', async (c) => {
 
 oauthRegister.delete('/register/:clientId', async (c) => {
   const clientId = c.req.param('clientId');
-  const token = extractBearerToken(c.req.header('Authorization'));
+  const deleteAuthHeader = c.req.header('Authorization');
+  const token = deleteAuthHeader?.startsWith('Bearer ') ? deleteAuthHeader.slice(7).trim() || null : null;
 
   if (!token) {
     return c.json({ error: 'invalid_token' }, 401);

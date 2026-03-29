@@ -6,7 +6,6 @@ import { getDb, type Database } from '../../../infra/db';
 import { inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 type PrRecord = SelectOf<typeof pullRequests>;
-import { toIsoString } from '../../../shared/utils';
 
 export type UserLiteDto = {
   id: string;
@@ -162,9 +161,9 @@ export function toPullRequestRecord(record: PrRecord): PullRequestRecord {
     status: record.status as PullRequestStatus,
     authorType: record.authorType as AuthorType,
     authorId: record.authorId,
-    createdAt: toIsoString(record.createdAt),
-    updatedAt: toIsoString(record.updatedAt),
-    mergedAt: toIsoString(record.mergedAt),
+    createdAt: (record.createdAt == null ? null : typeof record.createdAt === 'string' ? record.createdAt : record.createdAt.toISOString()),
+    updatedAt: (record.updatedAt == null ? null : typeof record.updatedAt === 'string' ? record.updatedAt : record.updatedAt.toISOString()),
+    mergedAt: (record.mergedAt == null ? null : typeof record.mergedAt === 'string' ? record.mergedAt : record.mergedAt.toISOString()),
   };
 }
 
@@ -197,10 +196,10 @@ export function toPullRequestDto(
     comments_count: options.commentsCount,
     reviews_count: options.reviewsCount,
     is_mergeable: options.isMergeable,
-    created_at: toIsoString(pullRequest.createdAt),
-    updated_at: toIsoString(pullRequest.updatedAt),
-    merged_at: toIsoString(mergedAt),
-    closed_at: toIsoString(closedAt),
+    created_at: (pullRequest.createdAt == null ? null : typeof pullRequest.createdAt === 'string' ? pullRequest.createdAt : pullRequest.createdAt.toISOString()),
+    updated_at: (pullRequest.updatedAt == null ? null : typeof pullRequest.updatedAt === 'string' ? pullRequest.updatedAt : pullRequest.updatedAt.toISOString()),
+    merged_at: (mergedAt == null ? null : typeof mergedAt === 'string' ? mergedAt : mergedAt.toISOString()),
+    closed_at: (closedAt == null ? null : typeof closedAt === 'string' ? closedAt : closedAt.toISOString()),
   };
 }
 

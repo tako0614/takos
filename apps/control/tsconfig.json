@@ -14,6 +14,11 @@
     "jsxImportSource": "hono/jsx",
     "baseUrl": ".",
     "paths": {
+      // All @/ paths resolve to packages/control/src/. Keep in sync with
+      // packages/control/tsconfig.base.json (which uses baseUrl "../.."
+      // and therefore omits the "../../" prefix on targets).
+
+      // Broad directory aliases — map top-level src subdirs directly.
       "@/application/*": ["../../packages/control/src/application/*"],
       "@/infra/*": ["../../packages/control/src/infra/*"],
       "@/local-platform/*": ["../../packages/control/src/local-platform/*"],
@@ -21,6 +26,9 @@
       "@/runtime/*": ["../../packages/control/src/runtime/*"],
       "@/server/*": ["../../packages/control/src/server/*"],
       "@/shared/*": ["../../packages/control/src/shared/*"],
+
+      // Shortcut aliases — remap deep paths to convenient short prefixes.
+      // These take priority over the broad aliases above when both match.
       "@/services/*": ["../../packages/control/src/application/services/*"],
       "@/routes/*": ["../../packages/control/src/server/routes/*"],
       "@/middleware/*": ["../../packages/control/src/server/middleware/*"],

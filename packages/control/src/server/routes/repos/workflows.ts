@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import { parseWorkflow } from 'takos-actions-engine';
-import { generateId, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
 import { parseJsonBody } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -63,7 +63,7 @@ function buildCachedWorkflowResponse(cached: CachedWorkflowRow) {
     name: cached.name,
     content: cached.content,
     triggers: safeJsonParseOrDefault<string[]>(cached.triggers, []),
-    parsed_at: toIsoString(cached.parsedAt),
+    parsed_at: (cached.parsedAt == null ? null : typeof cached.parsedAt === 'string' ? cached.parsedAt : cached.parsedAt.toISOString()),
   };
 }
 
@@ -174,8 +174,8 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     path: w.path,
     name: w.name,
     triggers: safeJsonParseOrDefault<string[]>(w.triggers, []),
-    parsed_at: toIsoString(w.parsedAt),
-    updated_at: toIsoString(w.updatedAt),
+    parsed_at: (w.parsedAt == null ? null : typeof w.parsedAt === 'string' ? w.parsedAt : w.parsedAt.toISOString()),
+    updated_at: (w.updatedAt == null ? null : typeof w.updatedAt === 'string' ? w.updatedAt : w.updatedAt.toISOString()),
   }));
 
   const bucket = c.env.GIT_OBJECTS;
