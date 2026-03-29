@@ -1,8 +1,8 @@
 /**
- * Structured Logger for Takos Platform
+ * Takos 向け構造化ロガー
  *
- * Zero-dependency structured logging compatible with Cloudflare Workers.
- * Outputs JSON to console methods so CF observability picks up the correct level.
+ * Cloudflare Workers で利用できるゼロ依存の構造化ログ。
+ * `console` への JSON 出力により、CF 側の可観測性（observability）でレベル別集計が可能。
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -90,11 +90,11 @@ class LoggerImpl implements Logger {
     const line = JSON.stringify(entry);
     switch (level) {
       case 'debug':
-        // eslint-disable-next-line no-console -- logger implementation
+        // eslint-disable-next-line no-console -- 実装上のロガー利用
         console.log(line);
         break;
       case 'info':
-        // eslint-disable-next-line no-console -- logger implementation
+        // eslint-disable-next-line no-console -- 実装上のロガー利用
         console.log(line);
         break;
       case 'warn':

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
-// Host-side port defaults must match DEFAULT_LOCAL_PORTS in
-// packages/control/src/local-platform/runtime-types.ts
+	// ホスト側のデフォルトポートは DEFAULT_LOCAL_PORTS と一致している必要がある
+	// （packages/control/src/local-platform/runtime-types.ts を参照）
 const defaults = {
   controlWebPort: '8787',
   controlDispatchPort: '8788',

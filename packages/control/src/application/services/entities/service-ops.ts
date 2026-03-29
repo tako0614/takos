@@ -2,7 +2,7 @@
  * Service entity operations for the control plane.
  *
  * Manages long-running services (e.g. background processes,
- * external service endpoints) and records state in group_entities.
+ * external service endpoints) and records state in the canonical services table.
  *
  * Runs inside Cloudflare Workers -- delegates to external providers
  * via fetch.
@@ -10,11 +10,13 @@
  * TODO: Add AWS ECS / GCP Cloud Run / Kubernetes provider implementations.
  */
 
-import { eq, and } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/client.ts';
-import { groupEntities } from '../../../infra/db/schema-groups.ts';
-import { generateId } from '../../../shared/utils/index.ts';
 import type { Env } from '../../../shared/types/env.ts';
+import {
+  deleteGroupManagedService,
+  findGroupManagedService,
+  listGroupManagedServices,
+  upsertGroupManagedService,
+} from './group-managed-services.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -43,6 +45,8 @@ interface ServiceConfig {
   imageRef?: string;
   port?: number;
   ipv4?: string;
+  resolvedBaseUrl?: string;
+  specFingerprint?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,15 +129,22 @@ export async function deployService(
   groupId: string,
   name: string,
   opts: {
+    spaceId: string;
+    envName: string;
     imageRef?: string;
     port?: number;
     imageHash?: string;
+    specFingerprint?: string;
+    desiredSpec?: Record<string, unknown>;
+    routeNames?: string[];
+    dependsOn?: string[];
   },
 ): Promise<ServiceEntityResult> {
   const now = new Date().toISOString();
 
   let imageHash = opts.imageHash ?? '';
   let ipv4: string | undefined;
+  let resolvedBaseUrl: string | undefined;
 
   if (!imageHash) {
     const result = await deployServiceImage(env, name, {
@@ -144,43 +155,37 @@ export async function deployService(
     ipv4 = result.ipv4;
   }
 
+  resolvedBaseUrl = ipv4 && opts.port ? `http://${ipv4}:${opts.port}` : undefined;
+
   const config: ServiceConfig = {
     deployedAt: now,
     imageHash,
     ...(opts.imageRef ? { imageRef: opts.imageRef } : {}),
     ...(opts.port ? { port: opts.port } : {}),
     ...(ipv4 ? { ipv4 } : {}),
+    ...(resolvedBaseUrl ? { resolvedBaseUrl } : {}),
+    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
   };
-
-  const db = getDb(env.DB);
-
-  // Upsert
-  const existing = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'service'),
-        eq(groupEntities.name, name),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(groupEntities)
-      .set({ config: JSON.stringify(config) })
-      .where(eq(groupEntities.id, existing[0].id));
-  } else {
-    await db.insert(groupEntities).values({
-      id: generateId(),
-      groupId,
-      category: 'service',
-      name,
-      config: JSON.stringify(config),
-    });
-  }
+  await upsertGroupManagedService(env, {
+    groupId,
+    spaceId: opts.spaceId,
+    envName: opts.envName,
+    componentKind: 'service',
+    manifestName: name,
+    status: 'deployed',
+    serviceType: 'service',
+    workloadKind: 'container-image',
+    specFingerprint: opts.specFingerprint ?? '',
+    desiredSpec: opts.desiredSpec ?? {},
+    routeNames: opts.routeNames,
+    dependsOn: opts.dependsOn,
+    deployedAt: now,
+    imageHash,
+    imageRef: opts.imageRef,
+    port: opts.port,
+    ipv4,
+    resolvedBaseUrl,
+  });
 
   return { name, deployedAt: now, imageHash, ipv4 };
 }
@@ -194,25 +199,10 @@ export async function deleteService(
   groupId: string,
   name: string,
 ): Promise<void> {
-  const db = getDb(env.DB);
-
-  const rows = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'service'),
-        eq(groupEntities.name, name),
-      ),
-    )
-    .limit(1);
-
-  if (rows.length === 0) {
+  const record = await findGroupManagedService(env, groupId, name, 'service');
+  if (!record) {
     throw new Error(`Service entity "${name}" not found in group ${groupId}`);
   }
-
-  const row = rows[0];
 
   try {
     await deleteServiceImage(env, name);
@@ -220,7 +210,7 @@ export async function deleteService(
     console.warn(`Failed to delete service "${name}":`, error);
   }
 
-  await db.delete(groupEntities).where(eq(groupEntities.id, row.id));
+  await deleteGroupManagedService(env, groupId, name, 'service');
 }
 
 // ---------------------------------------------------------------------------
@@ -231,25 +221,24 @@ export async function listServices(
   env: Env,
   groupId: string,
 ): Promise<ServiceEntityInfo[]> {
-  const db = getDb(env.DB);
-
-  const rows = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'service'),
-      ),
-    );
-
-  return rows.map((row) => ({
-    id: row.id,
-    groupId: row.groupId,
-    name: row.name,
-    category: row.category,
-    config: JSON.parse(row.config) as ServiceConfig,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }));
+  const records = await listGroupManagedServices(env, groupId);
+  return records
+    .filter((record) => record.config.componentKind === 'service')
+    .map((record) => ({
+      id: record.row.id,
+      groupId: record.row.groupId ?? groupId,
+      name: record.config.manifestName ?? record.row.slug ?? record.row.id,
+      category: 'service',
+      config: {
+        deployedAt: record.config.deployedAt ?? record.row.updatedAt,
+        imageHash: record.config.imageHash ?? '',
+        ...(record.config.imageRef ? { imageRef: record.config.imageRef } : {}),
+        ...(typeof record.config.port === 'number' ? { port: record.config.port } : {}),
+        ...(record.config.ipv4 ? { ipv4: record.config.ipv4 } : {}),
+        ...(record.config.resolvedBaseUrl ? { resolvedBaseUrl: record.config.resolvedBaseUrl } : {}),
+        ...(record.config.specFingerprint ? { specFingerprint: record.config.specFingerprint } : {}),
+      },
+      createdAt: record.row.createdAt,
+      updatedAt: record.row.updatedAt,
+    }));
 }

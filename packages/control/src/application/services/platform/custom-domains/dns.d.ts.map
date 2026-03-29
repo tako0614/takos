@@ -1,1 +1,0 @@
-{"version":3,"file":"dns.d.ts","sourceRoot":"","sources":["dns.ts"],"names":[],"mappings":"AAEA,wBAAsB,SAAS,CAC7B,MAAM,EAAE,MAAM,EACd,aAAa,EAAE,MAAM,EACrB,MAAM,EAAE,OAAO,GAAG,KAAK,GACtB,OAAO,CAAC;IAAE,QAAQ,EAAE,OAAO,CAAC;IAAC,KAAK,CAAC,EAAE,MAAM,CAAA;CAAE,CAAC,CAgDhD"}

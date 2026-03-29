@@ -1,2 +1,0 @@
-export declare function resolveDatabase(postgresUrl: string | null, dataDir: string | null, migrationsDir: string): Promise<import("@cloudflare/workers-types").D1Database>;
-//# sourceMappingURL=db-resolver.d.ts.map

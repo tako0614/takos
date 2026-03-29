@@ -1,33 +1,32 @@
 /**
- * Apply engine for the control plane.
+ * Canonical group reconciler for the control plane.
  *
- * Receives an AppManifest and a group ID, computes the diff against
- * current DB state, and executes entity operations to reconcile.
- *
- * This is the CP equivalent of the CLI's coordinator.ts + diff.ts
- * combined into a single orchestration module.
- *
- * Runs inside Cloudflare Workers -- no subprocess / wrangler CLI available.
+ * `.takos/app.yml` is compiled into `GroupDesiredState`, diffed against
+ * canonical resources/services state, then reconciled through provider ops.
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getDb } from '../../../infra/db/client.ts';
-import { groups, groupEntities } from '../../../infra/db/schema-groups.ts';
-import type { AppManifest, AppResource } from './group-deploy-manifest.ts';
+import { groups } from '../../../infra/db/schema-groups.ts';
+import type { AppManifest } from '../source/app-manifest-types.ts';
+import {
+  compileGroupDesiredState,
+  materializeRoute,
+  materializeRoutes,
+  type GroupDesiredState,
+  type ObservedGroupState,
+} from './group-state.ts';
 import {
   computeDiff,
-  type DiffResult,
   type DiffEntry,
+  type DiffResult,
   type GroupState,
-  type ResourceStateRecord,
-  type WorkerStateRecord,
-  type ContainerStateRecord,
-  type ServiceStateRecord,
-  type RouteStateRecord,
 } from './diff.ts';
 import {
   createResource,
   deleteResource,
+  listResources,
+  updateManagedResource,
 } from '../entities/resource-ops.ts';
 import {
   deployWorker,
@@ -41,11 +40,9 @@ import {
   deployService,
   deleteService,
 } from '../entities/service-ops.ts';
+import { listGroupManagedServices } from '../entities/group-managed-services.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
 import type { Env } from '../../../shared/types/env.ts';
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
 
 export interface ApplyEntryResult {
   name: string;
@@ -63,107 +60,100 @@ export interface ApplyResult {
 }
 
 export interface ApplyManifestOpts {
-  /** Filter to specific entity names. If omitted, apply all. */
   target?: string[];
-  /** Skip confirmation prompt (relevant for CLI callers; always true in CP). */
   autoApprove?: boolean;
-  /** Group name override (defaults to manifest.metadata.name). */
   groupName?: string;
-  /** Environment name (staging, production, etc.). */
   envName?: string;
-  /** Dispatch namespace for workers. */
   dispatchNamespace?: string;
-  /** If true, stop processing on first failure. */
   rollbackOnFailure?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// getGroupState — reconstruct GroupState from DB
-// ---------------------------------------------------------------------------
+type GroupRow = {
+  id: string;
+  spaceId: string;
+  name: string;
+  provider: string | null;
+  env: string | null;
+  appVersion: string | null;
+  manifestJson: string | null;
+  desiredSpecJson: string | null;
+  observedStateJson: string | null;
+  providerStateJson: string | null;
+  reconcileStatus: string;
+  lastAppliedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
-/**
- * Build a GroupState object from the groups + group_entities tables.
- * Returns null if the group has no entities yet (first deploy).
- */
+async function getGroupRecord(env: Env, groupId: string): Promise<GroupRow | null> {
+  const db = getDb(env.DB);
+  return db.select()
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .get() as Promise<GroupRow | null>;
+}
+
+function loadObservedRoutes(group: GroupRow): Record<string, ObservedGroupState['routes'][string]> {
+  const parsed = safeJsonParseOrDefault<Partial<ObservedGroupState>>(group.observedStateJson, {});
+  return parsed.routes ?? {};
+}
+
 export async function getGroupState(
   env: Env,
   groupId: string,
 ): Promise<GroupState | null> {
-  const db = getDb(env.DB);
+  const group = await getGroupRecord(env, groupId);
+  if (!group) return null;
 
-  // Fetch group metadata
-  const groupRows = await db
-    .select()
-    .from(groups)
-    .where(eq(groups.id, groupId))
-    .limit(1);
+  const resourceRows = await listResources(env, groupId);
+  const serviceRows = await listGroupManagedServices(env, groupId);
+  const routes = loadObservedRoutes(group);
 
-  if (groupRows.length === 0) {
+  const resources = Object.fromEntries(
+    resourceRows.map((row) => [
+      row.name,
+      {
+        name: row.name,
+        type: row.config.type,
+        resourceId: row.config.cfResourceId,
+        binding: row.config.binding,
+        status: 'active',
+        ...(row.config.cfName ? { cfName: row.config.cfName } : {}),
+        ...(row.config.specFingerprint ? { specFingerprint: row.config.specFingerprint } : {}),
+        updatedAt: row.updatedAt,
+      },
+    ]),
+  );
+
+  const workloads = Object.fromEntries(
+    serviceRows
+      .filter((record) => record.config.componentKind && record.config.manifestName)
+      .map((record) => [
+        record.config.manifestName as string,
+        {
+          serviceId: record.row.id,
+          name: record.config.manifestName as string,
+          category: record.config.componentKind as 'worker' | 'container' | 'service',
+          status: record.row.status,
+          ...(record.row.hostname ? { hostname: record.row.hostname } : {}),
+          ...(record.row.routeRef ? { routeRef: record.row.routeRef } : {}),
+          ...(record.row.workloadKind ? { workloadKind: record.row.workloadKind } : {}),
+          ...(record.config.specFingerprint ? { specFingerprint: record.config.specFingerprint } : {}),
+          ...(record.config.deployedAt ? { deployedAt: record.config.deployedAt } : {}),
+          ...(record.config.codeHash ? { codeHash: record.config.codeHash } : {}),
+          ...(record.config.imageHash ? { imageHash: record.config.imageHash } : {}),
+          ...(record.config.imageRef ? { imageRef: record.config.imageRef } : {}),
+          ...(typeof record.config.port === 'number' ? { port: record.config.port } : {}),
+          ...(record.config.ipv4 ? { ipv4: record.config.ipv4 } : {}),
+          ...(record.config.dispatchNamespace ? { dispatchNamespace: record.config.dispatchNamespace } : {}),
+          ...(record.config.resolvedBaseUrl ? { resolvedBaseUrl: record.config.resolvedBaseUrl } : {}),
+          updatedAt: record.row.updatedAt,
+        },
+      ]),
+  );
+
+  if (Object.keys(resources).length === 0 && Object.keys(workloads).length === 0 && Object.keys(routes).length === 0) {
     return null;
-  }
-
-  const group = groupRows[0];
-
-  // Fetch all entities for this group
-  const entityRows = await db
-    .select()
-    .from(groupEntities)
-    .where(eq(groupEntities.groupId, groupId));
-
-  if (entityRows.length === 0) {
-    return null;
-  }
-
-  const resources: Record<string, ResourceStateRecord> = {};
-  const workers: Record<string, WorkerStateRecord> = {};
-  const containers: Record<string, ContainerStateRecord> = {};
-  const services: Record<string, ServiceStateRecord> = {};
-  const routes: Record<string, RouteStateRecord> = {};
-
-  for (const row of entityRows) {
-    const config = JSON.parse(row.config) as Record<string, unknown>;
-
-    switch (row.category) {
-      case 'resource':
-        resources[row.name] = {
-          type: (config.type as string) ?? '',
-          id: (config.cfResourceId as string) ?? '',
-          binding: (config.binding as string) ?? '',
-          createdAt: row.createdAt,
-        };
-        break;
-
-      case 'worker':
-        workers[row.name] = {
-          scriptName: (config.scriptName as string) ?? '',
-          deployedAt: (config.deployedAt as string) ?? row.updatedAt,
-          codeHash: (config.codeHash as string) ?? '',
-        };
-        break;
-
-      case 'container':
-        containers[row.name] = {
-          deployedAt: (config.deployedAt as string) ?? row.updatedAt,
-          imageHash: (config.imageHash as string) ?? '',
-        };
-        break;
-
-      case 'service':
-        services[row.name] = {
-          deployedAt: (config.deployedAt as string) ?? row.updatedAt,
-          imageHash: (config.imageHash as string) ?? '',
-        };
-        break;
-
-      case 'route':
-        routes[row.name] = {
-          target: (config.target as string) ?? '',
-          path: config.path as string | undefined,
-          domain: config.domain as string | undefined,
-          url: config.url as string | undefined,
-        };
-        break;
-    }
   }
 
   return {
@@ -171,64 +161,13 @@ export async function getGroupState(
     groupName: group.name,
     provider: group.provider ?? 'cloudflare',
     env: group.env ?? 'default',
+    version: group.appVersion,
     updatedAt: group.updatedAt,
     resources,
-    workers,
-    containers,
-    services,
+    workloads,
     routes,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Overrides — env-specific deep merge
-// ---------------------------------------------------------------------------
-
-function applyOverrides(manifest: AppManifest, envName: string): AppManifest {
-  const specAny = manifest.spec as Record<string, unknown>;
-  const overrides = specAny.overrides as Record<string, Record<string, unknown>> | undefined;
-
-  if (!overrides?.[envName]) return manifest;
-
-  const envOverride = overrides[envName];
-  const mergedSpec = deepMerge(specAny, envOverride) as AppManifest['spec'];
-
-  // Remove consumed overrides key
-  delete (mergedSpec as Record<string, unknown>).overrides;
-
-  return { ...manifest, spec: mergedSpec };
-}
-
-function deepMerge(
-  base: Record<string, unknown>,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...base };
-
-  for (const key of Object.keys(patch)) {
-    const baseVal = base[key];
-    const patchVal = patch[key];
-
-    if (isPlainObject(baseVal) && isPlainObject(patchVal)) {
-      result[key] = deepMerge(
-        baseVal as Record<string, unknown>,
-        patchVal as Record<string, unknown>,
-      );
-    } else {
-      result[key] = patchVal;
-    }
-  }
-
-  return result;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-// ---------------------------------------------------------------------------
-// Topological sort — DFS-based (mirrors CLI coordinator)
-// ---------------------------------------------------------------------------
 
 const CATEGORY_PRIORITY: Record<string, number> = {
   resource: 0,
@@ -238,38 +177,23 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   route: 4,
 };
 
-function topologicalSort(entries: DiffEntry[], manifest: AppManifest): DiffEntry[] {
-  const specAny = manifest.spec as Record<string, unknown>;
-  const dependsOnMap = buildDependsOnMap(specAny);
-
-  const deletes = entries.filter((e) => e.action === 'delete');
-  const nonDeletes = entries.filter((e) => e.action !== 'delete');
-
-  const sortedNonDeletes = topoSortDFS(nonDeletes, dependsOnMap);
-  const sortedDeletes = topoSortDFS(deletes, dependsOnMap).reverse();
-
-  return [...sortedNonDeletes, ...sortedDeletes];
-}
-
-function buildDependsOnMap(spec: Record<string, unknown>): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  const categories = ['workers', 'containers', 'services'] as const;
-
-  for (const cat of categories) {
-    const defs = (spec[cat] ?? {}) as Record<string, Record<string, unknown>>;
-    for (const [name, def] of Object.entries(defs)) {
-      const deps = def.dependsOn;
-      if (Array.isArray(deps)) {
-        map.set(name, deps as string[]);
-      }
+function topologicalSort(entries: DiffEntry[], desiredState: GroupDesiredState): DiffEntry[] {
+  const dependsOnMap = new Map<string, string[]>();
+  for (const [name, workload] of Object.entries(desiredState.workloads)) {
+    if (workload.dependsOn.length > 0) {
+      dependsOnMap.set(name, workload.dependsOn);
     }
   }
 
-  return map;
+  const deletes = entries.filter((entry) => entry.action === 'delete');
+  const nonDeletes = entries.filter((entry) => entry.action !== 'delete');
+  const sortedNonDeletes = topoSortDFS(nonDeletes, dependsOnMap);
+  const sortedDeletes = topoSortDFS(deletes, dependsOnMap).reverse();
+  return [...sortedNonDeletes, ...sortedDeletes];
 }
 
 function topoSortDFS(entries: DiffEntry[], dependsOnMap: Map<string, string[]>): DiffEntry[] {
-  const entryByName = new Map(entries.map((e) => [e.name, e]));
+  const entryByName = new Map(entries.map((entry) => [entry.name, entry]));
   const visited = new Set<string>();
   const result: DiffEntry[] = [];
 
@@ -301,162 +225,193 @@ function topoSortDFS(entries: DiffEntry[], dependsOnMap: Map<string, string[]>):
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Entry dispatcher — calls entity operations
-// ---------------------------------------------------------------------------
-
 async function executeEntry(
   entry: DiffEntry,
-  manifest: AppManifest,
+  desiredState: GroupDesiredState,
   env: Env,
   groupId: string,
+  group: GroupRow,
   opts: ApplyManifestOpts,
 ): Promise<void> {
-  const { name, category, action } = entry;
-  const specAny = manifest.spec as Record<string, unknown>;
+  const groupName = opts.groupName ?? group.name;
+  const envName = opts.envName ?? group.env ?? 'default';
+  const spaceId = group.spaceId;
 
-  switch (category) {
+  switch (entry.category) {
     case 'resource': {
-      const resources = (specAny.resources ?? {}) as Record<string, AppResource>;
-      if (action === 'create') {
-        const resource = resources[name];
-        if (!resource) throw new Error(`Resource "${name}" not found in manifest`);
-        await createResource(env, groupId, name, {
+      const resource = desiredState.resources[entry.name];
+      if (entry.action === 'create') {
+        if (!resource) throw new Error(`Resource "${entry.name}" not found in desired state`);
+        await createResource(env, groupId, entry.name, {
           type: resource.type,
           binding: resource.binding,
-          groupName: opts.groupName,
-          envName: opts.envName,
+          groupName,
+          envName,
+          spaceId,
+          specFingerprint: resource.specFingerprint,
         });
       }
-      if (action === 'delete') {
-        await deleteResource(env, groupId, name);
+      if (entry.action === 'update') {
+        if (!resource) throw new Error(`Resource "${entry.name}" not found in desired state`);
+        await updateManagedResource(env, groupId, entry.name, {
+          binding: resource.binding,
+          specFingerprint: resource.specFingerprint,
+        });
+      }
+      if (entry.action === 'delete') {
+        await deleteResource(env, groupId, entry.name);
       }
       break;
     }
 
     case 'worker': {
-      if (action === 'create' || action === 'update') {
-        await deployWorker(env, groupId, name, {
-          groupName: opts.groupName,
-          envName: opts.envName,
+      const workload = desiredState.workloads[entry.name];
+      if ((entry.action === 'create' || entry.action === 'update') && workload) {
+        await deployWorker(env, groupId, entry.name, {
+          spaceId,
+          groupName,
+          envName,
           dispatchNamespace: opts.dispatchNamespace,
+          specFingerprint: workload.specFingerprint,
+          desiredSpec: workload.spec as Record<string, unknown>,
+          routeNames: workload.routeNames,
+          dependsOn: workload.dependsOn,
         });
       }
-      if (action === 'delete') {
-        await deleteWorker(env, groupId, name);
+      if (entry.action === 'delete') {
+        await deleteWorker(env, groupId, entry.name);
       }
       break;
     }
 
     case 'container': {
-      const containers = (specAny.containers ?? {}) as Record<
-        string,
-        { imageRef?: string; port?: number }
-      >;
-      if (action === 'create' || action === 'update') {
-        const container = containers[name];
-        await deployContainer(env, groupId, name, {
-          imageRef: container?.imageRef,
-          port: container?.port ?? 8080,
+      const workload = desiredState.workloads[entry.name];
+      if ((entry.action === 'create' || entry.action === 'update') && workload && workload.category === 'container') {
+        const spec = workload.spec as { imageRef?: string; port?: number };
+        await deployContainer(env, groupId, entry.name, {
+          spaceId,
+          envName,
+          imageRef: spec.imageRef,
+          port: spec.port ?? 8080,
+          specFingerprint: workload.specFingerprint,
+          desiredSpec: workload.spec as Record<string, unknown>,
+          routeNames: workload.routeNames,
+          dependsOn: workload.dependsOn,
         });
       }
-      if (action === 'delete') {
-        await deleteContainer(env, groupId, name);
+      if (entry.action === 'delete') {
+        await deleteContainer(env, groupId, entry.name);
       }
       break;
     }
 
     case 'service': {
-      const services = (specAny.services ?? {}) as Record<
-        string,
-        { imageRef?: string; port?: number }
-      >;
-      if (action === 'create' || action === 'update') {
-        const service = services[name];
-        await deployService(env, groupId, name, {
-          imageRef: service?.imageRef,
-          port: service?.port ?? 8080,
+      const workload = desiredState.workloads[entry.name];
+      if ((entry.action === 'create' || entry.action === 'update') && workload && workload.category === 'service') {
+        const spec = workload.spec as { imageRef?: string; port?: number };
+        await deployService(env, groupId, entry.name, {
+          spaceId,
+          envName,
+          imageRef: spec.imageRef,
+          port: spec.port ?? 8080,
+          specFingerprint: workload.specFingerprint,
+          desiredSpec: workload.spec as Record<string, unknown>,
+          routeNames: workload.routeNames,
+          dependsOn: workload.dependsOn,
         });
       }
-      if (action === 'delete') {
-        await deleteService(env, groupId, name);
+      if (entry.action === 'delete') {
+        await deleteService(env, groupId, entry.name);
       }
       break;
     }
 
-    case 'route': {
-      // Route operations are handled as part of the routing module
-      // (deployment/routing.ts). For now, route diff entries are
-      // logged but actual route configuration is deferred to the
-      // routing layer which manages CF custom domains and hostname routing.
-      // TODO: Wire route create/update/delete to routing.ts
+    case 'route':
       break;
-    }
   }
 }
 
-// ---------------------------------------------------------------------------
-// saveManifestToGroup — persist manifest JSON on the group row
-// ---------------------------------------------------------------------------
+function buildFinalRoutes(
+  desiredState: GroupDesiredState,
+  currentRoutes: Record<string, ObservedGroupState['routes'][string]>,
+  workloads: Record<string, ObservedGroupState['workloads'][string]>,
+  targetNames?: string[],
+  updatedAt?: string,
+): Record<string, ObservedGroupState['routes'][string]> {
+  if (!targetNames || targetNames.length === 0) {
+    return materializeRoutes(desiredState.routes, workloads, updatedAt);
+  }
 
-async function saveManifestToGroup(
-  env: Env,
-  groupId: string,
-  manifest: AppManifest,
-): Promise<void> {
-  const db = getDb(env.DB);
+  const nextRoutes = { ...currentRoutes };
+  const targetSet = new Set(targetNames);
 
-  await db
-    .update(groups)
-    .set({
-      manifestJson: JSON.stringify(manifest),
-      appVersion: manifest.spec.version,
-    })
-    .where(eq(groups.id, groupId));
+  for (const name of targetSet) {
+    const route = desiredState.routes[name];
+    if (route) {
+      nextRoutes[name] = materializeRoute(route, workloads, updatedAt);
+    } else {
+      delete nextRoutes[name];
+    }
+  }
+
+  return nextRoutes;
 }
 
-// ---------------------------------------------------------------------------
-// applyManifest — main entry point
-// ---------------------------------------------------------------------------
+async function saveGroupSnapshots(
+  env: Env,
+  groupId: string,
+  desiredState: GroupDesiredState,
+  observedState: ObservedGroupState,
+  status: 'ready' | 'degraded',
+): Promise<void> {
+  const db = getDb(env.DB);
+  const now = new Date().toISOString();
+  const current = await getGroupRecord(env, groupId);
 
-/**
- * Apply an AppManifest to a group.
- *
- * Steps:
- * 1. Load current state from DB
- * 2. Compute diff
- * 3. Apply overrides for the target environment
- * 4. Topological sort (dependsOn + default category ordering)
- * 5. Execute each entry via entity operations
- * 6. Save manifest to group row
- * 7. Return results
- */
+  await db.update(groups)
+    .set({
+      appVersion: desiredState.version,
+      provider: desiredState.provider,
+      env: desiredState.env,
+      manifestJson: JSON.stringify(desiredState.manifest),
+      desiredSpecJson: JSON.stringify(desiredState),
+      observedStateJson: JSON.stringify(observedState),
+      providerStateJson: current?.providerStateJson ?? '{}',
+      reconcileStatus: status,
+      lastAppliedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(groups.id, groupId))
+    .run();
+}
+
 export async function applyManifest(
   env: Env,
   groupId: string,
   manifest: AppManifest,
   opts: ApplyManifestOpts = {},
 ): Promise<ApplyResult> {
-  // 1. Load current state
-  const state = await getGroupState(env, groupId);
+  const group = await getGroupRecord(env, groupId);
+  if (!group) {
+    throw new Error(`Group "${groupId}" not found`);
+  }
 
-  // 2. Apply env overrides
-  const resolved = applyOverrides(manifest, opts.envName ?? 'default');
+  const desiredState = compileGroupDesiredState(manifest, {
+    groupName: opts.groupName ?? group.name,
+    provider: group.provider ?? 'cloudflare',
+    envName: opts.envName ?? group.env ?? 'default',
+  });
+  const currentState = await getGroupState(env, groupId);
+  const diff = computeDiff(desiredState, currentState);
 
-  // 3. Compute diff
-  const diff = computeDiff(resolved, state);
-
-  // 4. Filter by target if specified
   let entries = diff.entries;
   if (opts.target && opts.target.length > 0) {
     const targetSet = new Set(opts.target);
-    entries = entries.filter((e) => targetSet.has(e.name));
+    entries = entries.filter((entry) => targetSet.has(entry.name));
   }
 
-  // 5. Topological sort
-  const ordered = topologicalSort(entries, resolved);
+  const ordered = topologicalSort(entries, desiredState);
 
-  // 6. Execute
   const result: ApplyResult = {
     groupId,
     applied: [],
@@ -471,7 +426,7 @@ export async function applyManifest(
     }
 
     try {
-      await executeEntry(entry, resolved, env, groupId, opts);
+      await executeEntry(entry, desiredState, env, groupId, group, opts);
       result.applied.push({
         name: entry.name,
         category: entry.category,
@@ -493,31 +448,51 @@ export async function applyManifest(
     }
   }
 
-  // 7. Save manifest to group
-  try {
-    await saveManifestToGroup(env, groupId, resolved);
-  } catch (error) {
-    console.warn('Failed to save manifest to group:', error);
-  }
+  const refreshedState = await getGroupState(env, groupId);
+  const now = new Date().toISOString();
+  const workloads = refreshedState?.workloads ?? {};
+  const currentRoutes = currentState?.routes ?? {};
+  const finalRoutes = buildFinalRoutes(
+    desiredState,
+    currentRoutes,
+    workloads,
+    opts.target,
+    now,
+  );
+  const observedState: ObservedGroupState = {
+    groupId,
+    groupName: desiredState.groupName,
+    provider: desiredState.provider,
+    env: desiredState.env,
+    version: desiredState.version,
+    updatedAt: now,
+    resources: refreshedState?.resources ?? {},
+    workloads,
+    routes: finalRoutes,
+  };
+
+  const hasFailures = result.applied.some((entry) => entry.status === 'failed');
+  await saveGroupSnapshots(env, groupId, desiredState, observedState, hasFailures ? 'degraded' : 'ready');
 
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// planManifest — dry-run: compute diff without executing
-// ---------------------------------------------------------------------------
-
-/**
- * Compute the diff for a manifest against the current group state
- * without executing any operations. Useful for "plan" / dry-run.
- */
 export async function planManifest(
   env: Env,
   groupId: string,
   manifest: AppManifest,
   opts: { envName?: string } = {},
 ): Promise<DiffResult> {
-  const state = await getGroupState(env, groupId);
-  const resolved = applyOverrides(manifest, opts.envName ?? 'default');
-  return computeDiff(resolved, state);
+  const group = await getGroupRecord(env, groupId);
+  if (!group) {
+    throw new Error(`Group "${groupId}" not found`);
+  }
+
+  const desiredState = compileGroupDesiredState(manifest, {
+    groupName: group.name,
+    provider: group.provider ?? 'cloudflare',
+    envName: opts.envName ?? group.env ?? 'default',
+  });
+  const currentState = await getGroupState(env, groupId);
+  return computeDiff(desiredState, currentState);
 }

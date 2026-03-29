@@ -37,6 +37,7 @@ export const resources = sqliteTable('resources', {
   id: text('id').primaryKey(),
   ownerAccountId: text('owner_account_id').notNull(),
   accountId: text('account_id'),
+  groupId: text('group_id'),
   name: text('name').notNull(),
   type: text('type').notNull(),
   status: text('status').notNull().default('provisioning'),
@@ -56,6 +57,7 @@ export const resources = sqliteTable('resources', {
   idxOwner: index('idx_resources_owner_account_id').on(table.ownerAccountId),
   idxCfId: index('idx_resources_cf_id').on(table.cfId),
   idxAccount: index('idx_resources_account_id').on(table.accountId),
+  idxGroup: index('idx_resources_group_id').on(table.groupId),
   idxManifestKey: index('idx_resources_manifest_key').on(table.manifestKey),
   idxOrphanedAt: index('idx_resources_orphaned_at').on(table.orphanedAt),
 }));

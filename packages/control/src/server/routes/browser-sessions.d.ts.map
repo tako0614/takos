@@ -1,1 +1,0 @@
-{"version":3,"file":"browser-sessions.d.ts","sourceRoot":"","sources":["browser-sessions.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,OAAO,EAAE,IAAI,EAAE,MAAM,MAAM,CAAC;AAC5B,OAAO,KAAK,EAAE,GAAG,EAAE,IAAI,EAAE,MAAM,oBAAoB,CAAC;AAGpD,KAAK,uBAAuB,GAAG;IAC7B,IAAI,CAAC,EAAE,IAAI,CAAC;CACb,CAAC;AAEF,QAAA,MAAM,eAAe;cACT,GAAG;eACF,uBAAuB;yCAChC,CAAC;AA8OL,eAAe,eAAe,CAAC"}

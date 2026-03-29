@@ -47,7 +47,7 @@ function collectPackageLocks(startDir) {
           continue;
         }
 
-        // Skip git submodule directories (they contain a .git file, not a directory)
+        // git サブモジュールのディレクトリは除外する（.git はディレクトリではなくファイルとして存在するため）
         if (existsSync(path.join(fullPath, ".git"))) {
           continue;
         }

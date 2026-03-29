@@ -1,8 +1,8 @@
 /**
- * Shared build utility for container apps (executor, browser, etc.).
- * Wraps esbuild with common defaults for Node.js container bundles.
+ * コンテナアプリ（executor、browser など）向けの共通ビルドユーティリティ。
+ * Node.js 向けコンテナバンドルを esbuild で共通設定として実行する。
  *
- * Usage:
+ * 使い方:
  *   import { buildContainer } from '../../scripts/build-container.mjs';
  *   await buildContainer({ entryPoint: 'src/index.ts', name: 'takos-executor', ... });
  */
@@ -15,12 +15,12 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * @param {object} opts
- * @param {string} opts.appDir - Absolute path to the app directory
- * @param {string} opts.name - App name for logging
- * @param {string} [opts.entryPoint] - Entry point relative to appDir (default: 'src/index.ts')
- * @param {string} [opts.outfile] - Output file relative to appDir (default: 'dist/index.js')
- * @param {Record<string, string>} [opts.alias] - Additional esbuild aliases
- * @param {string[]} [opts.external] - Additional external packages
+ * @param {string} opts.appDir - アプリケーションディレクトリの絶対パス
+ * @param {string} opts.name - ログに表示するアプリ名
+ * @param {string} [opts.entryPoint] - appDir からのエントリポイント（デフォルト: 'src/index.ts'）
+ * @param {string} [opts.outfile] - 出力ファイルのパス（appDir からの相対パス、デフォルト: 'dist/index.js'）
+ * @param {Record<string, string>} [opts.alias] - 追加の esbuild エイリアス
+ * @param {string[]} [opts.external] - 追加の external 指定パッケージ
  */
 export async function buildContainer(opts) {
   const {

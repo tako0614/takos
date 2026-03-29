@@ -1,23 +1,23 @@
 /**
- * ID Generation Utilities
+ * ID 生成ユーティリティ
  *
- * Provides cryptographically secure random ID generation
- * for use across all takos packages.
+ * すべての Takos パッケージで利用できる
+ * 暗号学的に安全なランダム ID 生成を提供する。
  */
 
 /**
- * Generate a cryptographically secure random ID using alphanumeric characters.
+ * 英数字を使って暗号学的に安全なランダム ID を生成する。
  *
- * Uses crypto.getRandomValues() for secure randomness.
- * Character set: lowercase letters and digits (36 chars).
+ * 安全性確保のため `crypto.getRandomValues()` を利用する。
+ * 使用文字セットは英小文字 + 数字（計 36 文字）。
  *
- * @param length - Length of the ID (default: 12)
- * @returns Random alphanumeric string
+ * @param length - ID の長さ（既定値: 12）
+ * @returns 英数字から生成されるランダム文字列
  *
  * @example
  * ```typescript
- * const id = generateId(); // e.g., "a1b2c3d4e5f6"
- * const longId = generateId(24); // e.g., "a1b2c3d4e5f6g7h8i9j0k1l2"
+ * const id = generateId(); // 例: "a1b2c3d4e5f6"
+ * const longId = generateId(24); // 例: "a1b2c3d4e5f6g7h8i9j0k1l2"
  * ```
  */
 export function generateId(length: number = 12): string {
@@ -30,4 +30,3 @@ export function generateId(length: number = 12): string {
   }
   return result;
 }
-

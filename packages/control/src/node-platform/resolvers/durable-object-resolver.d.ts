@@ -1,2 +1,0 @@
-export declare function resolveDurableObject(name: string, redisUrl: string | null, dataDir: string | null): Promise<import("../../shared/types/bindings.ts").DurableObjectNamespace>;
-//# sourceMappingURL=durable-object-resolver.d.ts.map

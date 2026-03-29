@@ -14,7 +14,8 @@ function generateTestKeyPair(modulusLength = 1024) {
 }
 
 /**
- * Local helper to sign test tokens (not exported, only for test use)
+ * テスト用トークンを署名するローカルヘルパー
+ * （未 export、テスト専用）
  */
 function signTestToken(options: {
   issuer: string;
@@ -192,7 +193,7 @@ describe('service JWT', () => {
     expect(payload.exp).not.toBe(1);
     expect(payload.exp).toBe((payload.iat as number) + 120);
 
-    // Non-reserved custom claims still pass through.
+    // 予約済みでないカスタムクレームはそのまま残る
     expect(payload.role).toBe('internal');
 
     const verified = verifyServiceToken({

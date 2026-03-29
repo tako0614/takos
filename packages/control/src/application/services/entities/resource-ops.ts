@@ -2,19 +2,19 @@
  * Resource entity operations for the control plane.
  *
  * Provisions / deletes Cloudflare resources (D1, R2, KV, etc.) via the
- * CF Management API and records the result in the group_entities table.
+ * CF Management API and records the result in the canonical resources table.
  *
  * Runs inside Cloudflare Workers -- no subprocess / wrangler CLI available.
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 import { getDb } from '../../../infra/db/client.ts';
-import { groupEntities } from '../../../infra/db/schema-groups.ts';
+import { groups } from '../../../infra/db/schema-groups.ts';
+import { resources } from '../../../infra/db/schema-platform-resources.ts';
 import {
   createCloudflareApiClient,
   type CloudflareApiClient,
 } from '../cloudflare/api-client.ts';
-import { generateId } from '../../../shared/utils/index.ts';
 import type { Env } from '../../../shared/types/env.ts';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,7 @@ interface ResourceConfig {
   cfResourceId: string;
   binding: string;
   cfName: string;
+  specFingerprint?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,12 +55,36 @@ function resourceCfName(groupName: string, envName: string, resourceName: string
   return `${groupName}-${envName}-${resourceName}`;
 }
 
+function generateResourceId(): string {
+  return crypto.randomUUID();
+}
+
 function requireCfClient(env: Env): CloudflareApiClient {
   const client = createCloudflareApiClient(env);
   if (!client) {
     throw new Error('CF_ACCOUNT_ID and CF_API_TOKEN are required for resource provisioning');
   }
   return client;
+}
+
+async function resolveSpaceId(
+  env: Env,
+  groupId: string,
+  explicitSpaceId?: string,
+): Promise<string> {
+  if (explicitSpaceId) return explicitSpaceId;
+
+  const db = getDb(env.DB);
+  const group = await db.select({ spaceId: groups.spaceId })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .get();
+
+  if (!group) {
+    throw new Error(`Group "${groupId}" not found`);
+  }
+
+  return group.spaceId;
 }
 
 /**
@@ -129,10 +154,13 @@ export async function createResource(
     binding?: string;
     groupName?: string;
     envName?: string;
+    spaceId?: string;
+    specFingerprint?: string;
   },
 ): Promise<EntityResult> {
   const binding = opts.binding || name.toUpperCase().replace(/-/g, '_');
   const cfName = resourceCfName(opts.groupName ?? groupId, opts.envName ?? 'default', name);
+  const spaceId = await resolveSpaceId(env, groupId, opts.spaceId);
 
   let cfResourceId: string;
 
@@ -179,18 +207,52 @@ export async function createResource(
     cfResourceId,
     binding,
     cfName,
+    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
   };
 
-  const entityId = generateId();
   const db = getDb(env.DB);
+  const existing = await db.select()
+    .from(resources)
+    .where(and(
+      eq(resources.groupId, groupId),
+      eq(resources.name, name),
+      ne(resources.status, 'deleted'),
+    ))
+    .get();
 
-  await db.insert(groupEntities).values({
-    id: entityId,
-    groupId,
-    category: 'resource',
-    name,
-    config: JSON.stringify(config),
-  });
+  if (existing) {
+    await db.update(resources)
+      .set({
+        ownerAccountId: spaceId,
+        accountId: spaceId,
+        groupId,
+        type: opts.type,
+        status: 'active',
+        cfId: cfResourceId,
+        cfName,
+        config: JSON.stringify(config),
+        manifestKey: name,
+        orphanedAt: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(resources.id, existing.id))
+      .run();
+  } else {
+    await db.insert(resources).values({
+      id: generateResourceId(),
+      ownerAccountId: spaceId,
+      accountId: spaceId,
+      groupId,
+      name,
+      type: opts.type,
+      status: 'active',
+      cfId: cfResourceId,
+      cfName,
+      config: JSON.stringify(config),
+      metadata: '{}',
+      manifestKey: name,
+    }).run();
+  }
 
   return {
     name,
@@ -199,6 +261,45 @@ export async function createResource(
     id: cfResourceId,
     binding,
   };
+}
+
+export async function updateManagedResource(
+  env: Env,
+  groupId: string,
+  name: string,
+  updates: {
+    binding?: string;
+    specFingerprint?: string;
+  },
+): Promise<void> {
+  const db = getDb(env.DB);
+  const row = await db.select()
+    .from(resources)
+    .where(and(
+      eq(resources.groupId, groupId),
+      eq(resources.name, name),
+      ne(resources.status, 'deleted'),
+    ))
+    .get();
+
+  if (!row) {
+    throw new Error(`Resource "${name}" not found in group ${groupId}`);
+  }
+
+  const current = JSON.parse(row.config) as ResourceConfig;
+  const next: ResourceConfig = {
+    ...current,
+    ...(updates.binding ? { binding: updates.binding } : {}),
+    ...(updates.specFingerprint ? { specFingerprint: updates.specFingerprint } : {}),
+  };
+
+  await db.update(resources)
+    .set({
+      config: JSON.stringify(next),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(resources.id, row.id))
+    .run();
 }
 
 // ---------------------------------------------------------------------------
@@ -212,23 +313,20 @@ export async function deleteResource(
 ): Promise<void> {
   const db = getDb(env.DB);
 
-  const rows = await db
+  const row = await db
     .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'resource'),
-        eq(groupEntities.name, name),
-      ),
-    )
-    .limit(1);
+    .from(resources)
+    .where(and(
+      eq(resources.groupId, groupId),
+      eq(resources.name, name),
+      ne(resources.status, 'deleted'),
+    ))
+    .get();
 
-  if (rows.length === 0) {
+  if (!row) {
     throw new Error(`Resource entity "${name}" not found in group ${groupId}`);
   }
 
-  const row = rows[0];
   const config = JSON.parse(row.config) as ResourceConfig;
 
   // Delete the real CF resource
@@ -260,8 +358,9 @@ export async function deleteResource(
 
   // Remove from DB
   await db
-    .delete(groupEntities)
-    .where(eq(groupEntities.id, row.id));
+    .delete(resources)
+    .where(eq(resources.id, row.id))
+    .run();
 }
 
 // ---------------------------------------------------------------------------
@@ -276,19 +375,17 @@ export async function listResources(
 
   const rows = await db
     .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'resource'),
-      ),
-    );
+    .from(resources)
+    .where(and(
+      eq(resources.groupId, groupId),
+      ne(resources.status, 'deleted'),
+    ));
 
   return rows.map((row) => ({
     id: row.id,
-    groupId: row.groupId,
+    groupId: row.groupId ?? groupId,
     name: row.name,
-    category: row.category,
+    category: 'resource',
     config: JSON.parse(row.config) as ResourceConfig,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

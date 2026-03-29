@@ -1,12 +1,13 @@
 import { Hono, type Context } from 'hono';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, ne } from 'drizzle-orm';
 import type { Env } from '../../shared/types';
 import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
-import { getDb, groups, groupEntities } from '../../infra/db';
+import { getDb, groups, resources, services, deployments } from '../../infra/db';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { planManifest, applyManifest } from '../../application/services/deployment/apply-engine';
+import { getGroupState, planManifest, applyManifest } from '../../application/services/deployment/apply-engine';
 import { parseAppManifestYaml } from '../../application/services/source/app-manifest-parser';
 import { getUpdateType } from '../../application/services/deployment/store-install';
+import { safeJsonParseOrDefault } from '../../shared/utils/logger';
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 
@@ -20,16 +21,47 @@ function getGroupIdParam(c: GroupsContext): string {
   return groupId;
 }
 
-function getCategoryParam(c: GroupsContext): string {
-  const category = c.req.param('category');
-  if (!category) throw new BadRequestError('category param is required');
-  return decodeURIComponent(category);
+function parseJsonField<T>(value: string | null): T | null {
+  if (!value) return null;
+  return safeJsonParseOrDefault<T | null>(value, null);
 }
 
-function getNameParam(c: GroupsContext): string {
-  const name = c.req.param('name');
-  if (!name) throw new BadRequestError('name param is required');
-  return decodeURIComponent(name);
+function toApiGroup(group: {
+  id: string;
+  spaceId: string;
+  name: string;
+  appVersion: string | null;
+  provider: string | null;
+  env: string | null;
+  manifestJson: string | null;
+  desiredSpecJson: string | null;
+  observedStateJson: string | null;
+  providerStateJson: string | null;
+  reconcileStatus: string;
+  lastAppliedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    ...group,
+    manifestJson: parseJsonField(group.manifestJson),
+    desiredSpecJson: parseJsonField(group.desiredSpecJson),
+    observedStateJson: parseJsonField(group.observedStateJson),
+    providerStateJson: parseJsonField(group.providerStateJson),
+  };
+}
+
+async function requireGroupInSpace(c: GroupsContext) {
+  const { space } = c.get('access');
+  const db = getDb(c.env.DB);
+  const groupId = getGroupIdParam(c);
+  const group = await db
+    .select()
+    .from(groups)
+    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)))
+    .get();
+  if (!group) throw new NotFoundError('Group');
+  return group;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +72,7 @@ async function listGroupsHandler(c: GroupsContext) {
   const { space } = c.get('access');
   const db = getDb(c.env.DB);
   const result = await db.select().from(groups).where(eq(groups.spaceId, space.id));
-  return c.json({ groups: result });
+  return c.json({ groups: result.map((group) => toApiGroup(group)) });
 }
 
 async function createGroupHandler(c: GroupsContext) {
@@ -57,6 +89,11 @@ async function createGroupHandler(c: GroupsContext) {
     provider: body.provider ?? null,
     env: body.env ?? null,
     manifestJson: body.manifestJson ? JSON.stringify(body.manifestJson) : null,
+    desiredSpecJson: null,
+    observedStateJson: null,
+    providerStateJson: '{}',
+    reconcileStatus: 'idle',
+    lastAppliedAt: null,
     createdAt: now,
     updatedAt: now,
   });
@@ -64,92 +101,89 @@ async function createGroupHandler(c: GroupsContext) {
 }
 
 async function getGroupHandler(c: GroupsContext) {
-  const { space } = c.get('access');
-  const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-  const group = await db
-    .select()
-    .from(groups)
-    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)))
-    .get();
-  if (!group) throw new NotFoundError('Group');
-  return c.json(group);
-}
-
-async function deleteGroupHandler(c: GroupsContext) {
-  const { space } = c.get('access');
-  const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-  const group = await db
-    .select({ id: groups.id })
-    .from(groups)
-    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)))
-    .get();
-  if (!group) throw new NotFoundError('Group');
-  await db.delete(groups).where(eq(groups.id, groupId));
-  return c.json({ deleted: true });
-}
-
-async function listEntitiesHandler(c: GroupsContext) {
-  const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-  const category = c.req.query('category');
-
-  const where = category
-    ? and(eq(groupEntities.groupId, groupId), eq(groupEntities.category, category))
-    : eq(groupEntities.groupId, groupId);
-
-  const result = await db
-    .select()
-    .from(groupEntities)
-    .where(where);
+  const group = await requireGroupInSpace(c);
+  const observed = await getGroupState(c.env, group.id);
   return c.json({
-    entities: result.map((e) => ({ ...e, config: JSON.parse(e.config) })),
+    ...toApiGroup(group),
+    inventory: observed
+      ? {
+          resources: Object.values(observed.resources),
+          workloads: Object.values(observed.workloads),
+          routes: Object.values(observed.routes),
+        }
+      : { resources: [], workloads: [], routes: [] },
   });
 }
 
-async function upsertEntityHandler(c: GroupsContext) {
+async function deleteGroupHandler(c: GroupsContext) {
+  const group = await requireGroupInSpace(c);
   const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-  const body = await c.req.json();
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
+  const ownedResources = await db.select({ id: resources.id })
+    .from(resources)
+    .where(and(eq(resources.groupId, group.id), ne(resources.status, 'deleted')))
+    .all();
+  const ownedServices = await db.select({ id: services.id })
+    .from(services)
+    .where(eq(services.groupId, group.id))
+    .all();
 
-  await db
-    .insert(groupEntities)
-    .values({
-      id,
-      groupId,
-      category: body.category,
-      name: body.name,
-      config: JSON.stringify(body.config || {}),
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [groupEntities.groupId, groupEntities.category, groupEntities.name],
-      set: { config: JSON.stringify(body.config || {}), updatedAt: now },
-    });
+  if (ownedResources.length > 0 || ownedServices.length > 0) {
+    throw new BadRequestError('Group still owns resources or services. Apply an empty manifest before deleting the group.');
+  }
 
-  return c.json({ id, category: body.category, name: body.name }, 201);
+  await db.delete(groups).where(eq(groups.id, group.id));
+  return c.json({ deleted: true });
 }
 
-async function deleteEntityHandler(c: GroupsContext) {
+async function listGroupResourcesHandler(c: GroupsContext) {
+  const group = await requireGroupInSpace(c);
   const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-  const category = getCategoryParam(c);
-  const name = getNameParam(c);
+  const result = await db.select()
+    .from(resources)
+    .where(and(eq(resources.groupId, group.id), ne(resources.status, 'deleted')))
+    .all();
+  return c.json({
+    resources: result.map((resource) => ({
+      ...resource,
+      config: parseJsonField(resource.config) ?? {},
+      metadata: parseJsonField(resource.metadata) ?? {},
+    })),
+  });
+}
 
-  await db
-    .delete(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, category),
-        eq(groupEntities.name, name),
-      ),
-    );
-  return c.json({ deleted: true });
+async function listGroupServicesHandler(c: GroupsContext) {
+  const group = await requireGroupInSpace(c);
+  const db = getDb(c.env.DB);
+  const result = await db.select()
+    .from(services)
+    .where(eq(services.groupId, group.id))
+    .all();
+  return c.json({
+    services: result.map((service) => ({
+      ...service,
+      config: parseJsonField(service.config) ?? {},
+    })),
+  });
+}
+
+async function listGroupDeploymentsHandler(c: GroupsContext) {
+  const group = await requireGroupInSpace(c);
+  const db = getDb(c.env.DB);
+  const ownedServices = await db.select({ id: services.id })
+    .from(services)
+    .where(eq(services.groupId, group.id))
+    .all();
+  const serviceIds = ownedServices.map((service) => service.id);
+
+  if (serviceIds.length === 0) {
+    return c.json({ deployments: [] });
+  }
+
+  const result = await db.select()
+    .from(deployments)
+    .where(inArray(deployments.serviceId, serviceIds))
+    .all();
+  return c.json({ deployments: result });
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +191,7 @@ async function deleteEntityHandler(c: GroupsContext) {
 // ---------------------------------------------------------------------------
 
 async function planGroupHandler(c: GroupsContext) {
-  const groupId = getGroupIdParam(c);
+  const group = await requireGroupInSpace(c);
   const body = await c.req.json();
 
   let manifest = body.manifest;
@@ -165,14 +199,12 @@ async function planGroupHandler(c: GroupsContext) {
     manifest = parseAppManifestYaml(manifest);
   }
 
-  const diff = await planManifest(c.env, groupId, manifest);
+  const diff = await planManifest(c.env, group.id, manifest);
   return c.json(diff);
 }
 
 async function applyGroupHandler(c: GroupsContext) {
-  const { space } = c.get('access');
-  const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
+  const group = await requireGroupInSpace(c);
   const body = await c.req.json();
 
   let manifest = body.manifest;
@@ -180,33 +212,14 @@ async function applyGroupHandler(c: GroupsContext) {
     manifest = parseAppManifestYaml(manifest);
   }
 
-  const result = await applyManifest(c.env, groupId, manifest, {
+  const result = await applyManifest(c.env, group.id, manifest, {
     target: body.target,
   });
-
-  // group の app_version を更新
-  await db
-    .update(groups)
-    .set({
-      appVersion: manifest.spec.version,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)));
-
   return c.json(result);
 }
 
 async function updatesGroupHandler(c: GroupsContext) {
-  const { space } = c.get('access');
-  const db = getDb(c.env.DB);
-  const groupId = getGroupIdParam(c);
-
-  const group = await db
-    .select()
-    .from(groups)
-    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)))
-    .get();
-  if (!group) throw new NotFoundError('Group');
+  const group = await requireGroupInSpace(c);
 
   const latest = c.req.query('latestVersion');
   if (!latest || !group.appVersion) {
@@ -239,10 +252,10 @@ groupsRouter
   .get('/spaces/:spaceId/groups/:groupId', spaceAccess(), getGroupHandler)
   .delete('/spaces/:spaceId/groups/:groupId', spaceAccess({ roles: ['owner', 'admin'] }), deleteGroupHandler)
 
-  // Group entities
-  .get('/spaces/:spaceId/groups/:groupId/entities', spaceAccess(), listEntitiesHandler)
-  .post('/spaces/:spaceId/groups/:groupId/entities', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), upsertEntityHandler)
-  .delete('/spaces/:spaceId/groups/:groupId/entities/:category/:name', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), deleteEntityHandler)
+  // Canonical group inventory
+  .get('/spaces/:spaceId/groups/:groupId/resources', spaceAccess(), listGroupResourcesHandler)
+  .get('/spaces/:spaceId/groups/:groupId/services', spaceAccess(), listGroupServicesHandler)
+  .get('/spaces/:spaceId/groups/:groupId/deployments', spaceAccess(), listGroupDeploymentsHandler)
 
   // Deployment: plan / apply / updates
   .post('/spaces/:spaceId/groups/:groupId/plan', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), planGroupHandler)

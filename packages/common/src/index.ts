@@ -1,23 +1,23 @@
 /**
- * takos-common - Shared utilities for Takos services
+ * takos-common - Takos サービス共通ユーティリティ
  *
- * This package provides common utilities used across all takos packages:
- * - ID generation (generateId)
- * - Validation helpers (isLocalhost, isPrivateIP)
- * - Error handling (AppError, ValidationError, etc.)
- * - Structured logging (createLogger)
- * - Hono middleware
+ * このパッケージは全体で利用する共通ユーティリティを提供する。
+ * - ID 生成（generateId）
+ * - バリデーションヘルパー（isLocalhost, isPrivateIP）
+ * - エラー処理（AppError, ValidationError など）
+ * - 構造化ロガー（createLogger）
+ * - Hono ミドルウェア
  */
 
 // =============================================================================
-// ID Generation Utilities
+// ID 生成ユーティリティ
 // =============================================================================
 export {
   generateId,
 } from './id.js';
 
 // =============================================================================
-// Validation Utilities
+// バリデーションユーティリリティ
 // =============================================================================
 export {
   isLocalhost,
@@ -25,17 +25,17 @@ export {
 } from './validation.js';
 
 // =============================================================================
-// Structured Logging
+// 構造化ロガー
 // =============================================================================
 export { createLogger, type Logger, type LogLevel } from './logger.js';
 
 // =============================================================================
-// Abort Signal Utilities
+// Abort Signal ユーティリティ
 // =============================================================================
 export { throwIfAborted } from './abort.js';
 
 // =============================================================================
-// Environment Variable Parsing
+// 環境変数パース
 // =============================================================================
 export {
   parseIntEnv,
@@ -46,15 +46,15 @@ export {
 } from './env-parse.js';
 
 // =============================================================================
-// Error Handling
+// エラーハンドリング
 // =============================================================================
 export {
-  // Error codes
+  // エラーコード
   ErrorCodes,
   type ErrorCode,
-  // Base errors
+  // 基本エラー
   AppError,
-  // HTTP errors
+  // HTTP エラー
   BadRequestError,
   AuthenticationError,
   PaymentRequiredError,
@@ -70,12 +70,12 @@ export {
   BadGatewayError,
   ServiceUnavailableError,
   GatewayTimeoutError,
-  // Utility functions
+  // ユーティリティ関数
   isAppError,
   normalizeError,
   logError,
   getErrorMessage,
-  // Types
+  // 型定義
   type ErrorResponse,
   type ValidationErrorDetail,
 } from './errors.js';

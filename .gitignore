@@ -16,6 +16,12 @@ coverage/
 .cache/
 .eslintcache
 *.tsbuildinfo
+packages/control/src/**/*.d.ts
+packages/control/src/**/*.d.ts.map
+packages/common/src/**/*.d.ts
+packages/common/src/**/*.d.ts.map
+packages/actions-engine/src/**/*.d.ts
+packages/actions-engine/src/**/*.d.ts.map
 
 # Tooling / runtime state
 .wrangler/

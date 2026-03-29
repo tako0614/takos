@@ -1,9 +1,9 @@
 /**
- * Auto-close session logic for the Agent Runner.
+ * Agent Runner のセッション自動クローズ処理。
  *
- * Handles committing session changes (snapshot + file sync) on success,
- * or discarding changes on failure. Uses chunked processing to limit
- * memory usage and phase-aware rollback for error recovery.
+ * 成功時にはセッション変更（スナップショット作成 + ファイル同期）をコミットし、
+ * 失敗時には変更を破棄する。チャンク処理でメモリ使用量を抑え、段階を意識した
+ * ロールバックでエラー時の復旧を行う。
  */
 
 import type { Env } from '../../../shared/types';
@@ -29,7 +29,7 @@ export interface SessionCloserDeps {
 
 type Phase = 'INIT' | 'SNAPSHOT' | 'BLOB_WRITE' | 'FILE_SYNC' | 'FINALIZE' | 'CLEANUP';
 
-/** Mutable phase tracker shared between autoCloseSession and commitSession. */
+/** `autoCloseSession` と `commitSession` で共有する変更フェーズ追跡用トラッカー。 */
 interface PhaseTracker {
   current: Phase;
   snapshotCreated: boolean;
@@ -57,9 +57,10 @@ async function fetchAutoCloseSnapshot(
 }
 
 /**
- * Commit session changes: create snapshot and sync files to workspace.
- * Processes files in chunks to limit memory usage.
- * Updates the shared `tracker` so the caller can report accurate phase on error.
+ * セッション変更をコミットする。スナップショット作成とワークスペースへの
+ * ファイル同期を行う。
+ * ファイルはチャンク処理してメモリ使用量を抑える。
+ * 共有 `tracker` を更新し、エラー時に呼び出し元が正しいフェーズを通知できるようにする。
  */
 async function commitSession(
   deps: SessionCloserDeps,
@@ -71,7 +72,7 @@ async function commitSession(
   const BLOB_CHUNK_SIZE = 50;
   const DB_BATCH_SIZE = 100;
 
-  // Get session info
+  // セッション情報を取得する
   const session = await db.select({
     baseSnapshotId: sessions.baseSnapshotId,
     status: sessions.status,
@@ -87,7 +88,7 @@ async function commitSession(
 
   if (!snapshotResponse.ok) {
     logWarn('Failed to get snapshot from runtime', { module: 'services/agent/runner', detail: await snapshotResponse.text() });
-    // Still mark session as stopped
+    // 停止状態を記録したまま処理を進める
     await db.update(sessions).set({ status: 'stopped', updatedAt: timestamp })
       .where(eq(sessions.id, sessionId));
     return;
@@ -99,13 +100,13 @@ async function commitSession(
 
   tracker.current = 'BLOB_WRITE';
 
-  // Build tree and store blobs using SnapshotManager
-  // Process in chunks to avoid memory exhaustion for large workspaces
+  // ツリーを作成し、SnapshotManager で blob を保存する
+  // 大規模ワークスペースでのメモリ枯渇を避けるためチャンク処理する
   const snapshotManager = new SnapshotManager(deps.env, deps.context.spaceId);
   const tree: Record<string, { hash: string; size: number; mode: number; type: 'file' | 'symlink' }> = {};
 
-  // Process files in chunks to limit memory usage.
-  // Within each chunk, writeBlob calls run in parallel to reduce latency.
+  // ファイルをチャンク処理してメモリ使用を制限する。
+  // 各チャンク内では writeBlob を並列実行してレイテンシを下げる。
   for (let i = 0; i < snapshot.files.length; i += BLOB_CHUNK_SIZE) {
     const chunk = snapshot.files.slice(i, i + BLOB_CHUNK_SIZE);
 
@@ -117,15 +118,15 @@ async function commitSession(
         mode: 0o644,
         type: 'file' as const,
       };
-      // Clear content reference after processing to help GC
+      // GC 負荷を下げるため、処理済みの content 参照をクリアする
       (file as { content: string | null }).content = null;
     }));
   }
 
-  // Clear the original files array to free memory
+  // 元の files 配列を解放してメモリを解放する
   snapshot.files.length = 0;
 
-  // Create new snapshot
+  // 新規スナップショットを作成する
   const newSnapshot = await snapshotManager.createSnapshot(
     tree,
     [session.baseSnapshotId],
@@ -136,7 +137,7 @@ async function commitSession(
 
   tracker.current = 'FILE_SYNC';
 
-  // Mark sync as in-progress to detect partial failures on restart
+  // 再起動時に一部失敗を検知するため、同期中フラグを保存する
   const syncMarker = `file_sync_${sessionId}_${Date.now()}`;
   await db.insert(accountMetadata).values({
     accountId: deps.context.spaceId,
@@ -152,7 +153,7 @@ async function commitSession(
     },
   });
 
-  // Sync files table with snapshot (like container_commit does)
+  // files テーブルを snapshot と同期する（container_commit と同様）
   const currentFiles = await db.select({
     path: files.path,
     sha256: files.sha256,
@@ -168,7 +169,7 @@ async function commitSession(
 
   const treeEntries = Object.entries(tree);
 
-  // Process tree entries in chunks
+  // ツリーエントリをチャンクで処理する
   for (let i = 0; i < treeEntries.length; i += DB_BATCH_SIZE) {
     const chunk = treeEntries.slice(i, i + DB_BATCH_SIZE);
     const chunkOps: FileOp[] = [];
@@ -190,7 +191,7 @@ async function commitSession(
       const existingHash = currentFileMap.get(path);
 
       if (!existingHash) {
-        // New file - insert
+        // 新規ファイルなので insert
         const newId = generateId();
         createOps.push({
           id: newId,
@@ -206,22 +207,22 @@ async function commitSession(
         });
         chunkOps.push({ type: 'insert', path });
       } else if (existingHash !== entry.hash) {
-        // Modified file - update
+        // 更新ファイルなので update
         updateOps.push({ path, sha256: entry.hash, size: entry.size });
         chunkOps.push({ type: 'update', path, oldHash: existingHash });
       }
-      // Remove from map to track deletions
+      // 削除検知用に対象を map から除外する
       currentFileMap.delete(path);
     }
 
-    // Execute this chunk's operations
+    // このチャンクの処理を実行する
     try {
-      // Create new files
+      // 新規ファイルを作成する
       if (createOps.length > 0) {
         await db.insert(files).values(createOps);
       }
 
-      // Update files sequentially (D1 does not support transactions)
+      // ファイル更新は D1 がトランザクション未対応のため逐次実行
       for (const op of updateOps) {
         await db.update(files).set({
           sha256: op.sha256,
@@ -252,7 +253,7 @@ async function commitSession(
     }
   }
 
-  // Process deletions in chunks
+  // 削除対象をチャンク処理する
   const deletePaths = Array.from(currentFileMap.keys());
   for (let i = 0; i < deletePaths.length; i += DB_BATCH_SIZE) {
     const chunk = deletePaths.slice(i, i + DB_BATCH_SIZE);
@@ -288,10 +289,10 @@ async function commitSession(
 
   tracker.current = 'FINALIZE';
 
-  // Count for event emission
+  // イベント送信に使う件数をカウントする
   const fileCount = Object.keys(tree).length;
 
-  // Update workspace and session sequentially (D1 does not support transactions)
+  // D1 がトランザクション未対応のため、ワークスペースとセッションは順次更新する
   await db.update(accounts).set({ headSnapshotId: newSnapshot.id, updatedAt: timestamp })
     .where(eq(accounts.id, deps.context.spaceId));
   await db.update(sessions).set({ status: 'stopped', headSnapshotId: newSnapshot.id, updatedAt: timestamp })
@@ -313,16 +314,16 @@ async function commitSession(
 }
 
 /**
- * Auto-close session after run completion.
- * On success: commit changes (snapshot + file sync).
- * On failure: discard changes to prevent corruption.
- * Uses chunked processing and phase-aware rollback.
+ * 実行完了後にセッションを自動クローズする。
+ * 成功時は変更（スナップショット作成 + ファイル同期）をコミットする。
+ * 失敗時は破損防止のため変更を破棄する。
+ * チャンク処理とフェーズ付きロールバックを使用する。
  */
 export async function autoCloseSession(
   deps: SessionCloserDeps,
   status: 'completed' | 'failed',
 ): Promise<void> {
-  // Get the latest session_id from DB (may have been set by container_start)
+  // DB から最新の session_id を取得する（container_start で設定されている場合がある）
   const sessionId = await deps.getCurrentSessionId();
   if (!sessionId) {
     return; // No session to close
@@ -335,7 +336,7 @@ export async function autoCloseSession(
 
   const timestamp = new Date().toISOString();
 
-  // Shared phase tracker so commitSession can report accurate phase on error
+  // 共有フェーズトラッカー: commitSession がエラー時に正確なフェーズを返却できるようにする
   const tracker: PhaseTracker = {
     current: 'INIT',
     snapshotCreated: false,
@@ -346,10 +347,10 @@ export async function autoCloseSession(
     const db = getDb(deps.db);
 
     if (status === 'completed') {
-      // On success: get snapshot and commit to workspace
+      // 成功時: スナップショットを取得してワークスペースへコミット
       await commitSession(deps, sessionId, db, timestamp, tracker);
     } else {
-      // On failure: just mark as discarded
+      // 失敗時: 廃棄としてマークする
       await db.update(sessions).set({ status: 'discarded', updatedAt: timestamp })
         .where(eq(sessions.id, sessionId));
 
@@ -361,7 +362,7 @@ export async function autoCloseSession(
 
     tracker.current = 'CLEANUP';
 
-    // Destroy runtime session
+    // 実行時セッションを破棄する
     try {
       await callRuntimeRequest(deps.env, '/session/destroy', {
         method: 'POST',
@@ -379,7 +380,7 @@ export async function autoCloseSession(
       ? { message: error.message, stack: error.stack }
       : { message: String(error) };
 
-    // Structured error log for monitoring/alerting
+    // 監視・アラート用に構造化してエラーログを出す
     logError('Failed to auto-close session', JSON.stringify({
       level: 'ERROR',
       event: 'SESSION_AUTO_CLOSE_FAILED',
@@ -393,7 +394,7 @@ export async function autoCloseSession(
       timestamp,
     }), { module: 'services/agent/runner' });
 
-    // Emit error event so callers are aware of the failure
+    // 呼び出し元に失敗を通知するイベントを emit する
     try {
       await deps.emitEvent('progress', {
         message: `Session auto-close failed at phase ${tracker.current}: ${errorDetails.message}`,
@@ -405,7 +406,7 @@ export async function autoCloseSession(
       logError('Failed to emit auto-close error event', emitError, { module: 'services/agent/runner' });
     }
 
-    // Record the auto-close failure phase in the run's error field for diagnostics
+    // 自動クローズの失敗フェーズを run のエラーフィールドに記録する（診断用）
     try {
       const dbErr = getDb(deps.db);
       const existingRun = await dbErr.select({ error: runs.error }).from(runs)
@@ -418,16 +419,16 @@ export async function autoCloseSession(
       logError('Failed to record auto-close error on run', runUpdateErr, { module: 'services/agent/runner' });
     }
 
-    // Phase-aware rollback/recovery
+    // フェーズを意識したロールバック／リカバリ
     try {
       const dbRecover = getDb(deps.db);
       if (tracker.current === 'FILE_SYNC' && tracker.filesModified > 0) {
-        // Partial file sync - mark session as error state to prevent usage
+        // ファイル同期が部分的な場合は、再利用防止のためセッションをエラー状態にする
         logWarn(`Partial file sync detected (${tracker.filesModified} ops). Marking session as error state.`, { module: 'services/agent/runner' });
         await dbRecover.update(sessions).set({ status: 'failed', updatedAt: timestamp })
           .where(eq(sessions.id, sessionId));
       } else {
-        // Safe to mark as stopped
+        // 正常に停止状態へ遷移してよい
         await dbRecover.update(sessions).set({ status: 'stopped', updatedAt: timestamp })
           .where(eq(sessions.id, sessionId));
       }

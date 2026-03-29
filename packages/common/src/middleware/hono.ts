@@ -1,9 +1,9 @@
 /**
- * Hono Middleware for takos-runtime
+ * takos-runtime 用 Hono ミドルウェア
  *
- * Provides:
- * - Service-to-service JWT authentication (RS256)
- * - Consistent error handling
+ * 提供機能:
+ * - サービス間 JWT 認証（RS256）
+ * - 一貫したエラーハンドリング
  */
 
 import type { Context, Next, Env, ErrorHandler } from 'hono';
@@ -28,14 +28,14 @@ import {
 } from '../errors.js';
 
 // =============================================================================
-// Context variable types for Hono
+// Hono 用コンテキスト変数の型定義
 // =============================================================================
 
 /**
- * Environment bindings for service token middleware.
- * Use this as a type parameter for Hono to get typed context variables.
+ * サービストークンミドルウェアの環境定義。
+ * Hono の型パラメータとして指定することで、コンテキスト変数を型安全に扱える。
  *
- * Usage:
+ * 使用例:
  * ```typescript
  * import type { ServiceTokenEnv } from 'takos-common/middleware/hono';
  * const app = new Hono<ServiceTokenEnv>();
@@ -49,33 +49,32 @@ export interface ServiceTokenEnv extends Env {
 }
 
 // =============================================================================
-// Service Token Authentication Middleware
+// サービストークン認証ミドルウェア
 // =============================================================================
 
 /**
- * Configuration for service token middleware
+ * サービストークンミドルウェアの設定
  */
 export interface ServiceTokenConfig {
-  /** Public key for JWT verification (PEM format) */
+  /** JWT 検証用公開鍵（PEM 形式） */
   jwtPublicKey?: string;
-  /** Expected issuer for JWT tokens (required when jwtPublicKey is set) */
+  /** JWT トークンの issuer 想定値（jwtPublicKey を設定する場合は必須） */
   expectedIssuer?: string;
-  /** Expected audience for JWT tokens (required when jwtPublicKey is set) */
+  /** JWT トークンの audience 想定値（jwtPublicKey を設定する場合は必須） */
   expectedAudience?: string;
-  /** Paths to skip authentication (e.g., health checks) */
+  /** 認証をスキップするパス（例: health check） */
   skipPaths?: string[];
-  /** Clock tolerance in seconds (default: 30) */
+  /** タイムスタンプ許容誤差（秒、既定: 30） */
   clockToleranceSeconds?: number;
 }
 
 /**
- * Extract service token from Authorization header.
+ * Authorization ヘッダからサービストークンを取り出す。
  *
- * Note: `takos/packages/control/src/shared/utils/url-utils.ts` contains an
- * equivalent lower-level helper `extractBearerToken(header: string | null)`
- * that operates on a raw header string.  The two cannot be unified here
- * because `takos-common` must not import from the `control` package.
- * If the extraction logic ever needs to change, update both places.
+ * 補足: `takos/packages/control/src/shared/utils/url-utils.ts` には
+ * 生のヘッダ文字列を扱う同等の `extractBearerToken(header: string | null)` があります。
+ * こちらの実装では `takos-common` が `control` パッケージを import できないため
+ * 分離しているため、ロジック変更時は両方更新すること。
  */
 export function getServiceTokenFromHeader(c: Context): string | null {
   const authHeader = c.req.header('Authorization');
@@ -86,7 +85,7 @@ export function getServiceTokenFromHeader(c: Context): string | null {
 }
 
 /**
- * Check if the token looks like a JWT (has 3 parts separated by dots)
+ * トークンが JWT 形式（`.` で3分割）かどうかを確認する
  */
 function isJwtFormat(token: string): boolean {
   const parts = token.split('.');
@@ -94,13 +93,13 @@ function isJwtFormat(token: string): boolean {
 }
 
 /**
- * Create Hono middleware for service token authentication.
- * Only RS256 JWTs are accepted.
+ * サービストークン認証の Hono ミドルウェアを生成する。
+ * 受け付ける JWT は RS256 のみ。
  *
- * @param config - Configuration for the middleware
- * @returns Hono middleware function
+ * @param config - ミドルウェア設定
+ * @returns Hono ミドルウェア関数
  *
- * Usage:
+ * 使用例:
  * ```typescript
  * import { createServiceTokenMiddleware } from 'takos-common/middleware/hono';
  *
@@ -118,7 +117,7 @@ export function createServiceTokenMiddleware(config: ServiceTokenConfig) {
   } = config;
 
   return async (c: Context, next: Next): Promise<Response | void> => {
-    // Skip authentication for certain paths (e.g., health checks)
+    // 特定のパスは認証をスキップ（例: health check）
     const path = new URL(c.req.url).pathname;
     if (skipPaths.includes(path)) {
       await next();
@@ -135,7 +134,7 @@ export function createServiceTokenMiddleware(config: ServiceTokenConfig) {
       return c.json(error.toResponse(), error.statusCode as 503);
     }
 
-    // Extract token from request
+    // リクエストからトークンを抽出
     const token = getServiceTokenFromHeader(c);
     if (!token) {
       const error = new AuthenticationError('Authorization token is required');
@@ -168,25 +167,25 @@ export function createServiceTokenMiddleware(config: ServiceTokenConfig) {
 }
 
 // =============================================================================
-// Error Handling
+// エラーハンドリング
 // =============================================================================
 
 /**
- * Error handler options
+ * エラーハンドラの設定
  */
 export interface ErrorHandlerOptions {
-  /** Include stack traces in responses (only for development) */
+  /** レスポンスにスタックトレースを含める（開発環境のみ） */
   includeStack?: boolean;
-  /** Custom error logger */
+  /** カスタムエラーロガー */
   logger?: (error: unknown, context?: Record<string, unknown>) => void;
-  /** Custom error transformer */
+  /** カスタムエラー変換関数 */
   transformError?: (error: unknown) => AppError;
 }
 
 /**
- * Create Hono error handler (for use with `app.onError`)
+ * Hono の `app.onError` 用のエラーハンドラを作成する
  *
- * Usage:
+ * 使用例:
  * ```typescript
  * import { createErrorHandler } from 'takos-common/middleware/hono';
  *
@@ -200,14 +199,14 @@ export function createErrorHandler(
   const { includeStack = false, logger = logError, transformError } = options;
 
   return (err: Error, c: Context) => {
-    // Transform error if transformer provided
+    // 変換関数があればエラーを変換
     let appError: AppError;
     if (transformError) {
       appError = transformError(err);
     } else if (isAppError(err)) {
       appError = err;
     } else {
-      // Log non-operational errors with full details
+      // 想定外エラーは詳細をフルログ出力
       const path = new URL(c.req.url).pathname;
       logger(err, {
         path,
@@ -217,15 +216,15 @@ export function createErrorHandler(
       appError = new InternalError('An unexpected error occurred');
     }
 
-    // Build response
+    // レスポンスボディを構築
     const response = appError.toResponse();
 
-    // Add stack trace in development mode
+    // 開発時のみスタックトレースを付与
     if (includeStack && appError.stack) {
       (response.error as Record<string, unknown>).stack = appError.stack;
     }
 
-    // Set special headers for rate limiting
+    // レート制限時のレスポンスヘッダを設定
     if (appError instanceof RateLimitError && appError.retryAfter) {
       c.header('Retry-After', String(appError.retryAfter));
     }
@@ -235,10 +234,10 @@ export function createErrorHandler(
 }
 
 /**
- * Not found handler for Hono
- * Use with `app.notFound()`
+ * Hono 向け 404 ハンドラ
+ * `app.notFound()` で利用
  *
- * Usage:
+ * 使用例:
  * ```typescript
  * import { notFoundHandler } from 'takos-common/middleware/hono';
  *
@@ -252,7 +251,7 @@ export function notFoundHandler(c: Context) {
 }
 
 // ============================================================================
-// Helper functions for route handlers
+// ルートハンドラ用ヘルパー
 // ============================================================================
 
 function buildErrorBody(
@@ -270,7 +269,7 @@ function buildErrorBody(
 }
 
 /**
- * 400 Bad Request
+ * 400 不正なリクエスト
  */
 export function badRequest(
   c: Context,
@@ -281,7 +280,7 @@ export function badRequest(
 }
 
 /**
- * 404 Not Found
+ * 404 リソース未検出
  */
 export function notFound(
   c: Context,
@@ -292,14 +291,14 @@ export function notFound(
 }
 
 /**
- * 403 Forbidden
+ * 403 アクセス禁止
  */
 export function forbidden(c: Context, message = 'Access denied', details?: unknown) {
   return c.json(buildErrorBody(message, ErrorCodes.FORBIDDEN, details), 403);
 }
 
 /**
- * 500 Internal Server Error
+ * 500 サーバー内部エラー
  */
 export function internalError(
   c: Context,
