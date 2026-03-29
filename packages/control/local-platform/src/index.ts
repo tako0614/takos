@@ -1,11 +1,10 @@
 /**
  * Public barrel for takos-control-local-platform.
  *
- * Each sub-module (runtime, worker, oci-orchestrator) re-exports the core API
- * from the parent control package (`../../src/local-platform/`) AND layers on
- * Node-specific server/entrypoint logic that only belongs in this package.
- * See the comments in each file for details.
+ * All canonical implementations live in `../../src/local-platform/`.
+ * This package provides re-exports and entrypoint scripts.
  */
-export * from './runtime.ts';
-export * from './worker.ts';
-export * from './oci-orchestrator.ts';
+export * from '../../src/local-platform/runtime.ts';
+export * from '../../src/local-platform/local-server.ts';
+export * from '../../src/local-platform/worker.ts';
+export * from '../../src/local-platform/oci-orchestrator.ts';

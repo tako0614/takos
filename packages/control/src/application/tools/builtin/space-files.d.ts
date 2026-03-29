@@ -1,0 +1,20 @@
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
+export declare const WORKSPACE_FILES_LIST: ToolDefinition;
+export declare const WORKSPACE_FILES_READ: ToolDefinition;
+export declare const WORKSPACE_FILES_WRITE: ToolDefinition;
+export declare const WORKSPACE_FILES_CREATE: ToolDefinition;
+export declare const WORKSPACE_FILES_MKDIR: ToolDefinition;
+export declare const WORKSPACE_FILES_DELETE: ToolDefinition;
+export declare const WORKSPACE_FILES_RENAME: ToolDefinition;
+export declare const WORKSPACE_FILES_MOVE: ToolDefinition;
+export declare const workspaceFilesListHandler: ToolHandler;
+export declare const workspaceFilesReadHandler: ToolHandler;
+export declare const workspaceFilesWriteHandler: ToolHandler;
+export declare const workspaceFilesCreateHandler: ToolHandler;
+export declare const workspaceFilesMkdirHandler: ToolHandler;
+export declare const workspaceFilesDeleteHandler: ToolHandler;
+export declare const workspaceFilesRenameHandler: ToolHandler;
+export declare const workspaceFilesMoveHandler: ToolHandler;
+export declare const WORKSPACE_FILES_TOOLS: ToolDefinition[];
+export declare const WORKSPACE_FILES_HANDLERS: Record<string, ToolHandler>;
+//# sourceMappingURL=space-files.d.ts.map

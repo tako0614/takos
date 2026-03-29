@@ -8,7 +8,7 @@ import { validateTakosPersonalAccessToken } from '../../application/services/ide
 
 import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
 import { logError, logWarn } from '../../shared/utils/logger';
-import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
+import { getPlatformServices } from '../../platform/accessors.ts';
 
 type AuthVariables = {
   user?: User;
@@ -18,8 +18,9 @@ type AuthContext = Context<{ Bindings: Env; Variables: AuthVariables }>;
 type AuthMiddleware = MiddlewareHandler<{ Bindings: Env; Variables: AuthVariables }>;
 
 async function validateContainerAuth(c: AuthContext): Promise<User | null> {
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const rawTakosSessionId = c.req.header('X-Takos-Session-Id');
   if (!rawTakosSessionId) return null;
   const takosSessionId = normalizeSessionId(rawTakosSessionId);
@@ -70,8 +71,9 @@ async function resolveRequestUser(
   c: AuthContext,
   options: ResolveAuthOptions
 ): Promise<{ user: User | null; errorResponse?: Response }> {
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const containerUser = await validateContainerAuth(c);
   if (containerUser) {
     return { user: containerUser };

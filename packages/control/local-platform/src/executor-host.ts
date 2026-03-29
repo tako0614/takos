@@ -1,5 +1,5 @@
-import { startLocalExecutorHostServer } from './runtime.ts';
-import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
+import { startLocalExecutorHostServer } from '../../src/local-platform/local-server.ts';
+import { isDirectEntrypoint, logEntrypointError } from '../../src/local-platform/direct-entrypoint.ts';
 
 if (await isDirectEntrypoint(import.meta.url)) {
   startLocalExecutorHostServer().catch(logEntrypointError);

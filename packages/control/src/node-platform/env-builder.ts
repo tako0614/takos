@@ -159,7 +159,7 @@ async function buildSharedState() {
 let sharedPromise: Promise<SharedState> | null = null;
 const dispatchRegistries = new Set<TenantWorkerRuntimeRegistry>();
 
-async function getSharedState(): Promise<SharedState> {
+function getSharedState(): Promise<SharedState> {
   if (!sharedPromise) {
     sharedPromise = buildSharedState().catch((error) => {
       sharedPromise = null;
@@ -170,7 +170,7 @@ async function getSharedState(): Promise<SharedState> {
 }
 
 // ---------------------------------------------------------------------------
-// Build config
+// Build config helpers
 // ---------------------------------------------------------------------------
 
 function buildBaseConfig(isLocal: boolean) {
@@ -194,11 +194,36 @@ function buildBaseConfig(isLocal: boolean) {
   } as const;
 }
 
+/**
+ * Shared preamble: ensure routing is seeded, resolve shared state, build config.
+ * Used by both createNodeWebEnv and createNodeDispatchEnv to avoid repeating
+ * the same three-step initialization sequence.
+ */
+async function getInitializedState() {
+  await ensureRoutingSeeded(getSharedState);
+  const shared = await getSharedState();
+  const config = buildBaseConfig(shared.dataDir !== null);
+  return { shared, config };
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-export async function disposeNodePlatformState(): Promise<void> {
+/** Options for {@link disposeNodePlatformState}. */
+export interface DisposeOptions {
+  /** If true, also delete the local data directory on disk. */
+  clearData?: boolean;
+}
+
+/**
+ * Tear down the shared singleton state, closing DB connections, Redis
+ * clients, and dispatch registries.
+ *
+ * Pass `{ clearData: true }` to also remove the local data directory
+ * (equivalent to the old clearNodePlatformDataForTests).
+ */
+export async function disposeNodePlatformState(opts?: DisposeOptions): Promise<void> {
   const pendingState = sharedPromise;
   sharedPromise = null;
   resetRoutingSeed();
@@ -210,12 +235,21 @@ export async function disposeNodePlatformState(): Promise<void> {
   await Promise.all(Array.from(dispatchRegistries, (registry) => registry.dispose().catch(() => undefined /* dispose: registry teardown is best-effort */)));
   dispatchRegistries.clear();
   await disposeRedisClient();
+
+  if (opts?.clearData) {
+    const dataDir = resolveLocalDataDir();
+    if (dataDir) {
+      await removeLocalDataDir(dataDir);
+    }
+  }
 }
 
+/** @deprecated Use {@link disposeNodePlatformState} directly. */
 export async function resetNodePlatformStateForTests(): Promise<void> {
   await disposeNodePlatformState();
 }
 
+/** @deprecated Use `disposeNodePlatformState({ clearData: true })`. */
 export async function clearNodePlatformDataForTests(): Promise<void> {
   const dataDir = resolveLocalDataDir();
   if (!dataDir) return;
@@ -227,9 +261,7 @@ export async function clearNodePlatformDataForTests(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function createNodeWebEnv(): Promise<Env> {
-  await ensureRoutingSeeded(getSharedState);
-  const shared = await getSharedState();
-  const config = buildBaseConfig(shared.dataDir !== null);
+  const { shared, config } = await getInitializedState();
 
   return {
     DB: shared.db,
@@ -290,11 +322,7 @@ export async function createNodeWebEnv(): Promise<Env> {
 // ---------------------------------------------------------------------------
 
 export async function createNodeDispatchEnv(): Promise<DispatchEnv> {
-  await ensureRoutingSeeded(getSharedState);
-  const shared = await getSharedState();
-  const config = buildBaseConfig(shared.dataDir !== null);
-
-  const forwardTargets = { ...collectImplicitForwardTargets() };
+  const { shared, config } = await getInitializedState();
 
   const dispatcher = await buildDispatcher({
     dataDir: shared.dataDir,
@@ -302,7 +330,7 @@ export async function createNodeDispatchEnv(): Promise<DispatchEnv> {
     workerBundles: shared.workerBundles,
     encryptionKey: config.ENCRYPTION_KEY,
     pgPool: shared.pgPool,
-    forwardTargets,
+    forwardTargets: { ...collectImplicitForwardTargets() },
     dispatchRegistries,
   });
 

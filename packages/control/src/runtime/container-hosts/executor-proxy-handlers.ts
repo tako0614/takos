@@ -11,7 +11,7 @@ import { getDb } from '../../infra/db';
 import { runs } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../shared/utils/logger';
-import { ok, err, classifyProxyError, type AgentExecutorEnv } from './executor-utils';
+import { ok, err, classifyProxyError, readRunServiceId, type AgentExecutorEnv } from './executor-utils';
 import { base64ToBytes } from '../../shared/utils/encoding-utils';
 
 type Env = AgentExecutorEnv;
@@ -33,7 +33,28 @@ function requireSql(sql: unknown, endpoint: string): Response | null {
   return null;
 }
 
-export async function handleDbProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+/** Wraps handler logic with the shared try/catch + logError + classifyProxyError pattern. */
+async function withProxyErrorHandler(
+  label: string,
+  fn: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    return await fn();
+  } catch (e: unknown) {
+    logError(`${label} error`, e, { module: 'executor-host' });
+    const classified = classifyProxyError(e);
+    return err(classified.message, classified.status);
+  }
+}
+
+function requireRunIdentity(body: Record<string, unknown>): { runId: string; serviceId: string } | Response {
+  const runId = typeof body.runId === 'string' ? body.runId : null;
+  const serviceId = readRunServiceId(body);
+  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
+  return { runId, serviceId };
+}
+
+export function handleDbProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
   const { sql, params = [], statements, colName, rawOptions } = body as {
     sql?: string;
     params?: unknown[];
@@ -42,7 +63,7 @@ export async function handleDbProxy(path: string, body: Record<string, unknown>,
     rawOptions?: D1RawOptions;
   };
 
-  try {
+  return withProxyErrorHandler(`DB proxy on ${path}`, async () => {
     switch (path) {
       case '/proxy/db/first': {
         const bad = requireSql(sql, 'db/first');
@@ -79,23 +100,17 @@ export async function handleDbProxy(path: string, body: Record<string, unknown>,
           if (!validation.valid) return err(`SQL validation failed: ${validation.error}`, 400);
         }
         const stmts = statements.map(({ sql: s, params: p }) => env.DB.prepare(s).bind(...p));
-        const result = await env.DB.batch(stmts);
-        return ok(result);
+        return ok(await env.DB.batch(stmts));
       }
-      case '/proxy/db/exec': {
+      case '/proxy/db/exec':
         return err('db/exec endpoint is disabled for security', 403);
-      }
       default:
         return err(`Unknown DB proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`DB proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleR2Proxy(path: string, prefix: string, body: Record<string, unknown>, bucket: R2Bucket, rawRequest?: Request): Promise<Response> {
+export function handleR2Proxy(path: string, prefix: string, body: Record<string, unknown>, bucket: R2Bucket, rawRequest?: Request): Promise<Response> {
   const {
     key,
     body: legacyBody,
@@ -110,7 +125,7 @@ export async function handleR2Proxy(path: string, prefix: string, body: Record<s
     options?: Record<string, unknown>;
   };
 
-  try {
+  return withProxyErrorHandler(`R2 proxy on ${path}`, async () => {
     switch (path) {
       case `${prefix}/get`: {
         const obj = await bucket.get(key);
@@ -138,8 +153,7 @@ export async function handleR2Proxy(path: string, prefix: string, body: Record<s
           if (binaryBody.byteLength > MAX_PROXY_PUT_BYTES) {
             return err(`Payload exceeds maximum size of ${MAX_PROXY_PUT_BYTES} bytes`, 413);
           }
-          const result = await bucket.put(binaryKey, binaryBody, putOptions);
-          return ok(result);
+          return ok(await bucket.put(binaryKey, binaryBody, putOptions));
         }
 
         let value: string | ArrayBuffer | ArrayBufferView | null;
@@ -162,32 +176,23 @@ export async function handleR2Proxy(path: string, prefix: string, body: Record<s
           return err(`Payload exceeds maximum size of ${MAX_PROXY_PUT_BYTES} bytes`, 413);
         }
 
-        const result = await bucket.put(key, value, options as Parameters<R2Bucket['put']>[2]);
-        return ok(result);
+        return ok(await bucket.put(key, value, options as Parameters<R2Bucket['put']>[2]));
       }
       case `${prefix}/delete`: {
         await bucket.delete(key);
         return ok({ success: true });
       }
-      case `${prefix}/list`: {
-        const result = await bucket.list(body as Parameters<R2Bucket['list']>[0]);
-        return ok(result);
-      }
-      case `${prefix}/head`: {
-        const result = await bucket.head(key);
-        return ok(result);
-      }
+      case `${prefix}/list`:
+        return ok(await bucket.list(body as Parameters<R2Bucket['list']>[0]));
+      case `${prefix}/head`:
+        return ok(await bucket.head(key));
       default:
         return err(`Unknown R2 proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`R2 proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleNotifierProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+export function handleNotifierProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
   const {
     url,
     method = 'POST',
@@ -202,7 +207,7 @@ export async function handleNotifierProxy(path: string, body: Record<string, unk
     body?: string;
   };
 
-  try {
+  return withProxyErrorHandler(`Notifier proxy on ${path}`, async () => {
     switch (path) {
       case '/proxy/do/fetch': {
         const { namespace, name } = body as { namespace: string; name: string };
@@ -245,73 +250,60 @@ export async function handleNotifierProxy(path: string, body: Record<string, unk
       default:
         return err(`Unknown notifier proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`Notifier proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleVectorizeProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
-  if (!env.VECTORIZE) return err('VECTORIZE not configured', 503);
+export function handleVectorizeProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+  if (!env.VECTORIZE) return Promise.resolve(err('VECTORIZE not configured', 503));
+  const vectorize = env.VECTORIZE;
 
-  try {
-    const { vector, options, vectors, ids } = body as {
-      vector?: number[];
-      options?: Record<string, unknown>;
-      vectors?: unknown[];
-      ids?: string[];
-    };
+  const { vector, options, vectors, ids } = body as {
+    vector?: number[];
+    options?: Record<string, unknown>;
+    vectors?: unknown[];
+    ids?: string[];
+  };
 
+  return withProxyErrorHandler(`Vectorize proxy on ${path}`, async () => {
     switch (path) {
       case '/proxy/vectorize/query':
         if (!Array.isArray(vector)) return err('Missing required "vector" array for vectorize/query', 400);
-        return ok(await env.VECTORIZE.query(vector, options as Parameters<VectorizeIndex['query']>[1]));
+        return ok(await vectorize.query(vector, options as Parameters<VectorizeIndex['query']>[1]));
       case '/proxy/vectorize/insert':
-        return ok(await env.VECTORIZE.insert(vectors as Parameters<VectorizeIndex['insert']>[0]));
+        return ok(await vectorize.insert(vectors as Parameters<VectorizeIndex['insert']>[0]));
       case '/proxy/vectorize/upsert':
-        return ok(await env.VECTORIZE.upsert(vectors as Parameters<VectorizeIndex['upsert']>[0]));
+        return ok(await vectorize.upsert(vectors as Parameters<VectorizeIndex['upsert']>[0]));
       case '/proxy/vectorize/delete':
         if (!Array.isArray(ids)) return err('Missing required "ids" array for vectorize/delete', 400);
-        return ok(await env.VECTORIZE.deleteByIds(ids));
+        return ok(await vectorize.deleteByIds(ids));
       case '/proxy/vectorize/get':
         if (!Array.isArray(ids)) return err('Missing required "ids" array for vectorize/get', 400);
-        return ok(await env.VECTORIZE.getByIds(ids));
+        return ok(await vectorize.getByIds(ids));
       case '/proxy/vectorize/describe':
-        return ok(await env.VECTORIZE.describe());
+        return ok(await vectorize.describe());
       default:
         return err(`Unknown vectorize proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`Vectorize proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleAiProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
-  if (!env.AI) return err('AI not configured', 503);
+export function handleAiProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+  if (!env.AI) return Promise.resolve(err('AI not configured', 503));
 
-  try {
+  return withProxyErrorHandler(`AI proxy on ${path}`, async () => {
     const { model, inputs } = body as { model: string; inputs: Record<string, unknown> };
     switch (path) {
-      case '/proxy/ai/run': {
-        const ai = env.AI as AiRunBinding;
-        return ok(await ai.run(model, inputs));
-      }
+      case '/proxy/ai/run':
+        return ok(await (env.AI as AiRunBinding).run(model, inputs));
       default:
         return err(`Unknown AI proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`AI proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
 type Fetcher = { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
 
-async function forwardProxy(
+function forwardProxy(
   label: string,
   fetcher: Fetcher,
   body: Record<string, unknown>,
@@ -323,7 +315,7 @@ async function forwardProxy(
     body?: string;
   };
 
-  try {
+  return withProxyErrorHandler(`${label} proxy`, async () => {
     const reqHeaders = new Headers(buildSanitizedDOHeaders(hdrs, {}));
     reqHeaders.set('X-Takos-Internal', '1');
     const res = await fetcher.fetch(new Request(url, {
@@ -332,11 +324,7 @@ async function forwardProxy(
       body: reqBody,
     }));
     return new Response(res.body, { status: res.status, headers: res.headers });
-  } catch (e: unknown) {
-    logError(`${label} proxy error`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
 export function handleEgressProxy(body: Record<string, unknown>, env: Env): Promise<Response> {
@@ -353,75 +341,54 @@ export function handleBrowserProxy(body: Record<string, unknown>, env: Env): Pro
   return forwardProxy('Browser', env.BROWSER_HOST, body);
 }
 
-export async function handleQueueProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
-  if (!env.INDEX_QUEUE) return err('INDEX_QUEUE not configured', 503);
+export function handleQueueProxy(path: string, body: Record<string, unknown>, env: Env): Promise<Response> {
+  if (!env.INDEX_QUEUE) return Promise.resolve(err('INDEX_QUEUE not configured', 503));
 
-  try {
-    const { queue, message, messages } = body as {
-      queue?: string;
-      message?: unknown;
-      messages?: { body: unknown }[];
-    };
-    if (queue !== 'index') return err('Unknown queue', 403);
+  const { queue, message, messages } = body as {
+    queue?: string;
+    message?: unknown;
+    messages?: { body: unknown }[];
+  };
+  if (queue !== 'index') return Promise.resolve(err('Unknown queue', 403));
+
+  return withProxyErrorHandler(`Queue proxy on ${path}`, async () => {
     switch (path) {
       case '/proxy/queue/send':
-        await env.INDEX_QUEUE.send(message as IndexJobQueueMessage);
+        await env.INDEX_QUEUE!.send(message as IndexJobQueueMessage);
         return ok({ success: true });
       case '/proxy/queue/send-batch':
         if (!Array.isArray(messages)) return err('Missing required "messages" array for queue/send-batch', 400);
-        await env.INDEX_QUEUE.sendBatch(messages as { body: IndexJobQueueMessage }[]);
+        await env.INDEX_QUEUE!.sendBatch(messages as { body: IndexJobQueueMessage }[]);
         return ok({ success: true });
       default:
         return err(`Unknown queue proxy path: ${path}`, 404);
     }
-  } catch (e: unknown) {
-    logError(`Queue proxy error on ${path}`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleHeartbeat(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.serviceId === 'string'
-    ? body.serviceId
-    : typeof body.workerId === 'string'
-      ? body.workerId
-      : null;
-  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
+export function handleHeartbeat(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const identity = requireRunIdentity(body);
+  if (identity instanceof Response) return Promise.resolve(identity);
 
-  try {
+  return withProxyErrorHandler('Heartbeat', async () => {
     const db = getDb(env.DB);
     const now = new Date().toISOString();
     await db.update(runs)
       .set({ serviceHeartbeat: now })
-      .where(and(eq(runs.id, runId), eq(runs.serviceId, serviceId)));
+      .where(and(eq(runs.id, identity.runId), eq(runs.serviceId, identity.serviceId)));
     return ok({ success: true });
-  } catch (e: unknown) {
-    logError(`Heartbeat error`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }
 
-export async function handleRunReset(body: Record<string, unknown>, env: Env): Promise<Response> {
-  const runId = typeof body.runId === 'string' ? body.runId : null;
-  const serviceId = typeof body.serviceId === 'string'
-    ? body.serviceId
-    : typeof body.workerId === 'string'
-      ? body.workerId
-      : null;
-  if (!runId || !serviceId) return err('Missing runId or serviceId', 400);
+export function handleRunReset(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const identity = requireRunIdentity(body);
+  if (identity instanceof Response) return Promise.resolve(identity);
 
-  try {
+  return withProxyErrorHandler('Run reset', async () => {
     const db = getDb(env.DB);
     await db.update(runs)
       .set({ status: 'queued', serviceId: null, serviceHeartbeat: null })
-      .where(and(eq(runs.id, runId), eq(runs.serviceId, serviceId), eq(runs.status, 'running')));
+      .where(and(eq(runs.id, identity.runId), eq(runs.serviceId, identity.serviceId), eq(runs.status, 'running')));
     return ok({ success: true });
-  } catch (e: unknown) {
-    logError(`Run reset error`, e, { module: 'executor-host' });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
+  });
 }

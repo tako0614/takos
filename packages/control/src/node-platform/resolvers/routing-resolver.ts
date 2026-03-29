@@ -3,6 +3,7 @@
  */
 import path from 'node:path';
 import { optionalEnv } from './env-utils.ts';
+import { createSyncResolverWithRedis } from './resolver-factory.ts';
 import { createInMemoryRoutingStore, createPersistentRoutingStore } from '../../local-platform/routing-store.ts';
 import { createRedisRoutingStore } from '../../local-platform/redis-bindings.ts';
 
@@ -11,9 +12,11 @@ import { createRedisRoutingStore } from '../../local-platform/redis-bindings.ts'
 // ---------------------------------------------------------------------------
 
 export function resolveRoutingStore(redisUrl: string | null, dataDir: string | null) {
-  if (redisUrl) return createRedisRoutingStore(redisUrl);
-  if (dataDir) return createPersistentRoutingStore(path.join(dataDir, 'routing', 'routing-store.json'));
-  return createInMemoryRoutingStore();
+  return createSyncResolverWithRedis({
+    createRedis: (url) => createRedisRoutingStore(url),
+    createPersistent: (dir) => createPersistentRoutingStore(path.join(dir, 'routing', 'routing-store.json')),
+    createInMemory: () => createInMemoryRoutingStore(),
+  })(redisUrl, dataDir);
 }
 
 // ---------------------------------------------------------------------------

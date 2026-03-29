@@ -1,0 +1,1 @@
+{"version":3,"file":"tenant-resource-limits.d.ts","sourceRoot":"","sources":["tenant-resource-limits.ts"],"names":[],"mappings":"AAAA;;GAEG;AAIH,MAAM,MAAM,oBAAoB,GAAG;IACjC,6DAA6D;IAC7D,YAAY,EAAE,MAAM,CAAC;IACrB,iFAAiF;IACjF,cAAc,EAAE,MAAM,CAAC;IACvB,iEAAiE;IACjE,cAAc,EAAE,MAAM,CAAC;IACvB,0DAA0D;IAC1D,eAAe,EAAE,MAAM,CAAC;CACzB,CAAC;AASF,wBAAgB,yBAAyB,IAAI,oBAAoB,CAOhE"}

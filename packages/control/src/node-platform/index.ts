@@ -5,3 +5,4 @@ export {
   resetNodePlatformStateForTests,
   clearNodePlatformDataForTests,
 } from './env-builder.ts';
+export type { DisposeOptions } from './env-builder.ts';

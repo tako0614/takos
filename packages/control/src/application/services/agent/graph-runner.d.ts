@@ -1,0 +1,73 @@
+import type { Env, RunStatus } from '../../../shared/types';
+import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import type { ToolExecutorLike } from '../../tools/executor';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models';
+import type { ToolExecution } from './runner-utils';
+import type { LLMClient, ModelProvider } from './llm';
+import { type ResolvedSkillPlan } from './skills';
+import { type RunTerminalPayload } from '../run-notifier';
+import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
+type ToolExecutionRecord = {
+    name: string;
+    arguments: Record<string, unknown>;
+    result?: string;
+    error?: string;
+    startedAt: number;
+    duration_ms?: number;
+};
+type LangGraphRunOptions = {
+    apiKey: string;
+    model: string;
+    systemPrompt: string;
+    skillPlan: ResolvedSkillPlan;
+    history: AgentMessage[];
+    threadId: string;
+    runId: string;
+    sessionId?: string;
+    toolExecutor: ToolExecutorLike;
+    db: SqlDatabaseBinding;
+    maxIterations: number;
+    temperature: number;
+    toolExecutions: ToolExecutionRecord[];
+    emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
+    addMessage: (message: AgentMessage, metadata?: Record<string, unknown>) => Promise<void>;
+    updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
+    env?: Env;
+    spaceId?: string;
+    shouldCancel?: () => boolean | Promise<boolean>;
+    abortSignal?: AbortSignal;
+    memoryRuntime?: AgentMemoryRuntime;
+};
+export declare function runLangGraphRunner(options: LangGraphRunOptions): Promise<void>;
+export interface EngineDispatchDeps {
+    env: Env;
+    db: SqlDatabaseBinding;
+    context: AgentContext;
+    config: AgentConfig;
+    toolExecutor: ToolExecutorLike | undefined;
+    llmClient?: LLMClient;
+    modelProvider: ModelProvider;
+    aiModel: string;
+    openAiKey?: string;
+    abortSignal?: AbortSignal;
+    toolExecutions: ToolExecution[];
+    totalUsage: {
+        inputTokens: number;
+        outputTokens: number;
+    };
+    toolCallCount: number;
+    totalToolCalls: number;
+    skillPlan: ResolvedSkillPlan;
+    memoryRuntime?: AgentMemoryRuntime;
+    throwIfCancelled: (ctx: string) => Promise<void>;
+    checkCancellation: () => boolean | Promise<boolean>;
+    emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
+    addMessage: (msg: AgentMessage, meta?: Record<string, unknown>) => Promise<void>;
+    updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
+    buildTerminalEventPayload: (status: 'completed' | 'failed' | 'cancelled', details?: Record<string, unknown>) => RunTerminalPayload;
+    getConversationHistory: () => Promise<AgentMessage[]>;
+}
+export type EngineType = 'langgraph' | 'simple' | 'none';
+export declare function dispatchEngine(deps: EngineDispatchDeps, history: AgentMessage[]): Promise<void>;
+export {};
+//# sourceMappingURL=graph-runner.d.ts.map

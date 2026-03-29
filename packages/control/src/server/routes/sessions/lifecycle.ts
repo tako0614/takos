@@ -17,11 +17,7 @@ import { BadRequestError, AuthorizationError, NotFoundError, InternalError } fro
 import { requireParam, requireFound } from '../validation-utils';
 import {
   getPlatformConfig,
-  getPlatformGitObjects,
-  getPlatformRuntimeHost,
-  getPlatformSqlBinding,
-  getPlatformTenantSource,
-  getPlatformWorkflowQueue,
+  getPlatformServices,
 } from '../../../platform/accessors.ts';
 import type { RuntimeSessionManagerEnv } from '../../../application/services/sync/runtime-session';
 
@@ -35,8 +31,9 @@ type StopSessionBody = {
 };
 
 function buildRuntimeSessionManagerEnv(c: SessionContext): RuntimeSessionManagerEnv | null {
-  const dbBinding = getPlatformSqlBinding(c);
-  const runtimeHost = getPlatformRuntimeHost(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const runtimeHost = services.hosts.runtimeHost;
   if (!dbBinding || !runtimeHost) {
     return null;
   }
@@ -44,8 +41,8 @@ function buildRuntimeSessionManagerEnv(c: SessionContext): RuntimeSessionManager
   return {
     DB: dbBinding,
     RUNTIME_HOST: runtimeHost,
-    GIT_OBJECTS: getPlatformGitObjects(c),
-    TENANT_SOURCE: getPlatformTenantSource(c),
+    GIT_OBJECTS: services.objects.gitObjects,
+    TENANT_SOURCE: services.objects.tenantSource,
   };
 }
 
@@ -65,7 +62,7 @@ export async function startSession(
 
   const repoId = body.repo_id;
   const branch = body.branch;
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
 
   if (!repoId) {
@@ -138,11 +135,11 @@ export async function stopSession(
 ): Promise<Response> {
   const user = c.get('user');
   const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
-  const dbBinding = getPlatformSqlBinding(c);
-  const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
-  const gitObjects = getPlatformGitObjects(c);
-  const tenantSource = getPlatformTenantSource(c);
-  const workflowQueue = getPlatformWorkflowQueue(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const gitObjects = services.objects.gitObjects;
+  const tenantSource = services.objects.tenantSource;
+  const workflowQueue = services.queues.workflow;
   const config = getPlatformConfig(c);
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
@@ -253,7 +250,7 @@ export async function stopSession(
 export async function resumeSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
   const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
   }
@@ -290,7 +287,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
 export async function discardSession(c: SessionContext): Promise<Response> {
   const user = c.get('user');
   const sessionId = requireParam(c.req.param('sessionId'), 'sessionId');
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');

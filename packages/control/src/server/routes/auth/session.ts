@@ -21,14 +21,14 @@ import { getDb } from '../../../infra/db';
 import { accounts, authIdentities } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
-import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
+import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 
 export const authSessionRouter = new Hono<OptionalAuthRouteEnv>();
 
 const startGoogleOAuth = async (c: Context<OptionalAuthRouteEnv>) => {
   const returnTo = sanitizeReturnTo(c.req.query('return_to'));
   const config = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const redirectUri = `https://${config.adminDomain}/auth/callback`;
 
   if (!dbBinding || !config.googleClientId) {
@@ -102,8 +102,9 @@ function determineEmailKind(email: string, hd?: string): string {
 // GET /auth/callback - Handle Google OAuth callback
 authSessionRouter.get('/callback', async (c) => {
   const config = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const code = c.req.query('code');
   const state = c.req.query('state') || '';
   const error = c.req.query('error');
@@ -261,7 +262,7 @@ authSessionRouter.get('/callback', async (c) => {
 
 // POST /auth/logout
 authSessionRouter.post('/logout', async (c) => {
-  const sessionStore = getPlatformSessionStore(c);
+  const sessionStore = getPlatformServices(c).notifications.sessionStore;
   const sessionId = getSessionIdFromCookie(c.req.header('Cookie'));
   if (sessionId && sessionStore) {
     await deleteSession(sessionStore, sessionId);

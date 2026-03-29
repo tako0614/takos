@@ -1,18 +1,7 @@
 export {
   getPlatform,
-  getPlatformBindings,
   getPlatformConfig,
   getPlatformServices,
-  getPlatformService,
-  getPlatformSqlBinding,
-  getPlatformSessionStore,
-  getPlatformRunNotifier,
-  getPlatformRuntimeHost,
-  getPlatformExecutorHost,
-  getPlatformBrowserHost,
-  getPlatformGitObjects,
-  getPlatformTenantSource,
-  getPlatformWorkflowQueue,
 } from './accessors.ts';
 
 export type {

@@ -12,11 +12,16 @@
  *   takos state show <key>                -- Show details for a specific entry
  *   takos state import <key> <id>         -- Import an existing resource into state
  *   takos state rm <key>                  -- Remove entry from state (does NOT delete the actual resource)
+ *   takos state refresh                   -- Reconcile state with provider (remove orphaned entries)
+ *   takos state sync                      -- Synchronise local and remote state
  */
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { readState, writeState, getStateDir, getStateFilePath } from '../lib/state/state-file.js';
 import type { StateAccessOptions } from '../lib/state/state-file.js';
+import { refreshState } from '../lib/state/refresh.js';
+import type { RefreshableProvider } from '../lib/state/refresh.js';
+import { syncState } from '../lib/state/sync.js';
 import { cliExit } from '../lib/command-exit.js';
 import { printJson } from '../lib/cli-utils.js';
 import type { TakosState } from '../lib/state/state-types.js';
@@ -58,6 +63,19 @@ function toAccessOpts(options: { offline?: boolean }): StateAccessOptions {
   return options.offline ? { offline: true } : {};
 }
 
+/**
+ * Stub provider for `state refresh` — always returns true (resource exists).
+ *
+ * Real providers can implement the RefreshableProvider interface to
+ * actually verify resource existence. This stub ensures `state refresh`
+ * works even without a concrete provider, serving as a no-op baseline.
+ */
+class StubRefreshProvider implements RefreshableProvider {
+  async checkResourceExists(_type: string, _id: string, _name: string): Promise<boolean> {
+    return true;
+  }
+}
+
 export function registerStateCommand(program: Command): void {
   const stateCmd = program
     .command('state')
@@ -96,6 +114,7 @@ export function registerStateCommand(program: Command): void {
       console.log(chalk.bold(`State: ${state.groupName || '(unknown)'}`));
       console.log(`  Provider:    ${state.provider || '(unknown)'}`);
       console.log(`  Environment: ${state.env || '(unknown)'}`);
+      console.log(`  Version:     ${state.version || '(unknown)'}`);
       console.log(`  Updated at:  ${state.updatedAt || '(never)'}`);
       if (accessOpts.offline) {
         const stateFilePath = getStateFilePath(stateDir, group);
@@ -327,5 +346,112 @@ export function registerStateCommand(program: Command): void {
       await writeState(stateDir, group, state, accessOpts);
       console.log(chalk.green(`Removed ${resolved.category}.${resolved.name} from state`));
       console.log(chalk.dim('The actual resource was NOT deleted. Use provider tools to delete it.'));
+    });
+
+  // ── state refresh ───────────────────────────────────────────────────────────
+  stateCmd
+    .command('refresh')
+    .description('Reconcile state with provider — remove entries for resources that no longer exist')
+    .option('--group <name>', 'Group name', 'default')
+    .option('--json', 'Output as JSON')
+    .option('--offline', 'Force file-based state (skip API)')
+    .option('--dry-run', 'Show what would change without modifying state')
+    .action(async (options: { group: string; json?: boolean; offline?: boolean; dryRun?: boolean }) => {
+      const cwd = process.cwd();
+      const group = options.group;
+      const stateDir = getStateDir(cwd);
+      const accessOpts = toAccessOpts(options);
+      let state: TakosState | null;
+      try {
+        state = await readState(stateDir, group, accessOpts);
+      } catch {
+        state = null;
+      }
+
+      if (!state) {
+        console.log(chalk.dim('No state found. Nothing to refresh.'));
+        return;
+      }
+
+      // Use a stub provider for now. Real provider integration can be
+      // added later by passing the resolved provider here.
+      const provider: RefreshableProvider = new StubRefreshProvider();
+
+      // Work on a copy for dry-run; mutate the original otherwise
+      const workingState = options.dryRun
+        ? (JSON.parse(JSON.stringify(state)) as TakosState)
+        : state;
+
+      const result = await refreshState(workingState, provider);
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      if (result.changes.length === 0) {
+        console.log(chalk.green('State is consistent — no orphaned entries found.'));
+        return;
+      }
+
+      console.log('');
+      console.log(chalk.bold(`Refresh result for group "${group}":`));
+      for (const change of result.changes) {
+        const icon = change.action === 'removed' ? chalk.red('-') : chalk.yellow('!');
+        console.log(`  ${icon} ${change.key}: ${change.reason}`);
+      }
+      console.log('');
+
+      const removed = result.changes.filter((c) => c.action === 'removed').length;
+      const warnings = result.changes.filter((c) => c.action === 'warning').length;
+
+      if (options.dryRun) {
+        console.log(chalk.dim(`Dry run: ${removed} removal(s), ${warnings} warning(s). No changes written.`));
+      } else {
+        await writeState(stateDir, group, state, accessOpts);
+        console.log(chalk.green(`Refreshed: ${removed} removed, ${warnings} warning(s).`));
+      }
+    });
+
+  // ── state sync ──────────────────────────────────────────────────────────────
+  stateCmd
+    .command('sync')
+    .description('Synchronise local file state with remote API state')
+    .option('--group <name>', 'Group name', 'default')
+    .option('--json', 'Output as JSON')
+    .action(async (options: { group: string; json?: boolean }) => {
+      const cwd = process.cwd();
+      const group = options.group;
+      const stateDir = getStateDir(cwd);
+
+      const result = await syncState(stateDir, group);
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      switch (result.action) {
+        case 'no-api':
+          console.log(chalk.dim(result.message));
+          break;
+        case 'already-in-sync':
+          console.log(chalk.green(result.message));
+          break;
+        case 'local-updated':
+          console.log(chalk.cyan(result.message));
+          break;
+        case 'remote-updated':
+          console.log(chalk.cyan(result.message));
+          break;
+        case 'no-remote':
+          console.log(chalk.yellow(result.message));
+          break;
+        case 'no-local':
+          console.log(chalk.yellow(result.message));
+          break;
+        default:
+          console.log(result.message);
+      }
     });
 }

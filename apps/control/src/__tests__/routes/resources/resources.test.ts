@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   provisionCloudflareResource: vi.fn(),
   updateResourceMetadata: vi.fn(),
   resolveActorPrincipalId: vi.fn(),
-  getPlatformSqlBinding: vi.fn(),
+  getPlatformServices: vi.fn(),
   getDb: vi.fn(),
   CloudflareResourceService: vi.fn(),
 }));
@@ -54,7 +54,7 @@ vi.mock('@/services/identity/principals', () => ({
 }));
 
 vi.mock('@/platform/accessors.ts', () => ({
-  getPlatformSqlBinding: mocks.getPlatformSqlBinding,
+  getPlatformServices: mocks.getPlatformServices,
 }));
 
 vi.mock('@/platform/providers/cloudflare/resources.ts', () => ({
@@ -104,7 +104,7 @@ describe('resources base routes', () => {
     vi.clearAllMocks();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    mocks.getPlatformSqlBinding.mockReturnValue(env.DB);
+    mocks.getPlatformServices.mockReturnValue({ sql: { binding: env.DB } });
   });
 
   describe('GET /api/resources (no space_id)', () => {

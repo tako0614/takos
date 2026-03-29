@@ -1,5 +1,5 @@
-import { startLocalDispatchServer } from './runtime.ts';
-import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
+import { startLocalDispatchServer } from '../../src/local-platform/local-server.ts';
+import { isDirectEntrypoint, logEntrypointError } from '../../src/local-platform/direct-entrypoint.ts';
 
 if (await isDirectEntrypoint(import.meta.url)) {
   startLocalDispatchServer().catch(logEntrypointError);

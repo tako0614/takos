@@ -18,7 +18,13 @@ import type {
   R2Object,
   R2ObjectBody,
 } from '../../shared/types/bindings.ts';
-import type { R2Objects, R2ChecksumsLike, R2HTTPMetadataLike } from './r2-compat-types.ts';
+import type { R2Objects } from './r2-compat-types.ts';
+import {
+  toR2Object as toR2ObjectShared,
+  toR2ObjectBody as toR2ObjectBodyShared,
+  normaliseBody,
+  type R2ObjectMeta,
+} from './r2-adapter-shared.ts';
 
 // ---------------------------------------------------------------------------
 // Local type helpers – avoid adding @smithy/types or @cloudflare/workers-types
@@ -75,43 +81,26 @@ function lazyClient(config: S3ObjectStoreConfig): () => S3Client {
 }
 
 /**
- * Build the common R2Object-shaped metadata from an S3 head / get response.
+ * Map an S3 head / get response to provider-neutral metadata, then build R2Object.
  */
-function toR2Object(
+function s3ToR2Object(
   key: string,
   output: HeadObjectCommandOutput | GetObjectCommandOutput,
   range?: { offset: number; length: number },
 ): R2Object {
   const etag = (output.ETag ?? '').replace(/"/g, '');
-  const size = output.ContentLength ?? 0;
-
-  const checksums: R2ChecksumsLike = {
-    toJSON() {
-      return {};
-    },
-  };
-
-  const httpMetadata: R2HTTPMetadataLike = {
-    contentType: output.ContentType,
-  };
-
-  const obj = {
+  const meta: R2ObjectMeta = {
     key,
-    version: etag,
-    size,
     etag,
     httpEtag: output.ETag ?? `"${etag}"`,
-    checksums,
+    size: output.ContentLength ?? 0,
+    version: etag,
     uploaded: output.LastModified ?? new Date(),
-    httpMetadata,
+    contentType: output.ContentType,
     customMetadata: (output.Metadata ?? {}) as Record<string, string>,
     range,
-    writeHttpMetadata(_headers: Headers) {
-      // no-op – Cloudflare-specific helper
-    },
-  } as unknown as R2Object;
-
-  return obj;
+  };
+  return toR2ObjectShared(meta);
 }
 
 /**
@@ -152,71 +141,14 @@ async function consumeBody(
 /**
  * Wrap an S3 GetObjectCommand output as an R2ObjectBody.
  */
-function toR2ObjectBody(
+async function s3ToR2ObjectBody(
   key: string,
   output: GetObjectCommandOutput,
   range?: { offset: number; length: number },
-): R2ObjectBody {
-  const base = toR2Object(key, output, range);
-
-  let bodyUsed = false;
-  let buffered: ArrayBuffer | undefined;
-
-  async function getBuffer(): Promise<ArrayBuffer> {
-    if (bodyUsed && buffered === undefined) {
-      throw new Error('Body has already been consumed');
-    }
-    if (buffered !== undefined) return buffered;
-    bodyUsed = true;
-    buffered = await consumeBody(output.Body);
-    return buffered;
-  }
-
-  // Build a ReadableStream from the S3 body if one is available.
-  let bodyStream: ReadableStream<Uint8Array>;
-  const rawBody = output.Body as Partial<SdkStreamLike> | undefined;
-  if (rawBody && typeof rawBody.transformToWebStream === 'function') {
-    bodyStream = rawBody.transformToWebStream() as ReadableStream<Uint8Array>;
-  } else {
-    // Fallback: wrap into a ReadableStream that pulls from getBuffer().
-    bodyStream = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        const ab = await getBuffer();
-        controller.enqueue(new Uint8Array(ab));
-        controller.close();
-      },
-    });
-  }
-
-  const objectBody: R2ObjectBody = {
-    ...base,
-    body: bodyStream,
-    get bodyUsed() {
-      return bodyUsed;
-    },
-    async arrayBuffer() {
-      return getBuffer();
-    },
-    async text() {
-      const ab = await getBuffer();
-      return new TextDecoder().decode(ab);
-    },
-    async json<T = unknown>(): Promise<T> {
-      const t = await objectBody.text();
-      return JSON.parse(t) as T;
-    },
-    async blob() {
-      const ab = await getBuffer();
-      const metadata = (base as unknown as { httpMetadata?: R2HTTPMetadataLike }).httpMetadata;
-      const ct = metadata?.contentType ?? 'application/octet-stream';
-      return new Blob([ab], { type: ct });
-    },
-    writeHttpMetadata(_headers: Headers) {
-      // no-op
-    },
-  } as unknown as R2ObjectBody;
-
-  return objectBody;
+): Promise<R2ObjectBody> {
+  const base = s3ToR2Object(key, output, range);
+  const bytes = await consumeBody(output.Body);
+  return toR2ObjectBodyShared(base, bytes);
 }
 
 /**
@@ -235,32 +167,6 @@ function buildRangeHeader(
   return `bytes=${start}-`;
 }
 
-/**
- * Normalise the value passed to put() into a format that S3 PutObjectCommand
- * can accept (Buffer | Uint8Array | string | ReadableStream).
- */
-async function normaliseBody(
-  value: ReadableStream | ArrayBuffer | string | null | Blob,
-): Promise<Buffer | Uint8Array | string | undefined> {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === 'string') return value;
-  if (value instanceof ArrayBuffer) return Buffer.from(value);
-  if (value instanceof Uint8Array) return value;
-  if (typeof Blob !== 'undefined' && value instanceof Blob) {
-    const ab = await value.arrayBuffer();
-    return Buffer.from(ab);
-  }
-  // ReadableStream – collect into a Buffer
-  const reader = (value as ReadableStream<Uint8Array>).getReader();
-  const chunks: Uint8Array[] = [];
-  for (;;) {
-    const { done, value: chunk } = await reader.read();
-    if (done) break;
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -275,7 +181,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
         const output = await getClient().send(
           new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
         );
-        return toR2Object(key, output);
+        return s3ToR2Object(key, output);
       } catch (err: unknown) {
         const sdkErr = err as Partial<AwsSdkError>;
         if (sdkErr.name === 'NotFound' || sdkErr.$metadata?.httpStatusCode === 404) {
@@ -312,7 +218,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
           rangeInfo = { offset, length };
         }
 
-        return toR2ObjectBody(key, output, rangeInfo);
+        return s3ToR2ObjectBody(key, output, rangeInfo);
       } catch (err: unknown) {
         const sdkErr = err as Partial<AwsSdkError>;
         if (
@@ -406,21 +312,15 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
 
       const objects: R2Object[] = (output.Contents ?? []).map((item) => {
         const etag = (item.ETag ?? '').replace(/"/g, '');
-        const itemChecksums: R2ChecksumsLike = { toJSON: () => ({}) };
-        return {
+        return toR2ObjectShared({
           key: item.Key ?? '',
-          version: etag,
-          size: item.Size ?? 0,
           etag,
           httpEtag: item.ETag ?? `"${etag}"`,
-          checksums: itemChecksums,
+          size: item.Size ?? 0,
+          version: etag,
           uploaded: item.LastModified ?? new Date(),
-          httpMetadata: {} as R2HTTPMetadataLike,
           customMetadata: {} as Record<string, string>,
-          writeHttpMetadata(_headers: Headers) {
-            // no-op
-          },
-        } as unknown as R2Object;
+        });
       });
 
       const truncated = output.IsTruncated ?? false;

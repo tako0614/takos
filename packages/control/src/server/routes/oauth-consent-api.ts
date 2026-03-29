@@ -35,7 +35,7 @@ import {
   clearDeviceUserCodeAttempts,
 } from '../../application/services/oauth/device-auth-rate-limit';
 import type { PublicRouteEnv } from './route-auth';
-import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
+import { getPlatformServices } from '../../platform/accessors.ts';
 
 type ConsentApiEnv = { Bindings: PublicRouteEnv['Bindings']; Variables: { user?: User } };
 
@@ -46,8 +46,9 @@ const oauthConsentApi = new Hono<ConsentApiEnv>();
 // ---------------------------------------------------------------------------
 
 async function loadSessionUser(c: Context<ConsentApiEnv>) {
-  const sessionStore = getPlatformSessionStore(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const services = getPlatformServices(c);
+  const sessionStore = services.notifications.sessionStore;
+  const dbBinding = services.sql?.binding;
   if (!sessionStore || !dbBinding) return null;
 
   const cookieHeader = c.req.header('Cookie');

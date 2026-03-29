@@ -8,6 +8,7 @@ import { logInfo, logError, logWarn } from '../shared/utils/logger.ts';
 import { serveNodeFetch } from './fetch-server.ts';
 import type { ContainerBackend } from './container-backend.ts';
 import { DockerContainerBackend } from './docker-container-backend.ts';
+import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
 type OciServiceStatus = 'deployed' | 'removed' | 'routing-only';
 
@@ -526,4 +527,8 @@ export async function startLocalOciOrchestratorServer(
       });
     },
   });
+}
+
+if (await isDirectEntrypoint(import.meta.url)) {
+  startLocalOciOrchestratorServer().catch(logEntrypointError);
 }
