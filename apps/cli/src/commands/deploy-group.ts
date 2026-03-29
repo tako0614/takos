@@ -3,9 +3,9 @@
  *
  * Backward-compatible alias for `takos apply --auto-approve`.
  *
- * Loads the manifest, computes a diff, and delegates to the apply
- * coordinator with auto-approve enabled.  Wrangler-config mode and
- * dry-run are still supported for backward compatibility.
+ * Default (online): Send manifest to the API for apply (auto-approved).
+ * --offline: Compute diff locally and apply via the local coordinator.
+ * --wrangler-config: Direct wrangler deploy (unchanged, bypasses coordinator).
  *
  * For new workflows, prefer `takos apply`.
  *
@@ -18,14 +18,12 @@ import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
-import { resolveAccountId, resolveApiToken, printJson } from '../lib/cli-utils.js';
-import { readState, getStateDir } from '../lib/state/state-file.js';
-import { computeDiff } from '../lib/state/diff.js';
-import type { TakosState } from '../lib/state/state-types.js';
-import { applyDiff } from '../lib/apply/coordinator.js';
+import { printJson } from '../lib/cli-utils.js';
+import { api } from '../lib/api.js';
+import { getConfig } from '../lib/config.js';
+import { formatPlan } from '../lib/state/plan.js';
+import type { DiffResult } from '../lib/state/diff.js';
 import type { ApplyResult } from '../lib/apply/coordinator.js';
-import { deployWranglerDirect } from '../lib/group-deploy/index.js';
-import type { WranglerDirectDeployResult } from '../lib/group-deploy/index.js';
 
 type DeployGroupCommandOptions = {
   manifest?: string;
@@ -42,8 +40,18 @@ type DeployGroupCommandOptions = {
   container?: string[];
   baseDomain?: string;
   wranglerConfig?: string;
+  space?: string;
   offline?: boolean;
 };
+
+function resolveSpaceId(spaceOverride?: string): string {
+  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
+  if (!spaceId) {
+    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
+    cliExit(1);
+  }
+  return spaceId;
+}
 
 function printApplyResult(result: ApplyResult, env: string, groupName: string, dryRun?: boolean): void {
   const titlePrefix = dryRun ? '[DRY RUN] ' : '';
@@ -87,24 +95,76 @@ function printApplyResult(result: ApplyResult, env: string, groupName: string, d
   }
 }
 
-function printWranglerDirectResult(result: WranglerDirectDeployResult): void {
-  console.log('');
-  console.log(chalk.bold('Wrangler Direct Deploy'));
-  console.log(`  Config: ${result.configPath}`);
-  console.log(`  Env:    ${result.env}`);
-  if (result.namespace) {
-    console.log(`  Namespace: ${result.namespace}`);
+/** Offline fallback: use the local coordinator (original logic). */
+async function handleDeployGroupOffline(
+  manifest: Awaited<ReturnType<typeof loadAppManifest>>,
+  manifestPath: string,
+  options: DeployGroupCommandOptions,
+): Promise<void> {
+  const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
+  const { readState, getStateDir } = await import('../lib/state/state-file.js');
+  const { computeDiff } = await import('../lib/state/diff.js');
+  const { applyDiff } = await import('../lib/apply/coordinator.js');
+  type TakosState = import('../lib/state/state-types.js').TakosState;
+
+  const accountId = resolveAccountId(options.accountId);
+  const apiToken = resolveApiToken(options.apiToken);
+
+  const group = options.group || manifest.metadata.name;
+  const stateDir = getStateDir(process.cwd());
+  let currentState: TakosState | null = null;
+  try {
+    currentState = await readState(stateDir, group, { offline: true });
+  } catch {
+    // No state yet
   }
 
-  const icon = result.status === 'deployed' ? chalk.green('+')
-    : result.status === 'dry-run' ? chalk.yellow('~')
-    : chalk.red('!');
-  console.log(`  Status: ${icon} ${result.status}`);
+  const diff = computeDiff(manifest, currentState);
 
-  if (result.error) {
-    console.log(`  Error:  ${chalk.red(result.error)}`);
+  // dry-run: display diff and return
+  if (options.dryRun) {
+    if (options.json) {
+      printJson(diff);
+    } else {
+      console.log(formatPlan(diff));
+    }
+    return;
   }
-  console.log('');
+
+  const groupName = group;
+
+  if (!options.json) {
+    console.log(`${chalk.cyan('[DEPLOY]')} ${chalk.bold(manifest.metadata.name)} -> ${options.env} (offline)`);
+    if (options.namespace) {
+      console.log(`  Namespace: ${options.namespace}`);
+    }
+    console.log(`  Manifest:  ${manifestPath}`);
+    console.log('');
+  }
+
+  const applyResult = await applyDiff(diff, manifest, {
+    group,
+    env: options.env,
+    accountId,
+    apiToken,
+    groupName,
+    namespace: options.namespace,
+    manifestDir: path.dirname(manifestPath),
+    baseDomain: options.baseDomain,
+    autoApprove: true,
+  });
+
+  if (options.json) {
+    printJson(applyResult);
+    return;
+  }
+
+  printApplyResult(applyResult, options.env, groupName);
+
+  const hasFailures = applyResult.applied.some(e => e.status === 'failed');
+  if (hasFailures) {
+    cliExit(1);
+  }
 }
 
 export function registerDeployGroupCommand(program: Command): void {
@@ -116,6 +176,7 @@ export function registerDeployGroupCommand(program: Command): void {
     .option('--namespace <name>', 'Dispatch namespace (omit for account top-level)')
     .option('--group <name>', 'Group name override (defaults to manifest name)')
     .option('--dry-run', 'Show what would be deployed without deploying')
+    .option('--space <id>', 'Target workspace ID')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
@@ -127,9 +188,6 @@ export function registerDeployGroupCommand(program: Command): void {
     .option('--json', 'Machine-readable JSON output')
     .option('--offline', 'Force file-based state (skip API)')
     .action(async (options: DeployGroupCommandOptions) => {
-      const accountId = resolveAccountId(options.accountId);
-      const apiToken = resolveApiToken(options.apiToken);
-
       // ── Validate mutual exclusivity ──────────────────────────────────
       if (options.wranglerConfig && options.manifest && options.manifest !== '.takos/app.yml') {
         console.log(chalk.red('--wrangler-config and --manifest are mutually exclusive.'));
@@ -140,8 +198,15 @@ export function registerDeployGroupCommand(program: Command): void {
         cliExit(1);
       }
 
-      // ── Wrangler-config mode (unchanged — bypasses coordinator) ─────
+      // ── Wrangler-config mode (unchanged -- bypasses coordinator) ─────
       if (options.wranglerConfig) {
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
+        const { deployWranglerDirect } = await import('../lib/group-deploy/index.js');
+        type WranglerDirectDeployResult = import('../lib/group-deploy/index.js').WranglerDirectDeployResult;
+
+        const accountId = resolveAccountId(options.accountId);
+        const apiToken = resolveApiToken(options.apiToken);
+
         const wranglerResult = await deployWranglerDirect({
           wranglerConfigPath: options.wranglerConfig,
           env: options.env,
@@ -156,7 +221,22 @@ export function registerDeployGroupCommand(program: Command): void {
           return;
         }
 
-        printWranglerDirectResult(wranglerResult);
+        // Print wrangler direct result
+        console.log('');
+        console.log(chalk.bold('Wrangler Direct Deploy'));
+        console.log(`  Config: ${wranglerResult.configPath}`);
+        console.log(`  Env:    ${wranglerResult.env}`);
+        if (wranglerResult.namespace) {
+          console.log(`  Namespace: ${wranglerResult.namespace}`);
+        }
+        const icon = wranglerResult.status === 'deployed' ? chalk.green('+')
+          : wranglerResult.status === 'dry-run' ? chalk.yellow('~')
+          : chalk.red('!');
+        console.log(`  Status: ${icon} ${wranglerResult.status}`);
+        if (wranglerResult.error) {
+          console.log(`  Error:  ${chalk.red(wranglerResult.error)}`);
+        }
+        console.log('');
 
         if (wranglerResult.status === 'failed') {
           cliExit(1);
@@ -164,7 +244,7 @@ export function registerDeployGroupCommand(program: Command): void {
         return;
       }
 
-      // ── Manifest mode — delegate to coordinator ─────────────────────
+      // ── Manifest mode ────────────────────────────────────────────────
 
       // Load and validate manifest
       let manifestPath: string;
@@ -186,31 +266,46 @@ export function registerDeployGroupCommand(program: Command): void {
         cliExit(1);
       }
 
-      // Read current state and compute diff
-      const group = options.group || manifest.metadata.name;
-      const stateDir = getStateDir(process.cwd());
-      const accessOpts = options.offline ? { offline: true as const } : {};
-      let currentState: TakosState | null = null;
-      try {
-        currentState = await readState(stateDir, group, accessOpts);
-      } catch {
-        // No state yet
+      // Offline mode: delegate to local coordinator
+      if (options.offline) {
+        return handleDeployGroupOffline(manifest, manifestPath, options);
       }
 
-      const diff = computeDiff(manifest, currentState);
+      // ── Online mode: API-driven ──────────────────────────────────────
+      const spaceId = resolveSpaceId(options.space);
+      const group = options.group || manifest.metadata.name;
 
-      // dry-run: display diff and return
+      // Build target list from --service/--worker/--container filters
+      const targets: string[] = [];
+      if (options.worker) {
+        for (const w of options.worker) targets.push(`workers.${w}`);
+      }
+      if (options.container) {
+        for (const c of options.container) targets.push(`containers.${c}`);
+      }
+      if (options.service) {
+        for (const s of options.service) targets.push(`services.${s}`);
+      }
+
+      // dry-run: plan only
       if (options.dryRun) {
+        const planRes = await api<DiffResult>(`/api/spaces/${spaceId}/groups/${group}/plan`, {
+          method: 'POST',
+          body: { manifest },
+        });
+
+        if (!planRes.ok) {
+          console.log(chalk.red(`Error: ${planRes.error}`));
+          cliExit(1);
+        }
+
         if (options.json) {
-          printJson(diff);
+          printJson(planRes.data);
         } else {
-          const { formatPlan } = await import('../lib/state/plan.js');
-          console.log(formatPlan(diff));
+          console.log(formatPlan(planRes.data));
         }
         return;
       }
-
-      const groupName = group;
 
       if (!options.json) {
         console.log(`${chalk.cyan('[DEPLOY]')} ${chalk.bold(manifest.metadata.name)} -> ${options.env}`);
@@ -221,27 +316,30 @@ export function registerDeployGroupCommand(program: Command): void {
         console.log('');
       }
 
-      // Delegate to coordinator (auto-approve, since deploy-group never prompts)
-      const applyResult = await applyDiff(diff, manifest, {
-        group,
-        env: options.env,
-        accountId,
-        apiToken,
-        groupName,
-        namespace: options.namespace,
-        manifestDir: path.dirname(manifestPath),
-        baseDomain: options.baseDomain,
-        autoApprove: true,
+      // Apply via API (auto-approve, since deploy-group never prompts)
+      const applyRes = await api<ApplyResult>(`/api/spaces/${spaceId}/groups/${group}/apply`, {
+        method: 'POST',
+        body: {
+          manifest,
+          target: targets.length > 0 ? targets : undefined,
+        },
+        timeout: 120_000,
       });
+
+      if (!applyRes.ok) {
+        console.log(chalk.red(`Error: ${applyRes.error}`));
+        cliExit(1);
+      }
+
+      const applyResult = applyRes.data;
 
       if (options.json) {
         printJson(applyResult);
         return;
       }
 
-      printApplyResult(applyResult, options.env, groupName);
+      printApplyResult(applyResult, options.env, group);
 
-      // Exit with error code if any entry failed
       const hasFailures = applyResult.applied.some(e => e.status === 'failed');
       if (hasFailures) {
         cliExit(1);

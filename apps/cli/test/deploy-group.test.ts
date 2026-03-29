@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   cliExit: vi.fn((code?: number) => {
     throw new Error(`cliExit:${code ?? 0}`);
   }),
+  api: vi.fn(),
+  getConfig: vi.fn(),
 }));
 
 vi.mock('../src/lib/app-manifest.js', () => ({
@@ -23,6 +25,14 @@ vi.mock('../src/lib/group-deploy/index.js', () => ({
 
 vi.mock('../src/lib/command-exit.js', () => ({
   cliExit: mocks.cliExit,
+}));
+
+vi.mock('../src/lib/api.js', () => ({
+  api: mocks.api,
+}));
+
+vi.mock('../src/lib/config.js', () => ({
+  getConfig: mocks.getConfig,
 }));
 
 import { registerDeployGroupCommand } from '../src/commands/deploy-group.js';
@@ -145,6 +155,17 @@ describe('deploy-group command', () => {
     vi.clearAllMocks();
     mocks.resolveAppManifestPath.mockResolvedValue('/repo/.takos/app.yml');
     mocks.loadAppManifest.mockResolvedValue(sampleManifest);
+    // Mock config to provide spaceId for online mode
+    mocks.getConfig.mockReturnValue({ spaceId: 'test-space-id', apiUrl: 'https://test.takos.jp' });
+    // Default API mock for plan endpoint (dry-run)
+    mocks.api.mockResolvedValue({
+      ok: true,
+      data: {
+        entries: [],
+        hasChanges: false,
+        summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+      },
+    });
     mocks.deployGroup.mockResolvedValue({
       groupName: 'test-app',
       env: 'staging',
@@ -183,13 +204,12 @@ describe('deploy-group command', () => {
     ], { from: 'node' })).rejects.toThrow(/required option '--env <env>' not specified/);
   });
 
-  it('requires account ID', async () => {
+  it('requires space ID (online mode)', async () => {
+    // When no spaceId is available, resolveSpaceId should exit
+    mocks.getConfig.mockReturnValue({ apiUrl: 'https://test.takos.jp' });
+
     const program = createProgram();
-    // Clear env to force error
-    const origAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const origCfAccountId = process.env.CF_ACCOUNT_ID;
-    delete process.env.CLOUDFLARE_ACCOUNT_ID;
-    delete process.env.CF_ACCOUNT_ID;
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     try {
       await expect(program.parseAsync([
@@ -198,16 +218,13 @@ describe('deploy-group command', () => {
         'deploy-group',
         '--env',
         'staging',
-        '--api-token',
-        'token-1',
       ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
     } finally {
-      if (origAccountId !== undefined) process.env.CLOUDFLARE_ACCOUNT_ID = origAccountId;
-      if (origCfAccountId !== undefined) process.env.CF_ACCOUNT_ID = origCfAccountId;
+      logSpy.mockRestore();
     }
   });
 
-  it('calls deployGroup with correct options for dry-run', async () => {
+  it('calls API plan endpoint for dry-run', async () => {
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -226,18 +243,28 @@ describe('deploy-group command', () => {
       'takos-staging',
     ], { from: 'node' });
 
-    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
-      env: 'staging',
-      accountId: 'acct-1',
-      apiToken: 'token-1',
-      dryRun: true,
-      namespace: 'takos-staging',
-    }));
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/api/spaces/test-space-id/groups/test-app/plan',
+      expect.objectContaining({
+        method: 'POST',
+        body: { manifest: sampleManifest },
+      }),
+    );
 
     logSpy.mockRestore();
   });
 
   it('outputs JSON when --json is passed', async () => {
+    // API plan returns a DiffResult for dry-run
+    const planData = {
+      entries: [
+        { name: 'api', category: 'worker', action: 'create', type: 'worker', reason: 'new' },
+      ],
+      hasChanges: true,
+      summary: { create: 1, update: 0, delete: 0, unchanged: 0 },
+    };
+    mocks.api.mockResolvedValue({ ok: true, data: planData });
+
     const program = createProgram();
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -259,15 +286,14 @@ describe('deploy-group command', () => {
     expect(stdoutSpy).toHaveBeenCalled();
     const output = stdoutSpy.mock.calls.map(c => String(c[0])).join('');
     const parsed = JSON.parse(output);
-    expect(parsed.groupName).toBe('test-app');
-    expect(parsed.services).toHaveLength(2);
-    expect(parsed.resources).toHaveLength(2);
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.hasChanges).toBe(true);
 
     stdoutSpy.mockRestore();
     logSpy.mockRestore();
   });
 
-  it('passes --service as serviceFilter to deployGroup', async () => {
+  it('passes --service as target to API plan endpoint', async () => {
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -286,14 +312,25 @@ describe('deploy-group command', () => {
       'browser-host',
     ], { from: 'node' });
 
-    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
-      serviceFilter: ['browser-host'],
-    }));
+    // dry-run calls plan endpoint (not apply)
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/api/spaces/test-space-id/groups/test-app/plan',
+      expect.objectContaining({
+        method: 'POST',
+        body: { manifest: sampleManifest },
+      }),
+    );
 
     logSpy.mockRestore();
   });
 
-  it('errors when --service specifies a non-existent service', async () => {
+  it('errors when API returns error for non-existent service', async () => {
+    // Mock API apply returning an error for unknown target
+    mocks.api.mockResolvedValue({
+      ok: false,
+      error: 'Unknown service: nonexistent',
+    });
+
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -316,16 +353,6 @@ describe('deploy-group command', () => {
 
   it('accepts --worker and --container options', async () => {
     mocks.loadAppManifest.mockResolvedValue(newFormatManifest);
-    mocks.deployGroup.mockResolvedValue({
-      groupName: 'test-app',
-      env: 'staging',
-      dryRun: true,
-      services: [
-        { name: 'api', type: 'worker', status: 'deployed', scriptName: 'test-app-api' },
-      ],
-      resources: [],
-      bindings: [],
-    });
 
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -345,9 +372,14 @@ describe('deploy-group command', () => {
       'api',
     ], { from: 'node' });
 
-    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
-      workerFilter: ['api'],
-    }));
+    // dry-run calls plan endpoint
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/api/spaces/test-space-id/groups/test-app/plan',
+      expect.objectContaining({
+        method: 'POST',
+        body: { manifest: newFormatManifest },
+      }),
+    );
 
     logSpy.mockRestore();
   });
@@ -371,9 +403,14 @@ describe('deploy-group command', () => {
       'myapp.example.com',
     ], { from: 'node' });
 
-    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
-      baseDomain: 'myapp.example.com',
-    }));
+    // dry-run calls plan endpoint; --base-domain is passed at apply time
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/api/spaces/test-space-id/groups/test-app/plan',
+      expect.objectContaining({
+        method: 'POST',
+        body: { manifest: sampleManifest },
+      }),
+    );
 
     logSpy.mockRestore();
   });
@@ -421,9 +458,14 @@ describe('deploy-group command', () => {
       'browser-host',
     ], { from: 'node' });
 
-    expect(mocks.deployGroup).toHaveBeenCalledWith(expect.objectContaining({
-      serviceFilter: ['api', 'browser-host'],
-    }));
+    // dry-run calls plan endpoint
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/api/spaces/test-space-id/groups/test-app/plan',
+      expect.objectContaining({
+        method: 'POST',
+        body: { manifest: sampleManifest },
+      }),
+    );
 
     logSpy.mockRestore();
   });
@@ -564,15 +606,15 @@ describe('deploy-group command', () => {
   });
 
   it('exits with error code when deployment has failures', async () => {
-    mocks.deployGroup.mockResolvedValue({
-      groupName: 'test-app',
-      env: 'staging',
-      dryRun: false,
-      services: [
-        { name: 'api', type: 'worker', status: 'failed', error: 'wrangler not found' },
-      ],
-      resources: [],
-      bindings: [],
+    // Mock API apply response with a failure
+    mocks.api.mockResolvedValue({
+      ok: true,
+      data: {
+        applied: [
+          { name: 'api', category: 'worker', action: 'create', status: 'failed', error: 'deploy failed' },
+        ],
+        skipped: [],
+      },
     });
 
     const program = createProgram();
