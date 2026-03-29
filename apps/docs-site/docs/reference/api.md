@@ -458,8 +458,12 @@ Authorization: Bearer $TOKEN
 
 ### `app-deployments`
 
-`app-deployments` family は repo-local app deploy の public/current API です。
-主説明面は `services/:id/deployments` ではなく `/api/spaces/:spaceId/app-deployments` です。
+`app-deployments` family は repo-local app deploy の public contract ですが、このリポジトリの current implementation では end-to-end に接続されていません。
+主説明面は `services/:id/deployments` ではなく `/api/spaces/:spaceId/app-deployments` という設計メモとして残っています。
+
+::: warning current implementation
+現行の control-plane 実装では `AppDeploymentService` が legacy pipeline から切り離されており、`takos deploy` と app-deployments の実行経路は未接続です。実運用では `takos deploy-group` を使ってください。
+:::
 
 主要 endpoint:
 

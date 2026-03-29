@@ -16,7 +16,7 @@ import seedRepositories from './seed-repositories';
 import threads from './threads';
 import runs from './runs/routes';
 import search from './search';
-import indexRoutes from './index';
+import indexRoutes from './index/routes';
 import memories from './memories';
 import skills from './skills';
 import services from './workers';

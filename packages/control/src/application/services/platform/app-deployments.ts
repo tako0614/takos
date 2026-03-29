@@ -1,6 +1,7 @@
 import { getDb } from '../../../infra/db';
 import { workflowRuns, workflowJobs } from '../../../infra/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { GoneError } from 'takos-common/errors';
 import type { Env } from '../../../shared/types';
 import { checkRepoAccess } from '../source/repos';
 import * as gitStore from '../git-smart';
@@ -39,6 +40,13 @@ type ResolvedBuildArtifacts = {
   buildSources: AppDeploymentBuildSource[];
   packageFiles: Map<string, ArrayBuffer | Uint8Array>;
 };
+
+export const APP_DEPLOYMENTS_REMOVED_MESSAGE =
+  'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.';
+
+function throwRemovedAppDeployments(): never {
+  throw new GoneError(APP_DEPLOYMENTS_REMOVED_MESSAGE);
+}
 
 export function encodeSourceRef(refType: RepoRefType | undefined, ref: string | undefined, commitSha?: string): string | undefined {
   const normalizedRef = String(ref || '').trim();
@@ -370,24 +378,24 @@ export class AppDeploymentService {
   }
 
   async deployFromRepoRef(_spaceId: string, _userId: string, _input: CreateAppDeploymentInput): Promise<never> {
-    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
+    throwRemovedAppDeployments();
   }
 
   async list(_spaceId: string): Promise<never> {
-    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
+    throwRemovedAppDeployments();
   }
 
   async get(_spaceId: string, _appDeploymentId: string): Promise<{ hostnames?: string[] }> {
-    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
+    throwRemovedAppDeployments();
   }
 
   async remove(_spaceId: string, _appDeploymentId: string): Promise<never> {
-    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
+    throwRemovedAppDeployments();
   }
 
   async rollback(_spaceId: string, _userId: string, _appDeploymentId: string, _options?: {
     approveOauthAutoEnv?: boolean;
   }): Promise<never> {
-    throw new Error('Legacy bundle deployment pipeline has been removed. Use the app deployment API instead.');
+    throwRemovedAppDeployments();
   }
 }

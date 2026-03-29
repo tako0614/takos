@@ -3,7 +3,7 @@
 Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。
 
 ::: info アプリ開発者へ
-アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+アプリ開発者向けの current surface は Cloudflare-backed `takos deploy-group` です。`app.yml` を書いて `takos deploy-group --env staging` するのが今の正しい使い方です。
 :::
 
 ## 必要なもの

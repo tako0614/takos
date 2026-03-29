@@ -12,6 +12,7 @@
   "references": [
     { "path": "./packages/common" },
     { "path": "./packages/actions-engine" },
+    { "path": "./packages/control" },
     { "path": "./packages/runtime-service" },
     { "path": "./packages/browser-service" },
     { "path": "./apps/control" },

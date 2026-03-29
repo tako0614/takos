@@ -40,7 +40,8 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 - `.takos/app.yml` を書く
 - workflow artifact を用意する
-- `takos deploy` または `app-deployments` API を使う
+- `takos deploy-group` を使う
+- `takos deploy` / `app-deployments` API は contract としてのみ残っている
 
 ### operator
 

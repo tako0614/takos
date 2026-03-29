@@ -1,15 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  createCommonEnvDeps: vi.fn(),
   processReconcileJobs: vi.fn(),
   enqueuePeriodicDriftSweep: vi.fn(),
 }));
 
-vi.mock('@/services/common-env/service', () => ({
-  CommonEnvService: vi.fn(() => ({
+vi.mock('@/services/common-env/deps', () => ({
+  createCommonEnvDeps: mocks.createCommonEnvDeps,
+}));
+
+mocks.createCommonEnvDeps.mockImplementation(() => ({
+  spaceEnv: {},
+  serviceLink: {},
+  manualLink: {},
+  orchestrator: {
     processReconcileJobs: mocks.processReconcileJobs,
     enqueuePeriodicDriftSweep: mocks.enqueuePeriodicDriftSweep,
-  })),
+  },
+  reconciler: {},
 }));
 
 import { runCommonEnvScheduledMaintenance } from '@/services/common-env/maintenance';

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import { GoneError, isAppError } from 'takos-common/errors';
 import type { Env } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -12,12 +13,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/platform/app-deployments', () => ({
+  APP_DEPLOYMENTS_REMOVED_MESSAGE: 'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.',
   AppDeploymentService: class {
     deployFromRepoRef = mocks.deployFromRepoRef;
     list = mocks.list;
     get = mocks.get;
     remove = mocks.remove;
     rollback = mocks.rollback;
+  },
+}));
+
+vi.mock('@/routes/route-auth', () => ({
+  spaceAccess: () => async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+    c.set('access', { space: { id: 'ws1' } });
+    c.set('user', { id: 'user-1' });
+    await next();
   },
 }));
 
@@ -31,8 +41,16 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
 
 import appDeploymentRoutes from '@/routes/app-deployments';
 
+const removedMessage = 'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.';
+
 function createApp(user?: { id: string }) {
   const app = new Hono<{ Bindings: Env; Variables: { user?: { id: string } } }>();
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(error.toResponse(), error.statusCode as 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503 | 504);
+    }
+    throw error;
+  });
   app.use('*', async (c, next) => {
     if (user) c.set('user', user);
     await next();
@@ -53,54 +71,91 @@ describe('app deployment routes', () => {
     mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
   });
 
-  it('lists deployments for an authorized user', async () => {
-    mocks.list.mockResolvedValue([{ id: 'appdep-1', name: 'sample-app' }]);
-
-    const app = createApp({ id: 'user-1' });
-    const res = await app.request('/spaces/ws1/app-deployments', {}, makeEnv());
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ data: [{ id: 'appdep-1', name: 'sample-app' }] });
-  });
-
-  it('rejects create when repo_id is missing', async () => {
-    const app = createApp({ id: 'user-1' });
-    const res = await app.request('/spaces/ws1/app-deployments', {
+  it.each([
+    {
+      name: 'lists deployments',
+      method: 'GET',
+      path: '/spaces/ws1/app-deployments',
+      setup: () => {
+        mocks.list.mockRejectedValue(new GoneError(removedMessage));
+      },
+    },
+    {
+      name: 'deploys from repo ref',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    }, makeEnv());
-
-    expect(res.status).toBe(422);
-    expect(await res.json()).toEqual(expect.objectContaining({ error: 'Validation error' }));
-  });
-
-  it('deploys from repo ref and forwards metadata to the service', async () => {
-    mocks.deployFromRepoRef.mockResolvedValue({
-      app_deployment_id: 'appdep-1',
-      app_id: 'sample-app',
-      name: 'Sample App',
-      version: '1.0.0',
-    });
-
-    const app = createApp({ id: 'user-1' });
-    const res = await app.request('/spaces/ws1/app-deployments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      path: '/spaces/ws1/app-deployments',
+      body: {
         repo_id: 'repo-1',
         ref: 'main',
         ref_type: 'branch',
         approve_oauth_auto_env: true,
-      }),
+      },
+      setup: () => {
+        mocks.deployFromRepoRef.mockRejectedValue(new GoneError(removedMessage));
+      },
+    },
+    {
+      name: 'gets a deployment',
+      method: 'GET',
+      path: '/spaces/ws1/app-deployments/appdep-1',
+      setup: () => {
+        mocks.get.mockRejectedValue(new GoneError(removedMessage));
+      },
+    },
+    {
+      name: 'rolls back a deployment',
+      method: 'POST',
+      path: '/spaces/ws1/app-deployments/appdep-1/rollback',
+      body: { approve_oauth_auto_env: true },
+      setup: () => {
+        mocks.rollback.mockRejectedValue(new GoneError(removedMessage));
+      },
+    },
+    {
+      name: 'removes a deployment',
+      method: 'DELETE',
+      path: '/spaces/ws1/app-deployments/appdep-1',
+      setup: () => {
+        mocks.remove.mockRejectedValue(new GoneError(removedMessage));
+      },
+    },
+  ])('$name returns gone instead of 500', async ({ method, path, body, setup }) => {
+    setup();
+
+    const app = createApp({ id: 'user-1' });
+    const res = await app.request(path, body ? {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    } : {
+      method,
     }, makeEnv());
 
-    expect(res.status).toBe(201);
-    expect(mocks.deployFromRepoRef).toHaveBeenCalledWith('ws1', 'user-1', expect.objectContaining({
-      repoId: 'repo-1',
-      ref: 'main',
-      refType: 'branch',
-      approveOauthAutoEnv: true,
-    }));
+    expect(res.status).toBe(410);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'GONE',
+        message: removedMessage,
+      },
+    });
+  });
+
+  it.each([
+    { method: 'GET', path: '/spaces/ws1/app-deployments/appdep-1/rollout' },
+    { method: 'POST', path: '/spaces/ws1/app-deployments/appdep-1/rollout/pause' },
+    { method: 'POST', path: '/spaces/ws1/app-deployments/appdep-1/rollout/resume' },
+    { method: 'POST', path: '/spaces/ws1/app-deployments/appdep-1/rollout/abort' },
+    { method: 'POST', path: '/spaces/ws1/app-deployments/appdep-1/rollout/promote' },
+  ])('returns gone for removed rollout endpoint $path', async ({ method, path }) => {
+    const app = createApp({ id: 'user-1' });
+    const res = await app.request(path, { method }, makeEnv());
+
+    expect(res.status).toBe(410);
+    await expect(res.json()).resolves.toMatchObject({
+      error: {
+        code: 'GONE',
+        message: removedMessage,
+      },
+    });
   });
 });

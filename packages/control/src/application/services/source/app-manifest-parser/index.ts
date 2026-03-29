@@ -12,6 +12,28 @@ import { parseRoutes } from './parse-routes';
 import { parseEnvConfig } from './parse-env';
 import { parseOverrides } from './parse-overrides';
 
+function validateMcpServers(
+  mcpServers: NonNullable<AppManifest['spec']['mcpServers']> | undefined,
+  routes: NonNullable<AppManifest['spec']['routes']> | undefined,
+  resources: Record<string, NonNullable<AppManifest['spec']['resources']>[string]>,
+): void {
+  if (!mcpServers || mcpServers.length === 0) return;
+
+  const routeNames = new Set((routes || []).map((route) => route.name));
+
+  for (const server of mcpServers) {
+    if (server.endpoint && server.route) {
+      throw new Error(`spec.mcpServers.${server.name} must not specify both endpoint and route`);
+    }
+    if (server.route && !routeNames.has(server.route)) {
+      throw new Error(`spec.mcpServers.${server.name}.route references unknown route: ${server.route}`);
+    }
+    if (server.authSecretRef && resources[server.authSecretRef]?.type !== 'secretRef') {
+      throw new Error(`spec.mcpServers.${server.name}.authSecretRef must reference a secretRef resource: ${server.authSecretRef}`);
+    }
+  }
+}
+
 export function parseAppManifestYaml(raw: string): AppManifest {
   const parsed = YAML.parse(raw);
   const record = asRecord(parsed);
@@ -71,6 +93,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const syntheticServices = buildSyntheticServicesFromWorkers(workers);
   const resources = parseResources(specRecord, syntheticServices);
   validateResourceBindings(syntheticServices, resources);
+  validateMcpServers(mcpServers, routes, resources);
 
   // Validate env.inject template references
   if (envConfig?.inject) {

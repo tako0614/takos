@@ -2,7 +2,15 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const controlSrcRoot = resolve(import.meta.dirname, '../../../../../packages/control/src');
+const controlSrcRoot = resolve(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  '..',
+  ['packages', 'control', 'src'].join('/'),
+);
 const routesRoot = resolve(controlSrcRoot, 'server/routes');
 const forbiddenImportPatterns = [
   /application\/services\/wfp(?=['"])/,

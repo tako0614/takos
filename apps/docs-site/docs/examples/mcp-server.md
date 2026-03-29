@@ -4,6 +4,8 @@
 
 MCP Server を公開すると、AI エージェントからツールとして呼び出せるようになります。認証トークンの自動生成もサポートしています。
 
+この例は現行の `takos deploy-group` と control-plane parser に合わせています。`route` / `endpoint` の排他は設計上の契約として扱い、実運用では片方に寄せてください。
+
 ## app.yml
 
 ```yaml

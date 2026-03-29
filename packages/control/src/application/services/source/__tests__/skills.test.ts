@@ -124,15 +124,15 @@ describe('formatSkill', () => {
     mocks.normalizeCustomSkillMetadata.mockReturnValueOnce({});
     const skill = {
       id: 's1',
-      space_id: 'ws-1',
+      spaceId: 'ws-1',
       name: 'my-skill',
       description: 'A skill',
       instructions: 'Do this',
       triggers: 'hello,world',
       metadata: '{}',
       enabled: true,
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     };
 
     const result = formatSkill(skill);

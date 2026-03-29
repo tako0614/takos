@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",
@@ -31,7 +34,8 @@
   },
   "devDependencies": {
     "miniflare": "^4.20260124.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   },
   "exports": {
     "./agent": "./src/application/services/agent/index.ts",
@@ -72,15 +76,21 @@
     "./runtime/durable-objects": "./src/runtime/durable-objects/index.ts",
     "./runtime/queues": "./src/runtime/queues/index.ts",
     "./runtime/container-hosts": "./src/runtime/container-hosts/index.ts",
+    "./runtime/container-hosts/browser-session-host": "./src/runtime/container-hosts/browser-session-host.ts",
+    "./runtime/container-hosts/executor-host": "./src/runtime/container-hosts/executor-host.ts",
+    "./runtime/container-hosts/proxy-token-manager": "./src/runtime/container-hosts/proxy-token-manager.ts",
+    "./runtime/container-hosts/runtime-host": "./src/runtime/container-hosts/runtime-host.ts",
     "./runtime/container-hosts/executor-run-state": "./src/runtime/container-hosts/executor-run-state.ts",
 
-    "./server/routes": "./src/server/routes/barrel.ts",
+    "./server/routes": "./src/server/routes/index.ts",
     "./server/middleware": "./src/server/middleware/index.ts",
 
     "./shared/utils": "./src/shared/utils/index.ts",
     "./shared/types": "./src/shared/types/index.ts",
     "./shared/config": "./src/shared/config/index.ts",
     "./shared/constants": "./src/shared/constants/index.ts",
+
+    "./runtime/queues/workflow-runtime-client": "./src/runtime/queues/workflow-runtime-client.ts",
 
     "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts",
 

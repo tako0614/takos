@@ -3,7 +3,7 @@
 Takos を Kubernetes クラスタにホストする方法。このページは **takos オペレーター**向け。
 
 ::: info アプリ開発者へ
-アプリ開発者は takos がどのクラウドで動いているか意識する必要はない。app.yml を書いて `takos deploy-group --env staging` するだけ。
+このページは takos オペレーター向けです。k8s provider は current docs では experimental / partial 扱いで、アプリ開発者向けの current surface は Cloudflare-backed `takos deploy-group` です。
 :::
 
 ::: warning experimental

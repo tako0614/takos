@@ -2,6 +2,8 @@
 
 app.yml は「何をデプロイするか」を宣言するファイル。デプロイ後に何が起動し、どこで公開され、何が接続されるかを書く。
 
+このページの例は、現行の `takos deploy-group` / control-plane parser が実際に扱っている範囲に合わせている。`takos deploy` や app-deployments API のような旧経路は、現時点では end-to-end ではない。
+
 ## 5 分で書ける最小構成
 
 ```yaml
@@ -88,7 +90,7 @@ spec:
   routes:
     - name: browser-api
       target: browser-host
-      path: /session
+      path: /api
 ```
 
 ### Worker + MCP Server
@@ -166,7 +168,7 @@ spec:
 
 **何で動かす?**
 - CF Workers だけで済む → `workers` だけ書く
-- Docker が必要 (CF Containers) → `containers` + `workers` を��く
+- Docker が必要 (CF Containers) → `containers` + `workers` を書く
 - 常設コンテナが必要 → `services` を書く (`ipv4: true` で専用 IPv4 割当)
 
 **データを保存する?**
@@ -231,7 +233,7 @@ resources:
 
 ## 完全な例
 
-実際に動いている takos-computer の app.yml。
+実際に動いている takos-computer の app.yml を、現行の参照整合に合わせて簡略化したもの。
 
 ```yaml
 apiVersion: takos.dev/v1alpha1
@@ -282,7 +284,7 @@ spec:
       path: /gui
     - name: browser-api
       target: browser-host
-      path: /session
+      path: /api
     - name: browser-mcp
       target: browser-host
       path: /mcp

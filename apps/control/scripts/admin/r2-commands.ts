@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { sanitizeErrorMessage } from '../../../../packages/control/src/application/services/wfp/client.ts';
+import { sanitizeErrorMessage } from 'takos-control/core/wfp-client';
 import {
   type GlobalOptions,
   type ResolvedConfig,

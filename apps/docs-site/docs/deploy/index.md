@@ -1,16 +1,17 @@
 # デプロイ
 
-app.yml で定義したアプリを Cloudflare にデプロイします。
+現在の実働 surface は `takos deploy-group` です。`takos deploy` と `/api/spaces/:spaceId/app-deployments` は docs 上の契約として残っていますが、このリポジトリの current implementation では end-to-end に接続されていません。
 
-## 2 つの方法
+## 現在使える方法
 
 | | `takos deploy-group` | `takos deploy` |
 |---|---|---|
-| 用途 | 開発・テスト | Store 公開 |
+| 状態 | current | not currently wired |
+| 用途 | ローカルからの直接デプロイ | Store / app-deployments 経由の将来 surface |
 | 実行元 | ローカル CLI | Takos control plane |
 | 認証 | Cloudflare API トークン | Takos 認証 |
 
-開発中なら [deploy-group](/deploy/deploy-group)、Store に公開するなら [Store 経由](/deploy/store-deploy) を使ってください。
+現時点で使うべきなのは [deploy-group](/deploy/deploy-group) です。`takos deploy` を前提にした手順は未接続の implementation note として読んでください。
 
 ## クイックスタート
 
@@ -18,7 +19,7 @@ app.yml で定義したアプリを Cloudflare にデプロイします。
 # ローカルからステージングにデプロイ
 takos deploy-group --env staging
 
-# Store 経由でデプロイ
+# Store 経由デプロイは current implementation では利用不可
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
 ```
 

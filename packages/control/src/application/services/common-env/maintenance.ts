@@ -1,5 +1,5 @@
 import type { Env } from '../../../shared/types';
-import { createCommonEnvDeps } from './service';
+import { createCommonEnvDeps } from './deps';
 import { logInfo } from '../../../shared/utils/logger';
 
 export async function runCommonEnvScheduledMaintenance(params: {

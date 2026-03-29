@@ -66,11 +66,18 @@ describe('deploy command', () => {
     });
   });
 
-  it('posts repo/ref JSON to app deployments API', async () => {
+  function hasRemovedMessage(logSpy: { mock: { calls: Array<Array<unknown>> } }) {
+    return logSpy.mock.calls.some(([message]) => {
+      const text = String(message);
+      return /deprecated|removed|not available|not supported/i.test(text);
+    });
+  }
+
+  it('fails deploy with an explicit removed error', async () => {
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await program.parseAsync([
+    await expect(program.parseAsync([
       'node',
       'takos',
       'deploy',
@@ -80,58 +87,49 @@ describe('deploy command', () => {
       'main',
       '--ref-type',
       'branch',
-    ], { from: 'node' });
+    ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
 
-    expect(mocks.api).toHaveBeenCalledWith('/api/spaces/space-1/app-deployments', expect.objectContaining({
-      method: 'POST',
-      body: {
-        repo_id: 'repo-1',
-        ref: 'main',
-        ref_type: 'branch',
-        approve_oauth_auto_env: false,
-        approve_source_change: false,
-      },
-      timeout: 120_000,
-    }));
-
+    expect(hasRemovedMessage(logSpy)).toBe(true);
+    expect(mocks.validateAppManifest).not.toHaveBeenCalled();
+    expect(mocks.api).not.toHaveBeenCalled();
     logSpy.mockRestore();
   });
 
-  it('falls back to the current branch when --ref is omitted', async () => {
-    mocks.execFile.mockImplementation((_file: string, _args: string[], _opts: unknown, cb: (err: unknown, stdout?: string) => void) => {
-      cb(null, 'feature/current\n');
-    });
-
+  it('fails deploy status with an explicit removed error', async () => {
     const program = createProgram();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    await program.parseAsync([
-      'node',
-      'takos',
-      'deploy',
-      '--repo',
-      'repo-1',
-    ], { from: 'node' });
-
-    expect(mocks.api).toHaveBeenCalledWith('/api/spaces/space-1/app-deployments', expect.objectContaining({
-      body: expect.objectContaining({
-        repo_id: 'repo-1',
-        ref: 'feature/current',
-      }),
-    }));
-
-    logSpy.mockRestore();
-  });
-
-  it('requires --repo', async () => {
-    const program = createProgram();
 
     await expect(program.parseAsync([
       'node',
       'takos',
       'deploy',
-      '--ref',
-      'main',
-    ], { from: 'node' })).rejects.toThrow(/required option '--repo <id>' not specified/);
+      'status',
+      '--repo',
+      'repo-1',
+      'appdep-1',
+    ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
+
+    expect(hasRemovedMessage(logSpy)).toBe(true);
+    expect(mocks.api).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+  });
+
+  it('fails deploy rollback with an explicit removed error', async () => {
+    const program = createProgram();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await expect(program.parseAsync([
+      'node',
+      'takos',
+      'deploy',
+      'rollback',
+      '--repo',
+      'repo-1',
+      'appdep-1',
+    ], { from: 'node' })).rejects.toThrow(/cliExit:1/);
+
+    expect(hasRemovedMessage(logSpy)).toBe(true);
+    expect(mocks.api).not.toHaveBeenCalled();
+    logSpy.mockRestore();
   });
 });

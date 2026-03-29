@@ -16,8 +16,8 @@ export default defineConfig({
   test: {
     // Use miniflare environment for Cloudflare Workers testing
     environment: 'node',
-    // Keep app-owned tests local, and discover canonical package tests directly.
-    include: ['src/__tests__/**/*.test.ts', 'test/**/*.test.ts', '../../packages/control/src/**/*.test.ts'],
+    // Keep app-owned tests local; package tests run from packages/control.
+    include: ['src/__tests__/**/*.test.ts', 'test/**/*.test.ts'],
     // Exclude only dependencies from discovery
     exclude: ['node_modules'],
     // Setup files for test utilities and mocks
@@ -36,11 +36,12 @@ export default defineConfig({
         functions: 35,
         lines: 30,
       },
-      // Include backend source files, exclude frontend
-      include: ['../../packages/control/src/**/*.ts'],
+      // Cover app-owned entrypoints only.
+      include: ['src/**/*.ts'],
       exclude: [
         'web/**',
         'src/**/*.test.ts',
+        'src/**/__tests__/**',
         'src/**/*.d.ts',
         'src/types.ts',
       ],

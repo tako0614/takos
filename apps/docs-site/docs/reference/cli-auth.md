@@ -18,7 +18,7 @@ HTTP verb をそのまま露出するのではなく、domain ごとの task を
 ## implementation note
 
 CLI の deploy surface は [Deploy System](/deploy/) の public contract に従います。
-`takos deploy` は current surface ですが、end-to-end availability は deploy system 側の implementation note と同じ差分を持ちます。
+`takos deploy` は CLI に残っている contract ですが、このリポジトリの current implementation では end-to-end availability がありません。実運用の current surface は `takos deploy-group` です。
 
 ## 認証
 
@@ -116,7 +116,7 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は repo-local `.takos/app.yml` を前提に、`/api/spaces/:spaceId/app-deployments` を呼び出します。
+`takos deploy` は repo-local `.takos/app.yml` を前提に、`/api/spaces/:spaceId/app-deployments` を呼び出す contract です。現行実装ではこの経路は未接続です。
 
 ```bash
 takos deploy --space SPACE_ID --repo REPO_ID --ref main

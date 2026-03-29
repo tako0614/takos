@@ -2,7 +2,7 @@
  * D1 execution helpers and API client utilities.
  */
 
-import { CloudflareApiClient } from '../../../../packages/control/src/application/services/cloudflare/api-client.ts';
+import { CloudflareApiClient } from 'takos-control/core/cloudflare-api';
 
 import type { D1Statement, ResolvedConfig } from './admin-types.ts';
 import { VALID_USER_ID_PATTERN } from './constants.ts';

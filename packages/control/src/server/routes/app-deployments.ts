@@ -2,9 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../shared/types';
 import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
-import { NotFoundError, InternalError, isAppError } from 'takos-common/errors';
-import { AppDeploymentService } from '../../application/services/platform/app-deployments';
-import { RolloutService } from '../../application/services/platform/rollout';
+import { NotFoundError, InternalError, GoneError, isAppError } from 'takos-common/errors';
+import { AppDeploymentService, APP_DEPLOYMENTS_REMOVED_MESSAGE } from '../../application/services/platform/app-deployments';
 import { zValidator } from './zod-validator';
 import { logError } from '../../shared/utils/logger';
 import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
@@ -13,6 +12,10 @@ function handleRouteError(error: unknown, context: string): never {
   if (isAppError(error)) throw error;
   logError(`${context} error`, error, { module: 'routes/app-deployments' });
   throw new InternalError(`Failed to ${context}`);
+}
+
+function throwRemovedAppDeployments(): never {
+  throw new GoneError(APP_DEPLOYMENTS_REMOVED_MESSAGE);
 }
 
 const createAppDeploymentSchema = z.object({ repo_id: z.string().min(1), ref: z.string().min(1), ref_type: z.enum(['branch', 'tag', 'commit']).optional(), approve_oauth_auto_env: z.boolean().optional(), approve_source_change: z.boolean().optional() });
@@ -45,32 +48,28 @@ const routes = new Hono<SpaceAccessRouteEnv>()
     catch (error) { handleRouteError(error, 'rollback app deployment'); }
   })
   .get('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout', spaceAccess({ roles: APP_DEPLOYMENT_GET_ROLES }), async (c) => {
-    try { const rollout = new RolloutService(c.env); const state = await rollout.getRolloutState(c.req.param('appDeploymentId')); return c.json({ data: state }); }
+    try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'get rollout state'); }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
-    const { space } = c.get('access'); const appDeploymentId = c.req.param('appDeploymentId');
-    try { const rollout = new RolloutService(c.env); const deployment = await new AppDeploymentService(c.env).get(space.id, appDeploymentId); if (!deployment) throw new NotFoundError('App deployment'); const hostname = deployment.hostnames?.[0] || ''; const state = await rollout.pauseRollout(appDeploymentId, hostname); return c.json({ success: true, data: state }); }
+    try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'pause rollout'); }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
-    const { space } = c.get('access'); const appDeploymentId = c.req.param('appDeploymentId');
-    try { const rollout = new RolloutService(c.env); const deployment = await new AppDeploymentService(c.env).get(space.id, appDeploymentId); if (!deployment) throw new NotFoundError('App deployment'); const hostname = deployment.hostnames?.[0] || ''; const state = await rollout.resumeRollout(appDeploymentId, hostname); return c.json({ success: true, data: state }); }
+    try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'resume rollout'); }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
-    const { space } = c.get('access'); const appDeploymentId = c.req.param('appDeploymentId');
-    try { const rollout = new RolloutService(c.env); const deployment = await new AppDeploymentService(c.env).get(space.id, appDeploymentId); if (!deployment) throw new NotFoundError('App deployment'); const hostname = deployment.hostnames?.[0] || ''; const state = await rollout.abortRollout(appDeploymentId, hostname); return c.json({ success: true, data: state }); }
+    try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'abort rollout'); }
   })
   .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
-    const { space } = c.get('access'); const appDeploymentId = c.req.param('appDeploymentId');
-    try { const rollout = new RolloutService(c.env); const deployment = await new AppDeploymentService(c.env).get(space.id, appDeploymentId); if (!deployment) throw new NotFoundError('App deployment'); const hostname = deployment.hostnames?.[0] || ''; const state = await rollout.promoteRollout(appDeploymentId, hostname); return c.json({ success: true, data: state }); }
+    try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'promote rollout'); }
   })
   .delete('/spaces/:spaceId/app-deployments/:appDeploymentId', spaceAccess({ roles: APP_DEPLOYMENT_REMOVE_ROLES }), async (c) => {
     const { space } = c.get('access'); const appDeploymentId = c.req.param('appDeploymentId');
-    try { const service = new AppDeploymentService(c.env); const deployment = await service.get(space.id, appDeploymentId); if (!deployment) throw new NotFoundError('App deployment'); await service.remove(space.id, appDeploymentId); return c.json({ success: true }); }
+    try { const service = new AppDeploymentService(c.env); await service.remove(space.id, appDeploymentId); return c.json({ success: true }); }
     catch (error) { handleRouteError(error, 'remove app deployment'); }
   });
 

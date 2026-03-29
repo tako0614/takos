@@ -16,10 +16,11 @@ export declare const webApp: Hono<{
     Bindings: Env;
     Variables: Variables;
 }, import("hono/types").BlankSchema, "/">;
-export declare function createWebApp(): Hono<{
+export declare function getWebApp(): Hono<{
     Bindings: Env;
     Variables: Variables;
 }, import("hono/types").BlankSchema, "/">;
+export declare const createWebApp: typeof getWebApp;
 export declare function createWebWorker(buildPlatform?: (env: Env) => ControlPlatform<Env> | Promise<ControlPlatform<Env>>): {
     fetch(request: Request, env: Env, ctx: PlatformExecutionContext): Promise<Response>;
     scheduled(controller: PlatformScheduledController, env: Env): Promise<void>;

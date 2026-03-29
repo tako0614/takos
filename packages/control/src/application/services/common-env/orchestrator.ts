@@ -106,5 +106,3 @@ export class CommonEnvOrchestrator {
     return this.jobs.enqueuePeriodicDriftSweep(limit);
   }
 }
-
-export { CommonEnvOrchestrator as ServiceCommonEnvOrchestrator };

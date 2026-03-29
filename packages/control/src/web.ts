@@ -64,9 +64,16 @@ app.use('*', async (c, next) => {
 });
 
 export const webApp = app;
-export function createWebApp() {
-  return app;
+
+export function getWebApp() {
+  return webApp;
 }
+
+/**
+ * Backward-compatible alias for older callers.
+ * Prefer `getWebApp()` when you want the singleton worker app.
+ */
+export const createWebApp = getWebApp;
 
 function isAllowedOrigin(origin: string, adminDomain: string): boolean {
   if (origin === `https://${adminDomain}`) return true;
