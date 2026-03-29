@@ -1,1 +1,0 @@
-{"version":3,"file":"git-push-lock.d.ts","sourceRoot":"","sources":["git-push-lock.ts"],"names":[],"mappings":"AAcA,qBAAa,aAAa;IACZ,OAAO,CAAC,QAAQ,CAAC,KAAK;gBAAL,KAAK,EAAE,kBAAkB;IAEhD,KAAK,CAAC,OAAO,EAAE,OAAO,GAAG,OAAO,CAAC,QAAQ,CAAC;YAkBlC,OAAO;YAwBP,OAAO;IAwBf,KAAK,IAAI,OAAO,CAAC,IAAI,CAAC;CAU7B"}

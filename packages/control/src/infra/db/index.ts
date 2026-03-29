@@ -145,7 +145,6 @@ export {
 // Groups
 export {
   groups,
-  groupEntities,
 } from './schema';
 
 // Workers

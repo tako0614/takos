@@ -1,2 +1,0 @@
-export declare function withTimeout<T>(promiseOrFactory: Promise<T> | ((signal?: AbortSignal) => Promise<T>), timeoutMs: number, errorMessage: string): Promise<T>;
-//# sourceMappingURL=with-timeout.d.ts.map

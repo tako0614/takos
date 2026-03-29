@@ -1,49 +1,49 @@
 /**
- * JWT utilities for service-to-service authentication
- * Uses RS256 (RSA with SHA-256) for asymmetric signing
+ * サービス間認証で利用する JWT ユーティリティ
+ * 署名方式は RS256（RSA + SHA-256）を使用する。
  */
 
 import * as crypto from 'crypto';
 
 /**
- * Service token JWT payload structure
+ * サービストークンの JWT ペイロード構造
  */
 export interface ServiceTokenPayload {
-  iss: string;  // issuer service name
-  sub: string;  // subject (service or user id)
-  aud: string;  // audience (target service)
-  exp: number;  // expiration timestamp
-  iat: number;  // issued at
-  jti: string;  // unique token ID
+  iss: string;  // 発行元サービス名
+  sub: string;  // サブジェクト（サービス名またはユーザーID）
+  aud: string;  // 対象サービス（audience）
+  exp: number;  // 有効期限タイムスタンプ
+  iat: number;  // 発行時刻
+  jti: string;  // トークンの一意 ID
 }
 
 /**
- * Extended payload with optional custom claims
+ * カスタムクレームを含める拡張ペイロード
  */
 export interface ServiceTokenPayloadWithClaims extends ServiceTokenPayload {
   [key: string]: unknown;
 }
 
 /**
- * Options for verifying a service token
+ * サービストークン検証オプション
  */
 export interface VerifyServiceTokenOptions {
-  /** JWT token string */
+  /** JWT トークン文字列 */
   token: string;
-  /** Public key in PEM format (used as default/fallback) */
+  /** PEM 形式の公開鍵（既定値／フォールバックとして使用） */
   publicKey: string;
-  /** Additional public keys for rotation, keyed by kid (optional) */
+  /** ローテーション用公開鍵（kid をキーにしたマップ） */
   publicKeys?: Record<string, string>;
-  /** Expected audience (required) */
+  /** 期待する audience（必須） */
   expectedAudience: string;
-  /** Expected issuer (required) */
+  /** 期待する issuer（必須） */
   expectedIssuer: string;
-  /** Clock tolerance in seconds for exp/iat checks (default: 30) */
+  /** exp/iat 検証時のクロック許容誤差（秒、既定 30） */
   clockToleranceSeconds?: number;
 }
 
 /**
- * Result of token verification
+ * トークン検証結果
  */
 export interface VerifyServiceTokenResult {
   valid: boolean;
@@ -51,7 +51,7 @@ export interface VerifyServiceTokenResult {
   error?: string;
 }
 
-// Base64URL encoding/decoding utilities
+// Base64URL のエンコード/デコード用ユーティリティ
 function base64UrlEncode(data: Buffer | string): string {
   const buffer = typeof data === 'string' ? Buffer.from(data) : data;
   return buffer.toString('base64')
@@ -61,7 +61,7 @@ function base64UrlEncode(data: Buffer | string): string {
 }
 
 function base64UrlDecode(str: string): Buffer {
-  // Add padding back
+  // パディングを戻す
   let padded = str.replace(/-/g, '+').replace(/_/g, '/');
   const padding = (4 - (padded.length % 4)) % 4;
   padded += '='.repeat(padding);
@@ -73,7 +73,7 @@ function base64UrlDecode(str: string): Buffer {
 }
 
 /**
- * Generate a unique JWT ID (jti)
+ * ユニークな JWT ID（jti）を生成する
  */
 function generateJTI(): string {
   const bytes = crypto.randomBytes(16);
@@ -81,10 +81,10 @@ function generateJTI(): string {
 }
 
 /**
- * Verify a service token using RS256 algorithm
+ * RS256 でサービストークンを検証する
  *
- * @param options - Verification options including token and public key
- * @returns Verification result with payload if valid
+ * @param options - トークンと公開鍵を含む検証オプション
+ * @returns 有効な場合は payload を含む検証結果
  */
 export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifyServiceTokenResult {
   const {
@@ -97,7 +97,7 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
   } = options;
 
   try {
-    // Split token
+    // トークンを分割
     const parts = token.split('.');
     if (parts.length !== 3) {
       return { valid: false, error: 'Invalid token format' };
@@ -105,7 +105,7 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
 
-    // Decode header
+    // ヘッダをデコード
     let header: { alg?: string; typ?: string; kid?: string };
     try {
       header = JSON.parse(base64UrlDecode(encodedHeader).toString('utf-8'));
@@ -113,30 +113,29 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
       return { valid: false, error: 'Invalid header encoding' };
     }
 
-    // Verify algorithm
+    // 署名アルゴリズムを検証
     if (header.alg !== 'RS256') {
       return { valid: false, error: `Unsupported algorithm: ${header.alg}` };
     }
 
-    // Resolve which public key(s) to try based on kid.
-    // When kid is present, use only the matching key (strict rotation).
-    // When kid is absent, use only the default public key (latest/current key)
-    // to prevent accepting tokens signed with any older rotation key.
+    // kid の有無で検証に使う公開鍵を決定する。
+    // kid がある場合は一致する鍵のみを使う（ローテーション厳密運用）。
+    // kid がない場合は既定の公開鍵（最新）だけを使い、古い鍵での検証は拒否する。
     const keysToTry: string[] = [];
     if (header.kid) {
       if (publicKeys[header.kid]) {
-        // Token has a kid and we have a matching key - use it exclusively
+        // kid があり、対応する鍵が見つかったのでこの鍵のみを使用
         keysToTry.push(publicKeys[header.kid]);
       } else {
-        // kid is present but unknown - reject immediately
+        // kid はあるが未登録の鍵 ID のため、直ちに拒否
         return { valid: false, error: `Unknown key ID: ${header.kid}` };
       }
     } else {
-      // No kid: only try the default (latest) public key
+      // kid がない場合: 既定（最新）公開鍵のみで検証
       keysToTry.push(publicKey);
     }
 
-    // Try each key for signature verification
+    // 署名検証に使用する鍵を順に試行
     const signingInput = `${encodedHeader}.${encodedPayload}`;
     const signature = base64UrlDecode(encodedSignature);
 
@@ -156,7 +155,7 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
       return { valid: false, error: 'Invalid signature' };
     }
 
-    // Decode payload
+    // ペイロードをデコード
     let payload: ServiceTokenPayloadWithClaims;
     try {
       payload = JSON.parse(base64UrlDecode(encodedPayload).toString('utf-8'));
@@ -164,12 +163,12 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
       return { valid: false, error: 'Invalid payload encoding' };
     }
 
-    // Required verification config
+    // 必須の検証設定を確認
     if (!expectedAudience || !expectedIssuer) {
       return { valid: false, error: 'expectedAudience and expectedIssuer are required' };
     }
 
-    // Required claims
+    // 必須クレームを検証
     if (typeof payload.iss !== 'string' || payload.iss.length === 0) {
       return { valid: false, error: 'Missing or invalid iss claim' };
     }
@@ -189,23 +188,23 @@ export function verifyServiceToken(options: VerifyServiceTokenOptions): VerifySe
       return { valid: false, error: 'Missing or invalid iat claim' };
     }
 
-    // Verify expiration
+    // 有効期限を検証
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp + clockToleranceSeconds < now) {
       return { valid: false, error: 'Token has expired' };
     }
 
-    // Verify not-before (iat - tolerance)
+    // 発行時刻（iat）と許容誤差を検証
     if (payload.iat - clockToleranceSeconds > now) {
       return { valid: false, error: 'Token issued in the future' };
     }
 
-    // Verify audience
+    // audience を検証
     if (payload.aud !== expectedAudience) {
       return { valid: false, error: `Invalid audience: expected ${expectedAudience}, got ${payload.aud}` };
     }
 
-    // Verify issuer
+    // issuer を検証
     if (payload.iss !== expectedIssuer) {
       return { valid: false, error: `Invalid issuer: expected ${expectedIssuer}, got ${payload.iss}` };
     }

@@ -1,21 +1,21 @@
 /**
- * Standardized Error Handling for Takos Platform
+ * Takos プラットフォーム向けの統一エラー処理
  *
- * This module provides a consistent error handling pattern across all takos packages.
- * All errors extend from AppError and include:
- * - code: A unique error code for client-side handling
- * - message: A user-safe message (no internal details)
- * - statusCode: The HTTP status code to return
- * - details: Optional field-level or additional details
+ * 本モジュールはすべての takos パッケージで一貫したエラー処理方針を提供する。
+ * すべてのエラーは AppError を継承し、次の項目を持つ。
+ * - code: クライアント側ハンドリング用の一意なエラーコード
+ * - message: 内部情報を含まないユーザー向け安全メッセージ
+ * - statusCode: 返却する HTTP ステータスコード
+ * - details: 任意の追加情報（フィールド単位の詳細など）
  */
 
 import type { Logger } from './logger.js';
 
 /**
- * Standard error codes for consistent client handling
+ * クライアント側の取り扱いを統一する標準エラーコード
  */
 export const ErrorCodes = {
-  // 4xx Client Errors
+  // 4xx クライアントエラー
   BAD_REQUEST: 'BAD_REQUEST',
   UNAUTHORIZED: 'UNAUTHORIZED',
   PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
@@ -27,7 +27,7 @@ export const ErrorCodes = {
   RATE_LIMITED: 'RATE_LIMITED',
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
-  // 5xx Server Errors
+  // 5xx サーバーエラー
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
@@ -39,7 +39,7 @@ export const ErrorCodes = {
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 /**
- * Standard error response format for API responses
+ * API レスポンス共通のエラーフォーマット
  */
 export interface ErrorResponse {
   error: {
@@ -50,7 +50,7 @@ export interface ErrorResponse {
 }
 
 /**
- * Field-level validation error details
+ * フィールド単位のバリデーションエラー詳細
  */
 export interface ValidationErrorDetail {
   field: string;
@@ -59,8 +59,8 @@ export interface ValidationErrorDetail {
 }
 
 /**
- * Base application error class
- * All custom errors should extend from this class
+ * アプリケーション基本エラークラス
+ * カスタムエラーはすべてこのクラスを継承すること
  */
 export class AppError extends Error {
   public readonly code: ErrorCode;
@@ -78,13 +78,13 @@ export class AppError extends Error {
     this.statusCode = statusCode;
     this.details = details;
 
-    // Maintains proper stack trace for where error was thrown
+    // エラー発生位置のスタックトレースを正しく保持する
     Error.captureStackTrace?.(this, this.constructor);
   }
 
   /**
-   * Convert error to API response format
-   * This ensures no internal details leak to clients
+   * エラーを API レスポンス形式に変換する。
+   * クライアントへ内部情報が漏れないようにする。
    */
   toResponse(): ErrorResponse {
     return {
@@ -95,11 +95,10 @@ export class AppError extends Error {
       },
     };
   }
-
 }
 
 /**
- * 400 Bad Request - Invalid request syntax or parameters
+ * 400 不正なリクエスト
  */
 export class BadRequestError extends AppError {
   constructor(message = 'Bad request', details?: unknown) {
@@ -108,7 +107,7 @@ export class BadRequestError extends AppError {
 }
 
 /**
- * 401 Unauthorized - Authentication required or invalid
+ * 401 認証が必要
  */
 export class AuthenticationError extends AppError {
   constructor(message = 'Authentication required', details?: unknown) {
@@ -117,7 +116,7 @@ export class AuthenticationError extends AppError {
 }
 
 /**
- * 402 Payment Required - Payment is required to access the resource
+ * 402 決済必要
  */
 export class PaymentRequiredError extends AppError {
   constructor(message = 'Payment required', details?: unknown) {
@@ -126,7 +125,7 @@ export class PaymentRequiredError extends AppError {
 }
 
 /**
- * 403 Forbidden - Authenticated but not authorized
+ * 403 権限不足
  */
 export class AuthorizationError extends AppError {
   constructor(message = 'Access denied', details?: unknown) {
@@ -135,7 +134,7 @@ export class AuthorizationError extends AppError {
 }
 
 /**
- * 404 Not Found - Resource does not exist
+ * 404 リソース未検出
  */
 export class NotFoundError extends AppError {
   constructor(resource = 'Resource', details?: unknown) {
@@ -144,7 +143,7 @@ export class NotFoundError extends AppError {
 }
 
 /**
- * 409 Conflict - Resource conflict (e.g., duplicate)
+ * 409 競合
  */
 export class ConflictError extends AppError {
   constructor(message = 'Resource conflict', details?: unknown) {
@@ -153,7 +152,7 @@ export class ConflictError extends AppError {
 }
 
 /**
- * 410 Gone - Resource no longer available
+ * 410 リソース消失
  */
 export class GoneError extends AppError {
   constructor(message = 'Resource is no longer available', details?: unknown) {
@@ -162,7 +161,7 @@ export class GoneError extends AppError {
 }
 
 /**
- * 413 Payload Too Large - Request payload exceeds limit
+ * 413 ボディが上限を超過
  */
 export class PayloadTooLargeError extends AppError {
   constructor(message = 'Payload too large', details?: unknown) {
@@ -171,7 +170,7 @@ export class PayloadTooLargeError extends AppError {
 }
 
 /**
- * 422 Unprocessable Entity - Validation failed
+ * 422 バリデーション失敗
  */
 export class ValidationError extends AppError {
   public readonly fieldErrors: ValidationErrorDetail[];
@@ -188,11 +187,10 @@ export class ValidationError extends AppError {
     );
     this.fieldErrors = fieldErrors;
   }
-
 }
 
 /**
- * 429 Too Many Requests - Rate limit exceeded
+ * 429 リクエスト過多
  */
 export class RateLimitError extends AppError {
   public readonly retryAfter?: number;
@@ -204,7 +202,7 @@ export class RateLimitError extends AppError {
 }
 
 /**
- * 500 Internal Server Error - Unexpected server error
+ * 500 サーバー内部エラー
  */
 export class InternalError extends AppError {
   constructor(message = 'Internal server error', details?: unknown) {
@@ -213,7 +211,7 @@ export class InternalError extends AppError {
 }
 
 /**
- * 501 Not Implemented - Functionality not implemented
+ * 501 未実装
  */
 export class NotImplementedError extends AppError {
   constructor(message = 'Not implemented', details?: unknown) {
@@ -222,7 +220,7 @@ export class NotImplementedError extends AppError {
 }
 
 /**
- * 502 Bad Gateway - Invalid response from upstream service
+ * 502 不正なゲートウェイ応答
  */
 export class BadGatewayError extends AppError {
   constructor(message = 'Bad gateway', details?: unknown) {
@@ -231,7 +229,7 @@ export class BadGatewayError extends AppError {
 }
 
 /**
- * 503 Service Unavailable - Service temporarily unavailable
+ * 503 サービス利用不可（または一時停止）
  */
 export class ServiceUnavailableError extends AppError {
   constructor(message = 'Service temporarily unavailable', details?: unknown) {
@@ -240,7 +238,7 @@ export class ServiceUnavailableError extends AppError {
 }
 
 /**
- * 504 Gateway Timeout - Upstream service timeout
+ * 504 上流タイムアウト
  */
 export class GatewayTimeoutError extends AppError {
   constructor(message = 'Gateway timeout', details?: unknown) {
@@ -249,15 +247,15 @@ export class GatewayTimeoutError extends AppError {
 }
 
 /**
- * Type guard to check if an error is an AppError
+ * エラーが AppError かを判定する型ガード
  */
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
 
 /**
- * Convert unknown error to AppError
- * Use this to normalize errors before sending responses
+ * 不明なエラーを AppError に変換する。
+ * レスポンス送信前のエラー正規化に利用する。
  */
 export function normalizeError(error: unknown, logger?: Logger): AppError {
   if (isAppError(error)) {
@@ -281,15 +279,13 @@ export function normalizeError(error: unknown, logger?: Logger): AppError {
   return new InternalError('An unexpected error occurred');
 }
 
-
 /**
- * Extract a human-readable message from an unknown thrown value.
+ * 不明な例外値から、人間向けのメッセージ文字列を取り出す。
  *
- * When called with a single argument the behaviour matches the former
- * `runtime-service/utils/error-message` helper (`String(err)` for
- * non-Error values).  When a `fallback` string is supplied the
- * behaviour matches the former `control/web/lib/errors` helper
- * (returns the fallback when no meaningful message can be extracted).
+ * 引数が 1 つのみの場合は旧 `runtime-service/utils/error-message` の挙動と同じ
+ * （非 Error 値は `String(error)` を返す）。`fallback` が指定された場合は、
+ * 旧 `control/web/lib/errors` の挙動に合わせて、意味のある文字列が取れない場合に
+ * その fallback を返す。
  */
 export function getErrorMessage(error: unknown, fallback?: string): string {
   if (typeof error === 'string' && error.trim()) {
@@ -311,7 +307,7 @@ export function getErrorMessage(error: unknown, fallback?: string): string {
 }
 
 /**
- * Log error with full details for server-side debugging
+ * サーバー側デバッグ向けにエラー情報を詳細付きでログに出す
  */
 export function logError(error: unknown, context?: Record<string, unknown>, logger?: Logger): void {
   const errorInfo = isAppError(error)
@@ -338,4 +334,3 @@ export function logError(error: unknown, context?: Record<string, unknown>, logg
     });
   }
 }
-

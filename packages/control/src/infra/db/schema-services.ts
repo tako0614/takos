@@ -4,6 +4,7 @@ import { createdAtColumn, timestamps } from './schema-utils';
 const servicesTable = sqliteTable('services', {
   id: text('id').primaryKey(),
   accountId: text('account_id').notNull(),
+  groupId: text('group_id'),
   serviceType: text('service_type').notNull().default('app'),
   nameType: text('name_type'),
   status: text('status').notNull().default('pending'),
@@ -22,6 +23,7 @@ const servicesTable = sqliteTable('services', {
   idxHostname: index('idx_services_hostname').on(table.hostname),
   idxAccountStatus: index('idx_services_account_status').on(table.accountId, table.status),
   idxAccount: index('idx_services_account_id').on(table.accountId),
+  idxGroup: index('idx_services_group_id').on(table.groupId),
 }));
 
 export const services = Object.assign(servicesTable, {

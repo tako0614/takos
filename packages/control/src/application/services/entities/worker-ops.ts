@@ -2,21 +2,26 @@
  * Worker entity operations for the control plane.
  *
  * Deploys / deletes Cloudflare Workers via the CF Management API
- * (Workers Script API) and records state in group_entities.
+ * (Workers Script API) and records state in the canonical services table.
  *
  * Runs inside Cloudflare Workers -- no subprocess / wrangler CLI available.
  * Worker upload uses the CF Workers API directly (PUT /workers/scripts/:name).
  */
 
-import { eq, and } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/client.ts';
-import { groupEntities } from '../../../infra/db/schema-groups.ts';
 import {
   createCloudflareApiClient,
   type CloudflareApiClient,
 } from '../cloudflare/api-client.ts';
-import { generateId } from '../../../shared/utils/index.ts';
 import type { Env } from '../../../shared/types/env.ts';
+import {
+  buildManagedRouteRef,
+  deleteGroupManagedService,
+  findGroupManagedService,
+  listGroupManagedServices,
+  parseManagedServiceConfig,
+  upsertGroupManagedService,
+} from './group-managed-services.ts';
+import { recordGroupManagedDeployment } from './group-managed-deployments.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -44,15 +49,12 @@ interface WorkerConfig {
   deployedAt: string;
   codeHash: string;
   dispatchNamespace?: string;
+  specFingerprint?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function workerScriptName(groupName: string, envName: string, workerName: string): string {
-  return `${groupName}-${envName}-${workerName}`;
-}
 
 function requireCfClient(env: Env): CloudflareApiClient {
   const client = createCloudflareApiClient(env);
@@ -139,15 +141,23 @@ export async function deployWorker(
   groupId: string,
   name: string,
   opts: {
+    spaceId: string;
     groupName?: string;
     envName?: string;
     codeHash?: string;
     dispatchNamespace?: string;
+    specFingerprint?: string;
+    desiredSpec?: Record<string, unknown>;
+    routeNames?: string[];
+    dependsOn?: string[];
     /** If true, skip the actual CF API call (for when the upload is done elsewhere). */
     skipUpload?: boolean;
   },
 ): Promise<WorkerEntityResult> {
-  const scriptName = workerScriptName(opts.groupName ?? groupId, opts.envName ?? 'default', name);
+  const envName = opts.envName ?? 'default';
+  const existing = await findGroupManagedService(env, groupId, name, 'worker');
+  const scriptName = existing?.row.routeRef
+    ?? buildManagedRouteRef(groupId, envName, 'worker', name);
   const now = new Date().toISOString();
   const codeHash = opts.codeHash ?? '';
 
@@ -162,38 +172,36 @@ export async function deployWorker(
     scriptName,
     deployedAt: now,
     codeHash,
+    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
     ...(opts.dispatchNamespace ? { dispatchNamespace: opts.dispatchNamespace } : {}),
   };
+  const record = await upsertGroupManagedService(env, {
+    groupId,
+    spaceId: opts.spaceId,
+    envName,
+    componentKind: 'worker',
+    manifestName: name,
+    status: 'deployed',
+    serviceType: 'app',
+    workloadKind: 'worker-bundle',
+    specFingerprint: opts.specFingerprint ?? '',
+    desiredSpec: opts.desiredSpec ?? {},
+    routeNames: opts.routeNames,
+    dependsOn: opts.dependsOn,
+    deployedAt: now,
+    codeHash,
+    dispatchNamespace: opts.dispatchNamespace,
+  });
 
-  const db = getDb(env.DB);
-
-  // Upsert: if entity already exists, update it
-  const existing = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'worker'),
-        eq(groupEntities.name, name),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(groupEntities)
-      .set({ config: JSON.stringify(config) })
-      .where(eq(groupEntities.id, existing[0].id));
-  } else {
-    await db.insert(groupEntities).values({
-      id: generateId(),
-      groupId,
-      category: 'worker',
-      name,
-      config: JSON.stringify(config),
-    });
-  }
+  await recordGroupManagedDeployment(env, {
+    serviceId: record.row.id,
+    spaceId: opts.spaceId,
+    providerName: 'workers-dispatch',
+    artifactKind: 'worker-bundle',
+    routeRef: record.row.routeRef,
+    specFingerprint: opts.specFingerprint,
+    codeHash,
+  });
 
   return { name, scriptName, deployedAt: now, codeHash };
 }
@@ -207,37 +215,23 @@ export async function deleteWorker(
   groupId: string,
   name: string,
 ): Promise<void> {
-  const db = getDb(env.DB);
-
-  const rows = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'worker'),
-        eq(groupEntities.name, name),
-      ),
-    )
-    .limit(1);
-
-  if (rows.length === 0) {
+  const record = await findGroupManagedService(env, groupId, name, 'worker');
+  if (!record) {
     throw new Error(`Worker entity "${name}" not found in group ${groupId}`);
   }
 
-  const row = rows[0];
-  const config = JSON.parse(row.config) as WorkerConfig;
+  const config = parseManagedServiceConfig(record.row.config) as WorkerConfig;
 
   try {
     const client = createCloudflareApiClient(env);
     if (client) {
-      await deleteWorkerScript(client, config.scriptName, config.dispatchNamespace);
+      await deleteWorkerScript(client, record.row.routeRef ?? config.scriptName, config.dispatchNamespace);
     }
   } catch (error) {
-    console.warn(`Failed to delete CF worker "${config.scriptName}":`, error);
+    console.warn(`Failed to delete CF worker "${record.row.routeRef ?? config.scriptName}":`, error);
   }
 
-  await db.delete(groupEntities).where(eq(groupEntities.id, row.id));
+  await deleteGroupManagedService(env, groupId, name, 'worker');
 }
 
 // ---------------------------------------------------------------------------
@@ -248,25 +242,22 @@ export async function listWorkers(
   env: Env,
   groupId: string,
 ): Promise<WorkerEntityInfo[]> {
-  const db = getDb(env.DB);
-
-  const rows = await db
-    .select()
-    .from(groupEntities)
-    .where(
-      and(
-        eq(groupEntities.groupId, groupId),
-        eq(groupEntities.category, 'worker'),
-      ),
-    );
-
-  return rows.map((row) => ({
-    id: row.id,
-    groupId: row.groupId,
-    name: row.name,
-    category: row.category,
-    config: JSON.parse(row.config) as WorkerConfig,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }));
+  const records = await listGroupManagedServices(env, groupId);
+  return records
+    .filter((record) => record.config.componentKind === 'worker')
+    .map((record) => ({
+      id: record.row.id,
+      groupId: record.row.groupId ?? groupId,
+      name: record.config.manifestName ?? record.row.slug ?? record.row.id,
+      category: 'worker',
+      config: {
+        scriptName: record.row.routeRef ?? '',
+        deployedAt: record.config.deployedAt ?? record.row.updatedAt,
+        codeHash: record.config.codeHash ?? '',
+        ...(record.config.dispatchNamespace ? { dispatchNamespace: record.config.dispatchNamespace } : {}),
+        ...(record.config.specFingerprint ? { specFingerprint: record.config.specFingerprint } : {}),
+      },
+      createdAt: record.row.createdAt,
+      updatedAt: record.row.updatedAt,
+    }));
 }

@@ -1,29 +1,29 @@
 /**
- * Environment variable parsing helpers.
+ * 環境変数パース用ヘルパー。
  *
- * Provides a consistent pattern across all services:
- *  - **Required** vars (`parseIntEnvRequired`): throw if missing or invalid.
- *  - **Optional** vars (`parseIntEnv`, `parseFloatEnv`): log a warning when the
- *    raw value is present but invalid, then fall back to the default.
+ * すべてのサービスで統一した扱いを提供する:
+ *  - **必須** 変数（`parseIntEnvRequired`）: 未設定または不正値なら例外を投げる。
+ *  - **任意** 変数（`parseIntEnv` / `parseFloatEnv`）: 値が不正な場合は警告を出して
+ *    デフォルト値へフォールバックする。
  *
- * The helpers intentionally avoid importing a specific logger so they stay
- * dependency-free.  A `warnFn` callback is accepted for warning output;
- * callers can wire it to their own logger or leave it as `console.warn`.
+ * このヘルパーは特定のロガー実装を import しないため依存を持たない。
+ * `warnFn` コールバックを受け取り、呼び出し側が任意のロガーへ接続するか
+ * `console.warn` を利用できる。
  */
 
 type WarnFn = (message: string) => void;
 const defaultWarn: WarnFn = (msg) => console.warn(msg);
 
 // ---------------------------------------------------------------------------
-// Integer helpers
+// 整数ヘルパー
 // ---------------------------------------------------------------------------
 
 /**
- * Parse an optional integer environment variable.
+ * 任意の整数型環境変数をパースする。
  *
- * - Missing / empty value -> returns `defaultValue`.
- * - Present but not a valid integer -> logs a warning, returns `defaultValue`.
- * - `min` / `max` constraints are enforced when provided.
+ * - 値が未設定/空文字なら `defaultValue` を返す。
+ * - 値が存在するが整数として不正なら警告ログを出して `defaultValue` を返す。
+ * - `min` / `max` 指定があれば境界チェックを行う。
  */
 export function parseIntEnv(
   name: string,
@@ -36,10 +36,10 @@ export function parseIntEnv(
 }
 
 /**
- * Parse a required integer environment variable.
+ * 必須の整数型環境変数をパースする。
  *
- * - Missing / empty -> throws.
- * - Present but not a valid integer -> throws.
+ * - 値が未設定/空文字なら例外を投げる。
+ * - 不正な整数値なら例外を投げる。
  */
 export function parseIntEnvRequired(
   name: string,
@@ -63,13 +63,13 @@ export function parseIntEnvRequired(
 }
 
 /**
- * Parse an integer from a raw string value (not directly from process.env).
+ * `process.env` から直接読むのではなく、文字列入力から整数をパースする。
  *
- * Useful when the env value has already been read (e.g. from a Cloudflare
- * Workers `Env` binding) rather than from `process.env`.
+ * 例えば Cloudflare Workers の `Env` バインディングなど、
+ * 既に文字列として読み込まれた環境値を扱う場合に利用する。
  *
- * - `undefined` / empty -> returns `defaultValue`.
- * - Present but not a valid integer -> logs a warning, returns `defaultValue`.
+ * - `undefined` / 空文字なら `defaultValue` を返す。
+ * - 値が存在するが整数として不正なら警告を出して `defaultValue` を返す。
  */
 export function parseIntValue(
   name: string,
@@ -99,15 +99,15 @@ export function parseIntValue(
 }
 
 // ---------------------------------------------------------------------------
-// Float helpers
+// 小数ヘルパー
 // ---------------------------------------------------------------------------
 
 /**
- * Parse an optional float environment variable.
+ * 任意の浮動小数点数型環境変数をパースする。
  *
- * - Missing / empty value -> returns `defaultValue`.
- * - Present but not a valid number -> logs a warning, returns `defaultValue`.
- * - `min` / `max` constraints are enforced when provided.
+ * - 値が未設定/空文字なら `defaultValue` を返す。
+ * - 値が存在するが数値として不正なら警告を出して `defaultValue` を返す。
+ * - `min` / `max` 指定があれば境界チェックを行う。
  */
 export function parseFloatEnv(
   name: string,
@@ -120,10 +120,10 @@ export function parseFloatEnv(
 }
 
 /**
- * Parse a float from a raw string value (not directly from process.env).
+ * `process.env` から直接読むのではなく、文字列入力から浮動小数点数をパースする。
  *
- * - `undefined` / empty -> returns `defaultValue`.
- * - Present but not a valid number -> logs a warning, returns `defaultValue`.
+ * - `undefined` / 空文字なら `defaultValue` を返す。
+ * - 値が存在するが数値として不正なら警告を出して `defaultValue` を返す。
  */
 export function parseFloatValue(
   name: string,

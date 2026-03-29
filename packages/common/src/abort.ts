@@ -1,17 +1,17 @@
 /**
- * Abort Signal Utilities
+ * Abort Signal 用ユーティリティ
  *
- * Shared helpers for working with AbortSignal across Takos services.
+ * Takos の各サービス横断で AbortSignal を扱うための共通ヘルパー。
  */
 
 import { AppError } from './errors.js';
 
 /**
- * Throws an `AppError` if the given signal has been aborted.
+ * 指定したシグナルが中断済みなら `AppError` を投げる。
  *
- * @param signal  - The abort signal to check (no-op if `undefined`).
- * @param context - A short label describing the call-site, appended to the
- *                  error message for easier debugging (e.g. `'langgraph-start'`).
+ * @param signal  - チェック対象の AbortSignal（`undefined` の場合は何もしない）。
+ * @param context - 呼び出し箇所の短い識別子。デバッグ向けにエラーメッセージへ追記される
+ *                  （例: `'langgraph-start'`）。
  */
 export function throwIfAborted(signal: AbortSignal | undefined, context?: string): void {
   if (!signal?.aborted) {
