@@ -44,6 +44,8 @@ const REQUIRED_SITE_FILES = [
   "hosting/self-hosted.md",
   "hosting/local.md",
   "hosting/cloudflare.md",
+  "hosting/aws.md",
+  "hosting/gcp.md",
   "hosting/kubernetes.md",
   "hosting/differences.md",
   "examples/index.md",
