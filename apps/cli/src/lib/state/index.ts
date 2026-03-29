@@ -27,6 +27,7 @@ export {
 
 export {
   hasApiEndpoint,
+  getDefaultSpaceId,
 } from './api-client.js';
 
 export type {
@@ -43,3 +44,22 @@ export {
 export {
   formatPlan,
 } from './plan.js';
+
+export type {
+  RefreshChange,
+  RefreshResult,
+  RefreshableProvider,
+} from './refresh.js';
+
+export {
+  refreshState,
+} from './refresh.js';
+
+export type {
+  SyncAction,
+  SyncResult,
+} from './sync.js';
+
+export {
+  syncState,
+} from './sync.js';

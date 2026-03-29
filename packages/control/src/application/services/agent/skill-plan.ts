@@ -4,7 +4,7 @@
  * Extracted from runner.ts to separate skill concerns from the core run loop.
  */
 
-import type { AgentRunnerIo } from './runner';
+import type { AgentRunnerIo } from './runner-io';
 import type { AgentMessage, AgentEvent } from './agent-models';
 import type { ToolExecutorLike } from '../../tools/executor';
 import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills';

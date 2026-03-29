@@ -1,0 +1,22 @@
+import type { ToolDefinition, ToolHandler } from '../tool-definitions';
+export declare const SKILL_LIST: ToolDefinition;
+export declare const SKILL_GET: ToolDefinition;
+export declare const SKILL_CREATE: ToolDefinition;
+export declare const SKILL_UPDATE: ToolDefinition;
+export declare const SKILL_TOGGLE: ToolDefinition;
+export declare const SKILL_DELETE: ToolDefinition;
+export declare const SKILL_CONTEXT: ToolDefinition;
+export declare const SKILL_CATALOG: ToolDefinition;
+export declare const SKILL_DESCRIBE: ToolDefinition;
+export declare const skillListHandler: ToolHandler;
+export declare const skillGetHandler: ToolHandler;
+export declare const skillCreateHandler: ToolHandler;
+export declare const skillUpdateHandler: ToolHandler;
+export declare const skillToggleHandler: ToolHandler;
+export declare const skillDeleteHandler: ToolHandler;
+export declare const skillContextHandler: ToolHandler;
+export declare const skillCatalogHandler: ToolHandler;
+export declare const skillDescribeHandler: ToolHandler;
+export declare const WORKSPACE_SKILL_TOOLS: ToolDefinition[];
+export declare const WORKSPACE_SKILL_HANDLERS: Record<string, ToolHandler>;
+//# sourceMappingURL=space-skills.d.ts.map

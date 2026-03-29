@@ -8,7 +8,7 @@ import type { OptionalAuthRouteEnv } from '../route-auth';
 import { validateCliCallbackUrl } from './provisioning';
 import { escapeHtml, errorPage, warningPage } from './html';
 import { BadRequestError } from 'takos-common/errors';
-import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
+import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 
 const CLI_STATE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 const CLI_CALLBACK_STYLE = 'body{font-family:system-ui,sans-serif;padding:24px;}';
@@ -81,7 +81,7 @@ export const authCliRouter = new Hono<OptionalAuthRouteEnv>();
 // CLI authentication - starts Google OAuth with CLI callback
 authCliRouter.get('/cli', async (c) => {
   const config = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const callbackUrl = c.req.query('callback');
   const cliStateRaw = c.req.query('state');
   const cliState = typeof cliStateRaw === 'string' ? cliStateRaw.trim() : '';
@@ -123,8 +123,9 @@ authCliRouter.get('/cli', async (c) => {
 // CLI callback - receives OAuth callback and redirects to CLI
 authCliRouter.get('/cli/callback', async (c) => {
   const config = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const code = c.req.query('code');
   const state = c.req.query('state') || '';
   const error = c.req.query('error');

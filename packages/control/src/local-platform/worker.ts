@@ -14,6 +14,7 @@ import {
 import { logDebug, logError, logInfo } from '../shared/utils/logger.ts';
 import { buildNodeWorkerPlatform } from '../platform/adapters/node.ts';
 import type { PlatformScheduledEvent } from '../shared/types/bindings.ts';
+import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_SCHEDULED_INTERVAL_MS = 60_000;
@@ -183,4 +184,8 @@ export async function startLocalWorkerLoop(): Promise<void> {
       await sleep(pollIntervalMs);
     }
   }
+}
+
+if (await isDirectEntrypoint(import.meta.url)) {
+  startLocalWorkerLoop().catch(logEntrypointError);
 }

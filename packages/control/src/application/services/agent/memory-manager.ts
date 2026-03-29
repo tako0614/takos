@@ -7,7 +7,7 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { Env } from '../../../shared/types';
 import type { AgentContext } from './agent-models';
-import type { AgentRunnerIo } from './runner';
+import type { AgentRunnerIo } from './runner-io';
 import type { ToolExecutorLike } from '../../tools/executor';
 import { AgentMemoryRuntime, type AgentMemoryBackend } from '../memory-graph/memory-graph-runtime';
 import { logWarn } from '../../../shared/utils/logger';

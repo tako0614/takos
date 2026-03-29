@@ -4,6 +4,10 @@
  * Uses the existing auth/config infrastructure (config-auth.ts) to resolve
  * endpoint URL and authentication token, then provides typed helpers for
  * the group-state CRUD endpoints on the takos API.
+ *
+ * When the user is not authenticated with takos (e.g. only has a CF token
+ * for deploy-group / apply), hasApiEndpoint() returns false and callers
+ * silently fall back to the file-based backend — no extra login required.
  */
 
 import { api } from '../api.js';
@@ -39,6 +43,7 @@ interface GroupDetailResponse {
   entities: EntityRecord[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface GroupCreateResponse {
   group: GroupRecord;
 }
@@ -49,20 +54,50 @@ interface GroupCreateResponse {
 
 /**
  * Returns true when the API endpoint is configured and the user is
- * authenticated. When false, callers should fall back to file-based state.
+ * authenticated (takos token/session). When false, callers should fall
+ * back to file-based state.
+ *
+ * Note: This intentionally does NOT require CF tokens. When a user only
+ * has CF tokens (deploy-group / apply workflow) but no takos login, the
+ * caller will automatically fall back to file-based state without
+ * requiring additional authentication.
  */
 export function hasApiEndpoint(): boolean {
   try {
+    if (!isAuthenticated()) return false;
     const config = getConfig();
-    return isAuthenticated() && !!config.apiUrl;
+    return !!config.apiUrl;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Returns the spaceId from the current takos config, if available.
+ * Used by API calls that require a space scope.
+ */
+export function getDefaultSpaceId(): string | undefined {
+  try {
+    const config = getConfig();
+    return config.spaceId ?? config.workspaceId;
+  } catch {
+    return undefined;
   }
 }
 
 // ---------------------------------------------------------------------------
 // API helpers — group state CRUD
 // ---------------------------------------------------------------------------
+
+/**
+ * Build space-scoped headers. When the user has a default space configured
+ * (via login, env var, or session file), requests are scoped to that space.
+ */
+function spaceHeaders(): Record<string, string> {
+  const spaceId = getDefaultSpaceId();
+  if (spaceId) return { 'X-Takos-Space-Id': spaceId };
+  return {};
+}
 
 /**
  * Read a group's full state via the API.
@@ -72,6 +107,7 @@ export async function readGroupStateFromApi(group: string): Promise<TakosState |
   try {
     const res = await api<GroupDetailResponse>(
       `/api/groups/${encodeURIComponent(group)}/state`,
+      { headers: spaceHeaders() },
     );
     if (!res.ok) return null;
 
@@ -88,6 +124,7 @@ export async function writeGroupStateToApi(group: string, state: TakosState): Pr
   const res = await api<void>(`/api/groups/${encodeURIComponent(group)}/state`, {
     method: 'PUT',
     body: stateToApiPayload(state) as unknown as Record<string, unknown>,
+    headers: spaceHeaders(),
   });
 
   if (!res.ok) {
@@ -101,6 +138,7 @@ export async function writeGroupStateToApi(group: string, state: TakosState): Pr
 export async function deleteGroupStateFromApi(group: string): Promise<void> {
   const res = await api<void>(`/api/groups/${encodeURIComponent(group)}`, {
     method: 'DELETE',
+    headers: spaceHeaders(),
   });
 
   if (!res.ok) {
@@ -112,7 +150,9 @@ export async function deleteGroupStateFromApi(group: string): Promise<void> {
  * List all group names via the API.
  */
 export async function listGroupsFromApi(): Promise<string[]> {
-  const res = await api<GroupsListResponse>('/api/groups');
+  const res = await api<GroupsListResponse>('/api/groups', {
+    headers: spaceHeaders(),
+  });
   if (!res.ok) return [];
 
   return (res.data.groups ?? []).map((g) => g.name);

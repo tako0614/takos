@@ -26,7 +26,7 @@ import {
 } from '../../../application/services/oauth/device-auth-rate-limit';
 import { deviceCodeEntryPage, deviceConsentPage, deviceResultPage, errorPage } from '../auth/html';
 import { serveSpaFallback } from '../../../shared/utils/spa-fallback';
-import { getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
+import { getPlatformServices } from '../../../platform/accessors.ts';
 
 const oauthDevice = new Hono<PublicRouteEnv>();
 
@@ -40,8 +40,9 @@ async function loadSessionUser(c: Context<PublicRouteEnv>) {
   const sessionId = getSessionIdFromCookie(c.req.header('Cookie') ?? null);
   if (!sessionId) return null;
 
-  const sessionStore = getPlatformSessionStore(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const services = getPlatformServices(c);
+  const sessionStore = services.notifications.sessionStore;
+  const dbBinding = services.sql?.binding;
   if (!sessionStore || !dbBinding) return null;
 
   const session = await getSession(sessionStore, sessionId);

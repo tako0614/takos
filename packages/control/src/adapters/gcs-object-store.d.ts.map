@@ -1,0 +1,1 @@
+{"version":3,"file":"gcs-object-store.d.ts","sourceRoot":"","sources":["gcs-object-store.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EACV,QAAQ,EAGT,MAAM,gCAAgC,CAAC;AA0BxC,MAAM,MAAM,oBAAoB,GAAG;IACjC,MAAM,EAAE,MAAM,CAAC;IACf,SAAS,CAAC,EAAE,MAAM,CAAC;IACnB,WAAW,CAAC,EAAE,MAAM,CAAC;CACtB,CAAC;AAyJF,wBAAgB,oBAAoB,CAAC,MAAM,EAAE,oBAAoB,GAAG,QAAQ,CAmU3E"}

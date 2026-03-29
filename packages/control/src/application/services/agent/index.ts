@@ -8,6 +8,7 @@ export type {
   AgentEventType,
   AgentEvent,
 } from './agent-models';
+export type { AgentRunnerIo } from './runner-io';
 export { AgentRunner, executeRun } from './runner';
 export { D1CheckpointSaver } from './graph-agent';
 export type { ModelProvider, ModelOption, SupportedModelId } from './model-catalog';

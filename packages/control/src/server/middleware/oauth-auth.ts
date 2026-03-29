@@ -7,7 +7,7 @@ import { getCachedUser } from '../../application/services/identity/user-cache';
 import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
 
 import { AuthenticationError } from 'takos-common/errors';
-import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
+import { getPlatformConfig, getPlatformServices } from '../../platform/accessors.ts';
 
 export interface OAuthContext {
   clientId: string;
@@ -25,7 +25,7 @@ export function requireOAuthAuth(
   requiredScopes?: string[]
 ): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> {
   return async (c, next) => {
-    const dbBinding = getPlatformSqlBinding(c);
+    const dbBinding = getPlatformServices(c).sql?.binding;
     const config = getPlatformConfig(c);
     const authorizationHeader = c.req.header('Authorization');
     const token = authorizationHeader?.startsWith('Bearer ') ? authorizationHeader.slice(7).trim() || null : null;
@@ -175,7 +175,7 @@ export function requireAnyAuth(
   requiredScopes?: string[]
 ): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> {
   return async (c, next) => {
-    const sessionStore = getPlatformSessionStore(c);
+    const sessionStore = getPlatformServices(c).notifications.sessionStore;
     if (c.get('user')) {
       await next();
       return;

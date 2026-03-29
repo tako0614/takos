@@ -13,7 +13,7 @@ import { getDb, accounts, authIdentities } from '../../../infra/db';
 import type { OptionalAuthRouteEnv } from '../route-auth';
 import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html';
 import { BadRequestError, AuthorizationError } from 'takos-common/errors';
-import { getPlatformConfig, getPlatformSessionStore, getPlatformSqlBinding } from '../../../platform/accessors.ts';
+import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 
 function normalizeServiceName(value: string | null | undefined): string {
   if (!value) return 'サービス';
@@ -66,8 +66,9 @@ externalAuthRouter.get('/external/session', async (c) => {
   // Verify request originates from our own pages (defense against cross-origin session token theft)
   const origin = c.req.header('Origin');
   const platformConfig = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const expectedOrigin = `https://${platformConfig.adminDomain}`;
   if (origin && origin !== expectedOrigin) {
     throw new AuthorizationError();
@@ -104,7 +105,7 @@ externalAuthRouter.get('/external', async (c) => {
   const redirectUri = c.req.query('redirect_uri');
   const serviceName = normalizeServiceName(c.req.query('service'));
   const platformConfig = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const configuredAllowedDomains = getOptionalEnvBinding(c.env, 'AUTH_ALLOWED_REDIRECT_DOMAINS');
 
   if (!redirectUri) {
@@ -175,7 +176,7 @@ externalAuthRouter.get('/external', async (c) => {
 // GET /auth/external/google - Start Google OAuth for external services
 externalAuthRouter.get('/external/google', async (c) => {
   const platformConfig = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const state = c.req.query('state');
   if (!state) {
     throw new BadRequestError('Missing state');
@@ -214,8 +215,9 @@ externalAuthRouter.get('/external/google', async (c) => {
 // GET /auth/external/callback - Handle Google OAuth callback for external services
 externalAuthRouter.get('/external/callback', async (c) => {
   const platformConfig = getPlatformConfig(c);
-  const dbBinding = getPlatformSqlBinding(c);
-  const sessionStore = getPlatformSessionStore(c);
+  const services = getPlatformServices(c);
+  const dbBinding = services.sql?.binding;
+  const sessionStore = services.notifications.sessionStore;
   const code = c.req.query('code');
   const state = c.req.query('state') || '';
   const error = c.req.query('error');

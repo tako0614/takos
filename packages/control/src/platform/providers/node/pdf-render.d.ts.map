@@ -1,0 +1,1 @@
+{"version":3,"file":"pdf-render.d.ts","sourceRoot":"","sources":["pdf-render.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,MAAM,MAAM,mBAAmB,GAAG;IAChC,sFAAsF;IACtF,MAAM,CAAC,EAAE,MAAM,CAAC;IAChB,gDAAgD;IAChD,cAAc,CAAC,EAAE,MAAM,CAAC;CACzB,CAAC;AAyCF;;;;;;;;;GASG;AACH,wBAAgB,qBAAqB,CACnC,MAAM,EAAE,mBAAmB,GAC1B,CAAC,IAAI,EAAE,MAAM,KAAK,OAAO,CAAC,WAAW,CAAC,CAyDxC"}

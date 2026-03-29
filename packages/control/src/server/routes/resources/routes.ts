@@ -27,7 +27,7 @@ import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, AuthorizationError, InternalError } from 'takos-common/errors';
-import { getPlatformSqlBinding } from '../../../platform/accessors.ts';
+import { getPlatformServices } from '../../../platform/accessors.ts';
 import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
 
 async function deleteCfResource(
@@ -44,7 +44,7 @@ async function deleteCfResource(
 const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 
 .get('/', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const spaceId = c.req.query('space_id');
   if (!dbBinding) {
@@ -72,7 +72,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 })
 
 .get('/shared/:spaceId', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const spaceId = c.req.param('spaceId');
   if (!dbBinding) {
@@ -133,7 +133,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 })
 
 .get('/type/:type', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceType = c.req.param('type') as ResourceType;
   if (!dbBinding) {
@@ -150,7 +150,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 })
 
 .get('/:id', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceId = c.req.param('id');
   if (!dbBinding) {
@@ -187,7 +187,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     space_id: z.string().optional(),
   })),
   async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const body = c.req.valid('json') as { name: string; type: ResourceType; config?: Record<string, unknown>; space_id?: string };
   if (!dbBinding) {
@@ -265,7 +265,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     metadata: z.record(z.unknown()).optional(),
   })),
   async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const body = c.req.valid('json');
@@ -301,7 +301,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 })
 
 .delete('/:id', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceId = c.req.param('id');
   if (!dbBinding) {
@@ -341,7 +341,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 })
 
 .get('/by-name/:name', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceName = decodeURIComponent(c.req.param('name'));
   if (!dbBinding) {
@@ -368,7 +368,7 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 
 // Delete resource by name
 .delete('/by-name/:name', async (c) => {
-  const dbBinding = getPlatformSqlBinding(c);
+  const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
   const resourceName = decodeURIComponent(c.req.param('name'));
   if (!dbBinding) {

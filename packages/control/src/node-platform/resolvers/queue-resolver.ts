@@ -3,6 +3,7 @@
  */
 import path from 'node:path';
 import { optionalEnv } from './env-utils.ts';
+import { createResolverWithRedis, type ResolverWithRedisConfig } from './resolver-factory.ts';
 import {
   createInMemoryQueue,
 } from '../../local-platform/in-memory-bindings.ts';
@@ -54,6 +55,51 @@ const PERSISTENT_QUEUE_MAP: Record<QueueName, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Per-queue resolver builder
+// ---------------------------------------------------------------------------
+
+function queueResolverConfig<T>(name: QueueName): ResolverWithRedisConfig<unknown> {
+  const logicalName = LOGICAL_QUEUE_NAME_MAP[name];
+  return {
+    cloudAdapters: [
+      // SQS
+      {
+        async tryCreate() {
+          const sqsUrl = optionalEnv(SQS_ENV_MAP[name]);
+          if (!sqsUrl) return null;
+          const { createSqsQueue } = await import('../../adapters/sqs-queue.ts');
+          return createSqsQueue<T>({
+            region: optionalEnv('AWS_REGION') ?? 'us-east-1',
+            queueUrl: sqsUrl,
+            accessKeyId: optionalEnv('AWS_ACCESS_KEY_ID'),
+            secretAccessKey: optionalEnv('AWS_SECRET_ACCESS_KEY'),
+            queueName: logicalName,
+          });
+        },
+      },
+      // Pub/Sub
+      {
+        async tryCreate() {
+          const pubsubTopic = optionalEnv(PUBSUB_ENV_MAP[name]);
+          if (!pubsubTopic) return null;
+          const { createPubSubQueue } = await import('../../adapters/pubsub-queue.ts');
+          return createPubSubQueue<T>({
+            projectId: optionalEnv('GCP_PROJECT_ID'),
+            topicName: pubsubTopic,
+            keyFilePath: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
+            subscriptionName: optionalEnv(PUBSUB_SUBSCRIPTION_ENV_MAP[name]),
+            queueName: logicalName,
+          });
+        },
+      },
+    ],
+    createRedis: (redisUrl) => createRedisQueue<T>(redisUrl, logicalName),
+    createPersistent: (dataDir) => createPersistentQueue<T>(path.join(dataDir, 'queues', PERSISTENT_QUEUE_MAP[name]), logicalName),
+    createInMemory: () => createInMemoryQueue<T>(logicalName),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Resolver
 // ---------------------------------------------------------------------------
 
@@ -62,38 +108,5 @@ export async function resolveQueue<T = unknown>(
   redisUrl: string | null,
   dataDir: string | null,
 ) {
-  // SQS
-  const sqsUrl = optionalEnv(SQS_ENV_MAP[name]);
-  if (sqsUrl) {
-    const { createSqsQueue } = await import('../../adapters/sqs-queue.ts');
-    return createSqsQueue<T>({
-      region: optionalEnv('AWS_REGION') ?? 'us-east-1',
-      queueUrl: sqsUrl,
-      accessKeyId: optionalEnv('AWS_ACCESS_KEY_ID'),
-      secretAccessKey: optionalEnv('AWS_SECRET_ACCESS_KEY'),
-      queueName: LOGICAL_QUEUE_NAME_MAP[name],
-    });
-  }
-
-  // Pub/Sub
-  const pubsubTopic = optionalEnv(PUBSUB_ENV_MAP[name]);
-  if (pubsubTopic) {
-    const { createPubSubQueue } = await import('../../adapters/pubsub-queue.ts');
-    return createPubSubQueue<T>({
-      projectId: optionalEnv('GCP_PROJECT_ID'),
-      topicName: pubsubTopic,
-      keyFilePath: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
-      subscriptionName: optionalEnv(PUBSUB_SUBSCRIPTION_ENV_MAP[name]),
-      queueName: LOGICAL_QUEUE_NAME_MAP[name],
-    });
-  }
-
-  // Redis
-  if (redisUrl) return createRedisQueue<T>(redisUrl, LOGICAL_QUEUE_NAME_MAP[name]);
-
-  // Persistent local
-  if (dataDir) return createPersistentQueue<T>(path.join(dataDir, 'queues', PERSISTENT_QUEUE_MAP[name]), LOGICAL_QUEUE_NAME_MAP[name]);
-
-  // In-memory
-  return createInMemoryQueue<T>(LOGICAL_QUEUE_NAME_MAP[name]);
+  return createResolverWithRedis(queueResolverConfig<T>(name))(redisUrl, dataDir) as Promise<ReturnType<typeof createInMemoryQueue<T>>>;
 }

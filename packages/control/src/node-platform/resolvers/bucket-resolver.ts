@@ -3,6 +3,7 @@
  */
 import path from 'node:path';
 import { optionalEnv } from './env-utils.ts';
+import { createResolver, type ResolverConfig } from './resolver-factory.ts';
 import {
   createInMemoryR2Bucket,
 } from '../../local-platform/in-memory-bindings.ts';
@@ -53,37 +54,50 @@ const PERSISTENT_BUCKET_MAP: Record<BucketName, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Per-bucket resolver builder
+// ---------------------------------------------------------------------------
+
+function bucketResolverConfig(name: BucketName): ResolverConfig<ReturnType<typeof createInMemoryR2Bucket>> {
+  return {
+    cloudAdapters: [
+      // S3 (including MinIO / S3-compatible)
+      {
+        async tryCreate() {
+          const s3Bucket = optionalEnv(S3_ENV_MAP[name]);
+          if (!s3Bucket) return null;
+          const { createS3ObjectStore } = await import('../../adapters/s3-object-store.ts');
+          return createS3ObjectStore({
+            region: optionalEnv('AWS_REGION') ?? 'us-east-1',
+            bucket: s3Bucket,
+            accessKeyId: optionalEnv('AWS_ACCESS_KEY_ID'),
+            secretAccessKey: optionalEnv('AWS_SECRET_ACCESS_KEY'),
+            endpoint: optionalEnv('AWS_S3_ENDPOINT'),
+          });
+        },
+      },
+      // GCS
+      {
+        async tryCreate() {
+          const gcsBucket = optionalEnv(GCS_ENV_MAP[name]);
+          if (!gcsBucket) return null;
+          const { createGcsObjectStore } = await import('../../adapters/gcs-object-store.ts');
+          return createGcsObjectStore({
+            bucket: gcsBucket,
+            projectId: optionalEnv('GCP_PROJECT_ID'),
+            keyFilePath: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
+          });
+        },
+      },
+    ],
+    createPersistent: (dataDir) => createPersistentR2Bucket(path.join(dataDir, 'buckets', PERSISTENT_BUCKET_MAP[name])),
+    createInMemory: () => createInMemoryR2Bucket(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Resolver
 // ---------------------------------------------------------------------------
 
 export async function resolveBucket(name: BucketName, dataDir: string | null) {
-  // S3 (including MinIO / S3-compatible)
-  const s3Bucket = optionalEnv(S3_ENV_MAP[name]);
-  if (s3Bucket) {
-    const { createS3ObjectStore } = await import('../../adapters/s3-object-store.ts');
-    return createS3ObjectStore({
-      region: optionalEnv('AWS_REGION') ?? 'us-east-1',
-      bucket: s3Bucket,
-      accessKeyId: optionalEnv('AWS_ACCESS_KEY_ID'),
-      secretAccessKey: optionalEnv('AWS_SECRET_ACCESS_KEY'),
-      endpoint: optionalEnv('AWS_S3_ENDPOINT'),
-    });
-  }
-
-  // GCS
-  const gcsBucket = optionalEnv(GCS_ENV_MAP[name]);
-  if (gcsBucket) {
-    const { createGcsObjectStore } = await import('../../adapters/gcs-object-store.ts');
-    return createGcsObjectStore({
-      bucket: gcsBucket,
-      projectId: optionalEnv('GCP_PROJECT_ID'),
-      keyFilePath: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
-    });
-  }
-
-  // Persistent local
-  if (dataDir) return createPersistentR2Bucket(path.join(dataDir, 'buckets', PERSISTENT_BUCKET_MAP[name]));
-
-  // In-memory
-  return createInMemoryR2Bucket();
+  return createResolver(bucketResolverConfig(name))(dataDir);
 }

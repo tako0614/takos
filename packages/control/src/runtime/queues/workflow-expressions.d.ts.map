@@ -1,0 +1,1 @@
+{"version":3,"file":"workflow-expressions.d.ts","sourceRoot":"","sources":["workflow-expressions.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,gBAAgB,EAAE,iBAAiB,EAAE,MAAM,kBAAkB,CAAC;AAO5E,wBAAgB,iBAAiB,CAC/B,UAAU,EAAE,MAAM,EAClB,OAAO,EAAE,gBAAgB,GACxB,OAAO,CAiCT;AAED,wBAAgB,kBAAkB,CAChC,UAAU,EAAE,MAAM,EAClB,OAAO,EAAE,iBAAiB,GACzB,MAAM,GAAG,IAAI,CAoBf"}

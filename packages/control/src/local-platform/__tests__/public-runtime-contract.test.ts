@@ -19,8 +19,8 @@ describe('local public runtime contract', () => {
   it('keeps bootstrap and package runtime exports free of loader registration and shim imports', async () => {
     const bootstrap = await read('local-platform/bootstrap.ts', sourcePackageRoot);
     const sourceRuntime = await read('local-platform/runtime.ts', sourcePackageRoot);
+    const sourceLocalServer = await read('local-platform/local-server.ts', sourcePackageRoot);
     const packageRuntime = await read('src/runtime.ts', packageRoot);
-    const packageTransport = await read('src/transport.ts', packageRoot);
     const packageWeb = await read('src/web.ts', packageRoot);
     const packageDispatch = await read('src/dispatch.ts', packageRoot);
     const packageRuntimeHost = await read('src/runtime-host.ts', packageRoot);
@@ -51,20 +51,32 @@ describe('local public runtime contract', () => {
       expect(source).not.toContain('./node-runtime.ts');
       expect(source).not.toContain('./http-server.ts');
       expect(source).not.toContain('./start-server.ts');
-      expect(source).not.toContain('fetch-server.ts');
     }
 
+    // Source runtime.ts must stay free of Node server concerns
     expect(sourceRuntime).not.toContain('startLocalFetchServer');
     expect(sourceRuntime).not.toContain('startLocalWebServer');
     expect(sourceRuntime).not.toContain('startLocalDispatchServer');
     expect(sourceRuntime).not.toContain('startLocalRuntimeHostServer');
     expect(sourceRuntime).not.toContain('startLocalExecutorHostServer');
     expect(sourceRuntime).not.toContain('startLocalBrowserHostServer');
-    expect(packageRuntime).toContain('startCanonicalLocalServer');
+    expect(sourceRuntime).not.toContain('fetch-server.ts');
+
+    // Server starters live in the canonical local-server.ts
+    expect(sourceLocalServer).toContain('startCanonicalLocalServer');
+    expect(sourceLocalServer).toContain('startLocalWebServer');
+    expect(sourceLocalServer).toContain('startLocalDispatchServer');
+    expect(sourceLocalServer).toContain('startLocalRuntimeHostServer');
+    expect(sourceLocalServer).toContain('startLocalExecutorHostServer');
+    expect(sourceLocalServer).toContain('startLocalBrowserHostServer');
+    expect(sourceLocalServer).toContain("runtime: 'node'");
+    expect(sourceLocalServer).toContain("from './fetch-server.ts'");
+
+    // Package runtime wrapper is a pure re-export
+    expect(packageRuntime).toContain("from '../../src/local-platform/runtime.ts'");
+    expect(packageRuntime).toContain("from '../../src/local-platform/local-server.ts'");
     expect(packageRuntime).not.toContain('fetch-server.ts');
-    expect(packageTransport).not.toContain('TAKOS_LOCAL_FETCH_TRANSPORT');
-    expect(packageTransport).toContain("runtime: 'node'");
-    expect(packageTransport).toContain("from '../../src/local-platform/fetch-server.ts'");
+
     const sourceFetchServer = await read('local-platform/fetch-server.ts', sourcePackageRoot);
     expect(sourceFetchServer).not.toContain('process.env');
     expect(sourceFetchServer).not.toContain('logInfo');
@@ -126,6 +138,8 @@ describe('local public runtime contract', () => {
     await expect(access(path.join(packageRoot, 'src/oci-orchestrator-node.ts'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/http-server.ts'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/start-server.ts'), constants.F_OK)).rejects.toBeDefined();
+    await expect(access(path.join(packageRoot, 'src/transport.ts'), constants.F_OK)).rejects.toBeDefined();
+    await expect(access(path.join(packageRoot, 'src/direct-entrypoint.ts'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/register-public-loader.mjs'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/register-loader.mjs'), constants.F_OK)).rejects.toBeDefined();
     await expect(access(path.join(packageRoot, 'src/node-runtime.ts'), constants.F_OK)).rejects.toBeDefined();

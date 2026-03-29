@@ -10,72 +10,63 @@ type ValidationResult = {
 const REQUIRED_SITE_FILES = [
   "index.md",
   "overview/index.md",
-  "concepts/index.md",
-  "concepts/spaces-and-workspaces.md",
-  "concepts/repos-services-workers.md",
-  "concepts/resources-and-bindings.md",
-  "concepts/threads-and-runs.md",
-  "concepts/packages-and-ecosystem.md",
-  "specs/index.md",
-  "specs/reading-the-spec.md",
-  "specs/app-manifest.md",
-  "specs/deployment-model.md",
-  "specs/deploy-system.md",
-  "specs/cli-and-auth.md",
-  "specs/oauth.md",
+  "get-started/index.md",
+  "get-started/your-first-app.md",
+  "get-started/project-structure.md",
+  "get-started/local-development.md",
+  "apps/index.md",
+  "apps/manifest.md",
+  "apps/workers.md",
+  "apps/containers.md",
+  "apps/routes.md",
+  "apps/environment.md",
+  "apps/mcp.md",
+  "apps/file-handlers.md",
+  "apps/oauth.md",
   "architecture/index.md",
   "architecture/control-plane.md",
   "architecture/tenant-runtime.md",
-  "architecture/compatibility-and-limitations.md",
-  "architecture/release-system.md",
-  "architecture/resource-governance.md",
-  "operations/index.md",
-  "operations/platform-matrix.md",
+  "architecture/compatibility.md",
+  "platform/index.md",
+  "platform/store.md",
+  "platform/threads-and-runs.md",
+  "platform/spaces.md",
+  "platform/billing.md",
+  "platform/activitypub.md",
+  "platform/resource-governance.md",
+  "platform/compatibility.md",
+  "deploy/index.md",
+  "deploy/deploy-group.md",
+  "deploy/store-deploy.md",
+  "deploy/namespaces.md",
+  "deploy/rollback.md",
+  "deploy/troubleshooting.md",
+  "hosting/self-hosted.md",
+  "hosting/local.md",
+  "hosting/cloudflare.md",
+  "hosting/kubernetes.md",
+  "hosting/differences.md",
+  "examples/index.md",
+  "examples/simple-worker.md",
+  "examples/worker-with-db.md",
+  "examples/worker-with-container.md",
+  "examples/mcp-server.md",
+  "examples/multi-service.md",
   "reference/index.md",
   "reference/api.md",
+  "reference/cli.md",
+  "reference/cli-auth.md",
+  "reference/manifest-spec.md",
   "reference/glossary.md",
-  "reference/commands.md",
   ".vitepress/config.ts",
   ".vitepress/theme/index.ts",
   ".vitepress/theme/custom.css",
 ];
 
 const REQUIRED_PAGE_SNIPPETS: Record<string, string[]> = {
-  "specs/reading-the-spec.md": [
+  "overview/index.md": [
     "## このページで依存してよい範囲",
     "## このページで依存してはいけない範囲",
-    "## ラベル体系",
-    "## 次に読むページ",
-  ],
-  "specs/index.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## implementation note",
-    "## 次に読むページ",
-  ],
-  "specs/app-manifest.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## implementation note",
-    "## 次に読むページ",
-  ],
-  "specs/deploy-system.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## implementation note",
-    "## 次に読むページ",
-  ],
-  "specs/cli-and-auth.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## implementation note",
-    "## 次に読むページ",
-  ],
-  "reference/index.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## implementation note",
-    "## 次に読むページ",
   ],
   "reference/api.md": [
     "## このリファレンスで依存してよい範囲",
@@ -83,23 +74,16 @@ const REQUIRED_PAGE_SNIPPETS: Record<string, string[]> = {
     "## implementation note",
     "## 次に読むページ",
   ],
-  "reference/commands.md": [
-    "## このリファレンスで依存してよい範囲",
-    "## このリファレンスで依存してはいけない範囲",
+  "reference/cli-auth.md": [
+    "## このページで依存してよい範囲",
+    "## このページで依存してはいけない範囲",
     "## implementation note",
     "## 次に読むページ",
   ],
-  "overview/index.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
+  "reference/cli.md": [
     "## 次に読むページ",
   ],
-  "concepts/index.md": [
-    "## このページで依存してよい範囲",
-    "## このページで依存してはいけない範囲",
-    "## 次に読むページ",
-  ],
-  "operations/platform-matrix.md": [
+  "platform/compatibility.md": [
     "## Support matrix",
     "## Tracked templates",
     "## Runtime topology by surface",
@@ -107,10 +91,10 @@ const REQUIRED_PAGE_SNIPPETS: Record<string, string[]> = {
 };
 
 const FORBIDDEN_PAGE_SNIPPETS: Record<string, RegExp[]> = {
-  "specs/cli-and-auth.md": [/credentials\.json/],
-  "specs/deploy-system.md": [/\/api\/workers\/:id\/deployments/],
-  "concepts/repos-services-workers.md": [/API 上の `\/api\/workers` は内部的に service を操作します。/],
-  "concepts/threads-and-runs.md": [/`retrieval_index`\s*\|\s*検索インデックス用テキスト/],
+  "reference/cli-auth.md": [/credentials\.json/],
+  "deploy/index.md": [/\/api\/workers\/:id\/deployments/],
+  "apps/workers.md": [/API 上の `\/api\/workers` は内部的に service を操作します。/],
+  "platform/threads-and-runs.md": [/`retrieval_index`\s*\|\s*検索インデックス用テキスト/],
 };
 
 const SKIP_SCAN_DIRS = new Set([
@@ -622,7 +606,7 @@ function validateSelfContainedDocs(docsDir: string, result: ValidationResult): v
   const forbiddenRepoPathPattern =
     /\b(?:apps|packages|scripts)\/[A-Za-z0-9_./-]+\.(?:ts|tsx|js|mjs|cjs|md|json|sql|yml|yaml)\b/g;
   const allowlistedRepoPathRefs = new Map<string, Set<string>>([
-    ["operations/platform-matrix.md", new Set(["apps/control/SECRETS.md"])],
+    ["platform/compatibility.md", new Set(["apps/control/SECRETS.md"])],
   ]);
 
   for (const file of files) {
@@ -654,65 +638,44 @@ function validateRepoDocsPolicy(repoRoot: string, result: ValidationResult): voi
 }
 
 function validateManifestDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {
-  const manifestDoc = path.join(docsDir, "specs", "app-manifest.md");
-  const exampleMarker = readDocsMarker(manifestDoc, "manifest-example");
-  if (!exampleMarker) {
-    result.errors.push("[docs] specs/app-manifest.md must declare <!-- docs:manifest-example ... -->");
+  const manifestDoc = path.join(docsDir, "apps", "manifest.md");
+  if (!isFile(manifestDoc)) {
+    result.errors.push("[docs] apps/manifest.md is missing");
     return;
-  }
-
-  const examplePath = path.join(docsDir, exampleMarker);
-  if (!isFile(examplePath)) {
-    result.errors.push(`[docs] manifest example not found: ${path.relative(docsDir, examplePath)}`);
-    return;
-  }
-
-  try {
-    validateCurrentManifestYaml(readFileSync(examplePath, "utf8"));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    result.errors.push(
-      `[docs] manifest example is invalid (${path.relative(repoRoot, examplePath)}): ${message}`,
-    );
   }
 
   const manifestContent = readFileSync(manifestDoc, "utf8");
-  for (const requiredSnippet of ["single-document YAML", "kind: App", "build.fromWorkflow", "spec.services"]) {
+  for (const requiredSnippet of ["kind: App", "build:", "fromWorkflow", "spec:"]) {
     if (!manifestContent.includes(requiredSnippet)) {
-      result.errors.push(`[docs] specs/app-manifest.md must mention current contract snippet: ${requiredSnippet}`);
+      result.errors.push(`[docs] apps/manifest.md must mention current contract snippet: ${requiredSnippet}`);
+    }
+  }
+
+  const manifestSpecDoc = path.join(docsDir, "reference", "manifest-spec.md");
+  if (isFile(manifestSpecDoc)) {
+    const specContent = readFileSync(manifestSpecDoc, "utf8");
+    for (const requiredSnippet of ["apiVersion", "kind", "metadata", "spec"]) {
+      if (!specContent.includes(requiredSnippet)) {
+        result.errors.push(`[docs] reference/manifest-spec.md must mention field: ${requiredSnippet}`);
+      }
     }
   }
 }
 
 function validateCliDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {
-  const commandsDoc = path.join(docsDir, "reference", "commands.md");
-  const topLevelMarker = sortedUnique(parseMarkerList(readDocsMarker(commandsDoc, "cli-top-level")));
-  const domainMarker = sortedUnique(parseMarkerList(readDocsMarker(commandsDoc, "cli-domains")));
-  const actualDomains = extractCliDomains(repoRoot);
-
-  const topLevelDiff = setDiff(CURRENT_CLI_TOP_LEVEL, topLevelMarker);
-  if (topLevelDiff.missing.length > 0 || topLevelDiff.extra.length > 0) {
-    result.errors.push(
-      `[docs] CLI top-level coverage marker mismatch. missing=${topLevelDiff.missing.join("|") || "-"} extra=${topLevelDiff.extra.join("|") || "-"}`,
-    );
+  const cliDoc = path.join(docsDir, "reference", "cli.md");
+  if (!isFile(cliDoc)) {
+    result.errors.push("[docs] reference/cli.md is missing");
+    return;
   }
 
-  const domainDiff = setDiff(actualDomains, domainMarker);
-  if (domainDiff.missing.length > 0 || domainDiff.extra.length > 0) {
-    result.errors.push(
-      `[docs] CLI domain coverage mismatch. missing=${domainDiff.missing.join("|") || "-"} extra=${domainDiff.extra.join("|") || "-"}`,
-    );
-  }
-
-  const content = readFileSync(commandsDoc, "utf8");
+  const content = readFileSync(cliDoc, "utf8");
   const requiredSnippets = [
     "takos login",
     "takos whoami",
     "takos logout",
     "takos deploy",
-    "takos endpoint use",
-    "task-oriented",
-    "Compatibility-only registry entries",
+    "takos endpoint",
     "/api/services",
   ];
   for (const snippet of requiredSnippets) {
@@ -723,13 +686,27 @@ function validateCliDocs(repoRoot: string, docsDir: string, result: ValidationRe
 
   for (const legacyHeading of ["## build / publish / promote", "## mcp", "## personal-access-token"]) {
     if (content.includes(legacyHeading)) {
-      result.errors.push(`[docs] stale CLI heading detected in commands doc: ${legacyHeading}`);
+      result.errors.push(`[docs] stale CLI heading detected in CLI doc: ${legacyHeading}`);
+    }
+  }
+
+  const cliAuthDoc = path.join(docsDir, "reference", "cli-auth.md");
+  if (isFile(cliAuthDoc)) {
+    const authContent = readFileSync(cliAuthDoc, "utf8");
+    for (const snippet of ["takos login", "task-oriented"]) {
+      if (!authContent.includes(snippet)) {
+        result.errors.push(`[docs] CLI auth doc is missing current snippet: ${snippet}`);
+      }
     }
   }
 }
 
 function validatePlatformMatrixDoc(docsDir: string, result: ValidationResult): void {
-  const matrixDoc = path.join(docsDir, "operations", "platform-matrix.md");
+  const matrixDoc = path.join(docsDir, "platform", "compatibility.md");
+  if (!isFile(matrixDoc)) {
+    result.errors.push("[docs] platform/compatibility.md is missing");
+    return;
+  }
   const content = readFileSync(matrixDoc, "utf8");
 
   for (const snippet of [
@@ -844,27 +821,35 @@ function validateSupplementalDocs(repoRoot: string, result: ValidationResult): v
 }
 
 function validateCurrentTruthFiles(repoRoot: string, docsDir: string, result: ValidationResult): void {
-  const manifestDoc = readFileSync(path.join(docsDir, "specs", "app-manifest.md"), "utf8");
-  const ecosystemDoc = readFileSync(path.join(docsDir, "concepts", "packages-and-ecosystem.md"), "utf8");
-  const oauthDoc = readFileSync(path.join(docsDir, "specs", "oauth.md"), "utf8");
+  const manifestPath = path.join(docsDir, "apps", "manifest.md");
+  const storePath = path.join(docsDir, "platform", "store.md");
+  const oauthPath = path.join(docsDir, "apps", "oauth.md");
 
-  for (const [label, content, forbiddenPatterns] of [
-    [
-      "specs/app-manifest.md",
-      manifestDoc,
+  const filesToCheck: Array<[string, string, RegExp[]]> = [];
+
+  if (isFile(manifestPath)) {
+    filesToCheck.push([
+      "apps/manifest.md",
+      readFileSync(manifestPath, "utf8"),
       [/kind:\s+Package/, /kind:\s+Workload/],
-    ],
-    [
-      "concepts/packages-and-ecosystem.md",
-      ecosystemDoc,
+    ]);
+  }
+  if (isFile(storePath)) {
+    filesToCheck.push([
+      "platform/store.md",
+      readFileSync(storePath, "utf8"),
       [/kind:\s+Package/, /kind:\s+Workload/],
-    ],
-    [
-      "specs/oauth.md",
-      oauthDoc,
+    ]);
+  }
+  if (isFile(oauthPath)) {
+    filesToCheck.push([
+      "apps/oauth.md",
+      readFileSync(oauthPath, "utf8"),
       [/kind:\s+Package/, /client_name:/, /redirect_uris:/],
-    ],
-  ] as const) {
+    ]);
+  }
+
+  for (const [label, content, forbiddenPatterns] of filesToCheck) {
     for (const pattern of forbiddenPatterns) {
       if (pattern.test(content)) {
         result.errors.push(`[docs] stale contract pattern found in ${label}: ${pattern}`);

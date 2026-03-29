@@ -1,0 +1,1 @@
+{"version":3,"file":"fetch-pack.d.ts","sourceRoot":"","sources":["fetch-pack.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;GAUG;AAWH;;;;;;;;;;;;GAYG;AACH,wBAAsB,mBAAmB,CACvC,GAAG,EAAE,MAAM,EACX,UAAU,EAAE,MAAM,GAAG,IAAI,EACzB,KAAK,EAAE,MAAM,EAAE,EACf,KAAK,EAAE,MAAM,EAAE,EACf,OAAO,CAAC,EAAE;IAAE,gBAAgB,CAAC,EAAE,MAAM,CAAA;CAAE,GACtC,OAAO,CAAC,UAAU,CAAC,CAgErB"}

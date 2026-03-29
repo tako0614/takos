@@ -3,8 +3,7 @@ import { getDb, accounts, accountMemberships, threads, messages, runs } from '..
 import { RUN_QUEUE_MESSAGE_VERSION } from '../shared/types/queue-messages.ts';
 import { createPendingRun, updateRunStatus } from '../application/services/runs/create-thread-run-store.ts';
 import { eq } from 'drizzle-orm';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
 const POLL_INTERVAL_MS = 1_000;
 const POLL_TIMEOUT_MS = 45_000;
@@ -149,7 +148,7 @@ export async function runLocalSmoke() {
   };
 }
 
-async function main() {
+export async function runLocalSmokeCommand(): Promise<void> {
   try {
     const payload = await runLocalSmoke();
     console.log(JSON.stringify(payload, null, 2));
@@ -158,19 +157,6 @@ async function main() {
   }
 }
 
-function isDirectEntrypoint(): boolean {
-  const entrypoint = process.argv[2];
-  if (!entrypoint) return false;
-  return import.meta.url === pathToFileURL(path.resolve(process.cwd(), entrypoint)).href;
-}
-
-if (isDirectEntrypoint()) {
-  main().catch((error) => {
-    if (error instanceof Error) {
-      console.error(error.stack ?? error.message);
-    } else {
-      console.error(String(error));
-    }
-    process.exit(1);
-  });
+if (await isDirectEntrypoint(import.meta.url)) {
+  runLocalSmokeCommand().catch(logEntrypointError);
 }

@@ -1,0 +1,1 @@
+{"version":3,"file":"queue-handler.d.ts","sourceRoot":"","sources":["queue-handler.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,gCAAgC,CAAC;AACnE,OAAO,KAAK,EAAmB,SAAS,IAAI,GAAG,EAAE,MAAM,oBAAoB,CAAC;AAY5E,wBAAsB,WAAW,CAAC,KAAK,EAAE,YAAY,CAAC,OAAO,CAAC,EAAE,GAAG,EAAE,GAAG,GAAG,OAAO,CAAC,IAAI,CAAC,CAwOvF"}

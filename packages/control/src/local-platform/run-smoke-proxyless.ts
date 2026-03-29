@@ -1,6 +1,7 @@
 import { disposeNodePlatformState } from '../node-platform/env-builder.ts';
 import { runLocalSmoke } from './run-smoke.ts';
 import { DEFAULT_LOCAL_PORTS } from './runtime-types.ts';
+import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
 type ProxyUsageResponse = {
   counts?: Record<string, number>;
@@ -32,36 +33,36 @@ function diffCounts(before: Record<string, number>, after: Record<string, number
   return result;
 }
 
-async function main() {
+export async function runLocalSmokeProxyless() {
+  const before = await readProxyUsage();
+  const run = await runLocalSmoke();
+  const after = await readProxyUsage();
+  const delta = diffCounts(before, after);
+
+  const forbidden = ['db', 'offload', 'do']
+    .map((key) => ({ key, value: delta[key] ?? 0 }))
+    .filter((entry) => entry.value !== 0);
+
+  if (forbidden.length > 0) {
+    throw new Error(`Proxyless smoke failed: forbidden proxy usage detected ${JSON.stringify(forbidden)}`);
+  }
+
+  return {
+    ...run,
+    proxyless: true,
+    proxyUsageDelta: delta,
+  };
+}
+
+export async function runLocalSmokeProxylessCommand(): Promise<void> {
   try {
-    const before = await readProxyUsage();
-    const run = await runLocalSmoke();
-    const after = await readProxyUsage();
-    const delta = diffCounts(before, after);
-
-    const forbidden = ['db', 'offload', 'do']
-      .map((key) => ({ key, value: delta[key] ?? 0 }))
-      .filter((entry) => entry.value !== 0);
-
-    if (forbidden.length > 0) {
-      throw new Error(`Proxyless smoke failed: forbidden proxy usage detected ${JSON.stringify(forbidden)}`);
-    }
-
-    console.log(JSON.stringify({
-      ...run,
-      proxyless: true,
-      proxyUsageDelta: delta,
-    }, null, 2));
+    const payload = await runLocalSmokeProxyless();
+    console.log(JSON.stringify(payload, null, 2));
   } finally {
     await disposeNodePlatformState();
   }
 }
 
-main().catch((error) => {
-  if (error instanceof Error) {
-    console.error(error.stack ?? error.message);
-  } else {
-    console.error(String(error));
-  }
-  process.exit(1);
-});
+if (await isDirectEntrypoint(import.meta.url)) {
+  runLocalSmokeProxylessCommand().catch(logEntrypointError);
+}

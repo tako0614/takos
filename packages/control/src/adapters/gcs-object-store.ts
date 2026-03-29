@@ -8,19 +8,14 @@ import type {
 } from '../../shared/types/bindings.ts';
 import type {
   R2Objects,
-  R2ChecksumsLike,
-  R2HTTPMetadataLike,
   R2RangeLike,
 } from './r2-compat-types.ts';
-
-/** Build an empty R2Checksums-compatible object. */
-function emptyChecksums(): R2ChecksumsLike {
-  return {
-    toJSON() {
-      return {};
-    },
-  };
-}
+import {
+  toR2Object as toR2ObjectShared,
+  toR2ObjectBody as toR2ObjectBodyShared,
+  normaliseBody,
+  type R2ObjectMeta,
+} from './r2-adapter-shared.ts';
 
 /** Type guard for GCS SDK errors that carry a numeric `code` property. */
 function isGcsError(err: unknown): err is Error & { code: number } {
@@ -55,9 +50,9 @@ function lazyStorage(config: GcsObjectStoreConfig): () => Storage {
 }
 
 /**
- * Build the common R2Object-shaped metadata from a GCS file metadata response.
+ * Map GCS FileMetadata to provider-neutral metadata, then build R2Object.
  */
-function toR2Object(
+function gcsToR2Object(
   key: string,
   metadata: FileMetadata,
   range?: R2RangeLike,
@@ -70,31 +65,24 @@ function toR2Object(
       ? metadata.size
       : 0;
 
-  const httpMetadata: R2HTTPMetadataLike = {
-    contentType: typeof metadata.contentType === 'string' ? metadata.contentType : undefined,
-  };
-
   const generation = typeof metadata.generation === 'string'
     ? metadata.generation
     : typeof metadata.generation === 'number'
       ? String(metadata.generation)
       : undefined;
 
-  return {
+  const meta: R2ObjectMeta = {
     key,
-    version: etag || generation || 'unknown',
-    size,
     etag,
     httpEtag: rawEtag || `"${etag}"`,
-    checksums: emptyChecksums(),
+    size,
+    version: etag || generation || 'unknown',
     uploaded: metadata.updated ? new Date(metadata.updated) : new Date(),
-    httpMetadata,
+    contentType: typeof metadata.contentType === 'string' ? metadata.contentType : undefined,
     customMetadata: (metadata.metadata ?? {}) as Record<string, string>,
-    ...(range ? { range } : {}),
-    writeHttpMetadata(_headers: Headers) {
-      // no-op – Cloudflare-specific helper
-    },
-  } as unknown as R2Object;
+    range,
+  };
+  return toR2ObjectShared(meta);
 }
 
 /**
@@ -107,81 +95,15 @@ function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
 /**
  * Wrap a GCS download result as an R2ObjectBody.
  */
-function toR2ObjectBody(
+function gcsToR2ObjectBody(
   key: string,
   buffer: Buffer,
   metadata: FileMetadata,
   range?: R2RangeLike,
 ): R2ObjectBody {
-  const base = toR2Object(key, metadata, range);
-  const contentType =
-    (base as unknown as { httpMetadata?: R2HTTPMetadataLike }).httpMetadata?.contentType
-    ?? 'application/octet-stream';
-
-  let bodyUsed = false;
+  const base = gcsToR2Object(key, metadata, range);
   const bytes = bufferToArrayBuffer(buffer);
-
-  const bodyStream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(new Uint8Array(bytes));
-      controller.close();
-    },
-  });
-
-  const objectBody: R2ObjectBody = {
-    ...base,
-    body: bodyStream,
-    get bodyUsed() {
-      return bodyUsed;
-    },
-    async arrayBuffer() {
-      bodyUsed = true;
-      return bytes;
-    },
-    async text() {
-      bodyUsed = true;
-      return new TextDecoder().decode(bytes);
-    },
-    async json<T = unknown>(): Promise<T> {
-      bodyUsed = true;
-      const t = new TextDecoder().decode(bytes);
-      return JSON.parse(t) as T;
-    },
-    async blob() {
-      bodyUsed = true;
-      return new Blob([bytes], { type: contentType });
-    },
-    writeHttpMetadata(_headers: Headers) {
-      // no-op
-    },
-  } as unknown as R2ObjectBody;
-
-  return objectBody;
-}
-
-/**
- * Normalise the value passed to put() into a Buffer that GCS file.save() accepts.
- */
-async function normaliseBody(
-  value: ReadableStream | ArrayBuffer | string | null | Blob,
-): Promise<Buffer | string | undefined> {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === 'string') return value;
-  if (value instanceof ArrayBuffer) return Buffer.from(value);
-  if (value instanceof Uint8Array) return Buffer.from(value);
-  if (typeof Blob !== 'undefined' && value instanceof Blob) {
-    const ab = await value.arrayBuffer();
-    return Buffer.from(ab);
-  }
-  // ReadableStream – collect into a Buffer
-  const reader = (value as ReadableStream<Uint8Array>).getReader();
-  const chunks: Uint8Array[] = [];
-  for (;;) {
-    const { done, value: chunk } = await reader.read();
-    if (done) break;
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
+  return toR2ObjectBodyShared(base, bytes);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +123,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       try {
         const file = getBucket().file(key);
         const [metadata] = await file.getMetadata();
-        return toR2Object(key, metadata);
+        return gcsToR2Object(key, metadata);
       } catch (err: unknown) {
         if (isGcsError(err) && err.code === 404) {
           return null;
@@ -253,7 +175,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
           rangeInfo = { offset, length };
         }
 
-        return toR2ObjectBody(key, buffer, metadata, rangeInfo);
+        return gcsToR2ObjectBody(key, buffer, metadata, rangeInfo);
       } catch (err: unknown) {
         if (isGcsError(err) && err.code === 404) {
           return null;
@@ -337,7 +259,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       const [files, nextQuery, apiResponse] = await getBucket().getFiles(queryOptions);
 
       const objects: R2Object[] = files.map((file) =>
-        toR2Object(file.name, file.metadata),
+        gcsToR2Object(file.name, file.metadata),
       );
 
       const nextPageToken = (nextQuery as Partial<Pick<GetFilesOptions, 'pageToken'>> | undefined)?.pageToken;
