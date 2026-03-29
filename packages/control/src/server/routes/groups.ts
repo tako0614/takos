@@ -4,6 +4,9 @@ import type { Env } from '../../shared/types';
 import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
 import { getDb, groups, groupEntities } from '../../infra/db';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
+import { planManifest, applyManifest } from '../../application/services/deployment/apply-engine';
+import { parseAppManifestYaml } from '../../application/services/source/app-manifest-parser';
+import { getUpdateType } from '../../application/services/deployment/store-install';
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 
@@ -150,6 +153,80 @@ async function deleteEntityHandler(c: GroupsContext) {
 }
 
 // ---------------------------------------------------------------------------
+// Deployment: plan / apply / updates
+// ---------------------------------------------------------------------------
+
+async function planGroupHandler(c: GroupsContext) {
+  const groupId = getGroupIdParam(c);
+  const body = await c.req.json();
+
+  let manifest = body.manifest;
+  if (typeof manifest === 'string') {
+    manifest = parseAppManifestYaml(manifest);
+  }
+
+  const diff = await planManifest(c.env, groupId, manifest);
+  return c.json(diff);
+}
+
+async function applyGroupHandler(c: GroupsContext) {
+  const { space } = c.get('access');
+  const db = getDb(c.env.DB);
+  const groupId = getGroupIdParam(c);
+  const body = await c.req.json();
+
+  let manifest = body.manifest;
+  if (typeof manifest === 'string') {
+    manifest = parseAppManifestYaml(manifest);
+  }
+
+  const result = await applyManifest(c.env, groupId, manifest, {
+    target: body.target,
+  });
+
+  // group の app_version を更新
+  await db
+    .update(groups)
+    .set({
+      appVersion: manifest.spec.version,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)));
+
+  return c.json(result);
+}
+
+async function updatesGroupHandler(c: GroupsContext) {
+  const { space } = c.get('access');
+  const db = getDb(c.env.DB);
+  const groupId = getGroupIdParam(c);
+
+  const group = await db
+    .select()
+    .from(groups)
+    .where(and(eq(groups.id, groupId), eq(groups.spaceId, space.id)))
+    .get();
+  if (!group) throw new NotFoundError('Group');
+
+  const latest = c.req.query('latestVersion');
+  if (!latest || !group.appVersion) {
+    return c.json({
+      available: false,
+      currentVersion: group.appVersion,
+      latestVersion: latest ?? null,
+    });
+  }
+
+  const updateType = getUpdateType(group.appVersion, latest);
+  return c.json({
+    available: group.appVersion !== latest,
+    currentVersion: group.appVersion,
+    latestVersion: latest,
+    updateType,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -165,6 +242,11 @@ groupsRouter
   // Group entities
   .get('/spaces/:spaceId/groups/:groupId/entities', spaceAccess(), listEntitiesHandler)
   .post('/spaces/:spaceId/groups/:groupId/entities', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), upsertEntityHandler)
-  .delete('/spaces/:spaceId/groups/:groupId/entities/:category/:name', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), deleteEntityHandler);
+  .delete('/spaces/:spaceId/groups/:groupId/entities/:category/:name', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), deleteEntityHandler)
+
+  // Deployment: plan / apply / updates
+  .post('/spaces/:spaceId/groups/:groupId/plan', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), planGroupHandler)
+  .post('/spaces/:spaceId/groups/:groupId/apply', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), applyGroupHandler)
+  .get('/spaces/:spaceId/groups/:groupId/updates', spaceAccess(), updatesGroupHandler);
 
 export default groupsRouter;

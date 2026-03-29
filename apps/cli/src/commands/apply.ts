@@ -2,27 +2,26 @@
  * CLI command: `takos apply`
  *
  * Apply changes from app.yml to the target environment.
- * Computes a diff, displays the plan, optionally prompts for
- * confirmation, then delegates to the Layer 1 entity operations
- * via the apply coordinator.
+ *
+ * Default (online): Send manifest to the API for plan + apply.
+ * --offline: Compute diff locally and apply via the local coordinator.
  *
  * Usage:
  *   takos apply --env staging
  *   takos apply --env production --auto-approve
  *   takos apply --env staging --target resources.db --target workers.web
+ *   takos apply --offline --env staging
  */
 import { Command } from 'commander';
 import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
-import { resolveAccountId, resolveApiToken, confirmPrompt } from '../lib/cli-utils.js';
-import { readState, getStateDir } from '../lib/state/state-file.js';
-import { computeDiff } from '../lib/state/diff.js';
+import { confirmPrompt } from '../lib/cli-utils.js';
+import { api } from '../lib/api.js';
+import { getConfig } from '../lib/config.js';
 import { formatPlan } from '../lib/state/plan.js';
-import type { TakosState } from '../lib/state/state-types.js';
-import type { DiffResult, DiffEntry } from '../lib/state/diff.js';
-import { applyDiff } from '../lib/apply/coordinator.js';
+import type { DiffResult } from '../lib/state/diff.js';
 import type { ApplyResult } from '../lib/apply/coordinator.js';
 
 type ApplyCommandOptions = {
@@ -36,29 +35,20 @@ type ApplyCommandOptions = {
   namespace?: string;
   group?: string;
   baseDomain?: string;
+  space?: string;
   offline?: boolean;
 };
 
-/** Filter diff entries by --target values like "resources.db", "workers.web" */
-function filterDiffByTargets(diff: DiffResult, targets: string[]): DiffResult {
-  if (targets.length === 0) return diff;
-  const filtered = diff.entries.filter((entry: DiffEntry) => {
-    const categoryPlural = entry.category === 'resource' ? 'resources' : entry.category === 'worker' ? 'workers' : entry.category === 'container' ? 'containers' : entry.category === 'route' ? 'routes' : 'services';
-    const key = `${categoryPlural}.${entry.name}`;
-    return targets.some(target => key === target || key.endsWith(`.${target}`) || entry.name === target);
-  });
-  const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const entry of filtered) {
-    summary[entry.action]++;
+function resolveSpaceId(spaceOverride?: string): string {
+  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
+  if (!spaceId) {
+    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
+    cliExit(1);
   }
-  return {
-    entries: filtered,
-    hasChanges: summary.create > 0 || summary.update > 0 || summary.delete > 0,
-    summary,
-  };
+  return spaceId;
 }
 
-/** Print apply result from the coordinator */
+/** Print apply result (shared between online and offline). */
 function printApplyResult(result: ApplyResult, env: string, groupName: string): void {
   console.log('');
   console.log(chalk.bold(`Apply: ${groupName}`));
@@ -99,6 +89,114 @@ function printApplyResult(result: ApplyResult, env: string, groupName: string): 
   }
 }
 
+/** Offline fallback: use the local coordinator (original logic). */
+async function handleApplyOffline(
+  manifest: Awaited<ReturnType<typeof loadAppManifest>>,
+  manifestPath: string,
+  options: ApplyCommandOptions,
+): Promise<void> {
+  const { readState, getStateDir } = await import('../lib/state/state-file.js');
+  const { computeDiff } = await import('../lib/state/diff.js');
+  const { applyDiff } = await import('../lib/apply/coordinator.js');
+  const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
+  type TakosState = import('../lib/state/state-types.js').TakosState;
+  type DiffEntry = import('../lib/state/diff.js').DiffEntry;
+  type OfflineDiffResult = import('../lib/state/diff.js').DiffResult;
+
+  const accountId = resolveAccountId(options.accountId);
+  const apiToken = resolveApiToken(options.apiToken);
+
+  const stateDir = getStateDir(process.cwd());
+  const group = options.group || 'default';
+  let currentState: TakosState | null = null;
+  try {
+    currentState = await readState(stateDir, group, { offline: true });
+  } catch {
+    // No state yet
+  }
+
+  const fullDiff = computeDiff(manifest, currentState);
+  const targets = options.target || [];
+  const diff = filterDiffByTargets(fullDiff, targets);
+
+  console.log('');
+  console.log(chalk.bold(`Apply: ${manifest.metadata.name}`));
+  console.log(`  Environment: ${options.env}`);
+  console.log(`  Manifest:    ${manifestPath}`);
+  console.log(`  Mode:        offline`);
+  if (targets.length > 0) {
+    console.log(`  Targets:     ${targets.join(', ')}`);
+  }
+  console.log('');
+
+  const planOutput = formatPlan(diff);
+  console.log(planOutput);
+
+  const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
+  if (totalChanges === 0) {
+    console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
+    return;
+  }
+
+  console.log(chalk.yellow(`${totalChanges} change(s) to apply.`));
+  console.log('');
+
+  if (!options.autoApprove) {
+    const hasDeletes = diff.entries.some(d => d.action === 'delete');
+    const promptMessage = hasDeletes
+      ? chalk.red.bold('This will DELETE resources. Continue?')
+      : 'Do you want to apply these changes?';
+    const confirmed = await confirmPrompt(promptMessage);
+    if (!confirmed) {
+      console.log(chalk.dim('Apply cancelled.'));
+      return;
+    }
+  }
+
+  console.log('');
+  console.log(chalk.cyan('Applying changes...'));
+  console.log('');
+
+  const groupName = options.group || manifest.metadata.name;
+  const applyResult = await applyDiff(diff, manifest, {
+    group,
+    env: options.env,
+    accountId,
+    apiToken,
+    groupName,
+    namespace: options.namespace,
+    manifestDir: path.dirname(manifestPath),
+    baseDomain: options.baseDomain,
+    autoApprove: options.autoApprove,
+  });
+
+  printApplyResult(applyResult, options.env, groupName);
+
+  const hasFailures = applyResult.applied.some(e => e.status === 'failed');
+  if (hasFailures) {
+    cliExit(1);
+  }
+
+  /** Filter diff entries by --target values like "resources.db", "workers.web" */
+  function filterDiffByTargets(diffResult: OfflineDiffResult, filterTargets: string[]): OfflineDiffResult {
+    if (filterTargets.length === 0) return diffResult;
+    const filtered = diffResult.entries.filter((entry: DiffEntry) => {
+      const categoryPlural = entry.category === 'resource' ? 'resources' : entry.category === 'worker' ? 'workers' : entry.category === 'container' ? 'containers' : entry.category === 'route' ? 'routes' : 'services';
+      const key = `${categoryPlural}.${entry.name}`;
+      return filterTargets.some(t => key === t || key.endsWith(`.${t}`) || entry.name === t);
+    });
+    const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
+    for (const entry of filtered) {
+      summary[entry.action]++;
+    }
+    return {
+      entries: filtered,
+      hasChanges: summary.create > 0 || summary.update > 0 || summary.delete > 0,
+      summary,
+    };
+  }
+}
+
 export function registerApplyCommand(program: Command): void {
   program
     .command('apply')
@@ -109,15 +207,13 @@ export function registerApplyCommand(program: Command): void {
     .option('--target <key...>', 'Apply only specific resources/services (e.g. resources.db, workers.web)')
     .option('--namespace <name>', 'Dispatch namespace')
     .option('--group <name>', 'Target group (default: "default")', 'default')
+    .option('--space <id>', 'Target workspace ID')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
     .option('--base-domain <domain>', 'Base domain for template resolution')
     .option('--offline', 'Force file-based state (skip API)')
     .action(async (options: ApplyCommandOptions) => {
-      const accountId = resolveAccountId(options.accountId);
-      const apiToken = resolveApiToken(options.apiToken);
-
       // Step 1: Load manifest
       let manifestPath: string;
       try {
@@ -138,23 +234,30 @@ export function registerApplyCommand(program: Command): void {
         cliExit(1);
       }
 
-      // Step 2: Read current state
-      const stateDir = getStateDir(process.cwd());
-      const group = options.group || 'default';
-      const accessOpts = options.offline ? { offline: true as const } : {};
-      let currentState: TakosState | null = null;
-      try {
-        currentState = await readState(stateDir, group, accessOpts);
-      } catch {
-        // No state yet
+      // Offline mode: delegate to local coordinator
+      if (options.offline) {
+        return handleApplyOffline(manifest, manifestPath, options);
       }
 
-      // Step 3: Compute diff
-      const fullDiff = computeDiff(manifest, currentState);
+      // Online mode: API-driven plan + apply
+      const spaceId = resolveSpaceId(options.space);
+      const group = options.group || 'default';
       const targets = options.target || [];
-      const diff = filterDiffByTargets(fullDiff, targets);
 
-      // Step 4: Display plan
+      // Step 2: Plan via API
+      const planRes = await api<DiffResult>(`/api/spaces/${spaceId}/groups/${group}/plan`, {
+        method: 'POST',
+        body: { manifest },
+      });
+
+      if (!planRes.ok) {
+        console.log(chalk.red(`Error: ${planRes.error}`));
+        cliExit(1);
+      }
+
+      const diff = planRes.data;
+
+      // Step 3: Display plan
       console.log('');
       console.log(chalk.bold(`Apply: ${manifest.metadata.name}`));
       console.log(`  Environment: ${options.env}`);
@@ -167,22 +270,21 @@ export function registerApplyCommand(program: Command): void {
       const planOutput = formatPlan(diff);
       console.log(planOutput);
 
-      const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
-      if (totalChanges === 0) {
+      if (!diff.hasChanges) {
         console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
         return;
       }
 
+      const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
       console.log(chalk.yellow(`${totalChanges} change(s) to apply.`));
       console.log('');
 
-      // Step 5: Confirmation
+      // Step 4: Confirmation
       if (!options.autoApprove) {
         const hasDeletes = diff.entries.some(d => d.action === 'delete');
         const promptMessage = hasDeletes
           ? chalk.red.bold('This will DELETE resources. Continue?')
           : 'Do you want to apply these changes?';
-
         const confirmed = await confirmPrompt(promptMessage);
         if (!confirmed) {
           console.log(chalk.dim('Apply cancelled.'));
@@ -190,29 +292,30 @@ export function registerApplyCommand(program: Command): void {
         }
       }
 
-      // Step 6: Execute via coordinator (Layer 1 entity operations)
+      // Step 5: Apply via API
       console.log('');
       console.log(chalk.cyan('Applying changes...'));
       console.log('');
 
-      const groupName = options.group || manifest.metadata.name;
-
-      const applyResult = await applyDiff(diff, manifest, {
-        group,
-        env: options.env,
-        accountId,
-        apiToken,
-        groupName,
-        namespace: options.namespace,
-        manifestDir: path.dirname(manifestPath),
-        baseDomain: options.baseDomain,
-        autoApprove: options.autoApprove,
+      const applyRes = await api<ApplyResult>(`/api/spaces/${spaceId}/groups/${group}/apply`, {
+        method: 'POST',
+        body: {
+          manifest,
+          target: targets.length > 0 ? targets : undefined,
+        },
+        timeout: 120_000,
       });
 
-      // Step 7: Display results
-      printApplyResult(applyResult, options.env, groupName);
+      if (!applyRes.ok) {
+        console.log(chalk.red(`Error: ${applyRes.error}`));
+        cliExit(1);
+      }
 
-      const hasFailures = applyResult.applied.some(e => e.status === 'failed');
+      const result = applyRes.data;
+      const groupName = options.group || manifest.metadata.name;
+      printApplyResult(result, options.env, groupName);
+
+      const hasFailures = result.applied.some(e => e.status === 'failed');
       if (hasFailures) {
         cliExit(1);
       }
