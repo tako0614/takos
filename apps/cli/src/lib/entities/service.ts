@@ -16,6 +16,7 @@ export interface DeployServiceOpts {
   dockerfile: string;
   port: number;
   ipv4?: boolean;
+  group: string;
   env: string;
   groupName?: string;
   accountId: string;
@@ -34,17 +35,19 @@ export interface ServiceEntry {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function createEmptyState(opts: { env: string; groupName?: string }): TakosState {
+function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
   return {
     version: 1,
     provider: 'cloudflare',
     env: opts.env,
+    group: opts.group,
     groupName: opts.groupName || 'takos',
     updatedAt: new Date().toISOString(),
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
   };
 }
 
@@ -94,9 +97,10 @@ export async function deployService(
   );
 
   // Persist to state
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = (await readState(stateDir)) || createEmptyState(opts);
+  const state = (await readState(stateDir, group)) || createEmptyState(opts);
 
   state.services[name] = {
     deployedAt: new Date().toISOString(),
@@ -104,7 +108,7 @@ export async function deployService(
     ...(opts.ipv4 ? { ipv4: 'pending' } : {}),
   };
   state.updatedAt = new Date().toISOString();
-  await writeState(stateDir, state);
+  await writeState(stateDir, group, state);
 
   return {
     success: result.status === 'deployed',
@@ -116,10 +120,10 @@ export async function deployService(
 /**
  * List all services tracked in local state.
  */
-export async function listServices(): Promise<ServiceEntry[]> {
+export async function listServices(group: string): Promise<ServiceEntry[]> {
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (!state) return [];
 
   return Object.entries(state.services).map(([name, s]: [string, ServiceState]) => ({
@@ -131,19 +135,22 @@ export async function listServices(): Promise<ServiceEntry[]> {
 }
 
 /**
- * Delete a service from state. Actual deletion is TODO.
+ * Delete a service from local state.
+ *
+ * Note: provider-specific cloud deletion is not yet implemented.
+ * Only the local state entry is removed.
  */
 export async function deleteService(
   name: string,
-  _opts: { accountId: string; apiToken: string },
+  _opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  // TODO: provider-specific deletion
+  const group = _opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (state) {
     delete state.services[name];
     state.updatedAt = new Date().toISOString();
-    await writeState(stateDir, state);
+    await writeState(stateDir, group, state);
   }
 }

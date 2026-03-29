@@ -20,6 +20,7 @@ import type { TakosState } from '../lib/state/state-types.js';
 type PlanCommandOptions = {
   manifest?: string;
   env: string;
+  group: string;
 };
 
 export function registerPlanCommand(program: Command): void {
@@ -28,6 +29,7 @@ export function registerPlanCommand(program: Command): void {
     .description('Show execution plan: diff between app.yml and current state')
     .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
     .option('--env <env>', 'Target environment', 'staging')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .action(async (options: PlanCommandOptions) => {
       // Step 1: Load manifest
       let manifestPath: string;
@@ -50,9 +52,10 @@ export function registerPlanCommand(program: Command): void {
       }
 
       // Step 2: Read current state (null if not found)
+      const group = options.group;
       let currentState: TakosState | null = null;
       try {
-        currentState = await readState(getStateDir(process.cwd()));
+        currentState = await readState(getStateDir(process.cwd()), group);
       } catch {
         // No state file yet -- treat as fresh deployment
       }

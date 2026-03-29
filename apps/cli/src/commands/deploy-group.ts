@@ -208,10 +208,11 @@ export function registerDeployGroupCommand(program: Command): void {
       }
 
       // Read current state and compute diff
+      const group = options.group || manifest.metadata.name;
       const stateDir = getStateDir(process.cwd());
       let currentState: TakosState | null = null;
       try {
-        currentState = await readState(stateDir);
+        currentState = await readState(stateDir, group);
       } catch {
         // No state file yet
       }
@@ -229,7 +230,7 @@ export function registerDeployGroupCommand(program: Command): void {
         return;
       }
 
-      const groupName = options.group || manifest.metadata.name;
+      const groupName = group;
 
       if (!options.json) {
         console.log(`${chalk.cyan('[DEPLOY]')} ${chalk.bold(manifest.metadata.name)} -> ${options.env}`);
@@ -242,6 +243,7 @@ export function registerDeployGroupCommand(program: Command): void {
 
       // Delegate to coordinator (auto-approve, since deploy-group never prompts)
       const applyResult = await applyDiff(diff, manifest, {
+        group,
         env: options.env,
         accountId,
         apiToken,

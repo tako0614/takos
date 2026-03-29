@@ -2,8 +2,9 @@ import {
   hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
-} from '../../shared/utils/sliding-window';
-import { hitTokenBucket, type TokenBucketState } from '../../shared/utils/token-bucket';
+  hitTokenBucket,
+  type TokenBucketState,
+} from '../../shared/utils/rate-limiter';
 
 import { jsonResponse } from './do-header-utils';
 import { logWarn } from '../../shared/utils/logger';

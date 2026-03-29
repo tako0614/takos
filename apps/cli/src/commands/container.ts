@@ -86,6 +86,7 @@ export function registerContainerCommand(program: Command): void {
         const result = await deployContainer(name, {
           dockerfile: options.dockerfile,
           port: options.port,
+          group: options.group,
           env: options.env,
           groupName: options.group,
           accountId,
@@ -119,10 +120,11 @@ export function registerContainerCommand(program: Command): void {
   containerCmd
     .command('list')
     .description('List all tracked containers')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { group: string; json?: boolean }) => {
       try {
-        const containers = await listContainers();
+        const containers = await listContainers(options.group);
 
         if (options.json) {
           process.stdout.write(`${JSON.stringify(containers, null, 2)}\n`);
@@ -153,14 +155,15 @@ export function registerContainerCommand(program: Command): void {
   containerCmd
     .command('delete <name>')
     .description('Delete a container from state (does NOT delete the actual container)')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
-    .action(async (name: string, options: { accountId?: string; apiToken?: string }) => {
+    .action(async (name: string, options: { group: string; accountId?: string; apiToken?: string }) => {
       const accountId = resolveAccountId(options.accountId);
       const apiToken = resolveApiToken(options.apiToken);
 
       try {
-        await deleteContainer(name, { accountId, apiToken });
+        await deleteContainer(name, { group: options.group, accountId, apiToken });
         console.log(chalk.green(`Removed container '${name}' from state.`));
         console.log(chalk.dim('The actual container was NOT deleted.'));
       } catch (error) {

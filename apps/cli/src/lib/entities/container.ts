@@ -16,6 +16,7 @@ export interface DeployContainerOpts {
   dockerfile: string;
   port: number;
   workerHost?: string;
+  group: string;
   env: string;
   groupName?: string;
   accountId: string;
@@ -33,17 +34,19 @@ export interface ContainerEntry {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function createEmptyState(opts: { env: string; groupName?: string }): TakosState {
+function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
   return {
     version: 1,
     provider: 'cloudflare',
     env: opts.env,
+    group: opts.group,
     groupName: opts.groupName || 'takos',
     updatedAt: new Date().toISOString(),
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
   };
 }
 
@@ -94,16 +97,17 @@ export async function deployContainer(
   );
 
   // Persist to state
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = (await readState(stateDir)) || createEmptyState(opts);
+  const state = (await readState(stateDir, group)) || createEmptyState(opts);
 
   state.containers[name] = {
     deployedAt: new Date().toISOString(),
     imageHash: 'unknown', // Image hash is resolved at build time
   };
   state.updatedAt = new Date().toISOString();
-  await writeState(stateDir, state);
+  await writeState(stateDir, group, state);
 
   return {
     success: result.status === 'deployed',
@@ -115,10 +119,10 @@ export async function deployContainer(
 /**
  * List all containers tracked in local state.
  */
-export async function listContainers(): Promise<ContainerEntry[]> {
+export async function listContainers(group: string): Promise<ContainerEntry[]> {
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (!state) return [];
 
   return Object.entries(state.containers).map(([name, c]: [string, ContainerState]) => ({
@@ -129,19 +133,22 @@ export async function listContainers(): Promise<ContainerEntry[]> {
 }
 
 /**
- * Delete a container from state. Actual deletion is TODO.
+ * Delete a container from local state.
+ *
+ * Note: provider-specific cloud deletion (e.g. wrangler delete) is not
+ * yet implemented. Only the local state entry is removed.
  */
 export async function deleteContainer(
   name: string,
-  _opts: { accountId: string; apiToken: string },
+  _opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  // TODO: wrangler delete via provider
+  const group = _opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (state) {
     delete state.containers[name];
     state.updatedAt = new Date().toISOString();
-    await writeState(stateDir, state);
+    await writeState(stateDir, group, state);
   }
 }

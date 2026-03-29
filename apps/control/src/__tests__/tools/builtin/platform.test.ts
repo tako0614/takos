@@ -100,7 +100,6 @@ vi.mock('@/platform/providers/cloudflare/custom-domains', () => ({
 vi.mock('@/shared/utils', () => ({
   generateId: vi.fn(() => 'gen-id'),
   now: vi.fn(() => '2026-01-01T00:00:00.000Z'),
-  toIsoString: vi.fn((v: unknown) => typeof v === 'string' ? v : null),
   safeJsonParseOrDefault: vi.fn((_raw: unknown, fallback: unknown) => fallback),
 }));
 

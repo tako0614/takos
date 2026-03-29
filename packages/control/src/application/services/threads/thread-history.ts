@@ -15,7 +15,6 @@ import type {
 } from '../../../shared/types';
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { toIsoString } from '../../../shared/utils';
 import { listThreadMessages } from './thread-service';
 import { logError } from '../../../shared/utils/logger';
 
@@ -78,10 +77,10 @@ function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
       error: row.error ?? null,
       usage: row.usage,
       worker_id: row.serviceId ?? null,
-      worker_heartbeat: row.serviceHeartbeat ? toIsoString(row.serviceHeartbeat) : null,
-      started_at: row.startedAt ? toIsoString(row.startedAt) : null,
-      completed_at: row.completedAt ? toIsoString(row.completedAt) : null,
-      created_at: toIsoString(row.createdAt),
+      worker_heartbeat: row.serviceHeartbeat ? (row.serviceHeartbeat == null ? null : typeof row.serviceHeartbeat === 'string' ? row.serviceHeartbeat : row.serviceHeartbeat.toISOString()) : null,
+      started_at: row.startedAt ? (row.startedAt == null ? null : typeof row.startedAt === 'string' ? row.startedAt : row.startedAt.toISOString()) : null,
+      completed_at: row.completedAt ? (row.completedAt == null ? null : typeof row.completedAt === 'string' ? row.completedAt : row.completedAt.toISOString()) : null,
+      created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
     },
   };
 }
@@ -115,7 +114,7 @@ function toHistoryArtifact(row: RunHistoryArtifactRow): ThreadHistoryArtifactSum
     type: row.type as ArtifactType,
     title: row.title,
     file_id: row.fileId,
-    created_at: toIsoString(row.createdAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }
 
@@ -125,7 +124,7 @@ function toHistoryEvent(row: RunHistoryEventRow): ThreadHistoryEvent {
     run_id: row.runId,
     type: row.type,
     data: row.data,
-    created_at: toIsoString(row.createdAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }
 

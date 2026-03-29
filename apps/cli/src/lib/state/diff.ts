@@ -5,9 +5,9 @@ export type DiffAction = 'create' | 'update' | 'delete' | 'unchanged';
 
 export interface DiffEntry {
   name: string;
-  category: 'resource' | 'worker' | 'container' | 'service';
+  category: 'resource' | 'worker' | 'container' | 'service' | 'route';
   action: DiffAction;
-  type?: string; // resource type, 'worker', 'container', 'service'
+  type?: string; // resource type, 'worker', 'container', 'service', 'route'
   reason?: string; // 'code changed', 'new', 'removed from manifest'
 }
 
@@ -25,6 +25,7 @@ export interface DiffResult {
 interface ExtendedSpec {
   containers?: Record<string, unknown>;
   services?: Record<string, unknown>;
+  routes?: Record<string, { target: string }>;
 }
 
 /**
@@ -150,6 +151,33 @@ export function computeDiff(
         category: 'service',
         action: 'delete',
         type: 'service',
+        reason: 'removed from manifest',
+      });
+    }
+  }
+
+  // ── Routes ──
+  const desiredRoutes = (spec.routes ?? {}) as Record<string, { target: string }>;
+  const currentRoutes = current?.routes ?? {};
+
+  for (const name of Object.keys(desiredRoutes)) {
+    const existing = currentRoutes[name];
+    if (!existing) {
+      entries.push({ name, category: 'route', action: 'create', type: 'route', reason: 'new' });
+    } else if (existing.target !== desiredRoutes[name].target) {
+      entries.push({ name, category: 'route', action: 'update', type: 'route', reason: 'target changed' });
+    } else {
+      entries.push({ name, category: 'route', action: 'unchanged', type: 'route' });
+    }
+  }
+
+  for (const name of Object.keys(currentRoutes)) {
+    if (!desiredRoutes[name]) {
+      entries.push({
+        name,
+        category: 'route',
+        action: 'delete',
+        type: 'route',
         reason: 'removed from manifest',
       });
     }

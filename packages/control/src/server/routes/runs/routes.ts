@@ -8,7 +8,7 @@ import {
   RUN_TERMINAL_STATUSES,
   buildTerminalPayload,
 } from '../../../application/services/run-notifier';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { BadRequestError, NotFoundError, AppError, ErrorCodes } from 'takos-common/errors';
 import { checkRunAccess } from './access';
@@ -20,8 +20,21 @@ import {
 } from './observation';
 import { registerRunCreateRoutes } from './create';
 import { registerRunListRoutes } from './list';
-import { buildSanitizedDOHeaders } from '../../../shared/utils/do-header-utils';
 import type { BaseVariables } from '../route-auth';
+
+const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
+
+function buildSanitizedDOHeaders(
+  source: HeadersInit | undefined,
+  trustedOverrides: Record<string, string>,
+): Record<string, string> {
+  const headers = new Headers(source);
+  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
+  for (const [key, value] of Object.entries(trustedOverrides)) headers.set(key, value);
+  const result: Record<string, string> = {};
+  headers.forEach((v, k) => { result[k] = v; });
+  return result;
+}
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
@@ -63,7 +76,7 @@ function artifactRowToApi(row: ArtifactRow): Artifact {
     content: row.content,
     file_id: row.fileId,
     metadata: row.metadata,
-    created_at: toIsoString(row.createdAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }
 

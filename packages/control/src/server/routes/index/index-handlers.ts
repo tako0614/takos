@@ -79,7 +79,7 @@ export async function handleVectorizeIndex(
       await c.env.INDEX_QUEUE.send(message);
       logInfo(`Vectorize job ${jobId} enqueued for workspace ${spaceId}`, { module: 'index_queue' });
     } catch (err) {
-      logError('Failed to enqueue vectorize job', err, { module: 'routes/index/handlers' });
+      logError('Failed to enqueue vectorize job', err, { module: 'routes/index/index-handlers' });
       throw new InternalError('Failed to queue indexing job');
     }
   } else {

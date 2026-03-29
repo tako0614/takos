@@ -210,8 +210,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const page = parseLimit(c.req.query('page'), 1, 100000);
-      const limit = parseLimit(c.req.query('limit'), 20, 100);
+      const pageRaw = Number.parseInt(c.req.query('page') ?? '', 10);
+      const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+      const { limit } = parsePagination(c.req.query());
       const collection = await fetchRemoteRepositories(entry.repositoriesUrl, {
         page,
         limit,
@@ -263,8 +264,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const page = parseLimit(c.req.query('page'), 1, 100000);
-      const limit = parseLimit(c.req.query('limit'), 20, 100);
+      const pageRaw2 = Number.parseInt(c.req.query('page') ?? '', 10);
+      const page = Number.isFinite(pageRaw2) && pageRaw2 > 0 ? pageRaw2 : 1;
+      const { limit } = parsePagination(c.req.query());
       const collection = await searchRemoteRepositories(entry.searchUrl, query, {
         page,
         limit,
@@ -337,8 +339,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     try {
       const unseenOnly = c.req.query('unseen') === 'true';
-      const limit = parseLimit(c.req.query('limit'), 50, 100);
-      const offset = parseOffset(c.req.query('offset'));
+      const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
 
       const result = await getStoreUpdates(c.env.DB, access.space.id, {
         unseenOnly,

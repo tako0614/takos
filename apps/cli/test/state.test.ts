@@ -27,12 +27,14 @@ function makeState(overrides: Partial<TakosState> = {}): TakosState {
     version: 1,
     provider: 'cloudflare',
     env: 'production',
+    group: 'default',
     groupName: 'test-group',
     updatedAt: '2026-01-01T00:00:00Z',
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
     ...overrides,
   };
 }
@@ -65,9 +67,9 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
 // ── state-file tests ──
 
 describe('state-file', () => {
-  it('readState returns null when state.json does not exist', async () => {
+  it('readState returns null when state file does not exist', async () => {
     const dir = await makeTempDir();
-    const result = await readState(dir);
+    const result = await readState(dir, 'default');
     expect(result).toBeNull();
   });
 
@@ -82,8 +84,8 @@ describe('state-file', () => {
       },
     });
 
-    await writeState(dir, state);
-    const loaded = await readState(dir);
+    await writeState(dir, 'default', state);
+    const loaded = await readState(dir, 'default');
     expect(loaded).toEqual(state);
   });
 
@@ -92,17 +94,17 @@ describe('state-file', () => {
     const nested = path.join(dir, 'nested', 'deep');
     const state = makeState();
 
-    await writeState(nested, state);
-    const loaded = await readState(nested);
+    await writeState(nested, 'default', state);
+    const loaded = await readState(nested, 'default');
     expect(loaded).toEqual(state);
   });
 
   it('readState propagates non-ENOENT errors', async () => {
     // 存在するがディレクトリなので JSON パースエラーになる
     const dir = await makeTempDir();
-    const stateFilePath = path.join(dir, 'state.json');
+    const stateFilePath = path.join(dir, 'state.default.json');
     await fs.mkdir(stateFilePath, { recursive: true }); // ファイルではなくディレクトリ
-    await expect(readState(dir)).rejects.toThrow();
+    await expect(readState(dir, 'default')).rejects.toThrow();
   });
 });
 

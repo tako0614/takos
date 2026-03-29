@@ -3,7 +3,7 @@ import {
   hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
-} from '@/utils/sliding-window';
+} from '@/utils/rate-limiter';
 
 describe('hitSlidingWindow (dryRun)', () => {
   const config = { maxRequests: 5, windowMs: 10_000 };

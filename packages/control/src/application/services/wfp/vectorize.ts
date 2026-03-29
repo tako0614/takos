@@ -1,5 +1,9 @@
 /**
- * Vectorize index methods for WFPService.
+ * Vectorize index methods for the WFP (Workers for Platforms) service.
+ *
+ * Manages Cloudflare Vectorize indexes that are bound to tenant workers.
+ * Provides creation (with configurable dimensions and distance metric) and
+ * deletion of vector search indexes.
  */
 
 import { InternalError } from 'takos-common/errors';

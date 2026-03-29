@@ -2,7 +2,6 @@ import type { R2Bucket } from '../../../shared/types/bindings.ts';
 import { getDb, workflowRuns, workflowArtifacts } from '../../../infra/db';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import type { Env } from '../../../shared/types';
-import { toIsoString } from '../../../shared/utils';
 import { logError } from '../../../shared/utils/logger';
 
 type ArtifactBucket = Pick<R2Bucket, 'get' | 'delete' | 'list'>;

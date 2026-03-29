@@ -6,14 +6,6 @@ import { NotFoundError } from 'takos-common/errors';
 import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
 
 // ---------------------------------------------------------------------------
-// Bucket types and helpers — canonical definitions live in shared/utils/git-bucket.
-// Re-exported here for backward-compatible imports within the repos route tree.
-// ---------------------------------------------------------------------------
-
-export type { RepoBucketBinding, GitBucket } from '../../../shared/utils/git-bucket';
-export { toGitBucket } from '../../../shared/utils/git-bucket';
-
-// ---------------------------------------------------------------------------
 // Re-exports
 // ---------------------------------------------------------------------------
 

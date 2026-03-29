@@ -1,5 +1,10 @@
 /**
- * Deployment orchestration methods for WFPService.
+ * Deployment orchestration methods for the WFP (Workers for Platforms) service.
+ *
+ * Coordinates high-level tenant provisioning workflows: fetching a worker
+ * bundle (from R2), mapping generic binding descriptors into WFP-specific
+ * WorkerBinding shapes, and deploying the assembled worker into the dispatch
+ * namespace. Also provides the canonical D1 migration SQL for new tenants.
  */
 
 import type { Env } from '../../../shared/types';

@@ -19,7 +19,7 @@ function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-type StateCategory = 'resources' | 'workers' | 'containers' | 'services';
+type StateCategory = 'resources' | 'workers' | 'containers' | 'services' | 'routes';
 
 /**
  * Resolve a dotted key like "resources.db" or "services.web" against
@@ -30,7 +30,7 @@ function resolveStateKey(state: TakosState, key: string): {
   name: string;
   entry: Record<string, unknown>;
 } | null {
-  const categories: StateCategory[] = ['resources', 'workers', 'containers', 'services'];
+  const categories: StateCategory[] = ['resources', 'workers', 'containers', 'services', 'routes'];
   const parts = key.split('.');
   if (parts.length === 2) {
     const [category, name] = parts;
@@ -61,14 +61,16 @@ export function registerStateCommand(program: Command): void {
   stateCmd
     .command('list')
     .description('List all tracked resources and services')
+    .option('--group <name>', 'Group name', 'default')
     .option('--json', 'Output as JSON')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { group: string; json?: boolean }) => {
       const cwd = process.cwd();
+      const group = options.group;
       const stateDir = getStateDir(cwd);
-      const stateFilePath = getStateFilePath(cwd);
+      const stateFilePath = getStateFilePath(stateDir, group);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir);
+        state = await readState(stateDir, group);
       } catch {
         state = null;
       }
@@ -151,12 +153,14 @@ export function registerStateCommand(program: Command): void {
   stateCmd
     .command('show <key>')
     .description('Show details for a specific resource or service (e.g. resources.db)')
+    .option('--group <name>', 'Group name', 'default')
     .option('--json', 'Output as JSON')
-    .action(async (key: string, options: { json?: boolean }) => {
+    .action(async (key: string, options: { group: string; json?: boolean }) => {
+      const group = options.group;
       const stateDir = getStateDir(process.cwd());
       let state: TakosState | null;
       try {
-        state = await readState(stateDir);
+        state = await readState(stateDir, group);
       } catch {
         state = null;
       }
@@ -193,13 +197,15 @@ export function registerStateCommand(program: Command): void {
   stateCmd
     .command('import <key> <id>')
     .description('Import an existing resource into state (e.g. state import resources.db abc123)')
-    .action(async (key: string, id: string) => {
+    .option('--group <name>', 'Group name', 'default')
+    .action(async (key: string, id: string, options: { group: string }) => {
       const cwd = process.cwd();
+      const group = options.group;
       const stateDir = getStateDir(cwd);
-      const stateFilePath = getStateFilePath(cwd);
+      const stateFilePath = getStateFilePath(stateDir, group);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir);
+        state = await readState(stateDir, group);
       } catch {
         state = null;
       }
@@ -210,12 +216,14 @@ export function registerStateCommand(program: Command): void {
           version: 1,
           provider: 'cloudflare',
           env: 'unknown',
+          group,
           groupName: 'unknown',
           updatedAt: now,
           resources: {},
           workers: {},
           containers: {},
           services: {},
+          routes: {},
         };
       }
 
@@ -255,7 +263,7 @@ export function registerStateCommand(program: Command): void {
       }
 
       state.updatedAt = now;
-      await writeState(stateDir, state);
+      await writeState(stateDir, group, state);
       console.log(chalk.green(`Imported ${key} with id ${id}`));
       console.log(chalk.dim(`State saved to ${stateFilePath}`));
     });
@@ -264,12 +272,14 @@ export function registerStateCommand(program: Command): void {
   stateCmd
     .command('rm <key>')
     .description('Remove an entry from state (does NOT delete the actual resource)')
-    .action(async (key: string) => {
+    .option('--group <name>', 'Group name', 'default')
+    .action(async (key: string, options: { group: string }) => {
       const cwd = process.cwd();
+      const group = options.group;
       const stateDir = getStateDir(cwd);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir);
+        state = await readState(stateDir, group);
       } catch {
         state = null;
       }
@@ -296,9 +306,11 @@ export function registerStateCommand(program: Command): void {
         delete state.containers[resolved.name];
       } else if (resolved.category === 'services') {
         delete state.services[resolved.name];
+      } else if (resolved.category === 'routes') {
+        delete state.routes[resolved.name];
       }
 
-      await writeState(stateDir, state);
+      await writeState(stateDir, group, state);
       console.log(chalk.green(`Removed ${resolved.category}.${resolved.name} from state`));
       console.log(chalk.dim('The actual resource was NOT deleted. Use provider tools to delete it.'));
     });

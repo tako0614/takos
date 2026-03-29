@@ -1,5 +1,9 @@
 /**
- * R2 bucket methods for WFPService.
+ * R2 bucket methods for the WFP (Workers for Platforms) service.
+ *
+ * Manages Cloudflare R2 object-storage buckets that are bound to tenant
+ * workers. Provides CRUD for buckets, object listing, upload (via the
+ * S3-compatible PUT endpoint), deletion, and basic usage statistics.
  */
 
 import { CF_API_BASE } from './client';

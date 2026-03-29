@@ -17,7 +17,6 @@ import { triggerPushWorkflows } from '../../application/services/actions/actions
 import { getDb } from '../../infra/db';
 import { accounts, repositories } from '../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { toIsoString } from '../../shared/utils';
 import { checkSpaceAccess } from '../../application/services/identity/space-access';
 import { logError } from '../../shared/utils/logger';
 import { MAX_GIT_REQUEST_BODY_BYTES, GIT_PUSH_LOCK_LEASE_MS } from '../../shared/config/limits';
@@ -89,8 +88,8 @@ async function resolveRepo(
       official_maintainer: repo.officialMaintainer,
       featured: repo.featured,
       install_count: repo.installCount,
-      created_at: toIsoString(repo.createdAt),
-      updated_at: toIsoString(repo.updatedAt),
+      created_at: (repo.createdAt == null ? null : typeof repo.createdAt === 'string' ? repo.createdAt : repo.createdAt.toISOString()),
+      updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
     } as Repository,
     spaceId: account.id,
   };

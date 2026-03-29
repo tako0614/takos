@@ -45,7 +45,7 @@ import {
   buildAgentExecutorContainerEnvVars,
   buildAgentExecutorProxyConfig,
 } from './executor-proxy-config';
-import { extractBearerToken } from '../../shared/utils';
+
 import { constantTimeEqual } from '../../shared/utils/hash';
 import { logError } from '../../shared/utils/logger';
 import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
@@ -228,7 +228,8 @@ export default {
     // /proxy/* and /rpc/control/* — called by executor/container with per-run tokens
     if (path.startsWith('/proxy/') || path.startsWith('/rpc/control/')) {
       const runId = request.headers.get('X-Takos-Run-Id');
-      const token = extractBearerToken(request.headers.get('Authorization'));
+      const authHeader = request.headers.get('Authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
       if (!runId || !token) {
         return unauthorized();
       }

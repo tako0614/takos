@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { type AuthenticatedRouteEnv } from '../route-auth';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
@@ -37,7 +37,7 @@ function toCommentDto(
     body: comment.content,
     path: comment.filePath,
     line: comment.lineNumber,
-    created_at: toIsoString(comment.createdAt),
+    created_at: (comment.createdAt == null ? null : typeof comment.createdAt === 'string' ? comment.createdAt : comment.createdAt.toISOString()),
     author: resolveActorLite({
       actorType: comment.authorType,
       actorId: comment.authorId,

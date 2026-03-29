@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { toIsoString, parsePagination, paginatedResponse } from '../../../shared/utils';
+import { parsePagination, paginatedResponse } from '../../../shared/utils';
 import { fetchProfileActivity } from '../../../application/services/identity/profile-activity';
 import { type OptionalAuthRouteEnv } from '../route-auth';
 import { zValidator } from '../zod-validator';
@@ -117,7 +117,7 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: toIsoString(repo.updatedAt),
+    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
   }));
 
   const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
@@ -206,8 +206,8 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
       stars: starData.repoStars,
       forks: starData.repoForks,
       is_starred: starredSet.has(starData.repoId),
-      updated_at: toIsoString(starData.repoUpdatedAt),
-      starred_at: toIsoString(starData.starCreatedAt),
+      updated_at: (starData.repoUpdatedAt == null ? null : typeof starData.repoUpdatedAt === 'string' ? starData.repoUpdatedAt : starData.repoUpdatedAt.toISOString()),
+      starred_at: (starData.starCreatedAt == null ? null : typeof starData.starCreatedAt === 'string' ? starData.starCreatedAt : starData.starCreatedAt.toISOString()),
     };
   });
 

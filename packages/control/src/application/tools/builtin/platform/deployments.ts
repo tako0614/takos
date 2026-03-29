@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../../types';
-import { generateId, toIsoString } from '../../../../shared/utils';
+import { generateId } from '../../../../shared/utils';
 import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { deleteHostnameRouting } from '../../../services/routing/service';
@@ -124,8 +124,8 @@ export const workerListHandler: ToolHandler = async (args, context) => {
       hostname: w.hostname,
       route_ref: routeRef,
       slug: w.slug,
-      created_at: toIsoString(w.createdAt),
-      updated_at: toIsoString(w.updatedAt),
+      created_at: (w.createdAt == null ? null : typeof w.createdAt === 'string' ? w.createdAt : w.createdAt.toISOString()),
+      updated_at: (w.updatedAt == null ? null : typeof w.updatedAt === 'string' ? w.updatedAt : w.updatedAt.toISOString()),
       app_name: appRow?.name || null,
       app_icon: appRow?.icon || null,
       app_description: appRow?.description || null,

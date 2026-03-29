@@ -24,12 +24,14 @@ function makeState(overrides: Partial<TakosState> = {}): TakosState {
     version: 1,
     provider: 'cloudflare',
     env: 'production',
+    group: 'default',
     groupName: 'test-group',
     updatedAt: '2026-01-01T00:00:00Z',
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
     ...overrides,
   };
 }
@@ -40,7 +42,7 @@ describe('entities/resource', () => {
   it('createResource updates state', async () => {
     const dir = await makeTempDir();
     const state = makeState();
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
     // Simulate createResource by writing a new resource entry to state
     const updated = { ...state };
@@ -54,9 +56,9 @@ describe('entities/resource', () => {
       },
     };
     updated.updatedAt = new Date().toISOString();
-    await writeState(dir, updated);
+    await writeState(dir, 'default', updated);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.resources['main-db']).toBeDefined();
     expect(loaded!.resources['main-db'].type).toBe('d1');
@@ -73,9 +75,9 @@ describe('entities/resource', () => {
         storage: { type: 'r2', id: 'r2-001', binding: 'STORAGE', createdAt: '2026-01-01T00:00:00Z' },
       },
     });
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     const resourceNames = Object.keys(loaded!.resources);
     expect(resourceNames).toEqual(['db', 'cache', 'storage']);
@@ -90,16 +92,16 @@ describe('entities/resource', () => {
         cache: { type: 'kv', id: 'kv-001', binding: 'CACHE', createdAt: '2026-01-01T00:00:00Z' },
       },
     });
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
     // Simulate deleteResource by removing the entry from state
     const updated = { ...state };
     const { db: _removed, ...remainingResources } = updated.resources;
     updated.resources = remainingResources;
     updated.updatedAt = new Date().toISOString();
-    await writeState(dir, updated);
+    await writeState(dir, 'default', updated);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.resources['db']).toBeUndefined();
     expect(loaded!.resources['cache']).toBeDefined();
@@ -113,7 +115,7 @@ describe('entities/worker', () => {
   it('deployWorker updates state', async () => {
     const dir = await makeTempDir();
     const state = makeState();
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
     // Simulate deployWorker by adding a worker entry to state
     const updated = { ...state };
@@ -126,9 +128,9 @@ describe('entities/worker', () => {
       },
     };
     updated.updatedAt = new Date().toISOString();
-    await writeState(dir, updated);
+    await writeState(dir, 'default', updated);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.workers['web']).toBeDefined();
     expect(loaded!.workers['web'].scriptName).toBe('test-group-production-web');
@@ -143,16 +145,16 @@ describe('entities/worker', () => {
         api: { scriptName: 'test-api', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:bbb' },
       },
     });
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
     // Simulate deleteWorker by removing the entry from state
     const updated = { ...state };
     const { web: _removed, ...remainingWorkers } = updated.workers;
     updated.workers = remainingWorkers;
     updated.updatedAt = new Date().toISOString();
-    await writeState(dir, updated);
+    await writeState(dir, 'default', updated);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.workers['web']).toBeUndefined();
     expect(loaded!.workers['api']).toBeDefined();
@@ -166,7 +168,7 @@ describe('entities/worker', () => {
         web: { scriptName: 'test-web', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:old' },
       },
     });
-    await writeState(dir, state);
+    await writeState(dir, 'default', state);
 
     // Simulate updateWorker
     const updated = { ...state };
@@ -180,9 +182,9 @@ describe('entities/worker', () => {
       },
     };
     updated.updatedAt = newDeployedAt;
-    await writeState(dir, updated);
+    await writeState(dir, 'default', updated);
 
-    const loaded = await readState(dir);
+    const loaded = await readState(dir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.workers['web'].codeHash).toBe('sha256:new');
     expect(loaded!.workers['web'].deployedAt).toBe(newDeployedAt);

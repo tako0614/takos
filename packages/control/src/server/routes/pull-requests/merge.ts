@@ -6,7 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { pullRequests, branches } from '../../../infra/db/schema';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { toPullRequestRecord, type PullRequestRecord } from './dto';
-import { toGitBucket, type GitBucket } from './git-store';
+import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket';
 import { GIT_REBASE_MAX_COMMITS } from '../../../shared/config/limits';
 
 type MergeApplyFailure = { success: false; error: 'branch_not_found' | 'ref_conflict'; current: string | null };

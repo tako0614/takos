@@ -4,7 +4,7 @@ import type { Env } from '../../../shared/types';
 import { getDb, notificationSettings, notificationPreferences, notifications } from '../../../infra/db';
 import { eq, and, lt, inArray, isNull, count, desc } from 'drizzle-orm';
 import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
-import { buildDurableObjectUrl } from '../../../shared/utils';
+
 import { logWarn } from '../../../shared/utils/logger';
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -89,7 +89,7 @@ function getNotificationNotifierStub(env: Env, userId: string): NotificationNoti
 }
 
 async function emitNotificationCreated(stub: NotificationNotifierStub, notificationId: string): Promise<void> {
-  const request = new Request(buildDurableObjectUrl('/emit'), {
+  const request = new Request('https://internal.do/emit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Takos-Internal': '1' },
     body: JSON.stringify({

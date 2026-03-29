@@ -5,10 +5,6 @@ export {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_QUEUE_MESSAGE_VERSION,
-  isValidRunQueueMessage,
-  isValidIndexJobQueueMessage,
-  isValidWorkflowJobQueueMessage,
-  isValidDeploymentQueueMessage,
 } from './queue-messages';
 export type {
   WorkflowShell,
@@ -19,6 +15,13 @@ export type {
   WorkflowJobQueueMessage,
   DeploymentQueueMessage,
 } from './queue-messages';
+
+export {
+  isValidRunQueueMessage,
+  isValidIndexJobQueueMessage,
+  isValidWorkflowJobQueueMessage,
+  isValidDeploymentQueueMessage,
+} from './queue-message-guards';
 
 export type {
   SqlDatabaseBinding,

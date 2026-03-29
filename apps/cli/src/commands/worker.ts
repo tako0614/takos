@@ -80,6 +80,7 @@ export function registerWorkerCommand(program: Command): void {
       try {
         const result = await deployWorker(name, {
           artifact: options.artifact,
+          group: options.group,
           env: options.env,
           groupName: options.group,
           accountId,
@@ -110,10 +111,11 @@ export function registerWorkerCommand(program: Command): void {
   workerCmd
     .command('list')
     .description('List all tracked workers')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { group: string; json?: boolean }) => {
       try {
-        const workers = await listWorkers();
+        const workers = await listWorkers(options.group);
 
         if (options.json) {
           process.stdout.write(`${JSON.stringify(workers, null, 2)}\n`);
@@ -148,14 +150,15 @@ export function registerWorkerCommand(program: Command): void {
   workerCmd
     .command('delete <name>')
     .description('Delete a worker from state (does NOT delete the actual worker)')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
-    .action(async (name: string, options: { accountId?: string; apiToken?: string }) => {
+    .action(async (name: string, options: { group: string; accountId?: string; apiToken?: string }) => {
       const accountId = resolveAccountId(options.accountId);
       const apiToken = resolveApiToken(options.apiToken);
 
       try {
-        await deleteWorker(name, { accountId, apiToken });
+        await deleteWorker(name, { group: options.group, accountId, apiToken });
         console.log(chalk.green(`Removed worker '${name}' from state.`));
         console.log(chalk.dim('The actual worker was NOT deleted.'));
       } catch (error) {

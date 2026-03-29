@@ -1,5 +1,10 @@
 /**
- * Worker CRUD methods for WFPService.
+ * Worker CRUD methods for the WFP (Workers for Platforms) service.
+ *
+ * Handles creation, deletion, listing, existence checks, settings management,
+ * and WASM-module deployment of tenant workers within a Cloudflare dispatch
+ * namespace. Also provides static-asset upload helpers that delegate to
+ * assets.ts.
  */
 
 import type { WfpClient } from './client';

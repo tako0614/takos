@@ -12,7 +12,7 @@ import {
   type PullRequestDto,
   type PullRequestRecord,
 } from './dto';
-import { toGitBucket } from './git-store';
+import { toGitBucket } from '../../../shared/utils/git-bucket';
 import type { AuthenticatedRouteEnv } from '../route-auth';
 import { logError } from '../../../shared/utils/logger';
 

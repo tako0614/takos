@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Context } from 'hono';
 import type { Env } from '../../shared/types';
-import { AppError, BadRequestError, InternalError, parseLimit, type BaseVariables } from './route-auth';
+import { AppError, BadRequestError, InternalError, type BaseVariables } from './route-auth';
+import { parsePagination } from '../../shared/utils';
 import { zValidator } from './zod-validator';
-import { buildSanitizedDOHeaders } from '../../shared/utils/do-header-utils';
 import {
   getNotificationPreferences,
   getNotificationsMutedUntil,
@@ -22,6 +22,20 @@ import {
   type NotificationChannel,
   type NotificationType,
 } from '../../application/services/notifications/notification-models';
+
+const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
+
+function buildSanitizedDOHeaders(
+  source: HeadersInit | undefined,
+  trustedOverrides: Record<string, string>,
+): Record<string, string> {
+  const headers = new Headers(source);
+  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
+  for (const [key, value] of Object.entries(trustedOverrides)) headers.set(key, value);
+  const result: Record<string, string> = {};
+  headers.forEach((v, k) => { result[k] = v; });
+  return result;
+}
 
 type NotificationContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 type NotificationNotifierNamespace = {
@@ -69,7 +83,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const validatedQuery = c.req.valid('query');
 
     const limit = validatedQuery.limit
-      ? parseLimit(validatedQuery.limit, 50, 100)
+      ? parsePagination(validatedQuery, { limit: 50, maxLimit: 100 }).limit
       : undefined;
     const before = validatedQuery.before || null;
 

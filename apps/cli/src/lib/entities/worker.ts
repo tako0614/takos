@@ -19,6 +19,7 @@ import type { ContainerWranglerConfig, WranglerConfig } from '../group-deploy/de
 
 export interface DeployWorkerOpts {
   artifact?: string;
+  group: string;
   env: string;
   groupName?: string;
   accountId: string;
@@ -38,17 +39,19 @@ export interface WorkerEntry {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function createEmptyState(opts: { env: string; groupName?: string }): TakosState {
+function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
   return {
     version: 1,
     provider: 'cloudflare',
     env: opts.env,
+    group: opts.group,
     groupName: opts.groupName || 'takos',
     updatedAt: new Date().toISOString(),
     resources: {},
     workers: {},
     containers: {},
     services: {},
+    routes: {},
   };
 }
 
@@ -121,9 +124,10 @@ export async function deployWorker(
   });
 
   // Persist to state
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = (await readState(stateDir)) || createEmptyState(opts);
+  const state = (await readState(stateDir, group)) || createEmptyState(opts);
   const codeHash = opts.artifact ? await computeCodeHash(opts.artifact) : 'unknown';
 
   state.workers[name] = {
@@ -133,7 +137,7 @@ export async function deployWorker(
     ...(opts.containers && opts.containers.length > 0 ? { containers: opts.containers } : {}),
   };
   state.updatedAt = new Date().toISOString();
-  await writeState(stateDir, state);
+  await writeState(stateDir, group, state);
 
   return {
     success: wranglerResult.success,
@@ -145,10 +149,10 @@ export async function deployWorker(
 /**
  * List all workers tracked in local state.
  */
-export async function listWorkers(): Promise<WorkerEntry[]> {
+export async function listWorkers(group: string): Promise<WorkerEntry[]> {
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (!state) return [];
 
   return Object.entries(state.workers).map(([name, w]: [string, WorkerState]) => ({
@@ -161,19 +165,22 @@ export async function listWorkers(): Promise<WorkerEntry[]> {
 }
 
 /**
- * Delete a worker from state. Actual deletion via wrangler is TODO.
+ * Delete a worker from local state.
+ *
+ * Note: provider-specific cloud deletion (e.g. wrangler delete) is not
+ * yet implemented. Only the local state entry is removed.
  */
 export async function deleteWorker(
   name: string,
-  _opts: { accountId: string; apiToken: string },
+  _opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  // TODO: wrangler delete via provider
+  const group = _opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
-  const state = await readState(stateDir);
+  const state = await readState(stateDir, group);
   if (state) {
     delete state.workers[name];
     state.updatedAt = new Date().toISOString();
-    await writeState(stateDir, state);
+    await writeState(stateDir, group, state);
   }
 }

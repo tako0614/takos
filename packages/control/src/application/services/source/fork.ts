@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import type { Repository } from '../../../shared/types';
-import { generateId, toIsoString, sanitizeRepoName } from '../../../shared/utils';
+import { generateId, sanitizeRepoName } from '../../../shared/utils';
 import * as gitStore from '../git-smart';
 import { toApiRepositoryFromDb } from './repos';
 import { getDb, repositories, repoReleases } from '../../../infra/db';
@@ -343,7 +343,7 @@ async function getUpstreamReleases(
     id: r.id,
     tag: r.tag,
     name: r.name,
-    published_at: toIsoString(r.publishedAt),
+    published_at: (r.publishedAt == null ? null : typeof r.publishedAt === 'string' ? r.publishedAt : r.publishedAt.toISOString()),
     is_newer: r.publishedAt ? r.publishedAt > forkCreatedAt : false,
   }));
 }

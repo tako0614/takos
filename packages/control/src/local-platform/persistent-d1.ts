@@ -1,3 +1,15 @@
+/**
+ * Persistent local implementations of the Cloudflare D1 (SQLite-compatible edge database) interface.
+ *
+ * Provides two adapters for local/server use where a real D1 binding is
+ * unavailable:
+ *   - `createSqliteD1Database`   -- backed by a local SQLite file via libSQL
+ *   - `createPostgresD1Database` -- backed by a PostgreSQL connection pool
+ *
+ * Both expose the same D1-compatible API (prepare / batch / exec / withSession)
+ * so that the rest of the codebase can treat them identically to Cloudflare D1.
+ */
+
 import { createClient } from '@libsql/client';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';

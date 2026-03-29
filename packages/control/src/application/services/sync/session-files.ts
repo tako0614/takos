@@ -6,7 +6,7 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, sessionFiles, files } from '../../../infra/db';
 import { eq, and, ne, asc } from 'drizzle-orm';
@@ -349,7 +349,7 @@ export class SessionFilesManager {
       hash: sf.hash,
       size: sf.size,
       operation: sf.operation as 'create' | 'update' | 'delete',
-      created_at: toIsoString(sf.createdAt),
+      created_at: (sf.createdAt == null ? null : typeof sf.createdAt === 'string' ? sf.createdAt : sf.createdAt.toISOString()),
     }));
   }
 

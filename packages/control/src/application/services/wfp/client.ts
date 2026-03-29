@@ -1,3 +1,13 @@
+/**
+ * WFP (Workers for Platforms) HTTP client and configuration.
+ *
+ * Provides the low-level authenticated HTTP transport for all Cloudflare API
+ * calls made by the WFP module. Handles configuration resolution from
+ * environment variables (CF_ACCOUNT_ID, CF_API_TOKEN, WFP_DISPATCH_NAMESPACE),
+ * error classification with rate-limit / retry-after metadata, timeout
+ * handling, and sensitive-data sanitisation of error messages.
+ */
+
 import type { Env } from '../../../shared/types';
 
 export type WfpEnv = Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN' | 'WFP_DISPATCH_NAMESPACE'>;

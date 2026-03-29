@@ -10,7 +10,7 @@ import { isValidSha } from '../git-objects';
 import { putCommit, getCommitData } from './object-store';
 import { getDb, commits } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
-import { generateId, toIsoString } from '../../../../shared/utils';
+import { generateId } from '../../../../shared/utils';
 
 interface CommitIndexRow {
   sha: string;
@@ -151,10 +151,10 @@ export async function getCommitFromIndex(
     message: indexed.message,
     authorName: indexed.authorName,
     authorEmail: indexed.authorEmail,
-    authorDate: toIsoString(indexed.authorDate) ?? new Date(0).toISOString(),
+    authorDate: (indexed.authorDate == null ? null : typeof indexed.authorDate === 'string' ? indexed.authorDate : indexed.authorDate.toISOString()) ?? new Date(0).toISOString(),
     committerName: indexed.committerName,
     committerEmail: indexed.committerEmail,
-    commitDate: toIsoString(indexed.commitDate) ?? new Date(0).toISOString(),
+    commitDate: (indexed.commitDate == null ? null : typeof indexed.commitDate === 'string' ? indexed.commitDate : indexed.commitDate.toISOString()) ?? new Date(0).toISOString(),
   });
 }
 

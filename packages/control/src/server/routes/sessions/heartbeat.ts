@@ -1,7 +1,6 @@
 import { getDb } from '../../../infra/db';
 import { sessions } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
 import { BadRequestError, AuthorizationError, NotFoundError } from 'takos-common/errors';
@@ -114,8 +113,8 @@ export async function getSessionHealth(c: SessionContext): Promise<Response> {
     session_id: sessionId,
     status: session.status,
     is_healthy: isHealthy,
-    last_heartbeat: toIsoString(session.lastHeartbeat),
-    created_at: toIsoString(session.createdAt) ?? new Date(0).toISOString(),
+    last_heartbeat: (session.lastHeartbeat == null ? null : typeof session.lastHeartbeat === 'string' ? session.lastHeartbeat : session.lastHeartbeat.toISOString()),
+    created_at: (session.createdAt == null ? null : typeof session.createdAt === 'string' ? session.createdAt : session.createdAt.toISOString()) ?? new Date(0).toISOString(),
     reason,
   });
 }

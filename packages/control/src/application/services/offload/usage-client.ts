@@ -1,6 +1,6 @@
 import type { Env } from '../../../shared/types';
 import type { DurableObjectStubBinding } from '../../../shared/types/bindings.ts';
-import { buildDurableObjectUrl } from '../../../shared/utils';
+
 
 type RunNotifierNamespace = {
   idFromName(name: string): unknown;
@@ -24,7 +24,7 @@ export async function emitRunUsageEvent(
 
   const id = ns.idFromName(input.runId);
   const stub = ns.get(id) as DurableObjectStubBinding;
-  const request = new Request(buildDurableObjectUrl('/usage'), {
+  const request = new Request('https://internal.do/usage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Takos-Internal': '1' },
     body: JSON.stringify({

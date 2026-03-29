@@ -5,7 +5,7 @@ import { getDb, sessions } from '../../infra/db';
 import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../application/services/identity/session';
 import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache';
 import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
-import { extractBearerToken } from '../../shared/utils';
+
 import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
 import { logError, logWarn } from '../../shared/utils/logger';
 import { getPlatformSessionStore, getPlatformSqlBinding } from '../../platform/accessors.ts';
@@ -80,7 +80,8 @@ async function resolveRequestUser(
   let sessionId = getSessionIdFromCookie(c.req.header('Cookie'));
 
   if (!sessionId) {
-    const bearer = extractBearerToken(c.req.header('Authorization'));
+    const authHeader = c.req.header('Authorization');
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
     if (bearer) {
       if (bearer.startsWith('tak_pat_')) {
         if (!dbBinding) {

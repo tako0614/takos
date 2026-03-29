@@ -1,6 +1,6 @@
 import type { Env } from '../../../shared/types';
 import type { Snapshot, SnapshotTree, BlobFetcher } from './models';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, snapshots, blobs, files } from '../../../infra/db';
 import { eq, and, inArray, lte, ne, sql } from 'drizzle-orm';
@@ -175,7 +175,7 @@ export class SnapshotManager {
             message: snapshot.message ?? undefined,
             author: (snapshot.author as 'user' | 'ai' | null) ?? undefined,
             status: snapshot.status as 'pending' | 'complete' | 'failed',
-            created_at: toIsoString(snapshot.createdAt),
+            created_at: (snapshot.createdAt == null ? null : typeof snapshot.createdAt === 'string' ? snapshot.createdAt : snapshot.createdAt.toISOString()),
         };
     }
 

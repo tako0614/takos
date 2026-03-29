@@ -7,7 +7,6 @@ import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAp
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
-import { toIsoString } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -86,8 +85,8 @@ function toSnakeCaseResource(resourceData: D1ResourceData): Resource {
     cf_name: resourceData.cfName,
     config: resourceData.config,
     metadata: resourceData.metadata,
-    created_at: toIsoString(resourceData.createdAt),
-    updated_at: toIsoString(resourceData.updatedAt),
+    created_at: (resourceData.createdAt == null ? null : typeof resourceData.createdAt === 'string' ? resourceData.createdAt : resourceData.createdAt.toISOString()),
+    updated_at: (resourceData.updatedAt == null ? null : typeof resourceData.updatedAt === 'string' ? resourceData.updatedAt : resourceData.updatedAt.toISOString()),
   };
 }
 

@@ -1,40 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  toIsoString,
   base64UrlEncode,
   base64UrlDecode,
 } from '@/utils/index';
-
-describe('toIsoString', () => {
-  it('returns string as-is when given a string', () => {
-    const iso = '2024-01-01T00:00:00.000Z';
-    expect(toIsoString(iso)).toBe(iso);
-  });
-
-  it('converts Date to ISO string', () => {
-    const date = new Date('2024-06-15T12:00:00Z');
-    expect(toIsoString(date)).toBe('2024-06-15T12:00:00.000Z');
-  });
-
-  it('returns null for null input', () => {
-    expect(toIsoString(null)).toBeNull();
-  });
-
-  it('returns null for undefined input', () => {
-    expect(toIsoString(undefined)).toBeNull();
-  });
-});
-
-describe('toIsoString (required overload)', () => {
-  it('returns string as-is', () => {
-    expect(toIsoString('2024-01-01T00:00:00Z')).toBe('2024-01-01T00:00:00Z');
-  });
-
-  it('converts Date to ISO string', () => {
-    const date = new Date('2024-06-15T12:00:00Z');
-    expect(toIsoString(date)).toBe('2024-06-15T12:00:00.000Z');
-  });
-});
 
 describe('base64UrlEncode / base64UrlDecode', () => {
   it('round-trips simple data', () => {

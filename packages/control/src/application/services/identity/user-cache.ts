@@ -2,7 +2,6 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { User } from '../../../shared/types';
 import { getDb, accounts } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils/date-utils';
 
 interface UserCacheContext {
   get(key: 'user'): User | undefined;
@@ -55,8 +54,8 @@ export async function getCachedUser<C extends UserCacheContext>(
       picture: row.picture,
       trust_tier: row.trustTier,
       setup_completed: row.setupCompleted,
-      created_at: toIsoString(row.createdAt),
-      updated_at: toIsoString(row.updatedAt),
+      created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+      updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
     };
     c.set('user', user);
     return user;

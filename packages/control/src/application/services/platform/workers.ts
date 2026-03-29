@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SpaceRole } from '../../../shared/types';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { accountMemberships, accounts, getDb, services } from '../../../infra/db';
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../identity/principals';
@@ -80,8 +80,8 @@ function toApiService(row: {
     hostname: row.hostname,
     service_name: row.routeRef,
     slug: row.slug,
-    created_at: toIsoString(row.createdAt),
-    updated_at: toIsoString(row.updatedAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
   };
 }
 

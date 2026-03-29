@@ -1,7 +1,7 @@
 import type { Env } from '../../../shared/types';
 import type { DurableObjectStubBinding } from '../../../shared/types/bindings.ts';
 import type { RunNotifierEmitPayload } from './run-notifier-payload';
-import { buildDurableObjectUrl } from '../../../shared/utils';
+
 
 type RunNotifierNamespace = {
   idFromName(name: string): unknown;
@@ -23,7 +23,7 @@ export function buildRunNotifierEmitRequest(
   payload: RunNotifierEmitPayload,
   signal?: AbortSignal,
 ): Request {
-  return new Request(buildDurableObjectUrl('/emit'), {
+  return new Request('https://internal.do/emit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Takos-Internal': '1' },
     body: JSON.stringify(payload),

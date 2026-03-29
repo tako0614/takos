@@ -2,7 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { getDb, skills as skillsTable } from '../../../infra/db';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import {
   getOfficialSkillById,
   listLocalizedOfficialSkills,
@@ -123,8 +123,8 @@ function toSkillRow(s: {
     triggers: s.triggers,
     metadata: s.metadata || '{}',
     enabled: s.enabled,
-    created_at: toIsoString(s.createdAt),
-    updated_at: toIsoString(s.updatedAt),
+    created_at: (s.createdAt == null ? null : typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString()),
+    updated_at: (s.updatedAt == null ? null : typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString()),
   };
 }
 

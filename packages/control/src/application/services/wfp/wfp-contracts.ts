@@ -1,5 +1,10 @@
 /**
- * Shared types for WFP submodules.
+ * Shared types for WFP (Workers for Platforms) submodules.
+ *
+ * WFP is Cloudflare's multi-tenant worker deployment product. It allows a
+ * platform (Takos) to manage per-tenant Cloudflare Workers inside a "dispatch
+ * namespace" -- each tenant gets its own isolated worker with individually
+ * assigned resource bindings (D1, R2, KV, Queues, Vectorize, etc.).
  *
  * These types define the internal contract between the facade (service.ts) and
  * the per-domain method modules.  They are NOT part of the public API.

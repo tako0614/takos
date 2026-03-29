@@ -1,4 +1,4 @@
-import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 
 export interface ReleaseAsset {
   id: string;
@@ -46,7 +46,7 @@ export function toReleaseAsset(row: ReleaseAssetRow): ReleaseAsset {
     download_count: row.downloadCount,
     bundle_format: row.bundleFormat || undefined,
     bundle_meta: bundleMeta,
-    created_at: toIsoString(row.createdAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
   };
 }
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseLimit } from '../route-auth';
 import type { AuthenticatedRouteEnv } from '../route-auth';
+import { parsePagination } from '../../../shared/utils';
 import { zValidator } from '../zod-validator';
 import * as gitStore from '../../../application/services/git-smart';
 import { checkRepoAccess } from '../../../application/services/source/repos';
@@ -31,7 +31,7 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const repoId = c.req.param('repoId');
   const { branch, page: pageRaw, limit: limitRaw } = c.req.valid('query');
-  const limit = parseLimit(limitRaw, 20, 100);
+  const { limit } = parsePagination({ limit: limitRaw });
   const page = Math.max(1, parseInt(pageRaw || '1', 10) || 1);
   const offset = (page - 1) * limit;
 

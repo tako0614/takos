@@ -8,7 +8,7 @@ import type {
   ReviewerType,
 } from '../../../shared/types';
 import type { AgentMessage } from '../agent/types';
-import { generateId, safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
 import { getWorkspaceModelSettings } from '../identity/spaces';
 import { LLMClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
 import { getDb, prReviews, prComments } from '../../../infra/db';
@@ -113,7 +113,7 @@ function toPullRequestReviewDto(review: PullRequestReviewRecord): PullRequestRev
     status: toReviewStatus(review.status),
     body: review.body,
     analysis: review.analysis,
-    created_at: toIsoString(review.createdAt),
+    created_at: (review.createdAt == null ? null : typeof review.createdAt === 'string' ? review.createdAt : review.createdAt.toISOString()),
   };
 }
 
@@ -126,7 +126,7 @@ function toPullRequestCommentDto(comment: PullRequestCommentRecord): PullRequest
     content: comment.content,
     file_path: comment.filePath,
     line_number: comment.lineNumber,
-    created_at: toIsoString(comment.createdAt),
+    created_at: (comment.createdAt == null ? null : typeof comment.createdAt === 'string' ? comment.createdAt : comment.createdAt.toISOString()),
   };
 }
 

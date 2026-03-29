@@ -49,7 +49,6 @@ vi.mock('@/services/agent/model-catalog', () => ({
 vi.mock('@/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils')>()),
   now: () => '2025-01-01T00:00:00Z',
-  toIsoString: (val: unknown) => typeof val === 'string' ? val : null,
 }));
 
 vi.mock('@/utils/logger', () => ({

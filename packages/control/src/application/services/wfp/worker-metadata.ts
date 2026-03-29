@@ -1,5 +1,9 @@
 /**
- * Pure helper functions shared across WFP submodules.
+ * Pure helper functions shared across WFP (Workers for Platforms) submodules.
+ *
+ * Contains utilities that have no side effects and no dependency on the
+ * Cloudflare API client: SQL table-name sanitisation, D1 result extraction,
+ * and worker metadata assembly for dispatch namespace deployments.
  */
 
 import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';

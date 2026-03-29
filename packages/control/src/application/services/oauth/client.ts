@@ -11,7 +11,7 @@ import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
 import { generateRandomString, generateId } from './pkce';
 import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash';
 import { parseScopes, validateScopes } from './scopes';
-import { safeJsonParseOrDefault, toIsoString } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 
@@ -36,8 +36,8 @@ function toApiClient(row: OAuthClientRow): OAuthClient {
     owner_id: row.ownerAccountId ?? null,
     registration_access_token_hash: row.registrationAccessTokenHash ?? null,
     status: row.status as OAuthClientStatus,
-    created_at: toIsoString(row.createdAt),
-    updated_at: toIsoString(row.updatedAt),
+    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
   };
 }
 

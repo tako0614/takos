@@ -89,6 +89,7 @@ export function registerResourceCommand(program: Command): void {
           type: options.type as ResourceType,
           binding: options.binding,
           env: options.env,
+          group: options.group,
           groupName: options.group,
           accountId,
           apiToken,
@@ -121,10 +122,11 @@ export function registerResourceCommand(program: Command): void {
   resourceCmd
     .command('list')
     .description('List all tracked resources')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (options: { json?: boolean }) => {
+    .action(async (options: { group: string; json?: boolean }) => {
       try {
-        const resources = await listResources();
+        const resources = await listResources(options.group);
 
         if (options.json) {
           process.stdout.write(`${JSON.stringify(resources, null, 2)}\n`);
@@ -156,14 +158,15 @@ export function registerResourceCommand(program: Command): void {
   resourceCmd
     .command('delete <name>')
     .description('Delete a resource from state (does NOT delete the actual cloud resource)')
+    .option('--group <name>', 'Target group (default: "default")', 'default')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
-    .action(async (name: string, options: { accountId?: string; apiToken?: string }) => {
+    .action(async (name: string, options: { group: string; accountId?: string; apiToken?: string }) => {
       const accountId = resolveAccountId(options.accountId);
       const apiToken = resolveApiToken(options.apiToken);
 
       try {
-        await deleteResource(name, { accountId, apiToken });
+        await deleteResource(name, { group: options.group, accountId, apiToken });
         console.log(chalk.green(`Removed resource '${name}' from state.`));
         console.log(chalk.dim('The actual cloud resource was NOT deleted.'));
       } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hitTokenBucket, type TokenBucketState } from '@/utils/token-bucket';
+import { hitTokenBucket, type TokenBucketState } from '@/utils/rate-limiter';
 
 describe('Token Bucket', () => {
   it('starts full and allows immediately', () => {

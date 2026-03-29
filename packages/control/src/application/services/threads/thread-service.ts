@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
 import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
-import { generateId, toIsoString } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils';
 import { checkSpaceAccess } from '../identity/space-access';
 import { getDb, threads, messages, runs } from '../../../infra/db';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';

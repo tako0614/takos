@@ -2,7 +2,6 @@ import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
-import { toIsoString } from '../../../shared/utils';
 import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
 
 type DeploymentInsert = InsertOf<typeof deployments>;
@@ -41,12 +40,12 @@ export function toApiDeployment(d: DeploymentRow): Deployment {
     idempotency_key: d.idempotencyKey,
     is_rollback: d.isRollback,
     rollback_from_version: d.rollbackFromVersion,
-    rolled_back_at: toIsoString(d.rolledBackAt),
+    rolled_back_at: (d.rolledBackAt == null ? null : typeof d.rolledBackAt === 'string' ? d.rolledBackAt : d.rolledBackAt.toISOString()),
     rolled_back_by: d.rolledBackBy,
-    started_at: toIsoString(d.startedAt),
-    completed_at: toIsoString(d.completedAt),
-    created_at: toIsoString(d.createdAt) || '',
-    updated_at: toIsoString(d.updatedAt) || '',
+    started_at: (d.startedAt == null ? null : typeof d.startedAt === 'string' ? d.startedAt : d.startedAt.toISOString()),
+    completed_at: (d.completedAt == null ? null : typeof d.completedAt === 'string' ? d.completedAt : d.completedAt.toISOString()),
+    created_at: (d.createdAt == null ? null : typeof d.createdAt === 'string' ? d.createdAt : d.createdAt.toISOString()) || '',
+    updated_at: (d.updatedAt == null ? null : typeof d.updatedAt === 'string' ? d.updatedAt : d.updatedAt.toISOString()) || '',
   };
 }
 
@@ -241,7 +240,7 @@ export async function getDeploymentEvents(db: SqlDatabaseBinding, deploymentId: 
     step_name: e.stepName,
     message: e.message,
     details: e.details,
-    created_at: toIsoString(e.createdAt) || '',
+    created_at: (e.createdAt == null ? null : typeof e.createdAt === 'string' ? e.createdAt : e.createdAt.toISOString()) || '',
   }));
 }
 
