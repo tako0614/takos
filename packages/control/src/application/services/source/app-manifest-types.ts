@@ -11,35 +11,73 @@ export type ResourceLimits = {
   maxKeys?: number;
 };
 
-export type AppResource = {
-  type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'vectorize' | 'queue' | 'analyticsEngine' | 'workflow' | 'durableObject';
+type AppResourceBase = {
   binding?: string;
   generate?: boolean;
+  limits?: ResourceLimits;
+};
+
+type D1Resource = AppResourceBase & {
+  type: 'd1';
   migrations?: string | { up: string; down: string };
-  vectorize?: {
+};
+
+type R2Resource = AppResourceBase & { type: 'r2' };
+type KVResource = AppResourceBase & { type: 'kv' };
+type SecretRefResource = AppResourceBase & { type: 'secretRef' };
+
+type VectorizeResource = AppResourceBase & {
+  type: 'vectorize';
+  vectorize: {
     dimensions: number;
     metric: 'cosine' | 'euclidean' | 'dot-product';
   };
+};
+
+type QueueResource = AppResourceBase & {
+  type: 'queue';
   queue?: {
     maxRetries?: number;
     deadLetterQueue?: string;
     deliveryDelaySeconds?: number;
   };
+};
+
+type AnalyticsEngineResource = AppResourceBase & {
+  type: 'analyticsEngine';
   analyticsEngine?: {
     dataset?: string;
   };
-  workflow?: {
+};
+
+type WorkflowResource = AppResourceBase & {
+  type: 'workflow';
+  workflow: {
     service: string;
     export: string;
     timeoutMs?: number;
     maxRetries?: number;
   };
-  durableObject?: {
+};
+
+type DurableObjectResource = AppResourceBase & {
+  type: 'durableObject';
+  durableObject: {
     className: string;
     scriptName?: string;
   };
-  limits?: ResourceLimits;
 };
+
+export type AppResource =
+  | D1Resource
+  | R2Resource
+  | KVResource
+  | SecretRefResource
+  | VectorizeResource
+  | QueueResource
+  | AnalyticsEngineResource
+  | WorkflowResource
+  | DurableObjectResource;
 
 export type WorkflowArtifactBuild = {
   fromWorkflow: {

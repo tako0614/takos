@@ -151,6 +151,7 @@ export {
   OAUTH_SCOPES,
   ALL_SCOPES,
   OAUTH_CONSTANTS,
+  parseJsonStringArray,
 } from './oauth';
 export type {
   OAuthClientType,
@@ -159,6 +160,7 @@ export type {
   OAuthConsentStatus,
   OAuthDeviceCodeStatus,
   CodeChallengeMethod,
+  JsonStringArray,
   OAuthClient,
   OAuthAuthorizationCode,
   OAuthDeviceCode,

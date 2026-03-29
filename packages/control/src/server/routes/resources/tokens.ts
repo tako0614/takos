@@ -35,7 +35,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   }
 
   const db = getDb(c.env.DB);
-  const tokens = await db.select({
+  const rows = await db.select({
     id: resourceAccessTokens.id,
     name: resourceAccessTokens.name,
     tokenPrefix: resourceAccessTokens.tokenPrefix,
@@ -48,6 +48,15 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
     .orderBy(desc(resourceAccessTokens.createdAt))
     .all();
 
+  const tokens = rows.map((t) => ({
+    id: t.id,
+    name: t.name,
+    token_prefix: t.tokenPrefix,
+    permission: t.permission,
+    expires_at: t.expiresAt,
+    last_used_at: t.lastUsedAt,
+    created_at: t.createdAt,
+  }));
   return c.json({ tokens });
 })
 
@@ -63,7 +72,7 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
   }
 
   const db = getDb(c.env.DB);
-  const tokens = await db.select({
+  const rows = await db.select({
     id: resourceAccessTokens.id,
     name: resourceAccessTokens.name,
     tokenPrefix: resourceAccessTokens.tokenPrefix,
@@ -76,6 +85,15 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
     .orderBy(desc(resourceAccessTokens.createdAt))
     .all();
 
+  const tokens = rows.map((t) => ({
+    id: t.id,
+    name: t.name,
+    token_prefix: t.tokenPrefix,
+    permission: t.permission,
+    expires_at: t.expiresAt,
+    last_used_at: t.lastUsedAt,
+    created_at: t.createdAt,
+  }));
   return c.json({ tokens });
 })
 
@@ -137,10 +155,10 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
       id,
       name: body.name.trim(),
       token: tokenPlain, // Only returned on creation
-      tokenPrefix,
+      token_prefix: tokenPrefix,
       permission: body.permission || 'read',
-      expiresAt,
-      createdAt: timestamp,
+      expires_at: expiresAt,
+      created_at: timestamp,
     },
   }, 201);
 })
@@ -200,10 +218,10 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
       id,
       name: body.name.trim(),
       token: tokenPlain,
-      tokenPrefix,
+      token_prefix: tokenPrefix,
       permission: body.permission || 'read',
-      expiresAt,
-      createdAt: timestamp,
+      expires_at: expiresAt,
+      created_at: timestamp,
     },
   }, 201);
 })

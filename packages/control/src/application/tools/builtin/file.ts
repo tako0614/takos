@@ -10,14 +10,14 @@ import {
   FILE_COPY,
   FILE_TOOLS,
 } from './file/definitions';
-import { fileReadHandler } from './file/handler-read';
-import { fileWriteHandler } from './file/handler-write';
-import { fileWriteBinaryHandler } from './file/handler-write-binary';
-import { fileListHandler } from './file/handler-list';
-import { fileDeleteHandler } from './file/handler-delete';
-import { fileMkdirHandler } from './file/handler-mkdir';
-import { fileRenameHandler } from './file/handler-rename';
-import { fileCopyHandler } from './file/handler-copy';
+import { fileReadHandler, fileListHandler } from './file/read-handlers';
+import {
+  fileWriteHandler,
+  fileWriteBinaryHandler,
+  fileCopyHandler,
+  fileMkdirHandler,
+} from './file/write-handlers';
+import { fileDeleteHandler, fileRenameHandler } from './file/manage-handlers';
 
 export {
   FILE_READ,

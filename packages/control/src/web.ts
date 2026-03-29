@@ -371,10 +371,8 @@ export function createWebWorker(
     const bindings = platform.bindings;
     const requestBindings = {
       ...bindings,
-      DEPLOYMENT_PROVIDER_REGISTRY: platform.services.deploymentProviders,
       PLATFORM: platform,
     } as Env & {
-      DEPLOYMENT_PROVIDER_REGISTRY?: ControlPlatform<Env>['services']['deploymentProviders'];
       PLATFORM?: ControlPlatform<Env>;
     };
 

@@ -36,16 +36,16 @@ COPY apps/cli/src ./apps/cli/src
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build @takos/common and @takos/actions-engine first
+# Build takos-common and takos-actions-engine first
 WORKDIR /workspace/packages/common
 RUN pnpm run build
 
 WORKDIR /workspace/packages/actions-engine
 RUN pnpm run build
 
-# Build @takos/runtime-service to JS so `node dist/index.js` can load it without a TS loader.
+# Build takos-runtime-service to JS so `node dist/index.js` can load it without a TS loader.
 WORKDIR /workspace
-RUN pnpm --filter @takos/runtime-service build
+RUN pnpm --filter takos-runtime-service build
 
 # Build runtime
 WORKDIR /workspace/apps/runtime

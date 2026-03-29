@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { CommonEnvService } from '../../services/common-env';
+import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../services/common-env';
 
 export const WORKSPACE_ENV_LIST: ToolDefinition = {
   name: 'workspace_env_list',
@@ -52,8 +52,8 @@ export const WORKSPACE_ENV_DELETE: ToolDefinition = {
 };
 
 export const workspaceEnvListHandler: ToolHandler = async (_args, context) => {
-  const service = new CommonEnvService(context.env);
-  const env = await service.listSpaceCommonEnv(context.spaceId);
+  const deps = createCommonEnvDeps(context.env);
+  const env = await listSpaceCommonEnv(deps.spaceEnv, context.spaceId);
 
   return JSON.stringify({
     env,
@@ -70,15 +70,15 @@ export const workspaceEnvSetHandler: ToolHandler = async (args, context) => {
     throw new Error('name is required');
   }
 
-  const service = new CommonEnvService(context.env);
-  await service.upsertSpaceCommonEnv({
+  const deps = createCommonEnvDeps(context.env);
+  await upsertSpaceCommonEnv(deps.spaceEnv, {
     spaceId: context.spaceId,
     name,
     value,
     secret,
     actor: { type: 'user', userId: context.userId },
   });
-  await service.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_put');
+  await deps.orchestrator.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_put');
 
   return JSON.stringify({
     success: true,
@@ -93,8 +93,9 @@ export const workspaceEnvDeleteHandler: ToolHandler = async (args, context) => {
     throw new Error('name is required');
   }
 
-  const service = new CommonEnvService(context.env);
-  const deleted = await service.deleteSpaceCommonEnv(
+  const deps = createCommonEnvDeps(context.env);
+  const deleted = await deleteSpaceCommonEnv(
+    deps.spaceEnv,
     context.spaceId,
     name,
     { type: 'user', userId: context.userId },
@@ -104,7 +105,7 @@ export const workspaceEnvDeleteHandler: ToolHandler = async (args, context) => {
     throw new Error(`Environment variable not found: ${name}`);
   }
 
-  await service.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_delete');
+  await deps.orchestrator.reconcileServicesForEnvKey(context.spaceId, name, 'workspace_env_delete');
 
   return JSON.stringify({
     success: true,

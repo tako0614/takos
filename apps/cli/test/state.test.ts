@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AppManifest } from '../src/lib/app-manifest.js';
 import { computeDiff, computeWorkerDiff } from '../src/lib/state/diff.js';
 import { formatPlan } from '../src/lib/state/plan.js';
-import { readState, writeState } from '../src/lib/state/state-file.js';
+import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.js';
 import type { TakosState } from '../src/lib/state/state-types.js';
 
 // ── helpers ──

@@ -11,7 +11,7 @@ export {
   WEEKLY_RUNTIME_WINDOW_DAYS,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
 } from './billing-types';
-export { asMeterType } from './billing-utils';
+
 export type {
   MeterType,
   TransactionType,

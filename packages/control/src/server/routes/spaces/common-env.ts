@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
-import { CommonEnvService } from '../../../application/services/common-env';
+import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../../application/services/common-env';
 import { buildCommonEnvActor } from '../common-env-handlers';
 import { logError } from '../../../shared/utils/logger';
 import { AppError, BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
@@ -10,8 +10,8 @@ export default new Hono<SpaceAccessRouteEnv>()
     const { space } = c.get('access');
 
     try {
-      const service = new CommonEnvService(c.env);
-      const env = await service.listSpaceCommonEnv(space.id);
+      const deps = createCommonEnvDeps(c.env);
+      const env = await listSpaceCommonEnv(deps.spaceEnv, space.id);
       return c.json({ env });
     } catch (error) {
       logError('Failed to load space common env', error, { module: 'routes/spaces/common-env' });
@@ -40,16 +40,16 @@ export default new Hono<SpaceAccessRouteEnv>()
     }
 
     try {
-      const service = new CommonEnvService(c.env);
+      const deps = createCommonEnvDeps(c.env);
       const actor = await buildCommonEnvActor(c, user.id);
-      await service.upsertSpaceCommonEnv({
+      await upsertSpaceCommonEnv(deps.spaceEnv, {
         spaceId: space.id,
         name: body.name,
         value: body.value,
         secret: body.secret === true,
         actor,
       });
-      await service.reconcileServicesForEnvKey(space.id, body.name, 'workspace_env_put');
+      await deps.orchestrator.reconcileServicesForEnvKey(space.id, body.name, 'workspace_env_put');
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -66,13 +66,13 @@ export default new Hono<SpaceAccessRouteEnv>()
     const envName = c.req.param('name');
 
     try {
-      const service = new CommonEnvService(c.env);
+      const deps = createCommonEnvDeps(c.env);
       const actor = await buildCommonEnvActor(c, user.id);
-      const deleted = await service.deleteSpaceCommonEnv(space.id, envName, actor);
+      const deleted = await deleteSpaceCommonEnv(deps.spaceEnv, space.id, envName, actor);
       if (!deleted) {
         throw new NotFoundError('Common env');
       }
-      await service.reconcileServicesForEnvKey(space.id, envName, 'workspace_env_delete');
+      await deps.orchestrator.reconcileServicesForEnvKey(space.id, envName, 'workspace_env_delete');
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof AppError) throw error;

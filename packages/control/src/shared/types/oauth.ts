@@ -5,6 +5,40 @@ export type OAuthConsentStatus = 'active' | 'revoked';
 export type OAuthDeviceCodeStatus = 'pending' | 'approved' | 'denied' | 'used';
 export type CodeChallengeMethod = 'S256';
 
+/**
+ * A branded string type representing a JSON-serialized array stored in SQLite TEXT columns.
+ *
+ * Values must be valid JSON arrays (e.g. `'["authorization_code","refresh_token"]'`).
+ * Use {@link parseJsonStringArray} to deserialize, or `JSON.stringify(arr)` to create.
+ *
+ * @example
+ *   const raw: JsonStringArray = '["a","b"]' as JsonStringArray;
+ *   const parsed: string[] = parseJsonStringArray(raw); // ["a", "b"]
+ */
+export type JsonStringArray = string & { readonly __brand: 'JsonStringArray' };
+
+/**
+ * Parse a {@link JsonStringArray} into a native `string[]`.
+ * Returns `fallback` if the value is not valid JSON.
+ */
+export function parseJsonStringArray(value: JsonStringArray | string, fallback: string[] = []): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as string[]) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Represents an OAuth client row as stored in the database.
+ *
+ * Fields marked as {@link JsonStringArray} are stored as JSON-serialized arrays in SQLite
+ * TEXT columns (e.g. `'["https://example.com/callback"]'`). Use {@link parseJsonStringArray}
+ * to deserialize them into `string[]`.
+ *
+ * For the API response shape with parsed arrays, see {@link ClientRegistrationResponse}.
+ */
 export interface OAuthClient {
   id: string;
   client_id: string;
@@ -16,10 +50,14 @@ export interface OAuthClient {
   client_uri: string | null;
   policy_uri: string | null;
   tos_uri: string | null;
-  redirect_uris: string; // JSON array
-  grant_types: string; // JSON array
-  response_types: string; // JSON array
-  allowed_scopes: string; // JSON array
+  /** JSON-serialized array of redirect URIs, e.g. `'["https://example.com/cb"]'` */
+  redirect_uris: JsonStringArray;
+  /** JSON-serialized array of grant types, e.g. `'["authorization_code","refresh_token"]'` */
+  grant_types: JsonStringArray;
+  /** JSON-serialized array of response types, e.g. `'["code"]'` */
+  response_types: JsonStringArray;
+  /** JSON-serialized array of allowed scope strings, e.g. `'["openid","profile"]'` */
+  allowed_scopes: JsonStringArray;
   owner_id: string | null;
   registration_access_token_hash: string | null;
   status: OAuthClientStatus;
@@ -76,11 +114,19 @@ export interface OAuthToken {
   created_at: string;
 }
 
+/**
+ * Represents an OAuth consent record as stored in the database.
+ *
+ * The `scopes` field is a {@link JsonStringArray} stored as a JSON-serialized array
+ * in a SQLite TEXT column (e.g. `'["openid","profile"]'`). Use {@link parseJsonStringArray}
+ * to deserialize it into `string[]`.
+ */
 export interface OAuthConsent {
   id: string;
   user_id: string;
   client_id: string;
-  scopes: string; // JSON array
+  /** JSON-serialized array of granted scope strings, e.g. `'["openid","profile"]'` */
+  scopes: JsonStringArray;
   status: OAuthConsentStatus;
   granted_at: string;
   updated_at: string;

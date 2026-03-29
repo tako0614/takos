@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog';
-
-type ModelOption = string | { id: string; name?: string; description?: string };
+import type { ModelOption } from '../views/agent/work/task-work-types';
 
 export interface UseChatModelSelectionOptions {
   spaceId: string;

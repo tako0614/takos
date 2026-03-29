@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readState, writeState } from '../src/lib/state/state-file.js';
+import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.js';
 import type { TakosState } from '../src/lib/state/state-types.js';
 
 // ── Test helpers ────────────────────────────────────────────────────────────

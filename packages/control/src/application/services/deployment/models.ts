@@ -1,7 +1,7 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { DbEnv } from '../../../shared/types';
 import type { DurableNamespaceBinding, KvStoreBinding, ObjectStoreBinding } from '../../../shared/types/bindings.ts';
-import type { WfpDeploymentProviderEnv, DeploymentProviderRegistryLike } from './provider';
+import type { WfpDeploymentProviderEnv } from './provider';
 
 export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
   ENCRYPTION_KEY?: string;
@@ -13,7 +13,6 @@ export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
   ROUTING_DO?: DurableNamespaceBinding;
   ROUTING_DO_PHASE?: string;
   SERVICE_INTERNAL_JWT_ISSUER?: string;
-  DEPLOYMENT_PROVIDER_REGISTRY?: DeploymentProviderRegistryLike;
 };
 
 export type ArtifactKind = 'worker-bundle' | 'container-image';

@@ -11,8 +11,7 @@ import { logWarn, logError } from '../../../shared/utils/logger';
 import type { Env } from '../../../shared/types';
 import { eq } from 'drizzle-orm';
 import { getUsageEventsFromR2 } from '../offload/usage-events';
-import type { MeterType } from './billing-types';
-import { asMeterType } from './billing-utils';
+import { METER_TYPES, type MeterType } from './billing-types';
 import { getOrCreateBillingAccount } from './billing-accounts';
 import { recordUsage } from './billing-usage';
 
@@ -50,7 +49,9 @@ export async function recordRunUsageBatch(env: Env, runId: string): Promise<void
     try {
       const raw = await getUsageEventsFromR2(env.TAKOS_OFFLOAD, runId, { maxEvents: 50_000 });
       for (const ev of raw) {
-        const meterType = asMeterType(ev.meter_type);
+        const meterType = (METER_TYPES as readonly string[]).includes(ev.meter_type)
+          ? (ev.meter_type as MeterType)
+          : null;
         if (!meterType) continue;
         const units = typeof ev.units === 'number' ? ev.units : NaN;
         if (!Number.isFinite(units) || units <= 0) continue;

@@ -1,7 +1,11 @@
 /**
  * CLI command: `takos state`
  *
- * Manage the local state file (.takos/state.json).
+ * Manage group state (API-backed with file fallback).
+ *
+ * By default state is fetched from the takos API.  When the API is
+ * unavailable or `--offline` is passed, the local file backend
+ * (.takos/state.{group}.json) is used instead.
  *
  * Subcommands:
  *   takos state list                      -- Show all tracked resources/services
@@ -12,12 +16,10 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { readState, writeState, getStateDir, getStateFilePath } from '../lib/state/state-file.js';
+import type { StateAccessOptions } from '../lib/state/state-file.js';
 import { cliExit } from '../lib/command-exit.js';
+import { printJson } from '../lib/cli-utils.js';
 import type { TakosState } from '../lib/state/state-types.js';
-
-function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
 
 type StateCategory = 'resources' | 'workers' | 'containers' | 'services' | 'routes';
 
@@ -52,10 +54,14 @@ function resolveStateKey(state: TakosState, key: string): {
   return null;
 }
 
+function toAccessOpts(options: { offline?: boolean }): StateAccessOptions {
+  return options.offline ? { offline: true } : {};
+}
+
 export function registerStateCommand(program: Command): void {
   const stateCmd = program
     .command('state')
-    .description('Manage local state (.takos/state.json)');
+    .description('Manage state (API-backed with file fallback)');
 
   // ── state list ──────────────────────────────────────────────────────────────
   stateCmd
@@ -63,20 +69,21 @@ export function registerStateCommand(program: Command): void {
     .description('List all tracked resources and services')
     .option('--group <name>', 'Group name', 'default')
     .option('--json', 'Output as JSON')
-    .action(async (options: { group: string; json?: boolean }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (options: { group: string; json?: boolean; offline?: boolean }) => {
       const cwd = process.cwd();
       const group = options.group;
       const stateDir = getStateDir(cwd);
-      const stateFilePath = getStateFilePath(stateDir, group);
+      const accessOpts = toAccessOpts(options);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir, group);
+        state = await readState(stateDir, group, accessOpts);
       } catch {
         state = null;
       }
 
       if (!state) {
-        console.log(chalk.dim('No state file found. Run `takos apply` first.'));
+        console.log(chalk.dim('No state found. Run `takos apply` first.'));
         return;
       }
 
@@ -90,7 +97,10 @@ export function registerStateCommand(program: Command): void {
       console.log(`  Provider:    ${state.provider || '(unknown)'}`);
       console.log(`  Environment: ${state.env || '(unknown)'}`);
       console.log(`  Updated at:  ${state.updatedAt || '(never)'}`);
-      console.log(`  State file:  ${stateFilePath}`);
+      if (accessOpts.offline) {
+        const stateFilePath = getStateFilePath(stateDir, group);
+        console.log(`  State file:  ${stateFilePath}`);
+      }
       console.log('');
 
       const resources = state.resources || {};
@@ -155,18 +165,20 @@ export function registerStateCommand(program: Command): void {
     .description('Show details for a specific resource or service (e.g. resources.db)')
     .option('--group <name>', 'Group name', 'default')
     .option('--json', 'Output as JSON')
-    .action(async (key: string, options: { group: string; json?: boolean }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (key: string, options: { group: string; json?: boolean; offline?: boolean }) => {
       const group = options.group;
       const stateDir = getStateDir(process.cwd());
+      const accessOpts = toAccessOpts(options);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir, group);
+        state = await readState(stateDir, group, accessOpts);
       } catch {
         state = null;
       }
 
       if (!state) {
-        console.log(chalk.red('No state file found. Run `takos apply` first.'));
+        console.log(chalk.red('No state found. Run `takos apply` first.'));
         cliExit(1);
         return; // unreachable, helps TS narrow
       }
@@ -198,14 +210,15 @@ export function registerStateCommand(program: Command): void {
     .command('import <key> <id>')
     .description('Import an existing resource into state (e.g. state import resources.db abc123)')
     .option('--group <name>', 'Group name', 'default')
-    .action(async (key: string, id: string, options: { group: string }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (key: string, id: string, options: { group: string; offline?: boolean }) => {
       const cwd = process.cwd();
       const group = options.group;
       const stateDir = getStateDir(cwd);
-      const stateFilePath = getStateFilePath(stateDir, group);
+      const accessOpts = toAccessOpts(options);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir, group);
+        state = await readState(stateDir, group, accessOpts);
       } catch {
         state = null;
       }
@@ -263,9 +276,8 @@ export function registerStateCommand(program: Command): void {
       }
 
       state.updatedAt = now;
-      await writeState(stateDir, group, state);
+      await writeState(stateDir, group, state, accessOpts);
       console.log(chalk.green(`Imported ${key} with id ${id}`));
-      console.log(chalk.dim(`State saved to ${stateFilePath}`));
     });
 
   // ── state rm ────────────────────────────────────────────────────────────────
@@ -273,19 +285,21 @@ export function registerStateCommand(program: Command): void {
     .command('rm <key>')
     .description('Remove an entry from state (does NOT delete the actual resource)')
     .option('--group <name>', 'Group name', 'default')
-    .action(async (key: string, options: { group: string }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (key: string, options: { group: string; offline?: boolean }) => {
       const cwd = process.cwd();
       const group = options.group;
       const stateDir = getStateDir(cwd);
+      const accessOpts = toAccessOpts(options);
       let state: TakosState | null;
       try {
-        state = await readState(stateDir, group);
+        state = await readState(stateDir, group, accessOpts);
       } catch {
         state = null;
       }
 
       if (!state) {
-        console.log(chalk.red('No state file found. Nothing to remove.'));
+        console.log(chalk.red('No state found. Nothing to remove.'));
         cliExit(1);
         return; // unreachable, helps TS narrow
       }
@@ -310,7 +324,7 @@ export function registerStateCommand(program: Command): void {
         delete state.routes[resolved.name];
       }
 
-      await writeState(stateDir, group, state);
+      await writeState(stateDir, group, state, accessOpts);
       console.log(chalk.green(`Removed ${resolved.category}.${resolved.name} from state`));
       console.log(chalk.dim('The actual resource was NOT deleted. Use provider tools to delete it.'));
     });

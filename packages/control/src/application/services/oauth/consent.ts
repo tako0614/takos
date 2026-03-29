@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { oauthConsents, oauthClients } from '../../../infra/db';
-import type { OAuthConsent } from '../../../shared/types/oauth';
+import type { OAuthConsent, JsonStringArray } from '../../../shared/types/oauth';
+import { parseJsonStringArray } from '../../../shared/types/oauth';
 import { generateId } from './pkce';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { getDb } from '../../../infra/db';
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { revokeAllUserClientTokens } from './token';
@@ -15,7 +15,7 @@ function toApiConsent(row: OAuthConsentRow): OAuthConsent {
     id: row.id,
     user_id: row.accountId,
     client_id: row.clientId,
-    scopes: row.scopes,
+    scopes: row.scopes as JsonStringArray,
     status: row.status as 'active' | 'revoked',
     granted_at: (row.grantedAt == null ? null : typeof row.grantedAt === 'string' ? row.grantedAt : row.grantedAt.toISOString()),
     updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
@@ -45,7 +45,7 @@ export async function getConsent(
 }
 
 function parseGrantedScopes(consent: OAuthConsent): Set<string> {
-  return new Set(safeJsonParseOrDefault<string[]>(consent.scopes, []));
+  return new Set(parseJsonStringArray(consent.scopes));
 }
 
 export async function hasFullConsent(
@@ -86,28 +86,30 @@ export async function grantConsent(
   const existing = await getConsent(dbBinding, userId, clientId);
 
   if (existing) {
-    const existingScopes = safeJsonParseOrDefault<string[]>(existing.scopes, []);
+    const existingScopes = parseJsonStringArray(existing.scopes);
     const mergedScopes = Array.from(new Set([...existingScopes, ...scopes]));
 
+    const mergedScopesJson = JSON.stringify(mergedScopes) as JsonStringArray;
     await db.update(oauthConsents).set({
-      scopes: JSON.stringify(mergedScopes),
+      scopes: mergedScopesJson,
       updatedAt: now,
     }).where(eq(oauthConsents.id, existing.id));
 
     return {
       ...existing,
-      scopes: JSON.stringify(mergedScopes),
+      scopes: mergedScopesJson,
       updated_at: now,
     };
   }
 
   const id = generateId();
+  const scopesJson = JSON.stringify(scopes) as JsonStringArray;
 
   await db.insert(oauthConsents).values({
     id,
     accountId: userId,
     clientId,
-    scopes: JSON.stringify(scopes),
+    scopes: scopesJson,
     status: 'active',
     grantedAt: now,
     updatedAt: now,
@@ -117,7 +119,7 @@ export async function grantConsent(
     id,
     user_id: userId,
     client_id: clientId,
-    scopes: JSON.stringify(scopes),
+    scopes: scopesJson,
     status: 'active',
     granted_at: now,
     updated_at: now,
@@ -165,7 +167,7 @@ export async function removeConsentScopes(
     return false;
   }
 
-  const currentScopes = safeJsonParseOrDefault<string[]>(consent.scopes, []);
+  const currentScopes = parseJsonStringArray(consent.scopes);
   const removeSet = new Set(scopesToRemove);
   const remainingScopes = currentScopes.filter((s) => !removeSet.has(s));
 
@@ -174,7 +176,7 @@ export async function removeConsentScopes(
   }
 
   await db.update(oauthConsents).set({
-    scopes: JSON.stringify(remainingScopes),
+    scopes: JSON.stringify(remainingScopes) as JsonStringArray,
     updatedAt: new Date().toISOString(),
   }).where(eq(oauthConsents.id, consent.id));
 

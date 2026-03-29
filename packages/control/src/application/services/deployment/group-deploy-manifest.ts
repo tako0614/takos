@@ -10,17 +10,47 @@
 
 export type AppResourceType = 'd1' | 'r2' | 'kv' | 'secretRef' | 'queue' | 'vectorize' | 'analyticsEngine' | 'workflow' | 'durableObject';
 
-export interface AppResource {
-  type: AppResourceType;
+interface AppResourceBase {
   binding?: string;
-  migrations?: string | { up: string; down: string };
   /** For secretRef: whether to auto-generate a random value */
   generate?: boolean;
+}
+
+interface D1Resource extends AppResourceBase {
+  type: 'd1';
+  migrations?: string | { up: string; down: string };
+}
+
+interface R2Resource extends AppResourceBase { type: 'r2'; }
+interface KVResource extends AppResourceBase { type: 'kv'; }
+interface SecretRefResource extends AppResourceBase { type: 'secretRef'; }
+
+interface VectorizeResource extends AppResourceBase {
+  type: 'vectorize';
   /** For vectorize: index configuration */
-  vectorize?: { dimensions: number; metric: string };
+  vectorize: { dimensions: number; metric: string };
+}
+
+interface QueueResource extends AppResourceBase {
+  type: 'queue';
   /** For queue: queue configuration */
   queue?: { maxRetries?: number; deadLetterQueue?: string };
 }
+
+interface AnalyticsEngineResource extends AppResourceBase { type: 'analyticsEngine'; }
+interface WorkflowResource extends AppResourceBase { type: 'workflow'; }
+interface DurableObjectResource extends AppResourceBase { type: 'durableObject'; }
+
+export type AppResource =
+  | D1Resource
+  | R2Resource
+  | KVResource
+  | SecretRefResource
+  | VectorizeResource
+  | QueueResource
+  | AnalyticsEngineResource
+  | WorkflowResource
+  | DurableObjectResource;
 
 export interface WorkerServiceBuild {
   fromWorkflow: {

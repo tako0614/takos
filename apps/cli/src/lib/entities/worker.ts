@@ -14,6 +14,7 @@ import { deployWorkerWithWrangler } from '../group-deploy/deploy-worker.js';
 import { generateWranglerConfig, serializeWranglerToml } from '../group-deploy/wrangler-config.js';
 import { serializeContainerWranglerToml } from '../group-deploy/container.js';
 import type { ContainerWranglerConfig, WranglerConfig } from '../group-deploy/deploy-models.js';
+import { createEmptyState } from '../empty-state.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,24 +36,6 @@ export interface WorkerEntry {
   deployedAt: string;
   codeHash: string;
   containers?: string[];
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
-  return {
-    version: 1,
-    provider: 'cloudflare',
-    env: opts.env,
-    group: opts.group,
-    groupName: opts.groupName || 'takos',
-    updatedAt: new Date().toISOString(),
-    resources: {},
-    workers: {},
-    containers: {},
-    services: {},
-    routes: {},
-  };
 }
 
 async function computeCodeHash(artifactPath: string): Promise<string> {

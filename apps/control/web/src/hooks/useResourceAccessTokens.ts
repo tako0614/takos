@@ -8,11 +8,11 @@ export interface ResourceAccessToken {
   id: string;
   name: string;
   token?: string; // Only present on creation
-  tokenPrefix: string;
+  token_prefix: string;
   permission: 'read' | 'write';
-  expiresAt: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
 }
 
 export interface ResourceConnectionInfo {

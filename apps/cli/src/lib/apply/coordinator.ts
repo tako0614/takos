@@ -65,7 +65,7 @@ export async function applyDiff(
   // 2. lifecycle.preApply
   const specAny = resolved.spec as Record<string, unknown>;
   const lifecycle = specAny.lifecycle as
-    | { preApply?: LifecycleHook; postApply?: LifecycleHook }
+    | { preApply?: LifecycleHookInput; postApply?: LifecycleHookInput }
     | undefined;
 
   if (lifecycle?.preApply) {
@@ -337,10 +337,10 @@ function topoSortDFS(
 // Lifecycle hooks
 // ---------------------------------------------------------------------------
 
-type LifecycleHook = string | string[];
+type LifecycleHookInput = string | string[];
 
 async function runLifecycleHook(
-  _hook: LifecycleHook,
+  _hook: LifecycleHookInput,
   _opts: ApplyOpts,
 ): Promise<void> {
   throw new Error(

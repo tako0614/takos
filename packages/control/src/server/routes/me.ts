@@ -8,6 +8,7 @@ import { eq, and, ne, desc } from 'drizzle-orm';
 import { getUserConsentsWithClients, revokeConsent } from '../../application/services/oauth/consent';
 import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
 import type { ClientRegistrationRequest } from '../../shared/types/oauth';
+import { parseJsonStringArray } from '../../shared/types/oauth';
 import { logOAuthEvent } from '../../application/services/oauth/audit';
 import { parseJsonBody, type BaseVariables } from './route-auth';
 import { parsePagination } from '../../shared/utils';
@@ -164,7 +165,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         client_name: consent.client_name,
         client_logo: consent.client_logo,
         client_uri: consent.client_uri,
-        scopes: safeJsonParseOrDefault<string[]>(consent.scopes, []),
+        scopes: parseJsonStringArray(consent.scopes),
         granted_at: consent.granted_at,
         updated_at: consent.updated_at,
       })),
@@ -243,8 +244,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         description: client.description,
         logo_uri: client.logo_uri,
         client_uri: client.client_uri,
-        redirect_uris: safeJsonParseOrDefault<string[]>(client.redirect_uris, []),
-        allowed_scopes: safeJsonParseOrDefault<string[]>(client.allowed_scopes, []),
+        redirect_uris: parseJsonStringArray(client.redirect_uris),
+        allowed_scopes: parseJsonStringArray(client.allowed_scopes),
         client_type: client.client_type,
         status: client.status,
         created_at: client.created_at,
@@ -303,8 +304,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         description: updated.description,
         logo_uri: updated.logo_uri,
         client_uri: updated.client_uri,
-        redirect_uris: safeJsonParseOrDefault<string[]>(updated.redirect_uris, []),
-        allowed_scopes: safeJsonParseOrDefault<string[]>(updated.allowed_scopes, []),
+        redirect_uris: parseJsonStringArray(updated.redirect_uris),
+        allowed_scopes: parseJsonStringArray(updated.allowed_scopes),
         status: updated.status,
       });
     } catch (err) {
@@ -333,7 +334,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .get('/personal-access-tokens', async (c) => {
     const user = c.get('user');
     const db = getDb(c.env.DB);
-    const tokens = await db.select({
+    const rows = await db.select({
       id: personalAccessTokens.id,
       name: personalAccessTokens.name,
       tokenPrefix: personalAccessTokens.tokenPrefix,
@@ -345,6 +346,15 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       .where(eq(personalAccessTokens.accountId, user.id))
       .orderBy(desc(personalAccessTokens.createdAt))
       .all();
+    const tokens = rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      token_prefix: t.tokenPrefix,
+      scopes: t.scopes,
+      expires_at: t.expiresAt,
+      last_used_at: t.lastUsedAt,
+      created_at: t.createdAt,
+    }));
     return c.json({ tokens });
   })
 
@@ -387,7 +397,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       createdAt: timestamp,
     });
 
-    return c.json({ id, name: body.name.trim(), token: tokenPlain, tokenPrefix, scopes, expiresAt, createdAt: timestamp }, 201);
+    return c.json({ id, name: body.name.trim(), token: tokenPlain, token_prefix: tokenPrefix, scopes, expires_at: expiresAt, created_at: timestamp }, 201);
   })
 
   .delete('/personal-access-tokens/:id', async (c) => {

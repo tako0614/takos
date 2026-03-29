@@ -38,8 +38,6 @@ import {
   VALID_PLAN_TYPES,
   TASK_ANALYSIS_PROMPT,
 } from './workflow-types';
-import { extractJsonFromLLMResponse } from './workflow-utils';
-
 // Re-export submodule functions so existing call-sites keep working
 export { executeReview } from './workflow-review';
 export { startWorkflowSession, commitWorkflowSession } from './workflow-session';
@@ -73,7 +71,10 @@ export async function analyzeTask(
 
   try {
     const response = await llm.chat(messages);
-    const plan = JSON.parse(extractJsonFromLLMResponse(response.content)) as TaskPlan;
+    const jsonBody = response.content.trim().startsWith('{')
+      ? response.content.trim()
+      : response.content.trim().replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    const plan = JSON.parse(jsonBody) as TaskPlan;
 
     if (!VALID_PLAN_TYPES.has(plan.type)) {
       plan.type = 'conversation';

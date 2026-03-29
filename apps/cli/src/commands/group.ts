@@ -1,15 +1,18 @@
 /**
  * CLI command: `takos group`
  *
- * Manage groups (state file namespaces).
+ * Manage groups (state namespaces).
+ *
+ * By default state is fetched from the takos API.  When the API is
+ * unavailable or `--offline` is passed, the local file backend
+ * (.takos/state.*.json) is used instead.
  *
  * Subcommands:
- *   takos group list              -- Scan .takos/state.*.json for group names
+ *   takos group list              -- List groups
  *   takos group show <name>       -- Show all entities in a group
- *   takos group delete <name>     -- Delete all entities and the state file for a group
+ *   takos group delete <name>     -- Delete all entities and state for a group
  */
 import { Command } from 'commander';
-import readline from 'node:readline';
 import chalk from 'chalk';
 import {
   readState,
@@ -18,7 +21,9 @@ import {
   listStateGroups,
   deleteStateFile,
 } from '../lib/state/state-file.js';
+import type { StateAccessOptions } from '../lib/state/state-file.js';
 import { cliExit } from '../lib/command-exit.js';
+import { confirmPrompt } from '../lib/cli-utils.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,14 +37,8 @@ function validateGroupName(name: string): void {
   }
 }
 
-function confirmPrompt(message: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(`${message} (yes/no): `, (answer) => {
-      rl.close();
-      resolve(answer.trim().toLowerCase() === 'yes' || answer.trim().toLowerCase() === 'y');
-    });
-  });
+function toAccessOpts(options: { offline?: boolean }): StateAccessOptions {
+  return options.offline ? { offline: true } : {};
 }
 
 // ── Command registration ─────────────────────────────────────────────────────
@@ -47,17 +46,19 @@ function confirmPrompt(message: string): Promise<boolean> {
 export function registerGroupCommand(program: Command): void {
   const groupCmd = program
     .command('group')
-    .description('Manage groups (state file namespaces)');
+    .description('Manage groups (state namespaces)');
 
   // ── group list ────────────────────────────────────────────────────────────
   groupCmd
     .command('list')
     .description('List all groups')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (options: { json?: boolean }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (options: { json?: boolean; offline?: boolean }) => {
       const cwd = process.cwd();
       const stateDir = getStateDir(cwd);
-      const groups = await listStateGroups(stateDir);
+      const accessOpts = toAccessOpts(options);
+      const groups = await listStateGroups(stateDir, accessOpts);
 
       if (options.json) {
         process.stdout.write(`${JSON.stringify(groups, null, 2)}\n`);
@@ -72,8 +73,12 @@ export function registerGroupCommand(program: Command): void {
       console.log('');
       console.log(chalk.bold('Groups:'));
       for (const name of groups) {
-        const stateFilePath = getStateFilePath(stateDir, name);
-        console.log(`  ${name}  ${chalk.dim(stateFilePath)}`);
+        if (accessOpts.offline) {
+          const stateFilePath = getStateFilePath(stateDir, name);
+          console.log(`  ${name}  ${chalk.dim(stateFilePath)}`);
+        } else {
+          console.log(`  ${name}`);
+        }
       }
       console.log('');
       console.log(chalk.dim(`${groups.length} group(s)`));
@@ -84,11 +89,13 @@ export function registerGroupCommand(program: Command): void {
     .command('show <name>')
     .description('Show all entities in a group')
     .option('--json', 'Machine-readable JSON output')
-    .action(async (name: string, options: { json?: boolean }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (name: string, options: { json?: boolean; offline?: boolean }) => {
       validateGroupName(name);
       const cwd = process.cwd();
       const stateDir = getStateDir(cwd);
-      const state = await readState(stateDir, name);
+      const accessOpts = toAccessOpts(options);
+      const state = await readState(stateDir, name, accessOpts);
 
       if (!state) {
         console.log(chalk.red(`Group not found: ${name}`));
@@ -187,13 +194,15 @@ export function registerGroupCommand(program: Command): void {
   // ── group delete ──────────────────────────────────────────────────────────
   groupCmd
     .command('delete <name>')
-    .description('Delete a group and its state file')
+    .description('Delete a group and its state')
     .option('--force', 'Skip confirmation prompt')
-    .action(async (name: string, options: { force?: boolean }) => {
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (name: string, options: { force?: boolean; offline?: boolean }) => {
       validateGroupName(name);
       const cwd = process.cwd();
       const stateDir = getStateDir(cwd);
-      const state = await readState(stateDir, name);
+      const accessOpts = toAccessOpts(options);
+      const state = await readState(stateDir, name, accessOpts);
 
       if (!state) {
         console.log(chalk.red(`Group not found: ${name}`));
@@ -222,10 +231,8 @@ export function registerGroupCommand(program: Command): void {
         }
       }
 
-      const stateFilePath = getStateFilePath(stateDir, name);
-      await deleteStateFile(stateDir, name);
+      await deleteStateFile(stateDir, name, accessOpts);
       console.log(chalk.green(`Deleted group '${name}'`));
-      console.log(chalk.dim(`Removed: ${stateFilePath}`));
       console.log(chalk.dim('Actual cloud resources were NOT deleted.'));
     });
 }

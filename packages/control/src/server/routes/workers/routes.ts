@@ -20,7 +20,7 @@ import { deployments, serviceCustomDomains, serviceDeployments } from '../../../
 import { deleteHostnameRouting } from '../../../application/services/routing/service';
 import { createCloudflareApiClient } from '../../../application/services/cloudflare/api-client.ts';
 import { deleteCloudflareCustomHostname } from '../../../application/services/platform/custom-domains.ts';
-import { CommonEnvService } from '../../../application/services/common-env';
+import { createCommonEnvDeps, deleteServiceTakosAccessTokenConfig } from '../../../application/services/common-env';
 import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger';
@@ -294,8 +294,8 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     }
   }
 
-  const commonEnvService = new CommonEnvService(c.env);
-  await commonEnvService.deleteServiceTakosAccessTokenConfig({
+  const deps = createCommonEnvDeps(c.env);
+  await deleteServiceTakosAccessTokenConfig(deps.manualLink, {
     spaceId: worker.space_id,
     serviceId: worker.id,
   });

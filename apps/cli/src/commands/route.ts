@@ -11,13 +11,8 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { readState, getStateDir } from '../lib/state/state-file.js';
 import { cliExit } from '../lib/command-exit.js';
+import { printJson } from '../lib/cli-utils.js';
 import type { RouteState } from '../lib/state/state-types.js';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function printJson(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
 
 // ── Command registration ─────────────────────────────────────────────────────
 

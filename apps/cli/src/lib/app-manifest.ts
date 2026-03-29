@@ -17,11 +17,20 @@ type AppMetadata = {
   appId?: string;
 };
 
-type AppResource = {
-  type: 'd1' | 'r2' | 'kv' | 'secretRef';
+type AppResourceBase = {
   binding?: string;
+};
+
+type D1Resource = AppResourceBase & {
+  type: 'd1';
   migrations?: string | { up: string; down: string };
 };
+
+type R2Resource = AppResourceBase & { type: 'r2' };
+type KVResource = AppResourceBase & { type: 'kv' };
+type SecretRefResource = AppResourceBase & { type: 'secretRef' };
+
+type AppResource = D1Resource | R2Resource | KVResource | SecretRefResource;
 
 type WorkerService = {
   type: 'worker';
@@ -313,7 +322,7 @@ export async function loadAppManifest(manifestPath: string): Promise<AppManifest
       ...(resource.migrations
         ? { migrations: parseMigrations(resource.migrations, `spec.resources.${resourceName}`) }
         : {}),
-    };
+    } as AppResource;
   }
 
   const routesRaw = specRecord.routes;

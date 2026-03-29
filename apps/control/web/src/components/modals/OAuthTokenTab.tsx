@@ -181,17 +181,17 @@ export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) 
                   <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{token.name}</h4>
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
                     <code style={{ padding: '0.125rem 0.25rem', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace' }}>
-                      {token.tokenPrefix}...
+                      {token.token_prefix}...
                     </code>
                   </p>
-                  {token.lastUsedAt && (
+                  {token.last_used_at && (
                     <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                      {t('lastUsed', { date: formatShortDate(token.lastUsedAt) })}
+                      {t('lastUsed', { date: formatShortDate(token.last_used_at) })}
                     </p>
                   )}
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                    {t('createdDate', { date: formatShortDate(token.createdAt) })}
-                    {token.expiresAt && ` · ${t('expiresDate', { date: formatShortDate(token.expiresAt) })}`}
+                    {t('createdDate', { date: formatShortDate(token.created_at) })}
+                    {token.expires_at && ` · ${t('expiresDate', { date: formatShortDate(token.expires_at) })}`}
                   </p>
                 </div>
                 <Button

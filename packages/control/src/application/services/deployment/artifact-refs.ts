@@ -10,19 +10,13 @@ import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state
 import type {
   ArtifactKind,
   Deployment,
-  DeploymentEnv,
   CreateDeploymentInput,
   DeploymentTarget,
 } from './models';
 import {
-  type DeploymentProviderRegistryLike,
   parseDeploymentTargetConfig,
 } from './provider';
 import { BadRequestError, ConflictError } from 'takos-common/errors';
-
-export function getDeploymentProviderRegistry(env: DeploymentEnv): DeploymentProviderRegistryLike | undefined {
-  return env.DEPLOYMENT_PROVIDER_REGISTRY;
-}
 
 export function resolveDeploymentArtifactBaseRef(serviceId: string, target?: DeploymentTarget): string {
   const routeRef = target?.route_ref?.trim()

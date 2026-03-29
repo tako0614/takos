@@ -3,7 +3,6 @@ import type { WorkerEnv } from '../../runtime/worker/env.ts';
 import type { DispatchEnv } from '../../dispatch.ts';
 import {
   buildPlatform,
-  createDeploymentProviderRegistry,
   createPlatformConfig,
   createPlatformServices,
   createRoutingService,
@@ -13,7 +12,6 @@ import {
 import type { PlatformEnvRecord } from './shared.ts';
 import type {
   ControlPlatform,
-  PlatformDeployProviderConfig,
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
@@ -42,85 +40,6 @@ async function buildNodeDocuments(env: PlatformEnvRecord): Promise<PlatformServi
     // puppeteer-core / puppeteer is not installed — degrade gracefully.
     return {};
   }
-}
-
-// ---------------------------------------------------------------------------
-// Deployment provider auto-detection: detect ALL available providers
-// ---------------------------------------------------------------------------
-
-function detectDeploymentProviders(env: PlatformEnvRecord) {
-  const providers: PlatformDeployProviderConfig[] = [];
-
-  // Cloudflare Workers for Platforms
-  const cfAccountId = getString(env, 'CF_ACCOUNT_ID');
-  const cfApiToken = getString(env, 'CF_API_TOKEN');
-  const cfDispatchNamespace = getString(env, 'WFP_DISPATCH_NAMESPACE');
-  if (cfAccountId && cfApiToken && cfDispatchNamespace) {
-    providers.push({
-      name: 'workers-dispatch',
-      config: {
-        accountId: cfAccountId,
-        apiToken: cfApiToken,
-        dispatchNamespace: cfDispatchNamespace,
-        zoneId: getString(env, 'CF_ZONE_ID'),
-      },
-    });
-  }
-
-  // AWS ECS
-  const ecsClusterArn = getString(env, 'AWS_ECS_CLUSTER_ARN');
-  if (ecsClusterArn) {
-    providers.push({
-      name: 'ecs',
-      config: {
-        region: getString(env, 'AWS_REGION') ?? 'us-east-1',
-        clusterArn: ecsClusterArn,
-        taskDefinitionFamily: getString(env, 'AWS_ECS_TASK_FAMILY') ?? '',
-        serviceArn: getString(env, 'AWS_ECS_SERVICE_ARN'),
-        ecrRepositoryUri: getString(env, 'AWS_ECR_REPO_URI'),
-      },
-    });
-  }
-
-  // GCP Cloud Run
-  const gcpProjectId = getString(env, 'GCP_PROJECT_ID');
-  if (gcpProjectId) {
-    providers.push({
-      name: 'cloud-run',
-      config: {
-        projectId: gcpProjectId,
-        region: getString(env, 'GCP_REGION') ?? 'us-central1',
-        serviceId: getString(env, 'GCP_CLOUD_RUN_SERVICE_ID'),
-        artifactRegistryRepo: getString(env, 'GCP_ARTIFACT_REGISTRY_REPO'),
-      },
-    });
-  }
-
-  // OCI Orchestrator (local / generic container)
-  const ociUrl = getString(env, 'OCI_ORCHESTRATOR_URL');
-  if (ociUrl) {
-    providers.push({
-      name: 'oci',
-      config: {
-        orchestratorUrl: ociUrl,
-        orchestratorToken: getString(env, 'OCI_ORCHESTRATOR_TOKEN'),
-      },
-    });
-  }
-
-  return providers;
-}
-
-function resolveDefaultProviderName(
-  env: PlatformEnvRecord,
-  providers: PlatformDeployProviderConfig[],
-): PlatformDeployProviderConfig['name'] | undefined {
-  const explicit = getString(env, 'TAKOS_DEFAULT_DEPLOY_PROVIDER');
-  if (explicit) {
-    const found = providers.find((p) => p.name === explicit);
-    if (found) return found.name;
-  }
-  return providers[0]?.name;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,9 +72,6 @@ async function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings
     encryptionKey: getString(env, 'ENCRYPTION_KEY'),
     serviceInternalJwtIssuer: getString(env, 'SERVICE_INTERNAL_JWT_ISSUER'),
   });
-
-  const providers = detectDeploymentProviders(env);
-  const defaultName = resolveDefaultProviderName(env, providers);
 
   const documents = await buildNodeDocuments(env);
 
@@ -212,7 +128,6 @@ async function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings
     },
     documents,
     serviceRegistry: getServiceRegistry(env),
-    deploymentProviders: createDeploymentProviderRegistry(providers, defaultName),
     sseNotifier: (env as Record<string, unknown>).SSE_NOTIFIER as PlatformServices['sseNotifier'],
   });
 

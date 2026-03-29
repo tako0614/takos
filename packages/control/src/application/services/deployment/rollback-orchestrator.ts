@@ -36,10 +36,9 @@ import { eq, and, ne, inArray } from 'drizzle-orm';
 import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
 import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
 import {
-  getDeploymentProviderRegistry,
   resolveDeploymentServiceId,
   parseRuntimeConfig,
-} from './deployment-artifacts';
+} from './artifact-refs';
 
 /**
  * Execute a rollback to a previous deployment version.
@@ -80,7 +79,6 @@ export async function executeRollback(
   }
 
   const rollbackProvider = createDeploymentProvider(targetDeployment, {
-    providerRegistry: getDeploymentProviderRegistry(env),
     cloudflareEnv: env,
     orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
     orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
