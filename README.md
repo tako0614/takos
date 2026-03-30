@@ -53,7 +53,7 @@ corepack pnpm local:smoke
 
 ## Documentation
 
-Takos docs live in-repo under `apps/docs-site/docs` and are rendered with
+Takos docs live in-repo under `docs/` and are rendered with
 VitePress. Keep `README.md` as the short entrypoint and put longer setup,
 runtime, deployment, and contributor guidance in the docs site.
 
@@ -74,5 +74,5 @@ packaging lives in `deploy/helm/takos/`.
 
 ## Contributing
 
-See `CONTRIBUTING.md`, `apps/docs-site/docs`, and `SECURITY.md` for
+See `CONTRIBUTING.md`, `docs/`, and `SECURITY.md` for
 contributor expectations, product/spec docs, and security reporting guidance.

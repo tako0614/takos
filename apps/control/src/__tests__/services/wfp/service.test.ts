@@ -390,6 +390,33 @@ describe('WFPService', () => {
     });
   });
 
+  describe('getR2Object', () => {
+    it('reads object bytes from the R2 object endpoint', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('hello', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      const result = await svc.r2.getR2Object('my-bucket', 'path/to/file.txt');
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain('/r2/buckets/my-bucket/objects/');
+      expect(init.method).toBe('GET');
+      expect(result?.contentType).toBe('text/plain');
+      expect(new TextDecoder().decode(result?.body)).toBe('hello');
+    });
+
+    it('returns null when the object does not exist', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('missing', { status: 404 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const svc = new WFPService(config);
+      await expect(svc.r2.getR2Object('bucket', 'missing.txt')).resolves.toBeNull();
+    });
+  });
+
   describe('deployWorkerWithBindings', () => {
     it('throws when neither bundleUrl nor bundleScript provided', async () => {
       const svc = new WFPService(config);

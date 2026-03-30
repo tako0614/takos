@@ -195,6 +195,8 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
         body: Parameters<typeof r2Ops.uploadToR2>[3],
         options?: Parameters<typeof r2Ops.uploadToR2>[4],
       ) => r2Ops.uploadToR2(ctx, bucketName, key, body, options),
+      getR2Object: (bucketName: string, key: string) =>
+        r2Ops.getR2Object(ctx, bucketName, key),
       deleteR2Object: (bucketName: string, key: string) =>
         r2Ops.deleteR2Object(ctx, bucketName, key),
       getR2BucketStats: (bucketName: string) => r2Ops.getR2BucketStats(ctx, bucketName),

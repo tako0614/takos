@@ -6,6 +6,7 @@ import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, AuthorizationError, InternalError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
+import { getPortableKvStore, isPortableResourceProvider } from './portable-runtime.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
@@ -18,6 +19,7 @@ function toResource(data: {
   id: string;
   ownerAccountId: string;
   accountId: string | null;
+  providerName?: string | null;
   name: string;
   type: string;
   status: string;
@@ -34,6 +36,7 @@ function toResource(data: {
     id: data.id,
     owner_id: data.ownerAccountId,
     space_id: data.accountId,
+    ...(data.providerName !== undefined ? { provider_name: data.providerName } : {}),
     name: data.name,
     type: data.type as Resource['type'],
     status: data.status as Resource['status'],
@@ -87,6 +90,21 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     const resource = await loadKvResource(c, c.req.param('id'));
     const { limit } = parsePagination(c.req.query(), { limit: 100, maxLimit: 1000 });
 
+    if (isPortableResourceProvider(resource.provider_name)) {
+      try {
+        const kv = getPortableKvStore(resource);
+        const result = await kv.list({
+          prefix: c.req.query('prefix') || undefined,
+          cursor: c.req.query('cursor') || undefined,
+          limit,
+        });
+        return c.json({ entries: result.keys, cursor: result.cursor || null });
+      } catch (err) {
+        logError('Failed to list portable KV entries', err, { module: 'routes/resources/kv' });
+        throw new InternalError('Failed to list KV entries');
+      }
+    }
+
     try {
       const wfp = createOptionalCloudflareWfpProvider(c.env);
       if (!wfp) {
@@ -107,6 +125,17 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/kv/entries/:key', async (c) => {
   const resource = await loadKvResource(c, c.req.param('id'));
   const key = decodeURIComponent(c.req.param('key'));
+
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const kv = getPortableKvStore(resource);
+      const value = await kv.getWithMetadata(key, 'text');
+      return c.json({ key, value: value.value, content_type: null, metadata: value.metadata });
+    } catch (err) {
+      logError('Failed to read portable KV entry', err, { module: 'routes/resources/kv' });
+      throw new InternalError('Failed to read KV entry');
+    }
+  }
 
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
@@ -130,6 +159,17 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     const key = decodeURIComponent(c.req.param('key'));
     const body = c.req.valid('json') as { value: string };
 
+    if (isPortableResourceProvider(resource.provider_name)) {
+      try {
+        const kv = getPortableKvStore(resource);
+        await kv.put(key, body.value);
+        return c.json({ success: true });
+      } catch (err) {
+        logError('Failed to write portable KV entry', err, { module: 'routes/resources/kv' });
+        throw new InternalError('Failed to write KV entry');
+      }
+    }
+
     try {
       const wfp = createOptionalCloudflareWfpProvider(c.env);
       if (!wfp) {
@@ -146,6 +186,17 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
 .delete('/:id/kv/entries/:key', async (c) => {
   const resource = await loadKvResource(c, c.req.param('id'), ['write', 'admin']);
   const key = decodeURIComponent(c.req.param('key'));
+
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const kv = getPortableKvStore(resource);
+      await kv.delete(key);
+      return c.json({ success: true });
+    } catch (err) {
+      logError('Failed to delete portable KV entry', err, { module: 'routes/resources/kv' });
+      throw new InternalError('Failed to delete KV entry');
+    }
+  }
 
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);

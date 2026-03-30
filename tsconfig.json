@@ -18,7 +18,7 @@
     { "path": "./apps/control" },
     { "path": "./apps/runtime" },
     { "path": "./apps/cli" },
-    { "path": "./apps/docs-site" }
+    { "path": "./docs" }
   ],
   "exclude": [
     "node_modules",

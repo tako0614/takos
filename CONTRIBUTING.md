@@ -5,7 +5,7 @@
   the ecosystem root
 - Keep `packages/*` as the source of truth and treat `apps/*` as thin
   composition only
-- Treat `apps/docs-site/docs` as the source of truth for Takos docs
+- Treat `docs/` as the source of truth for Takos docs
 - `home-agent` is private-only and should not be treated as OSS product flow
 - Treat tracked deployment files as templates only
 - Keep public setup instructions working without private docs

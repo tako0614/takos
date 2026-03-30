@@ -1274,7 +1274,7 @@ describe('DeploymentService.getBindings', () => {
     const { service } = makeService();
     const result = await service.getBindings(dep);
 
-    expect(result).toEqual([{ type: 'kv_namespace', name: 'MY_KV', namespace_id: 'ns-1' }]);
+    expect(result).toEqual([{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }]);
   });
 
   it('throws on invalid encrypted data structure', async () => {

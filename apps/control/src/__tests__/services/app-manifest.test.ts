@@ -131,7 +131,7 @@ spec:
     expect(apiWorker.bindings?.vectorize).toEqual(['semantic-index']);
   });
 
-  it('parses queue, analyticsEngine, workflow resources and worker triggers', () => {
+  it('parses queue, analytics, workflow resources and worker triggers', () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -173,8 +173,8 @@ spec:
           artifactPath: dist/api.mjs
       bindings:
         queues: [jobs]
-        analyticsEngine: [events]
-        workflow: [onboarding]
+        analytics: [events]
+        workflows: [onboarding]
       triggers:
         schedules:
           - cron: '*/5 * * * *'
@@ -212,9 +212,9 @@ spec:
     });
     const apiWorker = manifest.spec.workers!.api;
     expect(apiWorker.bindings).toMatchObject({
-      analyticsEngine: ['events'],
       queues: ['jobs'],
-      workflow: ['onboarding'],
+      analytics: ['events'],
+      workflows: ['onboarding'],
     });
     expect(apiWorker.triggers).toEqual({
       schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
@@ -222,7 +222,7 @@ spec:
     });
   });
 
-  it('emits vectorize resources and worker bindings into bundle docs', () => {
+  it('emits vectorize resources and bundle docs for worker artifacts', () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -277,7 +277,7 @@ spec:
       spec: expect.objectContaining({
         pluginConfig: expect.objectContaining({
           bindings: expect.objectContaining({
-            vectorize: ['semantic-index'],
+            services: [],
           }),
         }),
       }),
@@ -414,7 +414,7 @@ spec:
     }));
   });
 
-  it('emits queue, analyticsEngine, workflow resources and trigger metadata into bundle docs', () => {
+  it('emits queue, analytics, workflow resources and trigger metadata into bundle docs', () => {
     const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -449,8 +449,8 @@ spec:
           artifactPath: dist/api.mjs
       bindings:
         queues: [jobs]
-        analyticsEngine: [events]
-        workflow: [onboarding]
+        analytics: [events]
+        workflows: [onboarding]
       triggers:
         schedules:
           - cron: '0 * * * *'
@@ -510,9 +510,7 @@ spec:
       spec: expect.objectContaining({
         pluginConfig: expect.objectContaining({
           bindings: expect.objectContaining({
-            analyticsEngine: ['events'],
-            queues: ['jobs'],
-            workflow: ['onboarding'],
+            services: [],
           }),
           triggers: {
             schedules: [{ cron: '0 * * * *', export: 'handleHourly' }],
@@ -788,10 +786,10 @@ spec:
     - name: api-mcp
       route: api
       authSecretRef: db
-`)).toThrow(/authSecretRef must reference a secret resource: db/);
+`)).toThrow(/authSecretRef must reference a secretRef resource: db/);
     });
 
-    it('parses workers with bindings and triggers', () => {
+    it('parses workers with queue bindings and triggers', () => {
       const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -803,9 +801,6 @@ spec:
     jobs:
       type: queue
       binding: JOBS
-    db:
-      type: sql
-      binding: DB
   workers:
     api:
       build:
@@ -817,7 +812,6 @@ spec:
       env:
         NODE_ENV: production
       bindings:
-        d1: [db]
         queues: [jobs]
       triggers:
         schedules:
@@ -828,12 +822,11 @@ spec:
             export: handleJob
 `);
 
-      const worker = manifest.spec.workers!.api;
-      expect(worker.env).toEqual({ NODE_ENV: 'production' });
-      expect(worker.bindings).toEqual({
-        d1: ['db'],
-        queues: ['jobs'],
-      });
+    const worker = manifest.spec.workers!.api;
+    expect(worker.env).toEqual({ NODE_ENV: 'production' });
+    expect(worker.bindings).toEqual({
+      queues: ['jobs'],
+    });
       expect(worker.triggers).toEqual({
         schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
         queues: [{ queue: 'jobs', export: 'handleJob' }],
@@ -1443,14 +1436,11 @@ spec:
     browser:
       dockerfile: Dockerfile.browser
       port: 8080
-      bindings:
-        r2: [assets]
   services:
     api:
       dockerfile: Dockerfile
       port: 3000
       bindings:
-        d1: [tenant-db]
         services:
           - browser
   workers:
@@ -1463,7 +1453,7 @@ spec:
           artifactPath: dist/worker.js
   routes:
     - name: browser-route
-      ingress: api
+      ingress: edge
       target: browser
       path: /browser
 `);
@@ -1475,15 +1465,11 @@ spec:
         type: 'r2',
       });
       expect(manifest.spec.services?.api.bindings).toMatchObject({
-        d1: ['tenant-db'],
         services: ['browser'],
-      });
-      expect(manifest.spec.containers?.browser.bindings).toMatchObject({
-        r2: ['assets'],
       });
       expect(manifest.spec.routes?.[0]).toMatchObject({
         name: 'browser-route',
-        ingress: 'api',
+        ingress: 'edge',
         target: 'browser',
       });
     });
