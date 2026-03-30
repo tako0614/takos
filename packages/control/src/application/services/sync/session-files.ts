@@ -10,6 +10,7 @@ import { generateId } from '../../../shared/utils';
 import { computeSHA256 } from '../../../shared/utils/hash';
 import { getDb, sessionFiles, files } from '../../../infra/db';
 import { eq, and, ne, asc } from 'drizzle-orm';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 export interface SessionFile {
   id: string;
@@ -349,7 +350,7 @@ export class SessionFilesManager {
       hash: sf.hash,
       size: sf.size,
       operation: sf.operation as 'create' | 'update' | 'delete',
-      created_at: (sf.createdAt == null ? null : typeof sf.createdAt === 'string' ? sf.createdAt : sf.createdAt.toISOString()),
+      created_at: textDateNullable(sf.createdAt) ?? new Date().toISOString(),
     }));
   }
 

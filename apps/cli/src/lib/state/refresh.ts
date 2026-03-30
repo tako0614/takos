@@ -37,7 +37,7 @@ export interface RefreshableProvider {
   /**
    * Check whether a resource exists with the provider.
    *
-   * @param type   Resource type (e.g. 'd1', 'r2', 'kv', 'queue')
+ * @param type   Resource type (e.g. 'sql', 'object_store', 'kv', 'queue')
    * @param id     The provider-side resource ID stored in state
    * @param name   The logical resource name in the group manifest
    * @returns      true if the resource exists, false if it is confirmed
@@ -47,7 +47,43 @@ export interface RefreshableProvider {
   checkResourceExists(type: string, id: string, name: string): Promise<boolean | null>;
 }
 
-const refreshableResourceTypes = new Set(['d1', 'r2', 'kv', 'queue', 'vectorize']);
+const refreshableResourceTypes = new Set(['sql', 'object_store', 'kv', 'queue', 'vector_index']);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function verifyEntry(
+  provider: RefreshableProvider,
+  type: string,
+  id: string,
+  key: string,
+  category: string,
+  name: string,
+  notFoundReason: string,
+): Promise<{ action: 'removed' | 'warning' | 'ok'; change?: RefreshChange }> {
+  try {
+    const exists = await provider.checkResourceExists(type, id, name);
+    if (exists === false) {
+      return {
+        action: 'removed',
+        change: { key, category, name, action: 'removed', reason: notFoundReason },
+      };
+    }
+    if (exists === null) {
+      return {
+        action: 'warning',
+        change: { key, category, name, action: 'warning', reason: `Could not verify ${category} "${name}" — skipped` },
+      };
+    }
+    return { action: 'ok' };
+  } catch {
+    return {
+      action: 'warning',
+      change: { key, category, name, action: 'warning', reason: `Could not verify ${category} "${name}" — skipped` },
+    };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Refresh logic
@@ -100,35 +136,13 @@ export async function refreshState(
       continue;
     }
 
-    try {
-      const exists = await provider.checkResourceExists(resource.type, resource.id, name);
-      if (exists === false) {
-        changes.push({
-          key: `resources.${name}`,
-          category: 'resource',
-          name,
-          action: 'removed',
-          reason: `${resource.type} resource "${resource.id}" not found in provider`,
-        });
-        delete state.resources[name];
-      } else if (exists === null) {
-        changes.push({
-          key: `resources.${name}`,
-          category: 'resource',
-          name,
-          action: 'warning',
-          reason: `Could not verify resource "${name}" — skipped`,
-        });
-      }
-    } catch {
-      changes.push({
-        key: `resources.${name}`,
-        category: 'resource',
-        name,
-        action: 'warning',
-        reason: `Could not verify resource "${name}" — skipped`,
-      });
-    }
+    const result = await verifyEntry(
+      provider, resource.type, resource.id,
+      `resources.${name}`, 'resource', name,
+      `${resource.type} resource "${resource.id}" not found in provider`,
+    );
+    if (result.change) changes.push(result.change);
+    if (result.action === 'removed') delete state.resources[name];
   }
 
   // ── Workers ───────────────────────────────────────────────────────────────
@@ -144,35 +158,13 @@ export async function refreshState(
       continue;
     }
 
-    try {
-      const exists = await provider.checkResourceExists('worker', worker.scriptName, name);
-      if (exists === false) {
-        changes.push({
-          key: `workers.${name}`,
-          category: 'worker',
-          name,
-          action: 'removed',
-          reason: `Worker script "${worker.scriptName}" not found in provider`,
-        });
-        delete state.workers[name];
-      } else if (exists === null) {
-        changes.push({
-          key: `workers.${name}`,
-          category: 'worker',
-          name,
-          action: 'warning',
-          reason: `Could not verify worker "${name}" — skipped`,
-        });
-      }
-    } catch {
-      changes.push({
-        key: `workers.${name}`,
-        category: 'worker',
-        name,
-        action: 'warning',
-        reason: `Could not verify worker "${name}" — skipped`,
-      });
-    }
+    const result = await verifyEntry(
+      provider, 'worker', worker.scriptName,
+      `workers.${name}`, 'worker', name,
+      `Worker script "${worker.scriptName}" not found in provider`,
+    );
+    if (result.change) changes.push(result.change);
+    if (result.action === 'removed') delete state.workers[name];
   }
 
   // ── Containers ────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ import { SHA1_PATTERN } from '../git-objects';
 import { getDb, branches, tags } from '../../../../infra/db';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { generateId } from '../../../../shared/utils';
-import { isInvalidArrayBufferError } from '../../../../shared/utils/db-guards';
+import { isInvalidArrayBufferError, textDate } from '../../../../shared/utils/db-guards';
 
 const MAX_REPO_ID_LENGTH = 128;
 const REPO_ID_PATTERN = /^[a-z0-9_-]+$/i;
@@ -70,7 +70,7 @@ function branchFromDrizzle(b: SelectOf<typeof branches>): GitBranch {
   return {
     id: b.id, repo_id: b.repoId, name: b.name, commit_sha: b.commitSha,
     is_default: b.isDefault, is_protected: b.isProtected,
-    created_at: (b.createdAt == null ? null : typeof b.createdAt === 'string' ? b.createdAt : b.createdAt.toISOString()), updated_at: (b.updatedAt == null ? null : typeof b.updatedAt === 'string' ? b.updatedAt : b.updatedAt.toISOString()),
+    created_at: textDate(b.createdAt), updated_at: textDate(b.updatedAt),
   };
 }
 
@@ -86,7 +86,7 @@ function tagFromDrizzle(t: SelectOf<typeof tags>): GitTag {
   return {
     id: t.id, repo_id: t.repoId, name: t.name, commit_sha: t.commitSha,
     message: t.message, tagger_name: t.taggerName, tagger_email: t.taggerEmail,
-    created_at: (t.createdAt == null ? null : typeof t.createdAt === 'string' ? t.createdAt : t.createdAt.toISOString()),
+    created_at: textDate(t.createdAt),
   };
 }
 

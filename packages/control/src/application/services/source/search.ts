@@ -4,6 +4,7 @@ import { createEmbeddingsService, isEmbeddingsAvailable } from '../execution/emb
 import { getDb, files } from '../../../infra/db';
 import { eq, and, ne, like, desc, sql } from 'drizzle-orm';
 import { logError, logWarn } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export type SearchType = 'filename' | 'content' | 'semantic' | 'all';
 
@@ -59,8 +60,8 @@ function toSpaceFile(f: {
     size: f.size,
     sha256: f.sha256,
     origin: f.origin as FileOrigin,
-    created_at: (f.createdAt == null ? null : typeof f.createdAt === 'string' ? f.createdAt : f.createdAt.toISOString()),
-    updated_at: (f.updatedAt == null ? null : typeof f.updatedAt === 'string' ? f.updatedAt : f.updatedAt.toISOString()),
+    created_at: textDate(f.createdAt),
+    updated_at: textDate(f.updatedAt),
   };
 }
 

@@ -123,9 +123,9 @@ export async function listContainers(group: string): Promise<ContainerEntry[]> {
  */
 export async function deleteContainer(
   name: string,
-  _opts: { group: string; accountId: string; apiToken: string },
+  opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  const group = _opts.group;
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
   const state = await readState(stateDir, group);

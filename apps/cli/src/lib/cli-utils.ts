@@ -7,6 +7,7 @@
 import readline from 'node:readline';
 import chalk from 'chalk';
 import { cliExit } from './command-exit.js';
+import { getConfig } from './config.js';
 
 /**
  * Resolve the Cloudflare account ID from an explicit override,
@@ -34,6 +35,19 @@ export function resolveApiToken(override?: string): string {
     cliExit(1);
   }
   return apiToken.trim();
+}
+
+/**
+ * Resolve the target workspace (space) ID from an explicit override,
+ * config, or exit with an error.
+ */
+export function resolveSpaceId(spaceOverride?: string): string {
+  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
+  if (!spaceId) {
+    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
+    cliExit(1);
+  }
+  return spaceId;
 }
 
 /** Write a value as pretty-printed JSON to stdout. */

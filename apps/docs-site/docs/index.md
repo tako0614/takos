@@ -35,7 +35,7 @@ features:
     link: /platform/store
   - icon: 🌐
     title: マルチテナント
-    details: dispatch namespace でテナントごとに Worker を分離。deploy-group で一括管理
+    details: dispatch namespace でテナントごとに Worker を分離。apply で一括管理
     link: /deploy/namespaces
   - icon: 🔧
     title: テンプレート変数

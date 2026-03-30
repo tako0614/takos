@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/platform/app-deployments', () => ({
-  APP_DEPLOYMENTS_REMOVED_MESSAGE: 'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.',
+  APP_DEPLOYMENTS_REMOVED_MESSAGE: 'App deployment API is not available in the current implementation. Use `takos apply`.',
   AppDeploymentService: class {
     deployFromRepoRef = mocks.deployFromRepoRef;
     list = mocks.list;
@@ -39,9 +39,9 @@ vi.mock('@/routes/shared/helpers', async (importOriginal) => {
   };
 });
 
-import appDeploymentRoutes from '@/routes/app-deployments';
+import appDeploymentRoutes from '@/routes/apps/deployments';
 
-const removedMessage = 'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.';
+const removedMessage = 'App deployment API is not available in the current implementation. Use `takos apply`.';
 
 function createApp(user?: { id: string }) {
   const app = new Hono<{ Bindings: Env; Variables: { user?: { id: string } } }>();

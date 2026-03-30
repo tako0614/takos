@@ -1,45 +1,37 @@
 /**
  * CLI command: `takos worker`
  *
- * Manage Cloudflare Workers as independent entities.
+ * Manage Workers as first-class workloads.
  *
- * Default (online): CRUD via the takos API.
+ * Default (online): CRUD via the workload deployment API.
  * --offline: Delegate to the local entity operations.
- *
- * Subcommands:
- *   takos worker deploy <name> [--artifact path] [--env staging]
- *   takos worker list [--json]
- *   takos worker delete <name> [--env staging]
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import chalk from 'chalk';
 import { cliExit } from '../lib/command-exit.js';
 import { api } from '../lib/api.js';
-import { getConfig } from '../lib/config.js';
-
-function resolveSpaceId(spaceOverride?: string): string {
-  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
-  if (!spaceId) {
-    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
-    cliExit(1);
-  }
-  return spaceId;
-}
-
-// ── Command registration ─────────────────────────────────────────────────────
+import { resolveSpaceId } from '../lib/cli-utils.js';
+import {
+  createWorkerDeployment,
+  ensureServiceInSpace,
+  ensureGroupInSpace,
+  findServiceInSpace,
+  listServicesInSpace,
+  readUtf8File,
+  setServiceGroup,
+} from '../lib/platform-surface.js';
 
 export function registerWorkerCommand(program: Command): void {
   const workerCmd = program
     .command('worker')
-    .description('Manage individual Cloudflare Workers');
+    .description('Manage Workers as first-class workloads');
 
-  // ── worker deploy ──────────────────────────────────────────────────────────
   workerCmd
     .command('deploy <name>')
-    .description('Deploy a worker')
-    .option('--artifact <path>', 'Path to the built artifact (JS/TS entry point)')
+    .description('Deploy a worker bundle')
+    .requiredOption('--artifact <path>', 'Path to the built worker bundle')
     .option('--env <env>', 'Target environment', 'staging')
-    .option('--group <name>', 'Group name', 'takos')
+    .option('--group <name>', 'Attach the worker to a group')
     .option('--space <id>', 'Target workspace ID')
     .option('--namespace <name>', 'Dispatch namespace')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
@@ -47,7 +39,7 @@ export function registerWorkerCommand(program: Command): void {
     .option('--json', 'Machine-readable JSON output')
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (name: string, options: {
-      artifact?: string;
+      artifact: string;
       env: string;
       group: string;
       space?: string;
@@ -57,7 +49,6 @@ export function registerWorkerCommand(program: Command): void {
       json?: boolean;
       offline?: boolean;
     }) => {
-      // Offline mode: delegate to local entity operations
       if (options.offline) {
         const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
         const { deployWorker } = await import('../lib/entities/worker.js');
@@ -66,17 +57,15 @@ export function registerWorkerCommand(program: Command): void {
 
         if (!options.json) {
           console.log(`${chalk.cyan('[DEPLOY]')} worker ${chalk.bold(name)} -> ${options.env} (offline)`);
-          if (options.artifact) {
-            console.log(`  Artifact: ${options.artifact}`);
-          }
+          console.log(`  Artifact: ${options.artifact}`);
         }
 
         try {
           const result = await deployWorker(name, {
             artifact: options.artifact,
-            group: options.group,
+            group: options.group ?? 'takos',
             env: options.env,
-            groupName: options.group,
+            groupName: options.group ?? 'takos',
             accountId,
             apiToken,
             namespace: options.namespace,
@@ -102,59 +91,104 @@ export function registerWorkerCommand(program: Command): void {
         return;
       }
 
-      // Online mode: apply via API targeting a specific worker
       const spaceId = resolveSpaceId(options.space);
-      const group = options.group;
 
       if (!options.json) {
         console.log(`${chalk.cyan('[DEPLOY]')} worker ${chalk.bold(name)} -> ${options.env}`);
-        if (options.artifact) {
-          console.log(`  Artifact: ${options.artifact}`);
+        console.log(`  Artifact: ${options.artifact}`);
+      }
+
+      try {
+        const bundle = await readUtf8File(options.artifact);
+        const group = options.group
+          ? await ensureGroupInSpace(spaceId, options.group)
+          : null;
+        const service = await ensureServiceInSpace({
+          spaceId,
+          name,
+          groupId: group?.id ?? null,
+          serviceType: 'app',
+        });
+        if (group && service.group_id !== group.id) {
+          await setServiceGroup(service.id, group.id);
         }
-      }
+        const result = await createWorkerDeployment({
+          serviceId: service.id,
+          bundle,
+          deployMessage: `takos worker deploy ${name}`,
+        });
 
-      const res = await api<{ success: boolean; scriptName?: string; error?: string }>(
-        `/api/spaces/${spaceId}/groups/${group}/apply`, {
-          method: 'POST',
-          body: {
-            manifest: null,
-            target: [`workers.${name}`],
-          },
-          timeout: 120_000,
-        },
-      );
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify({ service, ...result }, null, 2)}\n`);
+          return;
+        }
 
-      if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
-        cliExit(1);
-      }
-
-      const result = res.data;
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-        return;
-      }
-
-      if (result.success) {
-        const scriptLabel = result.scriptName ? ` ${result.scriptName}` : '';
-        console.log(`  ${chalk.green('✓')}${scriptLabel} deployed`);
-      } else {
-        console.log(`  ${chalk.red('✗')} Deploy failed`);
-        if (result.error) console.log(chalk.red(`  Error: ${result.error}`));
+        console.log(`  ${chalk.green('✓')} deployment ${result.deployment.id} v${result.deployment.version}`);
+        console.log(chalk.dim(`  status=${result.deployment.status} slug=${service.slug ?? service.id}`));
+        if (group) {
+          console.log(chalk.dim(`  group=${group.name}`));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(`Failed to deploy worker: ${message}`));
         cliExit(1);
       }
     });
 
-  // ── worker list ────────────────────────────────────────────────────────────
+  workerCmd
+    .command('attach <name>')
+    .description('Attach a worker to a group')
+    .requiredOption('--group <name>', 'Target group name')
+    .option('--space <id>', 'Target workspace ID')
+    .action(async (name: string, options: { group: string; space?: string }) => {
+      try {
+        const spaceId = resolveSpaceId(options.space);
+        const service = await findServiceInSpace(spaceId, name, 'app');
+        if (!service) {
+          console.log(chalk.red(`Worker not found: ${name}`));
+          cliExit(1);
+          return;
+        }
+        const group = await ensureGroupInSpace(spaceId, options.group);
+        await setServiceGroup(service.id, group.id);
+        console.log(chalk.green(`Attached worker '${name}' to group '${group.name}'.`));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(`Failed to attach worker: ${message}`));
+        cliExit(1);
+      }
+    });
+
+  workerCmd
+    .command('detach <name>')
+    .description('Detach a worker from its group')
+    .option('--space <id>', 'Target workspace ID')
+    .action(async (name: string, options: { space?: string }) => {
+      try {
+        const spaceId = resolveSpaceId(options.space);
+        const service = await findServiceInSpace(spaceId, name, 'app');
+        if (!service) {
+          console.log(chalk.red(`Worker not found: ${name}`));
+          cliExit(1);
+          return;
+        }
+        await setServiceGroup(service.id, null);
+        console.log(chalk.green(`Detached worker '${name}' from its group.`));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(`Failed to detach worker: ${message}`));
+        cliExit(1);
+      }
+    });
+
   workerCmd
     .command('list')
-    .description('List all tracked workers')
-    .option('--group <name>', 'Target group (default: "default")', 'default')
+    .description('List workers in a workspace')
+    .option('--group <name>', 'Target group for offline state', 'default')
     .option('--space <id>', 'Target workspace ID')
     .option('--json', 'Machine-readable JSON output')
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (options: { group: string; space?: string; json?: boolean; offline?: boolean }) => {
-      // Offline mode
       if (options.offline) {
         const { listWorkers } = await import('../lib/entities/worker.js');
         try {
@@ -169,13 +203,10 @@ export function registerWorkerCommand(program: Command): void {
           }
           console.log('');
           console.log(chalk.bold('Workers:'));
-          for (const w of workers) {
-            const scriptLabel = chalk.dim(` -> ${w.scriptName}`);
-            const hashLabel = w.codeHash ? chalk.dim(` [${w.codeHash}]`) : '';
-            const containerLabel = w.containers && w.containers.length > 0
-              ? chalk.dim(` (containers: ${w.containers.join(', ')})`)
-              : '';
-            console.log(`  ${w.name}${scriptLabel}${hashLabel}${containerLabel}`);
+          for (const worker of workers) {
+            const scriptLabel = chalk.dim(` -> ${worker.scriptName}`);
+            const hashLabel = worker.codeHash ? chalk.dim(` [${worker.codeHash}]`) : '';
+            console.log(`  ${worker.name}${scriptLabel}${hashLabel}`);
           }
           console.log('');
           console.log(chalk.dim(`${workers.length} worker(s)`));
@@ -187,55 +218,47 @@ export function registerWorkerCommand(program: Command): void {
         return;
       }
 
-      // Online mode
-      const spaceId = resolveSpaceId(options.space);
-      const group = options.group;
+      try {
+        const spaceId = resolveSpaceId(options.space);
+        const workers = (await listServicesInSpace(spaceId))
+          .filter((service) => service.service_type === 'app');
 
-      const res = await api<Array<{ name: string; scriptName: string; codeHash?: string; containers?: string[] }>>(
-        `/api/spaces/${spaceId}/groups/${group}/entities?category=worker`,
-      );
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(workers, null, 2)}\n`);
+          return;
+        }
 
-      if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        if (workers.length === 0) {
+          console.log(chalk.dim('No workers found.'));
+          return;
+        }
+
+        console.log('');
+        console.log(chalk.bold('Workers:'));
+        for (const worker of workers) {
+          const slugLabel = worker.slug ? chalk.dim(` slug=${worker.slug}`) : '';
+          const hostnameLabel = worker.hostname ? chalk.dim(` host=${worker.hostname}`) : '';
+          const groupLabel = worker.group_id ? chalk.dim(` group=${worker.group_id}`) : '';
+          console.log(`  ${worker.id}${slugLabel}${hostnameLabel}${groupLabel}`);
+        }
+        console.log('');
+        console.log(chalk.dim(`${workers.length} worker(s)`));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(`Failed to list workers: ${message}`));
         cliExit(1);
       }
-
-      const workers = res.data;
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(workers, null, 2)}\n`);
-        return;
-      }
-
-      if (workers.length === 0) {
-        console.log(chalk.dim('No workers tracked. Use `takos worker deploy` to deploy one.'));
-        return;
-      }
-
-      console.log('');
-      console.log(chalk.bold('Workers:'));
-      for (const w of workers) {
-        const scriptLabel = chalk.dim(` -> ${w.scriptName}`);
-        const hashLabel = w.codeHash ? chalk.dim(` [${w.codeHash}]`) : '';
-        const containerLabel = w.containers && w.containers.length > 0
-          ? chalk.dim(` (containers: ${w.containers.join(', ')})`)
-          : '';
-        console.log(`  ${w.name}${scriptLabel}${hashLabel}${containerLabel}`);
-      }
-      console.log('');
-      console.log(chalk.dim(`${workers.length} worker(s)`));
     });
 
-  // ── worker delete ──────────────────────────────────────────────────────────
   workerCmd
     .command('delete <name>')
-    .description('Delete a worker from state (does NOT delete the actual worker)')
-    .option('--group <name>', 'Target group (default: "default")', 'default')
+    .description('Delete a worker workload')
+    .option('--group <name>', 'Target group for offline state', 'default')
     .option('--space <id>', 'Target workspace ID')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (name: string, options: { group: string; space?: string; accountId?: string; apiToken?: string; offline?: boolean }) => {
-      // Offline mode
       if (options.offline) {
         const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
         const { deleteWorker } = await import('../lib/entities/worker.js');
@@ -243,8 +266,7 @@ export function registerWorkerCommand(program: Command): void {
         const apiToken = resolveApiToken(options.apiToken);
         try {
           await deleteWorker(name, { group: options.group, accountId, apiToken });
-          console.log(chalk.green(`Removed worker '${name}' from state.`));
-          console.log(chalk.dim('The actual worker was NOT deleted.'));
+          console.log(chalk.green(`Removed worker '${name}' from offline state.`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.log(chalk.red(`Failed to delete worker: ${message}`));
@@ -253,21 +275,26 @@ export function registerWorkerCommand(program: Command): void {
         return;
       }
 
-      // Online mode
-      const spaceId = resolveSpaceId(options.space);
-      const group = options.group;
+      try {
+        const spaceId = resolveSpaceId(options.space);
+        const service = await findServiceInSpace(spaceId, name, 'app');
+        if (!service) {
+          console.log(chalk.red(`Worker not found: ${name}`));
+          cliExit(1);
+          return;
+        }
 
-      const res = await api<void>(
-        `/api/spaces/${spaceId}/groups/${group}/entities/worker/${name}`,
-        { method: 'DELETE' },
-      );
+        const res = await api<void>(`/api/services/${encodeURIComponent(service.id)}`, { method: 'DELETE' });
+        if (!res.ok) {
+          console.log(chalk.red(`Error: ${res.error}`));
+          cliExit(1);
+        }
 
-      if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(chalk.green(`Deleted worker '${name}'.`));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(`Failed to delete worker: ${message}`));
         cliExit(1);
       }
-
-      console.log(chalk.green(`Removed worker '${name}' from state.`));
-      console.log(chalk.dim('The actual worker was NOT deleted.'));
     });
 }

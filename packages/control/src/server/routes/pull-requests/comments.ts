@@ -14,6 +14,7 @@ import type { PullRequestCommentDto } from './dto';
 import { buildUserLiteMap, resolveActorLite } from './dto';
 import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError } from 'takos-common/errors';
+import { textDate } from '../../../shared/utils/db-guards';
 
 function toCommentDto(
   comment: {
@@ -37,7 +38,7 @@ function toCommentDto(
     body: comment.content,
     path: comment.filePath,
     line: comment.lineNumber,
-    created_at: (comment.createdAt == null ? null : typeof comment.createdAt === 'string' ? comment.createdAt : comment.createdAt.toISOString()),
+    created_at: textDate(comment.createdAt),
     author: resolveActorLite({
       actorType: comment.authorType,
       actorId: comment.authorId,

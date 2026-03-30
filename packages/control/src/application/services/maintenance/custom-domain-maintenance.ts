@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
 
 import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains';
 import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
-import type { RoutingTarget } from '../routing/types';
+import type { RoutingTarget } from '../routing/routing-models';
 import { ServiceDesiredStateService } from '../platform/worker-desired-state';
 import { listServiceRouteRecordsByIds } from '../platform/workers';
 import { logError, logWarn } from '../../../shared/utils/logger';

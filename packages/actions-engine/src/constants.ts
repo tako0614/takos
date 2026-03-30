@@ -1,61 +1,61 @@
 /**
- * Centralized constants for the actions-engine package.
+ * actions-engine パッケージ共通の定数定義
  *
- * All magic numbers and hard-coded limits are defined here so that they are
- * easy to find, document, and tune without touching implementation files.
+ * マジックナンバーや固定制限値はすべてここに集約し、
+ * 実装コードを変更せずに確認・管理・調整できるようにする。
  */
 
 // ---------------------------------------------------------------------------
-// Parser limits
+// パーサ制限値
 // ---------------------------------------------------------------------------
 
 /**
- * Maximum number of `evaluate()` calls allowed per expression evaluation.
- * Guards against runaway recursion or adversarial expressions that attempt to
- * consume unbounded CPU time (e.g. deeply nested bracket accesses).
+ * 式評価ごとの `evaluate()` 呼び出し最大回数。
+ * 再帰の暴走や深い角括弧アクセスを使った無限に近い実行を防止する。
  */
 export const MAX_EVALUATE_CALLS = 10_000;
 
 /**
- * Maximum depth of chained property / bracket accesses (e.g. `a.b.c[0].d`).
- * Prevents stack overflow and excessive object traversal from malicious or
- * accidentally deep expressions.
+ * 連鎖したプロパティ／角括弧アクセスの最大深度（例: `a.b.c[0].d`）。
+ * 悪意ある入力や誤って深い式から、スタックオーバーフローや過剰な
+ * オブジェクト走査が発生するのを防ぐ。
  */
 export const MAX_PARSE_ACCESS_DEPTH = 128;
 
 /**
- * Maximum byte length of a JSON string accepted by the `fromJSON()` expression
- * function. Capped at 1 MB to prevent out-of-memory conditions when an
- * attacker-controlled value is passed to `JSON.parse`.
+ * `fromJSON()` 式関数で受け付ける JSON 文字列の最大バイト数。
+ * 攻撃者制御の文字列が `JSON.parse` に渡される際の OOM を防ぐため
+ * 1 MB に上限を設けている。
  */
 export const MAX_FROM_JSON_SIZE = 1_048_576; // 1 MB
 
 /**
- * Maximum byte length of an expression (the content inside `${{ }}`).
- * Set to 64 KB, which is well above any reasonable expression while still
- * preventing denial-of-service via extremely long input strings.
+ * 式本文（`${{ }}` の中身）の最大バイト長。
+ * 現実的な長さを大きく上回る 64 KB としつつ、極端に長い入力による
+ * DoS を防止する。
  */
 export const MAX_EXPRESSION_SIZE = 64 * 1024; // 64 KB
 
 // ---------------------------------------------------------------------------
-// Scheduler / step-runner limits
+// スケジューラ / ステップ実行の上限
 // ---------------------------------------------------------------------------
 
 /**
- * Default step timeout in minutes, used when a step does not specify
- * `timeout-minutes`. Matches the GitHub Actions default of 360 minutes
- * (6 hours).
+ * ステップのデフォルト実行タイムアウト（分）。
+ * `timeout-minutes` 未指定時に使用され、GitHub Actions の既定値である
+ * 360 分（6 時間）に合わせる。
  */
 export const DEFAULT_TIMEOUT_MINUTES = 360;
 
 /**
- * Multiplier to convert minutes to milliseconds for `setTimeout` calls.
+ * `setTimeout` 呼び出しで分をミリ秒へ変換する倍率。
  */
 export const MINUTES_TO_MS = 60_000;
 
 /**
- * Maximum size in bytes for GITHUB_ENV / GITHUB_OUTPUT / GITHUB_PATH command
- * files written by step scripts. Capped at 10 MB to prevent a single step
- * from exhausting memory when the runner reads these files back.
+ * スクリプトが書き込む GITHUB_ENV / GITHUB_OUTPUT / GITHUB_PATH
+ * コマンドファイルの最大サイズ（バイト）。
+ * ランナーがこれらを読み戻す際に単一ステップでメモリ枯渇しないよう、
+ * 上限を 10 MB にしている。
  */
 export const MAX_COMMAND_FILE_BYTES = 10 * 1024 * 1024; // 10 MB

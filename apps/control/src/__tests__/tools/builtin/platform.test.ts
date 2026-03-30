@@ -15,7 +15,7 @@ const platformServiceMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
+  const actual = await importOriginal();
   const chain = {
     from: vi.fn(() => chain),
     where: vi.fn(() => chain),
@@ -56,6 +56,12 @@ const mockDesiredState = {
   getRoutingTarget: vi.fn(),
 };
 
+const mockCommonEnvDeps = {
+  reconciler: {
+    reconcileServiceCommonEnv: vi.fn(),
+  },
+};
+
 vi.mock('@/services/platform/worker-desired-state', () => ({
   ServiceDesiredStateService: vi.fn(() => mockDesiredState),
 }));
@@ -82,6 +88,7 @@ vi.mock('@/services/common-env', () => ({
   CommonEnvService: vi.fn(() => ({
     reconcileServiceCommonEnv: vi.fn(),
   })),
+  createCommonEnvDeps: vi.fn(() => mockCommonEnvDeps),
 }));
 
 vi.mock('@/services/common-env/crypto', () => ({
@@ -100,43 +107,48 @@ vi.mock('@/platform/providers/cloudflare/custom-domains', () => ({
 vi.mock('@/shared/utils', () => ({
   generateId: vi.fn(() => 'gen-id'),
   now: vi.fn(() => '2026-01-01T00:00:00.000Z'),
-  safeJsonParseOrDefault: vi.fn((_raw: unknown, fallback: unknown) => fallback),
+  safeJsonParseOrDefault: vi.fn((raw: unknown, fallback: unknown) => {
+    if (typeof raw !== 'string') return fallback;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }),
 }));
 
-import { resolveServiceReferenceRecord, getServiceRouteRecord } from '@/services/platform/workers';
+import { getServiceRouteRecord, resolveServiceReferenceRecord } from '@/services/platform/workers';
 
 import {
-  PLATFORM_TOOLS,
-  PLATFORM_HANDLERS,
-  SERVICE_ENV_GET,
-  SERVICE_ENV_SET,
-  SERVICE_BINDINGS_GET,
-  SERVICE_BINDINGS_SET,
-  SERVICE_RUNTIME_GET,
-  SERVICE_RUNTIME_SET,
-  workerEnvGetHandler,
-  workerEnvSetHandler,
-  workerBindingsSetHandler,
-  workerRuntimeSetHandler,
-  DOMAIN_LIST,
+  DEPLOYMENT_GET,
+  DEPLOYMENT_HISTORY,
+  DEPLOYMENT_ROLLBACK,
   DOMAIN_ADD,
-  DOMAIN_VERIFY,
+  DOMAIN_LIST,
   DOMAIN_REMOVE,
-  domainListHandler,
-  domainAddHandler,
-  domainRemoveHandler,
-  SERVICE_LIST,
+  DOMAIN_VERIFY,
+  PLATFORM_HANDLERS,
+  PLATFORM_TOOLS,
+  SERVICE_BINDINGS_SET,
   SERVICE_CREATE,
   SERVICE_DELETE,
-  workerListHandler,
+  SERVICE_ENV_GET,
+  SERVICE_ENV_SET,
+  SERVICE_LIST,
+  SERVICE_RUNTIME_SET,
+  deploymentGetHandler,
+  deploymentHistoryHandler,
+  deploymentRollbackHandler,
+  domainAddHandler,
+  domainListHandler,
+  domainRemoveHandler,
+  workerBindingsSetHandler,
   workerCreateHandler,
   workerDeleteHandler,
-  DEPLOYMENT_HISTORY,
-  DEPLOYMENT_GET,
-  DEPLOYMENT_ROLLBACK,
-  deploymentHistoryHandler,
-  deploymentGetHandler,
-  deploymentRollbackHandler,
+  workerEnvGetHandler,
+  workerEnvSetHandler,
+  workerListHandler,
+  workerRuntimeSetHandler,
 } from '@/tools/builtin/platform';
 
 // ---------------------------------------------------------------------------
@@ -220,14 +232,14 @@ describe('service settings definitions', () => {
     expect(SERVICE_RUNTIME_SET.parameters.required).toEqual(['service_name']);
   });
 
-  it('service_bindings_set supports queue and analytics_engine bindings', () => {
+  it('service_bindings_set exposes Cloudflare-native binding kinds', () => {
     const bindingsItems = SERVICE_BINDINGS_SET.parameters.properties.bindings.items;
     expect(bindingsItems).toBeDefined();
     if (!bindingsItems || !('properties' in bindingsItems) || !bindingsItems.properties?.type) {
       throw new Error('bindings item schema must define type');
     }
     const enumValues = bindingsItems.properties.type.enum;
-    expect(enumValues).toEqual(expect.arrayContaining(['queue', 'analytics_engine']));
+    expect(enumValues).toEqual(expect.arrayContaining(['queue', 'analyticsEngine']));
   });
 });
 
@@ -310,21 +322,21 @@ describe('workerEnvSetHandler', () => {
 describe('workerBindingsSetHandler', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('normalizes queue and analytics bindings to service binding types', async () => {
+  it('normalizes queue and analytics bindings to canonical service binding types', async () => {
     vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
       id: 'w-1',
       accountId: 'ws-test',
     } as any);
     mockSelectGet
       .mockResolvedValueOnce({ id: 'res-q', type: 'queue' })
-      .mockResolvedValueOnce({ id: 'res-a', type: 'analytics_engine' });
+      .mockResolvedValueOnce({ id: 'res-a', type: 'analyticsEngine' });
 
     await workerBindingsSetHandler(
       {
         service_name: 'my-worker',
         bindings: [
           { type: 'queue', name: 'JOB_QUEUE', id: 'queue-handle' },
-          { type: 'analytics_engine', name: 'EVENTS', id: 'analytics-handle' },
+          { type: 'analyticsEngine', name: 'EVENTS', id: 'analytics-handle' },
         ],
       },
       makeContext(),
@@ -334,29 +346,101 @@ describe('workerBindingsSetHandler', () => {
       workerId: 'w-1',
       bindings: [
         { name: 'JOB_QUEUE', type: 'queue', resourceId: 'res-q' },
-        { name: 'EVENTS', type: 'analytics_engine', resourceId: 'res-a' },
+        { name: 'EVENTS', type: 'analytics_store', resourceId: 'res-a' },
       ],
     });
   });
 
-  it('fails fast for workflow bindings until Takos-managed workflow delivery is wired', async () => {
+  it('stores workflow binding metadata from the resource definition', async () => {
     vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
       id: 'w-1',
       accountId: 'ws-test',
     } as any);
-    mockSelectGet.mockResolvedValueOnce({ id: 'res-wf', type: 'workflow' });
-
-    await expect(
-      workerBindingsSetHandler(
-        {
-          service_name: 'my-worker',
-          bindings: [
-            { type: 'workflow', name: 'PUBLISH_FLOW', id: 'workflow-handle' },
-          ],
+    mockSelectGet.mockResolvedValueOnce({
+      id: 'res-wf',
+      type: 'workflow',
+      name: 'publish-flow',
+      providerResourceName: 'publish-flow',
+      config: JSON.stringify({
+        workflowRuntime: {
+          service: 'api',
+          export: 'PublishWorkflow',
         },
-        makeContext(),
-      ),
-    ).rejects.toThrow('workflow bindings are not assignable through service_bindings_set yet');
+      }),
+    });
+
+    await workerBindingsSetHandler(
+      {
+        service_name: 'my-worker',
+        bindings: [
+          { type: 'workflow', name: 'PUBLISH_FLOW', id: 'workflow-handle' },
+        ],
+      },
+      makeContext(),
+    );
+
+    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+      workerId: 'w-1',
+      bindings: [
+        {
+          name: 'PUBLISH_FLOW',
+          type: 'workflow_runtime',
+          resourceId: 'res-wf',
+          config: {
+            workflowRuntime: {
+              service: 'api',
+              export: 'PublishWorkflow',
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it('stores durable namespace binding metadata from the resource definition', async () => {
+    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+      id: 'w-1',
+      accountId: 'ws-test',
+    } as any);
+    mockSelectGet.mockResolvedValueOnce({
+      id: 'res-do',
+      type: 'durableObject',
+      name: 'counter-do',
+      providerResourceName: 'counter-do',
+      config: JSON.stringify({
+        durableNamespace: {
+          className: 'CounterDO',
+          scriptName: 'edge-worker',
+        },
+      }),
+    });
+
+    await workerBindingsSetHandler(
+      {
+        service_name: 'my-worker',
+        bindings: [
+          { type: 'durableObject', name: 'COUNTER', id: 'durable-handle' },
+        ],
+      },
+      makeContext(),
+    );
+
+    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+      workerId: 'w-1',
+      bindings: [
+        {
+          name: 'COUNTER',
+          type: 'durable_namespace',
+          resourceId: 'res-do',
+          config: {
+            durableNamespace: {
+              className: 'CounterDO',
+              scriptName: 'edge-worker',
+            },
+          },
+        },
+      ],
+    });
   });
 });
 

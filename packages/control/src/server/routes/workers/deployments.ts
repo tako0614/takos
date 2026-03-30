@@ -14,6 +14,7 @@ import { safeJsonParseOrDefault } from '../../../shared/utils';
 import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError } from 'takos-common/errors';
 import { MAX_BUNDLE_SIZE_BYTES } from '../../../shared/config/limits';
+import { upsertGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
 
 type ApiDeploymentEvent = {
   id: string;
@@ -44,7 +45,7 @@ type ApiDeploymentSummary = {
 };
 
 const providerSchema = z.object({
-  name: z.enum(['workers-dispatch', 'oci', 'ecs', 'cloud-run', 'k8s']),
+  name: z.enum(['workers-dispatch', 'runtime-host', 'oci', 'ecs', 'cloud-run', 'k8s']),
 }).strict();
 
 const targetSchema = z.object({
@@ -116,8 +117,8 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     if (!body.target?.artifact?.image_ref) {
       throw new BadRequestError( 'artifact.image_ref is required for container-image deploys');
     }
-    if (body.provider?.name === 'workers-dispatch') {
-      throw new BadRequestError( 'workers-dispatch provider does not support container-image deploys');
+    if (body.provider?.name === 'workers-dispatch' || body.provider?.name === 'runtime-host') {
+      throw new BadRequestError( `${body.provider.name} provider does not support container-image deploys`);
     }
     if (body.strategy === 'canary') {
       throw new BadRequestError( 'canary strategy is not supported for container-image deploys');
@@ -154,6 +155,36 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     provider: body.provider,
     target: body.target,
   });
+
+  if (worker.group_id) {
+    if (worker.service_type === 'app') {
+      await upsertGroupDesiredWorkload(c.env, {
+        groupId: worker.group_id,
+        category: 'worker',
+        name: worker.slug ?? worker.id,
+        workload: {
+          artifact: {
+            kind: 'bundle',
+            deploymentId: deployment.id,
+            ...(deployment.artifact_ref ? { artifactRef: deployment.artifact_ref } : {}),
+          },
+        },
+      });
+    } else {
+      const target = body.target ?? {};
+      const artifact = target.artifact;
+      await upsertGroupDesiredWorkload(c.env, {
+        groupId: worker.group_id,
+        category: 'service',
+        name: worker.slug ?? worker.id,
+        workload: {
+          ...(typeof artifact?.exposed_port === 'number' ? { port: artifact.exposed_port } : {}),
+          ...(artifact?.health_path ? { healthCheck: { type: 'http', path: artifact.health_path } } : {}),
+          ...(artifact?.image_ref ? { artifact: { kind: 'image', imageRef: artifact.image_ref, ...(body.provider?.name && body.provider.name !== 'runtime-host' && body.provider.name !== 'workers-dispatch' ? { provider: body.provider.name } : {}) } } : {}),
+        },
+      });
+    }
+  }
 
   if (c.env.DEPLOY_QUEUE) {
     try {

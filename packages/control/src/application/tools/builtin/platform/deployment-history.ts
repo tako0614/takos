@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../../types';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
 import { DeploymentService } from '../../../services/deployment/index';
 import { getDb, services } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';

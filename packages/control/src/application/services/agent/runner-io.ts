@@ -58,21 +58,21 @@ export interface AgentRunnerIo {
     history: AgentMessage[];
     availableToolNames: string[];
   }): Promise<import('./skills').SkillLoadResult>;
-  getMemoryActivation(input: { spaceId: string }): Promise<import('../memory-graph/types').ActivationResult>;
+  getMemoryActivation(input: { spaceId: string }): Promise<import('../memory-graph/graph-models').ActivationResult>;
   finalizeMemoryOverlay(input: {
     runId: string;
     spaceId: string;
-    claims: import('../memory-graph/types').Claim[];
-    evidence: import('../memory-graph/types').Evidence[];
+    claims: import('../memory-graph/graph-models').Claim[];
+    evidence: import('../memory-graph/graph-models').Evidence[];
   }): Promise<void>;
   getToolCatalog(input: { runId: string }): Promise<{
-    tools: import('../../tools/types').ToolDefinition[];
+    tools: import('../../tools/tool-definitions').ToolDefinition[];
     mcpFailedServers: string[];
   }>;
   executeTool(input: {
     runId: string;
-    toolCall: import('../../tools/types').ToolCall;
-  }): Promise<import('../../tools/types').ToolResult>;
+    toolCall: import('../../tools/tool-definitions').ToolCall;
+  }): Promise<import('../../tools/tool-definitions').ToolResult>;
   cleanupToolExecutor(input: { runId: string }): Promise<void>;
   emitRunEvent(input: {
     runId: string;

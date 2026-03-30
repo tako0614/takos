@@ -25,6 +25,7 @@ import type {
   DurableObjectStubBinding,
   R2Bucket,
 } from '../../shared/types/bindings.ts';
+import { textDateNullable } from '../../shared/utils/db-guards';
 
 type Variables = {
   user?: User;
@@ -88,8 +89,8 @@ async function resolveRepo(
       official_maintainer: repo.officialMaintainer,
       featured: repo.featured,
       install_count: repo.installCount,
-      created_at: (repo.createdAt == null ? null : typeof repo.createdAt === 'string' ? repo.createdAt : repo.createdAt.toISOString()),
-      updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
+      created_at: textDateNullable(repo.createdAt),
+      updated_at: textDateNullable(repo.updatedAt),
     } as Repository,
     spaceId: account.id,
   };

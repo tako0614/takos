@@ -4,7 +4,7 @@
  * Consolidates: file_write, file_write_binary, file_copy, file_mkdir.
  */
 
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session';
 import { validateContent, validateBinaryContent, isBinaryFile } from './limits';
 import { logError, logWarn } from '../../../../shared/utils/logger';

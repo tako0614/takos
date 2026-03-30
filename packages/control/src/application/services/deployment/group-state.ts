@@ -54,7 +54,7 @@ export interface ObservedResourceState {
   resourceId: string;
   binding: string;
   status: string;
-  cfName?: string;
+  providerResourceName?: string;
   specFingerprint?: string;
   updatedAt: string;
 }
@@ -264,6 +264,10 @@ export function compileGroupDesiredState(
     workloads: desiredWorkloads,
     routes,
   };
+}
+
+export function resolveRouteOwner(route: DesiredRouteState): string {
+  return route.ingress ?? route.target;
 }
 
 export function resolveWorkloadBaseUrl(workload: ObservedWorkloadState | undefined): string | undefined {

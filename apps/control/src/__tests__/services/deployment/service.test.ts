@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — declared before any import so vi.mock factories can
@@ -161,10 +161,10 @@ vi.mock('drizzle-orm', () => ({
 }));
 
 import {
-  buildDeploymentArtifactRef,
   DeploymentService,
+  buildDeploymentArtifactRef,
 } from '@/services/deployment/service';
-import type { Deployment, DeploymentEvent, CreateDeploymentInput } from '@/services/deployment/types';
+import type { Deployment, DeploymentEvent } from '@/services/deployment/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -480,6 +480,35 @@ describe('DeploymentService.createDeployment', () => {
     );
   });
 
+  it('defaults worker deployments to runtime-host when WFP env is unavailable', async () => {
+    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3, provider_name: 'runtime-host' as any });
+    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' });
+    mocks.createDeploymentWithVersion.mockResolvedValue({
+      deployment: createdDeployment,
+      version: 3,
+    });
+    mocks.serializeDeploymentTarget.mockReturnValue({
+      providerName: 'runtime-host',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    });
+
+    const { service } = makeService({
+      CF_ACCOUNT_ID: undefined,
+      CF_API_TOKEN: undefined,
+      WFP_DISPATCH_NAMESPACE: undefined,
+    });
+    await service.createDeployment({
+      serviceId: 'w-1',
+      spaceId: 'space-1',
+      bundleContent: 'console.log("hi")',
+    });
+
+    expect(mocks.serializeDeploymentTarget).toHaveBeenCalledWith(expect.objectContaining({
+      provider: { name: 'runtime-host' },
+    }));
+  });
+
   it('uploads bundle to R2 when WORKER_BUNDLES is present', async () => {
     const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
     mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
@@ -547,7 +576,7 @@ describe('DeploymentService.createDeployment', () => {
     mocks.ServiceDesiredStateService.mockReturnValue({
       resolveDeploymentState: vi.fn().mockResolvedValue({
         envVars: {},
-        bindings: [{ type: 'kv_namespace', name: 'MY_KV', id: 'ns-1' }],
+        bindings: [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }],
         runtimeConfig: {
           compatibility_date: '2024-01-01',
           compatibility_flags: [],
@@ -565,7 +594,7 @@ describe('DeploymentService.createDeployment', () => {
     });
 
     expect(mocks.encrypt).toHaveBeenCalledWith(
-      JSON.stringify([{ type: 'kv_namespace', name: 'MY_KV', id: 'ns-1' }]),
+      JSON.stringify([{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }]),
       'test-encryption-key',
       'new-dep-id',
     );
@@ -1237,7 +1266,7 @@ describe('DeploymentService.getBindings', () => {
   });
 
   it('decrypts and returns bindings', async () => {
-    const bindings = [{ type: 'kv_namespace', name: 'MY_KV', id: 'ns-1' }];
+    const bindings = [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }];
     const encrypted = JSON.stringify({ ciphertext: 'ct', iv: 'iv' });
     const dep = createBaseDeployment({ bindings_snapshot_encrypted: encrypted });
     mocks.decrypt.mockResolvedValue(JSON.stringify(bindings));
@@ -1245,7 +1274,7 @@ describe('DeploymentService.getBindings', () => {
     const { service } = makeService();
     const result = await service.getBindings(dep);
 
-    expect(result).toEqual(bindings);
+    expect(result).toEqual([{ type: 'kv_namespace', name: 'MY_KV', namespace_id: 'ns-1' }]);
   });
 
   it('throws on invalid encrypted data structure', async () => {

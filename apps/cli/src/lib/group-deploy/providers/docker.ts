@@ -11,7 +11,13 @@
  * Requires: docker CLI available.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
+import { isAlreadyExistsError } from '../resource-provider.js';
 import { execCommand } from '../cloudflare-utils.js';
+
+const DOCKER_ALREADY_EXISTS_PATTERNS = [
+  'already exists',
+  'duplicate key',
+];
 
 export class DockerProvider implements ResourceProvider {
   readonly name = 'docker';
@@ -34,7 +40,7 @@ export class DockerProvider implements ResourceProvider {
         'docker', ['compose', '-p', this.composeProject, 'exec', '-T', service, ...command],
       );
       if (exitCode !== 0) {
-        if (stderr.includes('already exists') || stderr.includes('duplicate key') || stdout.includes('already exists')) {
+        if (isAlreadyExistsError(DOCKER_ALREADY_EXISTS_PATTERNS, stderr, stdout)) {
           return { ok: true, stdout, error: 'already exists' };
         }
         return { ok: false, stdout, error: stderr || `docker exec exited with code ${exitCode}` };
@@ -48,7 +54,7 @@ export class DockerProvider implements ResourceProvider {
   // ── PostgreSQL database ──────────────────────────────────────────────────
 
   async createDatabase(name: string, _opts?: { migrations?: string }): Promise<ProvisionResult> {
-    const dbName = name.replace(/-/g, '_');
+    const dbName = name.replace(/-/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
     const result = await this.dockerExec(
       'postgres',
       ['psql', '-U', 'postgres', '-c', `CREATE DATABASE "${dbName}";`],

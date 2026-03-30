@@ -24,7 +24,7 @@ type Variables = {
 export function requireOAuthAuth(
   requiredScopes?: string[]
 ): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> {
-  return async (c, next) => {
+  return async (c, next): Promise<Response | void> => {
     const dbBinding = getPlatformServices(c).sql?.binding;
     const config = getPlatformConfig(c);
     const authorizationHeader = c.req.header('Authorization');

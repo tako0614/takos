@@ -11,6 +11,7 @@ import {
     getReachableSnapshots as getReachableSnapshotsImpl,
     runGC as runGCImpl,
 } from './snapshot-cleanup';
+import { textDate } from '../../../shared/utils/db-guards';
 
 /** Extract non-empty blob hashes from a snapshot tree. */
 function extractTreeHashes(tree: SnapshotTree): string[] {
@@ -175,7 +176,7 @@ export class SnapshotManager {
             message: snapshot.message ?? undefined,
             author: (snapshot.author as 'user' | 'ai' | null) ?? undefined,
             status: snapshot.status as 'pending' | 'complete' | 'failed',
-            created_at: (snapshot.createdAt == null ? null : typeof snapshot.createdAt === 'string' ? snapshot.createdAt : snapshot.createdAt.toISOString()),
+            created_at: textDate(snapshot.createdAt),
         };
     }
 

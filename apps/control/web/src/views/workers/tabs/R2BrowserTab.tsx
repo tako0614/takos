@@ -78,7 +78,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchObjects = useCallback(async (newPrefix: string = prefix, reset: boolean = true) => {
-    if (!resource.cf_name) return;
+    if (!resource.provider_resource_name) return;
     setLoading(true);
     try {
       const res = await rpc.resources[':id'].r2.objects.$get({
@@ -96,7 +96,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [resource.name, resource.cf_name, prefix, cursor, showToast, t]);
+  }, [resource.name, resource.provider_resource_name, prefix, cursor, showToast, t]);
 
   useEffect(() => {
     fetchObjects('', true);

@@ -32,7 +32,7 @@ export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' 
 
 export type RoutingStatus = 'active' | 'canary' | 'rollback' | 'archived';
 
-export type DeploymentProviderName = 'workers-dispatch' | 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+export type DeploymentProviderName = 'workers-dispatch' | 'runtime-host' | 'oci' | 'ecs' | 'cloud-run' | 'k8s';
 
 export type DeploymentProviderRef = {
   name: DeploymentProviderName;

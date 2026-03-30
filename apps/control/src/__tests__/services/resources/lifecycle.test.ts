@@ -21,7 +21,7 @@ vi.mock('@/services/cloudflare/resources', () => ({
 }));
 
 vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
+  ...(await importOriginal()),
   generateId: mocks.generateId,
   now: mocks.now,
 }));
@@ -43,21 +43,21 @@ describe('provisionCloudflareResource', () => {
 
   it('provisions a resource and inserts it into the database', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'cf-new-id',
-      cfName: 'my-db',
+      providerResourceId: 'cf-new-id',
+      providerResourceName: 'my-db',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
     const result = await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
       name: 'My Database',
-      type: 'd1',
-      cfName: 'my-db',
+      type: 'sql',
+      providerResourceName: 'my-db',
     });
 
     expect(result.id).toBe('generated-id');
-    expect(result.cfId).toBe('cf-new-id');
-    expect(result.cfName).toBe('my-db');
+    expect(result.providerResourceId).toBe('cf-new-id');
+    expect(result.providerResourceName).toBe('my-db');
     expect(mocks.createResource).toHaveBeenCalledWith('d1', 'my-db', {});
     expect(mocks.insertResource).toHaveBeenCalledWith(
       mockEnv.DB,
@@ -66,17 +66,20 @@ describe('provisionCloudflareResource', () => {
         owner_id: 'user-1',
         name: 'My Database',
         type: 'd1',
+        semantic_type: 'sql',
+        driver: 'cloudflare-d1',
+        provider_name: 'cloudflare',
         status: 'active',
-        cf_id: 'cf-new-id',
-        cf_name: 'my-db',
+        provider_resource_id: 'cf-new-id',
+        provider_resource_name: 'my-db',
       })
     );
   });
 
   it('uses provided id and timestamp', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'cf-id',
-      cfName: 'custom-db',
+      providerResourceId: 'cf-id',
+      providerResourceName: 'custom-db',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
@@ -85,8 +88,8 @@ describe('provisionCloudflareResource', () => {
       timestamp: '2026-06-01T00:00:00.000Z',
       ownerId: 'user-1',
       name: 'Custom DB',
-      type: 'd1',
-      cfName: 'custom-db',
+      type: 'sql',
+      providerResourceName: 'custom-db',
     });
 
     expect(result.id).toBe('custom-id');
@@ -102,17 +105,17 @@ describe('provisionCloudflareResource', () => {
 
   it('passes vectorize options to createResource', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'cf-vec-id',
-      cfName: 'my-vectors',
+      providerResourceId: 'cf-vec-id',
+      providerResourceName: 'my-vectors',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
     await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
       name: 'Vectors',
-      type: 'vectorize' as any,
-      cfName: 'my-vectors',
-      vectorize: {
+      type: 'vector_index',
+      providerResourceName: 'my-vectors',
+      vectorIndex: {
         dimensions: 1536,
         metric: 'cosine',
       },
@@ -125,8 +128,8 @@ describe('provisionCloudflareResource', () => {
 
   it('provisions a queue resource through the Cloudflare provider', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'queue-id-123',
-      cfName: 'my-queue',
+      providerResourceId: 'queue-id-123',
+      providerResourceName: 'my-queue',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
@@ -134,33 +137,33 @@ describe('provisionCloudflareResource', () => {
       ownerId: 'user-1',
       name: 'Queue',
       type: 'queue' as any,
-      cfName: 'my-queue',
+      providerResourceName: 'my-queue',
     });
 
-    expect(result.cfId).toBe('queue-id-123');
+    expect(result.providerResourceId).toBe('queue-id-123');
     expect(mocks.createResource).toHaveBeenCalledWith('queue', 'my-queue', {});
   });
 
   it('treats analyticsEngine as a logical resource without provider provisioning', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: null,
-      cfName: 'event-dataset',
+      providerResourceId: null,
+      providerResourceName: 'event-dataset',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
     const result = await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
       name: 'Analytics',
-      type: 'analyticsEngine' as any,
-      cfName: 'event-dataset',
+      type: 'analytics_store',
+      providerResourceName: 'event-dataset',
     });
 
     expect(result).toEqual({
       id: 'generated-id',
-      cfId: null,
-      cfName: 'event-dataset',
+      providerResourceId: null,
+      providerResourceName: 'event-dataset',
     });
-    expect(mocks.createResource).toHaveBeenCalledWith('analyticsEngine', 'event-dataset', {});
+    expect(mocks.createResource).toHaveBeenCalledWith('analytics_engine', 'event-dataset', {});
   });
 
   it('records failure when recordFailure is true and provider throws', async () => {
@@ -172,8 +175,8 @@ describe('provisionCloudflareResource', () => {
       provisionCloudflareResource(mockEnv, {
         ownerId: 'user-1',
         name: 'Failed DB',
-        type: 'd1',
-        cfName: 'fail-db',
+        type: 'sql',
+        providerResourceName: 'fail-db',
         recordFailure: true,
       })
     ).rejects.toThrow('Cloudflare API error');
@@ -185,7 +188,10 @@ describe('provisionCloudflareResource', () => {
         owner_id: 'user-1',
         name: 'Failed DB',
         type: 'd1',
-        cf_name: 'fail-db',
+        semantic_type: 'sql',
+        driver: 'cloudflare-d1',
+        provider_name: 'cloudflare',
+        provider_resource_name: 'fail-db',
         config: expect.objectContaining({
           error: 'Cloudflare API error',
         }),
@@ -200,8 +206,8 @@ describe('provisionCloudflareResource', () => {
       provisionCloudflareResource(mockEnv, {
         ownerId: 'user-1',
         name: 'Failed DB',
-        type: 'd1',
-        cfName: 'fail-db',
+        type: 'sql',
+        providerResourceName: 'fail-db',
       })
     ).rejects.toThrow('API error');
 
@@ -210,8 +216,8 @@ describe('provisionCloudflareResource', () => {
 
   it('passes spaceId to insertResource', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'cf-id',
-      cfName: 'test-db',
+      providerResourceId: 'cf-id',
+      providerResourceName: 'test-db',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
@@ -219,8 +225,8 @@ describe('provisionCloudflareResource', () => {
       ownerId: 'user-1',
       spaceId: 'space-1',
       name: 'Test DB',
-      type: 'd1',
-      cfName: 'test-db',
+      type: 'sql',
+      providerResourceName: 'test-db',
     });
 
     expect(mocks.insertResource).toHaveBeenCalledWith(
@@ -233,23 +239,25 @@ describe('provisionCloudflareResource', () => {
 
   it('passes config to insertResource', async () => {
     mocks.createResource.mockResolvedValue({
-      cfId: 'cf-id',
-      cfName: 'test-db',
+      providerResourceId: 'cf-id',
+      providerResourceName: 'test-db',
     });
     mocks.insertResource.mockResolvedValue(undefined);
 
     await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
       name: 'Test DB',
-      type: 'd1',
-      cfName: 'test-db',
+      type: 'sql',
+      providerResourceName: 'test-db',
       config: { region: 'us-east-1' },
     });
 
     expect(mocks.insertResource).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        config: { region: 'us-east-1' },
+        config: expect.objectContaining({
+          region: 'us-east-1',
+        }),
       })
     );
   });

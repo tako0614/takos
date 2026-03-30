@@ -3,7 +3,7 @@
 Takos を Kubernetes クラスタにホストする方法。このページは **takos オペレーター**向け。
 
 ::: info アプリ開発者へ
-このページは takos オペレーター向けです。k8s provider は current docs では experimental / partial 扱いで、アプリ開発者向けの current surface は Cloudflare-backed `takos deploy-group` です。
+このページは takos オペレーター向けです。k8s provider は current docs では experimental / partial 扱いで、アプリ開発者向けの current surface は Cloudflare-backed `takos apply` です。
 :::
 
 ::: warning experimental
@@ -276,7 +276,7 @@ kubectl apply -f takos-deployment.yaml
 アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
 
 ```bash
-takos deploy-group --env production
+takos apply --env production
 ```
 
 ## バッキングサービスの選択

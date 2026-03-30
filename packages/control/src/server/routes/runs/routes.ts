@@ -39,6 +39,7 @@ function buildSanitizedDOHeaders(
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
 import { zValidator } from '../zod-validator';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type ArtifactRow = {
   id: string;
@@ -76,7 +77,7 @@ function artifactRowToApi(row: ArtifactRow): Artifact {
     content: row.content,
     file_id: row.fileId,
     metadata: row.metadata,
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    created_at: textDate(row.createdAt),
   };
 }
 

@@ -1,6 +1,8 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import type { ReconcileUpdate } from '../common-env/repository';
 
+export type ServiceBindingSpec = WorkerBinding;
+
 export type DesiredStateEnv = Pick<import('../../../shared/types').Env, 'DB' | 'ENCRYPTION_KEY' | 'ADMIN_DOMAIN'>;
 
 export type ServiceRuntimeLimits = {
@@ -85,8 +87,8 @@ export type ServiceBindingRow = {
   resourceName: string | null;
   resourceType: string;
   resourceStatus: string;
-  resourceCfId: string | null;
-  resourceCfName: string | null;
+  resourceProviderResourceId: string | null;
+  resourceProviderResourceName: string | null;
 };
 
 export type RoutingRow = {

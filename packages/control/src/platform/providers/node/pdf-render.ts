@@ -36,8 +36,10 @@ async function importPuppeteer(): Promise<PuppeteerModule> {
   // Prefer puppeteer-core (lighter, no bundled browser).
   // Fall back to puppeteer (includes a browser download).
   try {
+    // @ts-expect-error puppeteer-core is an optional peer dependency
     return await import('puppeteer-core');
   } catch {
+    // @ts-expect-error puppeteer is an optional peer dependency
     return await import('puppeteer');
   }
 }
@@ -112,10 +114,8 @@ export function createNodePdfRenderer(
       if (pdfBuffer instanceof ArrayBuffer) {
         return pdfBuffer;
       }
-      return (pdfBuffer as Uint8Array).buffer.slice(
-        (pdfBuffer as Uint8Array).byteOffset,
-        (pdfBuffer as Uint8Array).byteOffset + (pdfBuffer as Uint8Array).byteLength,
-      );
+      const bytes = pdfBuffer as Uint8Array;
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     } finally {
       await page.close();
     }

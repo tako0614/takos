@@ -14,7 +14,7 @@
  * a validated {@link FileOperationContext}.
  */
 
-import type { ToolContext } from '../../types';
+import type { ToolContext } from '../../tool-definitions';
 import { buildSessionPath, requireContainer, resolveMountPath } from './session';
 
 /**

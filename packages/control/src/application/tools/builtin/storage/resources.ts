@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../../types';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
 import { createCloudflareApiClient } from '../../../services/cloudflare/api-client.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../../platform/providers/cloudflare/wfp.ts';
 import { generateId } from '../../../../shared/utils';
@@ -86,8 +86,8 @@ export const createD1Handler: ToolHandler = async (args, context) => {
     throw new Error('Invalid database name. Must be 3+ chars, lowercase alphanumeric with hyphens.');
   }
 
-  const cfName = `takos-d1-${generateId()}`;
-  const databaseId = await wfp.d1.createD1Database(cfName);
+  const providerResourceName = `takos-d1-${generateId()}`;
+  const databaseId = await wfp.d1.createD1Database(providerResourceName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);
@@ -97,9 +97,12 @@ export const createD1Handler: ToolHandler = async (args, context) => {
     accountId: spaceId,
     name: name,
     type: 'd1',
+    semanticType: 'sql',
+    driver: 'cloudflare-d1',
+    providerName: 'cloudflare',
     status: 'active',
-    cfId: databaseId,
-    cfName: cfName,
+    providerResourceId: databaseId,
+    providerResourceName,
     config: '{}',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -134,8 +137,8 @@ export const createKVHandler: ToolHandler = async (args, context) => {
     throw new Error('Cloudflare WFP is not configured');
   }
 
-  const cfName = `takos-kv-${generateId()}`;
-  const namespaceId = await wfp.kv.createKVNamespace(cfName);
+  const providerResourceName = `takos-kv-${generateId()}`;
+  const namespaceId = await wfp.kv.createKVNamespace(providerResourceName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);
@@ -145,9 +148,12 @@ export const createKVHandler: ToolHandler = async (args, context) => {
     accountId: spaceId,
     name: title,
     type: 'kv',
+    semanticType: 'kv',
+    driver: 'cloudflare-kv',
+    providerName: 'cloudflare',
     status: 'active',
-    cfId: namespaceId,
-    cfName: cfName,
+    providerResourceId: namespaceId,
+    providerResourceName,
     config: '{}',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -174,8 +180,8 @@ export const createR2Handler: ToolHandler = async (args, context) => {
     throw new Error('Invalid bucket name. Must be 3+ chars, lowercase alphanumeric with hyphens.');
   }
 
-  const cfName = `takos-r2-${generateId()}`;
-  await wfp.r2.createR2Bucket(cfName);
+  const providerResourceName = `takos-r2-${generateId()}`;
+  await wfp.r2.createR2Bucket(providerResourceName);
 
   const resourceId = generateId();
   const db = getDb(env.DB);
@@ -185,9 +191,12 @@ export const createR2Handler: ToolHandler = async (args, context) => {
     accountId: spaceId,
     name: name,
     type: 'r2',
+    semanticType: 'object_store',
+    driver: 'cloudflare-r2',
+    providerName: 'cloudflare',
     status: 'active',
-    cfId: cfName,
-    cfName: cfName,
+    providerResourceId: providerResourceName,
+    providerResourceName,
     config: '{}',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

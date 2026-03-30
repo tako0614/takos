@@ -1,6 +1,6 @@
 # Workers
 
-CF Workers (V8 isolate) を定義する。HTTP リクエスト処理、ルーティング、軽量処理を担当する Takos アプリの中核。
+`workers` は Workers runtime で動くワークロードです。HTTP 処理、軽量ジョブ、route ingress を担います。
 
 ## 基本
 
@@ -15,21 +15,7 @@ workers:
         artifactPath: dist/worker
 ```
 
-## コンテナとの紐づけ
-
-```yaml
-workers:
-  browser-host:
-    containers: [browser]       # spec.containers の名前を参照
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-host
-        artifact: browser-host
-        artifactPath: dist/host.js
-```
-
-## バインディング
+## Bindings
 
 ```yaml
 workers:
@@ -38,33 +24,32 @@ workers:
     bindings:
       d1: [primary-db]
       r2: [assets]
-      queues: [reminders]
+      kv: [cache]
+      queues: [jobs]
       vectorize: [embeddings]
-      analytics: [events]
-      workflows: [deploy-flow]
+      analyticsEngine: [events]
+      workflow: [deploy-flow]
       durableObjects: [session-do]
-      services: [takos-control]
+      services: [control-api]
 ```
 
-`spec.resources` の名前を参照する。型が一致しないとバリデーションエラー。
+`bindings` は `spec.resources` の名前を参照します。binding key と resource type は一致している必要があります。
 
-### バインディング種類一覧
-
-| binding | 説明 | 例 |
+| binding | resource type | 例 |
 | --- | --- | --- |
-| `d1` | D1 Database | `d1: [primary-db]` |
-| `r2` | R2 Bucket | `r2: [assets]` |
-| `kv` | KV Namespace | `kv: [cache]` |
-| `vectorize` | Vectorize Index | `vectorize: [embeddings]` |
-| `queues` | Queue | `queues: [jobs]` |
-| `analytics` | Analytics Engine | `analytics: [events]` |
-| `workflows` | Workflows | `workflows: [deploy-flow]` |
-| `durableObjects` | Durable Objects | `durableObjects: [session-do]` |
-| `services` | Service Binding (外部 Worker) | `services: [other-worker]` |
+| `d1` | `d1` | `d1: [primary-db]` |
+| `r2` | `r2` | `r2: [assets]` |
+| `kv` | `kv` | `kv: [cache]` |
+| `queues` | `queue` | `queues: [jobs]` |
+| `vectorize` | `vectorize` | `vectorize: [embeddings]` |
+| `analyticsEngine` | `analyticsEngine` | `analyticsEngine: [events]` |
+| `workflow` | `workflow` | `workflow: [deploy-flow]` |
+| `durableObjects` | `durableObject` | `durableObjects: [session-do]` |
+| `services` | 他 workload | `services: [control-api]` |
 
-### analytics (Analytics Engine)
+## 代表例
 
-Analytics Engine にイベントを書き込むときに使う。`spec.resources` で `type: analyticsEngine` のリソースを定義し、バインディングで参照する。
+### Analytics
 
 ```yaml
 resources:
@@ -78,14 +63,10 @@ workers:
   web:
     build: ...
     bindings:
-      analytics: [events]
+      analyticsEngine: [events]
 ```
 
-Worker コードからは `env.ANALYTICS.writeDataPoint(...)` で書き込める。
-
-### workflows (Workflows)
-
-Workflows バインディングでワークフローの作成・管理ができる。`spec.resources` で `type: workflow` のリソースを定義する。
+### Workflow Runtime
 
 ```yaml
 resources:
@@ -102,14 +83,12 @@ workers:
   web:
     build: ...
     bindings:
-      workflows: [deploy-flow]
+      workflow: [deploy-flow]
 ```
 
-Worker コードからは `env.DEPLOY_WORKFLOW.create(...)` でワークフローインスタンスを作成できる。
+`workflow` は manifest でも service settings API / builtin tool でも設定できます。binding には `workflow.service` と `workflow.export` の metadata が必要です。
 
-### durableObjects (Durable Objects)
-
-Durable Objects バインディングでステートフルなオブジェクトにアクセスできる。`spec.resources` で `type: durableObject` のリソースを定義する。
+### Durable Namespace
 
 ```yaml
 resources:
@@ -118,7 +97,7 @@ resources:
     binding: SESSION
     durableObject:
       className: SessionDO
-      scriptName: web         # 省略すると同一 Worker 内を参照
+      scriptName: web
 
 workers:
   web:
@@ -127,9 +106,7 @@ workers:
       durableObjects: [session-do]
 ```
 
-Worker コードからは `env.SESSION.get(id)` でオブジェクトを取得できる。
-
-## トリガー
+## Triggers
 
 ```yaml
 workers:
@@ -140,44 +117,19 @@ workers:
         - cron: "*/15 * * * *"
           export: scheduled
       queues:
-        - queue: reminders        # spec.resources の type: queue を参照
+        - queue: jobs
           export: queue
 ```
-
-## Worker 固有の環境変数
-
-```yaml
-workers:
-  web:
-    build: ...
-    env:
-      PUBLIC_APP_NAME: My App
-      NODE_ENV: production
-```
-
-アプリ全体の環境変数は `spec.env` で設定する。詳しくは [環境変数](/apps/environment) を参照。
 
 ## フィールド
 
 | field | required | 説明 |
 | --- | --- | --- |
-| `build` | yes | ビルドソース。現在は `fromWorkflow` のみ |
-| `containers` | no | 紐づける CF Containers (`spec.containers` の名前) |
-| `bindings` | no | リソースバインディング（d1, r2, kv, vectorize, queues, analytics, workflows, durableObjects, services） |
+| `build` | yes | 現在は `fromWorkflow` のみ |
+| `containers` | no | 紐づける `spec.containers` 名 |
+| `bindings` | no | Cloudflare-native resource bindings |
 | `triggers` | no | スケジュール / キュートリガー |
 | `env` | no | Worker 固有の環境変数 |
-
-### build.fromWorkflow
-
-| field | required | 説明 |
-| --- | --- | --- |
-| `path` | yes | `.takos/workflows/` 配下のワークフローパス |
-| `job` | yes | deploy artifact を出すジョブ名 |
-| `artifact` | yes | ワークフロー artifact 名 |
-| `artifactPath` | yes | artifact 内の Worker バンドルパス |
-
-## 次のステップ
-
-- [Containers](/apps/containers) --- Docker コンテナの定義方法
-- [Routes](/apps/routes) --- Worker の公開設定
-- [環境変数](/apps/environment) --- テンプレート変数と値の注入
+| `healthCheck` | no | ヘルスチェック設定 |
+| `scaling` | no | スケーリング設定 |
+| `dependsOn` | no | 他 workload への依存 |

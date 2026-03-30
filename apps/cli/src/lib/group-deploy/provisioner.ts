@@ -8,6 +8,7 @@
 import type { ProvisionedResource, ResourceProvisionResult } from './deploy-models.js';
 import { toBinding } from './cloudflare-utils.js';
 import type { ResourceProvider, ProviderOptions } from './resource-provider.js';
+import { validateResourceName } from './resource-provider.js';
 import { CloudflareProvider } from './providers/cloudflare.js';
 import { AWSProvider } from './providers/aws.js';
 import { GCPProvider } from './providers/gcp.js';
@@ -63,9 +64,10 @@ export async function provisionResources(
 
   const provider = resolveProvider(options);
   const providerLabel = provider.name.toUpperCase();
-  console.log(`[INFO] Detected provider: ${provider.name}${providerLabel === 'CLOUDFLARE' ? ' (CLOUDFLARE_ACCOUNT_ID set)' : ''}`);
+  process.stderr.write(`[INFO] Detected provider: ${provider.name}${providerLabel === 'CLOUDFLARE' ? ' (CLOUDFLARE_ACCOUNT_ID set)' : ''}\n`);
 
   for (const [name, resource] of Object.entries(resources)) {
+    validateResourceName(name);
     const binding = resource.binding || toBinding(name);
 
     if (options.dryRun) {

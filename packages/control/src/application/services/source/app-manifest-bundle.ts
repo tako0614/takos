@@ -25,7 +25,10 @@ function buildSourceLabels(source: AppDeploymentBuildSource): Record<string, str
 
 /** Container definition in the new `spec.containers` section (CF Containers) */
 interface ManifestContainer {
-  dockerfile: string;
+  dockerfile?: string;
+  imageRef?: string;
+  artifact?: { kind: 'image'; imageRef: string; provider?: string };
+  provider?: string;
   port?: number;
   instanceType?: string;
   maxInstances?: number;
@@ -34,7 +37,10 @@ interface ManifestContainer {
 
 /** Service definition in the new `spec.services` section (常設コンテナ) */
 interface ManifestService {
-  dockerfile: string;
+  dockerfile?: string;
+  imageRef?: string;
+  artifact?: { kind: 'image'; imageRef: string; provider?: string };
+  provider?: string;
   port?: number;
   instanceType?: string;
   maxInstances?: number;
@@ -62,7 +68,7 @@ interface ManifestService {
 
 /** Worker definition in the new `spec.workers` section */
 interface ManifestWorker {
-  build: {
+  build?: {
     fromWorkflow: {
       path: string;
       job: string;
@@ -70,6 +76,7 @@ interface ManifestWorker {
       artifactPath: string;
     };
   };
+  artifact?: { kind: 'bundle'; deploymentId?: string; artifactRef?: string };
   env?: Record<string, string>;
   bindings?: {
     d1?: string[];
@@ -132,7 +139,10 @@ function emitNewFormatDocs(
       spec: {
         type: 'container',
         pluginConfig: {
-          dockerfile: container.dockerfile,
+          ...(container.dockerfile ? { dockerfile: container.dockerfile } : {}),
+          ...(container.imageRef ? { imageRef: container.imageRef } : {}),
+          ...(container.artifact ? { artifact: container.artifact } : {}),
+          ...(container.provider ? { provider: container.provider } : {}),
           ...(container.port != null ? { port: container.port } : {}),
           ...(container.instanceType ? { instanceType: container.instanceType } : {}),
           ...(container.maxInstances ? { maxInstances: container.maxInstances } : {}),
@@ -151,7 +161,10 @@ function emitNewFormatDocs(
       spec: {
         type: 'service',
         pluginConfig: {
-          dockerfile: service.dockerfile,
+          ...(service.dockerfile ? { dockerfile: service.dockerfile } : {}),
+          ...(service.imageRef ? { imageRef: service.imageRef } : {}),
+          ...(service.artifact ? { artifact: service.artifact } : {}),
+          ...(service.provider ? { provider: service.provider } : {}),
           ...(service.port != null ? { port: service.port } : {}),
           ...(service.instanceType ? { instanceType: service.instanceType } : {}),
           ...(service.maxInstances ? { maxInstances: service.maxInstances } : {}),
@@ -170,7 +183,7 @@ function emitNewFormatDocs(
   // ── Workers ────────────────────────────────────────────────────────────────
   for (const [workerName, worker] of Object.entries(workers)) {
     const source = buildSources.get(workerName);
-    if (!source) {
+    if (!source && worker.artifact?.kind !== 'bundle') {
       throw new Error(`Build source is missing for worker: ${workerName}`);
     }
 
@@ -188,11 +201,11 @@ function emitNewFormatDocs(
       kind: 'Workload',
       metadata: {
         name: workerName,
-        labels: buildSourceLabels(source),
+        ...(source ? { labels: buildSourceLabels(source) } : {}),
       },
       spec: {
         type: 'cloudflare.worker',
-        artifactRef: source.artifact_path,
+        artifactRef: source?.artifact_path ?? worker.artifact?.artifactRef,
         pluginConfig: {
           env: worker.env || {},
           bindings: {
@@ -359,7 +372,7 @@ export function appManifestToBundleDocs(
         ...(resource.type === 'analyticsEngine' && resource.analyticsEngine ? { analyticsEngine: resource.analyticsEngine } : {}),
         ...(resource.type === 'workflow' && resource.workflow ? { workflow: resource.workflow } : {}),
         ...(resource.type === 'durableObject' && resource.durableObject ? { durableObject: resource.durableObject } : {}),
-        ...(resource.migrations
+        ...(resource.type === 'd1' && resource.migrations
           ? typeof resource.migrations === 'string'
             ? { migrations: resource.migrations }
             : { migrations: resource.migrations.up, rollbackMigrations: resource.migrations.down }

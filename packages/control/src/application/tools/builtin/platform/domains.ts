@@ -1,4 +1,4 @@
-﻿import type { ToolDefinition, ToolHandler } from '../../types';
+﻿import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
 import { generateId } from '../../../../shared/utils';
 import { getDb, serviceCustomDomains } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';

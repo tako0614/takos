@@ -71,7 +71,7 @@ export function createExecutorProxyRouter() {
   const router = new Hono<{ Bindings: Env }>();
 
   // Auth guard for all routes
-  router.use('*', async (c, next) => {
+  router.use('*', async (c, next): Promise<void | Response> => {
     if (!validateInternalToken(c.req.raw, c.env)) {
       return c.json({ error: 'Unauthorized' }, 401);
     }

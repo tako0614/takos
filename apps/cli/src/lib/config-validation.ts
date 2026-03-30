@@ -13,11 +13,11 @@ export interface ApiUrlValidationResult {
  * Supports localhost, IPv4 loopback range (127.0.0.0/8), and IPv6 loopback.
  */
 export function isLocalhostAddress(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  return h === 'localhost'
-    || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
-    || h === '::1'
-    || h === '0:0:0:0:0:0:0:1';
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost'
+    || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(normalized)
+    || normalized === '::1'
+    || normalized === '0:0:0:0:0:0:0:1';
 }
 
 /** Trusted API domains */

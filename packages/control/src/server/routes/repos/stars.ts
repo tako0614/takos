@@ -8,6 +8,7 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, AuthenticationError, NotFoundError } from 'takos-common/errors';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/star', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {
@@ -154,8 +155,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       stars: star.repoStars,
       forks: star.repoForks,
       is_starred: true,
-      created_at: (star.repoCreatedAt == null ? null : typeof star.repoCreatedAt === 'string' ? star.repoCreatedAt : star.repoCreatedAt.toISOString()),
-      updated_at: (star.repoUpdatedAt == null ? null : typeof star.repoUpdatedAt === 'string' ? star.repoUpdatedAt : star.repoUpdatedAt.toISOString()),
+      created_at: textDateNullable(star.repoCreatedAt),
+      updated_at: textDateNullable(star.repoUpdatedAt),
       workspace: {
         id: star.accountId,
         name: star.accountName,

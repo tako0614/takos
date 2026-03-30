@@ -1,8 +1,8 @@
 /**
  * Resource entity operations for the control plane.
  *
- * Provisions / deletes Cloudflare resources (D1, R2, KV, etc.) via the
- * CF Management API and records the result in the canonical resources table.
+ * Provisions / deletes managed resources (Cloudflare-native or local portability
+ * backends) and records the result in the canonical resources table.
  *
  * Runs inside Cloudflare Workers -- no subprocess / wrangler CLI available.
  */
@@ -11,11 +11,10 @@ import { eq, and, ne } from 'drizzle-orm';
 import { getDb } from '../../../infra/db/client.ts';
 import { groups } from '../../../infra/db/schema-groups.ts';
 import { resources } from '../../../infra/db/schema-platform-resources.ts';
-import {
-  createCloudflareApiClient,
-  type CloudflareApiClient,
-} from '../cloudflare/api-client.ts';
 import type { Env } from '../../../shared/types/env.ts';
+import { resolveResourceDriver } from '../resources/capabilities.ts';
+import { inferCanonicalResourceDescriptor } from '../deployment/canonical-model.ts';
+import { deleteManagedResource, provisionManagedResource } from '../resources/lifecycle.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -35,15 +34,25 @@ export interface EntityInfo {
   name: string;
   category: string;
   config: ResourceConfig;
+  providerResourceId?: string | null;
+  providerResourceName?: string | null;
+  semanticType?: string | null;
+  driver?: string | null;
+  providerName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 interface ResourceConfig {
   type: string;
-  cfResourceId: string;
+  manifestType?: string;
+  resourceClass?: string;
+  backing?: string;
   binding: string;
-  cfName: string;
+  bindingName?: string;
+  bindingType?: string;
+  providerResourceId?: string;
+  providerResourceName?: string;
   specFingerprint?: string;
 }
 
@@ -51,20 +60,12 @@ interface ResourceConfig {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function resourceCfName(groupName: string, envName: string, resourceName: string): string {
+function resourceProviderName(groupName: string, envName: string, resourceName: string): string {
   return `${groupName}-${envName}-${resourceName}`;
 }
 
 function generateResourceId(): string {
   return crypto.randomUUID();
-}
-
-function requireCfClient(env: Env): CloudflareApiClient {
-  const client = createCloudflareApiClient(env);
-  if (!client) {
-    throw new Error('CF_ACCOUNT_ID and CF_API_TOKEN are required for resource provisioning');
-  }
-  return client;
 }
 
 async function resolveSpaceId(
@@ -87,64 +88,6 @@ async function resolveSpaceId(
   return group.spaceId;
 }
 
-/**
- * Generate a cryptographically random hex token (for secretRef).
- * Uses the Web Crypto API available in Workers.
- */
-function generateSecretToken(bytes = 32): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  return Array.from(buf).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ---------------------------------------------------------------------------
-// CF resource provisioning via API
-// ---------------------------------------------------------------------------
-
-async function provisionD1(client: CloudflareApiClient, cfName: string): Promise<string> {
-  const result = await client.accountPost<{ uuid: string }>('/d1/database', { name: cfName });
-  return result.uuid;
-}
-
-async function provisionR2(client: CloudflareApiClient, cfName: string): Promise<string> {
-  await client.accountPost('/r2/buckets', { name: cfName });
-  return cfName; // R2 bucket name is the ID
-}
-
-async function provisionKV(client: CloudflareApiClient, cfName: string): Promise<string> {
-  const result = await client.accountPost<{ id: string }>('/storage/kv/namespaces', { title: cfName });
-  return result.id;
-}
-
-async function provisionQueue(client: CloudflareApiClient, cfName: string): Promise<string> {
-  const result = await client.accountPost<{ queue_id: string }>('/queues', { queue_name: cfName });
-  return result.queue_id;
-}
-
-// ---------------------------------------------------------------------------
-// CF resource deletion via API
-// ---------------------------------------------------------------------------
-
-async function deleteD1(client: CloudflareApiClient, cfResourceId: string): Promise<void> {
-  await client.accountDelete(`/d1/database/${cfResourceId}`);
-}
-
-async function deleteR2(client: CloudflareApiClient, cfName: string): Promise<void> {
-  await client.accountDelete(`/r2/buckets/${cfName}`);
-}
-
-async function deleteKV(client: CloudflareApiClient, cfResourceId: string): Promise<void> {
-  await client.accountDelete(`/storage/kv/namespaces/${cfResourceId}`);
-}
-
-async function deleteQueue(client: CloudflareApiClient, cfResourceId: string): Promise<void> {
-  await client.accountDelete(`/queues/${cfResourceId}`);
-}
-
-// ---------------------------------------------------------------------------
-// createResource
-// ---------------------------------------------------------------------------
-
 export async function createResource(
   env: Env,
   groupId: string,
@@ -155,58 +98,42 @@ export async function createResource(
     groupName?: string;
     envName?: string;
     spaceId?: string;
+    providerName?: string;
     specFingerprint?: string;
   },
 ): Promise<EntityResult> {
-  const binding = opts.binding || name.toUpperCase().replace(/-/g, '_');
-  const cfName = resourceCfName(opts.groupName ?? groupId, opts.envName ?? 'default', name);
-  const spaceId = await resolveSpaceId(env, groupId, opts.spaceId);
-
-  let cfResourceId: string;
-
-  switch (opts.type) {
-    case 'd1': {
-      const client = requireCfClient(env);
-      cfResourceId = await provisionD1(client, cfName);
-      break;
-    }
-    case 'r2': {
-      const client = requireCfClient(env);
-      cfResourceId = await provisionR2(client, cfName);
-      break;
-    }
-    case 'kv': {
-      const client = requireCfClient(env);
-      cfResourceId = await provisionKV(client, cfName);
-      break;
-    }
-    case 'queue': {
-      const client = requireCfClient(env);
-      cfResourceId = await provisionQueue(client, cfName);
-      break;
-    }
-    case 'secretRef': {
-      cfResourceId = generateSecretToken();
-      break;
-    }
-    case 'vectorize':
-    case 'analyticsEngine':
-    case 'workflow':
-    case 'durableObject': {
-      // These resource types are auto-configured during worker deploy.
-      // Record them in the entity table but skip API provisioning.
-      cfResourceId = name;
-      break;
-    }
-    default:
-      throw new Error(`Unsupported resource type: ${opts.type}`);
+  const descriptor = inferCanonicalResourceDescriptor(opts.type);
+  if (!descriptor) {
+    throw new Error(`Unsupported resource type: ${opts.type}`);
   }
+  const binding = opts.binding || name.toUpperCase().replace(/-/g, '_');
+  const providerResourceName = resourceProviderName(opts.groupName ?? groupId, opts.envName ?? 'default', name);
+  const spaceId = await resolveSpaceId(env, groupId, opts.spaceId);
+  const providerName = opts.providerName ?? 'cloudflare';
+  const provisioned = await provisionManagedResource(env, {
+    ownerId: spaceId,
+    spaceId,
+    groupId,
+    name,
+    type: opts.type,
+    publicType: opts.type as never,
+    semanticType: descriptor.resourceClass,
+    providerName,
+    persist: false,
+    providerResourceName,
+    config: {},
+  });
 
   const config: ResourceConfig = {
     type: opts.type,
-    cfResourceId,
+    manifestType: opts.type,
+    resourceClass: descriptor.resourceClass,
+    backing: descriptor.backing,
     binding,
-    cfName,
+    bindingName: binding,
+    bindingType: descriptor.bindingType,
+    providerResourceId: provisioned.providerResourceId ?? undefined,
+    providerResourceName: provisioned.providerResourceName,
     ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
   };
 
@@ -227,9 +154,12 @@ export async function createResource(
         accountId: spaceId,
         groupId,
         type: opts.type,
+        semanticType: descriptor.resourceClass,
+        driver: resolveResourceDriver(descriptor.resourceClass, providerName),
+        providerName,
         status: 'active',
-        cfId: cfResourceId,
-        cfName,
+        providerResourceId: provisioned.providerResourceId,
+        providerResourceName: provisioned.providerResourceName,
         config: JSON.stringify(config),
         manifestKey: name,
         orphanedAt: null,
@@ -245,9 +175,12 @@ export async function createResource(
       groupId,
       name,
       type: opts.type,
+      semanticType: descriptor.resourceClass,
+      driver: resolveResourceDriver(descriptor.resourceClass, providerName),
+      providerName,
       status: 'active',
-      cfId: cfResourceId,
-      cfName,
+      providerResourceId: provisioned.providerResourceId,
+      providerResourceName: provisioned.providerResourceName,
       config: JSON.stringify(config),
       metadata: '{}',
       manifestKey: name,
@@ -258,7 +191,7 @@ export async function createResource(
     name,
     category: 'resource',
     type: opts.type,
-    id: cfResourceId,
+    id: provisioned.providerResourceId ?? provisioned.id,
     binding,
   };
 }
@@ -329,31 +262,18 @@ export async function deleteResource(
 
   const config = JSON.parse(row.config) as ResourceConfig;
 
-  // Delete the real CF resource
+  // Delete the real provider resource
   try {
-    const client = createCloudflareApiClient(env);
-    if (client) {
-      switch (config.type) {
-        case 'd1':
-          await deleteD1(client, config.cfResourceId);
-          break;
-        case 'r2':
-          await deleteR2(client, config.cfName);
-          break;
-        case 'kv':
-          await deleteKV(client, config.cfResourceId);
-          break;
-        case 'queue':
-          await deleteQueue(client, config.cfResourceId);
-          break;
-        // secretRef, vectorize, analyticsEngine, workflow, durableObject:
-        // no external resource to delete
-      }
-    }
+    await deleteManagedResource(env, {
+      type: config.type,
+      providerName: row.providerName,
+      providerResourceId: config.providerResourceId,
+      providerResourceName: config.providerResourceName,
+    });
   } catch (error) {
     // Log but still remove from DB so state is consistent.
     // The real resource may already have been deleted externally.
-    console.warn(`Failed to delete CF resource for "${name}":`, error);
+    console.warn(`Failed to delete managed resource for "${name}":`, error);
   }
 
   // Remove from DB
@@ -387,6 +307,11 @@ export async function listResources(
     name: row.name,
     category: 'resource',
     config: JSON.parse(row.config) as ResourceConfig,
+    providerResourceId: row.providerResourceId,
+    providerResourceName: row.providerResourceName,
+    semanticType: row.semanticType,
+    driver: row.driver,
+    providerName: row.providerName,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));

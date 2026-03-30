@@ -33,14 +33,14 @@ build:
     path: workflows/deploy.yml
 ```
 
-### `Error: worker "xxx" not found in manifest`
+### `Error: target "workers.xxx" not found in manifest`
 
-`--worker` フラグで指定した名前が `.takos/app.yml` の `workers` セクションに存在するか確認してください。
+`--target` で指定した workload 名が `.takos/app.yml` に存在するか確認してください。
 
 ```bash
 # app.yml に workers.web がある場合
-takos deploy-group --env staging --worker web    # OK
-takos deploy-group --env staging --worker api    # NG（存在しない）
+takos apply --env staging --target workers.web    # OK
+takos apply --env staging --target workers.api    # NG（存在しない）
 ```
 
 ## リソース作成失敗
@@ -60,16 +60,16 @@ takos deploy-group --env staging --worker api    # NG（存在しない）
 
 ### `Error: wrangler deploy failed`
 
-1. まず dry-run で確認しましょう:
+1. まず plan を確認しましょう:
 
 ```bash
-takos deploy-group --env staging --dry-run
+takos plan
 ```
 
-2. verbose モードでログを確認:
+2. 変更対象を絞って切り分けます:
 
 ```bash
-takos deploy-group --env staging --verbose
+takos apply --env staging --target workers.web
 ```
 
 3. よくある原因:
@@ -85,7 +85,7 @@ echo $CLOUDFLARE_ACCOUNT_ID
 echo $CLOUDFLARE_API_TOKEN
 
 # または明示的に指定
-takos deploy-group --env staging \
+takos apply --env staging \
   --account-id YOUR_ACCOUNT_ID \
   --api-token YOUR_API_TOKEN
 ```
@@ -112,7 +112,7 @@ env:
 デプロイ前に manifest だけ検証したい場合:
 
 ```bash
-takos deploy validate
+takos plan
 ```
 
 以下の項目が検証されます。
@@ -120,16 +120,16 @@ takos deploy validate
 - `.takos/app.yml` が `kind: App` であること
 - `build.fromWorkflow.path` が `.takos/workflows/` 配下であること
 - service / resource / route の参照が整合していること
-- `--worker` / `--container` フィルタの名前が manifest 内に存在すること
+- `--target` で指定した resource / workload / route が manifest 内に存在すること
 
 ## それでも解決しない場合
 
 1. Cloudflare ダッシュボードで Worker やリソースの状態を確認
-2. `takos deploy-group --dry-run --json` で生成される設定を確認
+2. `takos plan` で manifest の解釈結果と差分を確認
 3. 生成された wrangler.toml を手動で `wrangler deploy` してエラーを切り分け
 
 ## 次のステップ
 
-- [deploy-group](/deploy/deploy-group) --- デプロイコマンドの詳細
+- [apply](/deploy/apply) --- `takos apply` の詳細
 - [ロールバック](/deploy/rollback) --- ロールバックの手順
 - [CLI コマンド](/reference/cli) --- CLI の全コマンド

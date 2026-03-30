@@ -30,6 +30,23 @@ export function isValidOpaqueId(value: unknown): value is string {
   return OPAQUE_ID_PATTERN.test(normalized);
 }
 
+/**
+ * Normalise a Drizzle text-column value to a plain string.
+ *
+ * SQLite `text()` columns always return strings at runtime, but Drizzle's
+ * type inference sometimes widens them to `string | Date` or even `never`
+ * when column definitions are composed via object spread.
+ * This helper safely narrows the type so callers don't need inline casts.
+ */
+export function textDate(value: string | Date | unknown): string {
+  return typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : String(value);
+}
+
+/** Nullable variant of {@link textDate}. */
+export function textDateNullable(value: string | Date | null | undefined | unknown): string | null {
+  return value == null ? null : textDate(value);
+}
+
 export function isValidLookupEmail(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const normalized = value.trim();

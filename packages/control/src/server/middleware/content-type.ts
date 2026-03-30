@@ -11,7 +11,7 @@ export function validateContentType(options: ContentTypeOptions = {}): Middlewar
   const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
   const allowEmptyBody = options.allowEmptyBody ?? true;
 
-  return async (c: Context, next) => {
+  return async (c: Context, next): Promise<Response | void> => {
     const method = c.req.method;
 
     if (!['POST', 'PUT', 'PATCH'].includes(method)) {

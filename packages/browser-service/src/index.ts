@@ -1,4 +1,4 @@
-// Container entry point — starts the browser service HTTP server
+// コンテナ起動エントリポイント（ブラウザサービスの HTTP サーバーを起動）
 import { startBrowserService } from './app.js';
 
 startBrowserService();

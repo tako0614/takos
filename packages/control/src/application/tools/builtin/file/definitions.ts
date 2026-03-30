@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition } from '../../tool-definitions';
 
 export const FILE_READ: ToolDefinition = {
   name: 'file_read',

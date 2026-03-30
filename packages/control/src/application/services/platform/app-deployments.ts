@@ -359,6 +359,7 @@ export class AppDeploymentService {
     }
 
     for (const resource of Object.values(manifest.spec.resources || {})) {
+      if (resource.type !== 'd1') continue;
       if (!resource.migrations) continue;
       if (typeof resource.migrations === 'string') {
         if (!looksLikeInlineSql(resource.migrations)) {

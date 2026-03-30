@@ -1,12 +1,12 @@
 /**
- * Expression tokenizer
- * Handles lexical analysis of GitHub Actions expressions
+ * 式トークナイザー
+ * GitHub Actions 式の字句解析を行う
  */
 
 /**
- * Expression evaluation error
+ * 式評価エラー
  */
-/** @internal - not re-exported from the package index */
+/** @internal - パッケージインデックスからは再エクスポートされない */
 export class ExpressionError extends Error {
   constructor(
     message: string,
@@ -18,7 +18,7 @@ export class ExpressionError extends Error {
 }
 
 /**
- * Token types for expression lexer
+ * 式レンジャのトークン種別
  */
 export type TokenType =
   | 'identifier'
@@ -41,7 +41,7 @@ export interface Token {
   raw: string;
 }
 
-/** Two-character operator lookup: first char -> second char -> operator string */
+/** 2 文字演算子の対応表: 1 文字目 -> 2 文字目 -> 演算子文字列 */
 const TWO_CHAR_OPERATORS: Record<string, Record<string, string>> = {
   '=': { '=': '==' },
   '!': { '=': '!=' },
@@ -51,14 +51,14 @@ const TWO_CHAR_OPERATORS: Record<string, Record<string, string>> = {
   '|': { '|': '||' },
 };
 
-// Regex patterns for tokenizer (hoisted to module level to avoid re-creation)
+// トークナイザー用の正規表現（再生成を避けるためモジュール上位で定義）
 const RE_WHITESPACE = /\s/;
 const RE_IDENTIFIER_START = /[a-zA-Z_]/;
 const RE_IDENTIFIER_CHAR = /[a-zA-Z0-9_-]/;
 const RE_DIGIT = /[0-9]/;
 
 /**
- * Simple tokenizer for expressions
+ * 式のシンプルトークナイザー
  */
 export function tokenize(expr: string): Token[] {
   const tokens: Token[] = [];
@@ -67,13 +67,13 @@ export function tokenize(expr: string): Token[] {
   while (pos < expr.length) {
     const char = expr[pos];
 
-    // Skip whitespace
+    // 空白をスキップ
     if (RE_WHITESPACE.test(char)) {
       pos++;
       continue;
     }
 
-    // Operators -- check two-char operators first via lookup table
+    // 演算子を処理: まず 2 文字演算子を演算子テーブルで確認
     const twoCharOp = TWO_CHAR_OPERATORS[char]?.[expr[pos + 1]];
     if (twoCharOp !== undefined) {
       tokens.push({ type: 'operator', value: twoCharOp, raw: twoCharOp });
@@ -91,7 +91,7 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    // Punctuation
+    // 区切り記号
     if (char === '.') {
       tokens.push({ type: 'dot', value: '.', raw: '.' });
       pos++;
@@ -123,7 +123,7 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    // String literals
+    // 文字列リテラル
     if (char === "'" || char === '"') {
       const quote = char;
       let value = '';
@@ -146,7 +146,7 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    // Numbers
+    // 数値
     if (RE_DIGIT.test(char) || (char === '-' && RE_DIGIT.test(expr[pos + 1] || ''))) {
       let raw = '';
       if (char === '-') {
@@ -162,14 +162,14 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    // Identifiers and keywords
+    // 識別子・キーワード
     if (RE_IDENTIFIER_START.test(char)) {
       let raw = '';
       while (pos < expr.length && RE_IDENTIFIER_CHAR.test(expr[pos])) {
         raw += expr[pos];
         pos++;
       }
-      // Check for keywords
+      // キーワードか確認
       if (raw === 'true') {
         tokens.push({ type: 'boolean', value: true, raw });
       } else if (raw === 'false') {
@@ -182,7 +182,7 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    // Unknown character
+    // 未知の文字
     throw new ExpressionError(`Unexpected character: ${char}`, expr);
   }
 

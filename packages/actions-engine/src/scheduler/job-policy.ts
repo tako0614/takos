@@ -1,5 +1,5 @@
 /**
- * Job policy helpers — context builders, result factories, and step-control logic.
+ * ジョブポリシーヘルパー（コンテキスト生成・結果生成・ステップ制御）
  */
 import type {
   JobResult,
@@ -9,7 +9,7 @@ import type {
   StepResult,
 } from '../workflow-models.js';
 
-// --- Job execution state ---
+// --- ジョブ実行状態 ---
 
 export interface JobExecutionState {
   failed: boolean;
@@ -22,7 +22,7 @@ export interface StepControl {
   shouldCancelWorkflow: boolean;
 }
 
-// --- Job context helpers ---
+// --- ジョブコンテキストヘルパー ---
 
 type NeedsResult = ExecutionContext['needs'][string]['result'];
 
@@ -97,7 +97,7 @@ export function buildStepsContext(stepResults: StepResult[]): ExecutionContext['
   return stepsContext;
 }
 
-// --- Result factories ---
+// --- 結果ファクトリ ---
 
 export function createCompletedJobResult(
   id: string,
@@ -128,7 +128,7 @@ export function createInProgressJobResult(
   };
 }
 
-// --- Step control classification ---
+// --- ステップ制御の分類 ---
 
 export function classifyStepControl(
   step: Step,
@@ -143,7 +143,7 @@ export function classifyStepControl(
   };
 }
 
-// --- Output collection ---
+// --- 出力収集 ---
 
 export function collectStepOutputs(steps: StepResult[]): Record<string, string> {
   const outputs: Record<string, string> = {};
@@ -158,7 +158,7 @@ export function collectStepOutputs(steps: StepResult[]): Record<string, string> 
   return outputs;
 }
 
-// --- Job finalization ---
+// --- ジョブ最終化 ---
 
 export function finalizeJobResult(
   result: JobResult,
@@ -174,7 +174,7 @@ export function finalizeJobResult(
   result.outputs = collectStepOutputs(result.steps);
 }
 
-// --- Dependency skip detection ---
+// --- 依存スキップ判定 ---
 
 export function getDependencySkipReason(
   needs: string[],

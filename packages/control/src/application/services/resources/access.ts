@@ -6,6 +6,7 @@ import { generateId } from '../../../shared/utils';
 import { toApiResourceAccess } from './format';
 import { getResourceById } from './store';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const RESOURCE_PERMISSIONS: readonly string[] = ['read', 'write', 'admin'];
 
@@ -39,7 +40,7 @@ export async function listResourceAccess(db: D1Database, resourceId: string) {
       accountId: ra.accountId,
       permission: ra.permission,
       grantedByAccountId: ra.grantedByAccountId,
-      createdAt: (ra.createdAt == null ? null : typeof ra.createdAt === 'string' ? ra.createdAt : ra.createdAt.toISOString()),
+      createdAt: textDate(ra.createdAt),
     }),
     workspace_name: ra.accountName,
   }));

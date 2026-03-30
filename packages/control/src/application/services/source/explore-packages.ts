@@ -16,6 +16,7 @@ import type {
 import { queryReleasesWithRepo, loadAssetsForReleases, buildPackagesFromRows } from './explore-search';
 import { SORT_ALIASES, filterPackages, sortPackages } from './explore-package-filters';
 import { getTakopackRatingStats, getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 // ---------------------------------------------------------------------------
 // Re-export types and functions so existing importers continue to work
@@ -74,7 +75,7 @@ function toPackageDto(
     release: {
       id: pkg.release.id,
       tag: pkg.release.tag,
-      published_at: (pkg.release.publishedAt == null ? null : typeof pkg.release.publishedAt === 'string' ? pkg.release.publishedAt : pkg.release.publishedAt.toISOString()),
+      published_at: textDateNullable(pkg.release.publishedAt),
     },
     asset: {
       id: pkg.primaryAsset.id,
@@ -83,7 +84,7 @@ function toPackageDto(
       download_count: pkg.primaryAsset.download_count,
     },
     total_downloads: pkg.totalDownloads,
-    published_at: (pkg.release.publishedAt == null ? null : typeof pkg.release.publishedAt === 'string' ? pkg.release.publishedAt : pkg.release.publishedAt.toISOString()),
+    published_at: textDateNullable(pkg.release.publishedAt),
     rating_avg: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_avg ?? null,
     rating_count: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_count ?? 0,
     publish_status: publishStatus,
@@ -205,7 +206,7 @@ export async function suggestPackages(
         release: {
           id: release.id,
           tag: release.tag,
-          published_at: (release.publishedAt == null ? null : typeof release.publishedAt === 'string' ? release.publishedAt : release.publishedAt.toISOString()),
+          published_at: textDateNullable(release.publishedAt),
         },
         asset: {
           id: primaryAsset.id,
@@ -214,7 +215,7 @@ export async function suggestPackages(
           download_count: primaryAsset.download_count,
         },
         total_downloads: totalDownloads,
-        published_at: (release.publishedAt == null ? null : typeof release.publishedAt === 'string' ? release.publishedAt : release.publishedAt.toISOString()),
+        published_at: textDateNullable(release.publishedAt),
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)

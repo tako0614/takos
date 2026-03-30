@@ -22,6 +22,7 @@ import type { CustomSkillMetadata, SkillLocale } from '../agent/skill-contracts'
 import { hasSkillTemplate, listSkillTemplates } from '../agent/skill-templates';
 import { listMcpServers } from '../platform/mcp';
 import { logWarn } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export class SkillMetadataValidationError extends Error {
   constructor(
@@ -172,8 +173,8 @@ function toSkillRow(s: {
     triggers: s.triggers,
     metadata: s.metadata || '{}',
     enabled: s.enabled,
-    createdAt: typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString(),
-    updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString(),
+    createdAt: textDate(s.createdAt),
+    updatedAt: textDate(s.updatedAt),
   };
 }
 

@@ -200,7 +200,7 @@ async function loadChildRun(
     run: childRun,
     artifacts: childArtifacts.map((artifact) => ({
       ...artifact,
-      created_at: (artifact.created_at == null ? null : typeof artifact.created_at === 'string' ? artifact.created_at : artifact.created_at.toISOString()),
+      created_at: artifact.created_at,
     })),
   };
 }
@@ -214,7 +214,7 @@ function buildWaitAgentResponse(result: { run: ChildRunRow; artifacts: ArtifactS
     root_thread_id: result.run.rootThreadId ?? result.run.threadId,
     status: result.run.status,
     timed_out: timedOut,
-    completed_at: result.run.completedAt ? (result.run.completedAt == null ? null : typeof result.run.completedAt === 'string' ? result.run.completedAt : result.run.completedAt.toISOString()) : null,
+    completed_at: result.run.completedAt ? result.run.completedAt : null,
     final_response: terminal ? extractFinalResponse(result.run.output) : null,
     error: terminal ? result.run.error : null,
     artifacts: result.artifacts,

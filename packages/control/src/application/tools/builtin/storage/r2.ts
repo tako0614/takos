@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolContext } from '../../types';
+import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions';
 import { validateR2Key, validateStoragePath } from './validators';
 import { computeSHA256 } from '../../../../shared/utils/hash';
 import { getDb, files } from '../../../../infra/db';

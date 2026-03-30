@@ -160,7 +160,7 @@ async function resolveRequestUser(
 
 // Supports cookie auth (browser), Bearer token (CLI external), and
 // X-Takos-Internal + X-Takos-Session-Id (CLI container mode via service binding)
-export const requireAuth: AuthMiddleware = async (c, next) => {
+export const requireAuth: AuthMiddleware = async (c, next): Promise<Response | void> => {
   if (c.get('user')) {
     await next();
     return;

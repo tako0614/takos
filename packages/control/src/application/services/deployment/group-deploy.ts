@@ -45,7 +45,7 @@ function execCommand(
       resolve({
         stdout: String(stdout || ''),
         stderr: String(stderr || ''),
-        exitCode: error ? (error as NodeJS.ErrnoException & { code?: number }).code as number || 1 : 0,
+        exitCode: error ? ((error as NodeJS.ErrnoException & { code?: number }).code as unknown as number) || 1 : 0,
       });
     });
   });

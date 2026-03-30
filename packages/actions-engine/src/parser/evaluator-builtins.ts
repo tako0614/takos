@@ -1,5 +1,5 @@
 /**
- * Built-in function implementations for the expression evaluator
+ * 式評価器で使用する組み込み関数実装
  */
 import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
@@ -173,7 +173,7 @@ export function fnToJSON(args: unknown[]): string {
 
 export function fnFromJSON(args: unknown[]): unknown {
   const str = String(args[0]);
-  // Limit input size to prevent OOM from attacker-controlled JSON strings
+  // 攻撃者制御の JSON 文字列による OOM を防ぐため入力サイズを制限
   if (str.length > MAX_FROM_JSON_SIZE) {
     return null;
   }

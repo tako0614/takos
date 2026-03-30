@@ -37,10 +37,38 @@ const POD_POLL_INTERVAL_MS = 2_000;
 // import.
 // ---------------------------------------------------------------------------
 
+// @kubernetes/client-node is an optional peer dependency — types are only
+// available when the package is installed (e.g. in local-platform builds).
+
+// Local type stubs for @kubernetes/client-node (avoids hard dependency)
+type K8sPodCondition = { type: string; status: string; reason?: string; message?: string };
+type K8sContainerStatus = { ready: boolean; state?: { waiting?: { reason?: string; message?: string } } };
+type K8sPodStatus = {
+  phase?: string;
+  conditions?: K8sPodCondition[];
+  containerStatuses?: K8sContainerStatus[];
+  podIP?: string;
+  message?: string;
+  reason?: string;
+};
+
+interface K8sCoreV1Api {
+  readNamespacedPod(params: { name: string; namespace: string }): Promise<{ body: { status?: K8sPodStatus } }>;
+  createNamespacedPod(params: { namespace: string; body: unknown }): Promise<unknown>;
+  deleteNamespacedPod(params: { name: string; namespace: string; gracePeriodSeconds?: number }): Promise<unknown>;
+  readNamespacedPodLog(params: { name: string; namespace: string; container?: string; tailLines?: number; timestamps?: boolean }): Promise<{ body: string }>;
+}
+
+interface K8sKubeConfig {
+  loadFromFile(path: string): void;
+  loadFromCluster(): void;
+  makeApiClient(apiClass: unknown): K8sCoreV1Api;
+}
+
 type K8sApi = {
-  core: import('@kubernetes/client-node').CoreV1Api;
-  log: import('@kubernetes/client-node').Log;
-  kc: import('@kubernetes/client-node').KubeConfig;
+  core: K8sCoreV1Api;
+  log: unknown;
+  kc: K8sKubeConfig;
 };
 
 let _k8sApi: K8sApi | null = null;
@@ -49,7 +77,8 @@ async function getK8sApi(): Promise<K8sApi> {
   if (_k8sApi) return _k8sApi;
 
   // Dynamic import so the dependency is truly optional at load time.
-  const k8s = await import('@kubernetes/client-node');
+  // @ts-expect-error — @kubernetes/client-node is an optional dependency
+  const k8s = await import('@kubernetes/client-node') as { KubeConfig: new () => K8sKubeConfig; CoreV1Api: unknown; Log: new (kc: K8sKubeConfig) => unknown };
   const kc = new k8s.KubeConfig();
 
   if (K8S_KUBECONFIG) {

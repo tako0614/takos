@@ -15,6 +15,7 @@ import { generateWranglerConfig, serializeWranglerToml } from '../group-deploy/w
 import { serializeContainerWranglerToml } from '../group-deploy/container.js';
 import type { ContainerWranglerConfig, WranglerConfig } from '../group-deploy/deploy-models.js';
 import { createEmptyState } from '../empty-state.js';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,9 @@ async function computeCodeHash(artifactPath: string): Promise<string> {
   try {
     const content = await fs.readFile(artifactPath);
     return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Warning: could not compute code hash for ${artifactPath}: ${msg}\n`);
     return 'unknown';
   }
 }
@@ -73,9 +76,7 @@ export async function deployWorker(
         artifactPath,
       },
     },
-    env: opts.bindings ? Object.fromEntries(
-      Object.entries(opts.bindings).map(([k, v]) => [k, v]),
-    ) : undefined,
+    env: opts.bindings,
     bindings: undefined,
     containers: undefined,
   };
@@ -90,7 +91,7 @@ export async function deployWorker(
       env: opts.env,
       namespace: opts.namespace,
       resources,
-      compatibilityDate: '2025-01-01',
+      compatibilityDate: DEFAULT_COMPATIBILITY_DATE,
     },
   );
 
@@ -155,9 +156,9 @@ export async function listWorkers(group: string): Promise<WorkerEntry[]> {
  */
 export async function deleteWorker(
   name: string,
-  _opts: { group: string; accountId: string; apiToken: string },
+  opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  const group = _opts.group;
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
   const state = await readState(stateDir, group);

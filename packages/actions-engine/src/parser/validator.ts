@@ -1,5 +1,5 @@
 /**
- * Workflow schema validation using Zod
+ * Zod を使ったワークフロー検証
  */
 import { z } from 'zod';
 import { buildDependencyGraph, detectCycle, DependencyError } from '../scheduler/dependency.js';
@@ -7,11 +7,11 @@ import type { Workflow, WorkflowDiagnostic } from '../workflow-models.js';
 import { normalizeNeedsInput } from '../scheduler/job.js';
 
 // =============================================================================
-// Zod Schemas
+// Zod スキーマ
 // =============================================================================
 
 /**
- * Branch filter schema
+ * ブランチフィルターのスキーマ
  */
 const branchFilterSchema = z.object({
   branches: z.array(z.string()).optional(),
@@ -23,12 +23,12 @@ const branchFilterSchema = z.object({
 });
 
 /**
- * Push trigger schema
+ * push トリガーのスキーマ
  */
 const pushTriggerSchema = branchFilterSchema.nullable();
 
 /**
- * Pull request trigger schema
+ * pull_request トリガーのスキーマ
  */
 const pullRequestTriggerSchema = branchFilterSchema
   .extend({
@@ -37,7 +37,7 @@ const pullRequestTriggerSchema = branchFilterSchema
   .nullable();
 
 /**
- * Workflow dispatch input schema
+ * workflow_dispatch 入力のスキーマ
  */
 const workflowDispatchInputSchema = z.object({
   description: z.string().optional(),
@@ -48,7 +48,7 @@ const workflowDispatchInputSchema = z.object({
 });
 
 /**
- * Workflow dispatch trigger schema
+ * workflow_dispatch トリガーのスキーマ
  */
 const workflowDispatchSchema = z
   .object({
@@ -57,14 +57,14 @@ const workflowDispatchSchema = z
   .nullable();
 
 /**
- * Schedule trigger schema
+ * schedule トリガーのスキーマ
  */
 const scheduleTriggerSchema = z.object({
   cron: z.string(),
 });
 
 /**
- * Workflow call input schema
+ * workflow_call 入力のスキーマ
  */
 const workflowCallInputSchema = z.object({
   description: z.string().optional(),
@@ -74,7 +74,7 @@ const workflowCallInputSchema = z.object({
 });
 
 /**
- * Workflow call output schema
+ * workflow_call 出力のスキーマ
  */
 const workflowCallOutputSchema = z.object({
   description: z.string().optional(),
@@ -82,7 +82,7 @@ const workflowCallOutputSchema = z.object({
 });
 
 /**
- * Workflow call secret schema
+ * workflow_call シークレットのスキーマ
  */
 const workflowCallSecretSchema = z.object({
   description: z.string().optional(),
@@ -90,7 +90,7 @@ const workflowCallSecretSchema = z.object({
 });
 
 /**
- * Workflow call trigger schema
+ * workflow_call トリガーのスキーマ
  */
 const workflowCallSchema = z
   .object({
@@ -101,7 +101,7 @@ const workflowCallSchema = z
   .nullable();
 
 /**
- * Workflow trigger schema
+ * ワークフロートリガーのスキーマ
  */
 const workflowTriggerSchema = z.object({
   push: pushTriggerSchema.optional(),
@@ -146,7 +146,7 @@ const workflowTriggerSchema = z.object({
 });
 
 /**
- * Step schema
+ * ステップのスキーマ
  */
 const stepSchema = z
   .object({
@@ -176,13 +176,13 @@ const stepSchema = z
   );
 
 /**
- * Matrix config schema
+ * Matrix 設定のスキーマ
  */
 const matrixConfigSchema = z
   .record(z.unknown())
-  .refine(
-    (obj) => {
-      // Allow 'include' and 'exclude' as special keys
+      .refine(
+        (obj) => {
+      // 'include' と 'exclude' を特別キーとして許可
       for (const [key, value] of Object.entries(obj)) {
         if (key === 'include' || key === 'exclude') {
           if (!Array.isArray(value)) return false;
@@ -198,7 +198,7 @@ const matrixConfigSchema = z
   );
 
 /**
- * Job strategy schema
+ * ジョブ戦略のスキーマ
  */
 const jobStrategySchema = z.object({
   matrix: matrixConfigSchema.optional(),
@@ -207,7 +207,7 @@ const jobStrategySchema = z.object({
 });
 
 /**
- * Container config schema
+ * コンテナ設定のスキーマ
  */
 const containerConfigSchema = z.union([
   z.string(),
@@ -227,7 +227,7 @@ const containerConfigSchema = z.union([
 ]);
 
 /**
- * Permissions schema
+ * 権限のスキーマ
  */
 const permissionsSchema = z.union([
   z.literal('read-all'),
@@ -236,7 +236,7 @@ const permissionsSchema = z.union([
 ]);
 
 /**
- * Concurrency schema
+ * 同時実行制御のスキーマ
  */
 const concurrencySchema = z.union([
   z.string(),
@@ -247,7 +247,7 @@ const concurrencySchema = z.union([
 ]);
 
 /**
- * Environment schema
+ * 環境設定のスキーマ
  */
 const environmentSchema = z.union([
   z.string(),
@@ -258,7 +258,7 @@ const environmentSchema = z.union([
 ]);
 
 /**
- * Job defaults schema
+ * ジョブ既定値のスキーマ
  */
 const jobDefaultsSchema = z.object({
   run: z
@@ -270,7 +270,7 @@ const jobDefaultsSchema = z.object({
 });
 
 /**
- * Job schema
+ * ジョブのスキーマ
  */
 const jobSchema = z.object({
   name: z.string().optional(),
@@ -292,7 +292,7 @@ const jobSchema = z.object({
 });
 
 /**
- * Complete workflow schema
+ * 完全なワークフローのスキーマ
  */
 const workflowSchema = z.object({
   name: z.string().optional(),
@@ -313,11 +313,11 @@ const workflowSchema = z.object({
 });
 
 // =============================================================================
-// Validation Functions
+// 検証関数
 // =============================================================================
 
 /**
- * Validation result
+ * 検証結果
  */
 export interface ValidationResult {
   valid: boolean;
@@ -325,7 +325,7 @@ export interface ValidationResult {
 }
 
 /**
- * Collect Zod issues as workflow diagnostics
+ * Zod の issue をワークフロー診断に変換して収集
  */
 function collectSchemaDiagnostics(
   schema: z.ZodTypeAny,
@@ -348,7 +348,7 @@ function collectSchemaDiagnostics(
 }
 
 /**
- * Build validation result from diagnostics
+ * 診断結果から検証結果を構築
  */
 function buildValidationResult(diagnostics: WorkflowDiagnostic[]): ValidationResult {
   return {
@@ -358,15 +358,15 @@ function buildValidationResult(diagnostics: WorkflowDiagnostic[]): ValidationRes
 }
 
 /**
- * Validate workflow against schema
+ * スキーマに対してワークフローを検証
  */
 export function validateWorkflow(workflow: Workflow): ValidationResult {
   const diagnostics: WorkflowDiagnostic[] = [];
 
-  // Schema validation
+  // スキーマ検証
   collectSchemaDiagnostics(workflowSchema, workflow, diagnostics, (issuePath) => issuePath.join('.'));
 
-  // Additional semantic validation
+  // 追加のセマンティック検証
   const semanticDiagnostics = validateSemantics(workflow);
   diagnostics.push(...semanticDiagnostics);
 
@@ -374,12 +374,12 @@ export function validateWorkflow(workflow: Workflow): ValidationResult {
 }
 
 /**
- * Perform semantic validation
+ * セマンティック検証を実行
  */
 function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
   const diagnostics: WorkflowDiagnostic[] = [];
 
-  // Validate job dependencies
+  // ジョブ依存関係を検証
   const jobNames = new Set(Object.keys(workflow.jobs));
 
   for (const [jobId, job] of Object.entries(workflow.jobs)) {
@@ -403,7 +403,7 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
       }
     }
 
-    // Validate step IDs are unique
+    // ステップ ID の重複チェック
     const stepIds = new Set<string>();
     for (let i = 0; i < job.steps.length; i++) {
       const step = job.steps[i];
@@ -420,7 +420,7 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
     }
   }
 
-  // Check for circular dependencies using the shared dependency graph
+    // 共有の依存グラフで循環依存を検出
   try {
     const graph = buildDependencyGraph(workflow);
     const cycle = detectCycle(graph);
@@ -432,8 +432,8 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
       });
     }
   } catch (e) {
-    // buildDependencyGraph throws DependencyError for unknown job references,
-    // which are already reported by the needs-validation above.
+    // buildDependencyGraph は未知のジョブ参照時に DependencyError を投げるが、
+    // 同内容は上で needs 検証により既に報告されている。
     if (!(e instanceof DependencyError)) {
       throw e;
     }
@@ -441,4 +441,3 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
 
   return diagnostics;
 }
-

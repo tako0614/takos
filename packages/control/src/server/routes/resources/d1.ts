@@ -11,6 +11,7 @@ import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type D1ResourceData = {
   id: string;
@@ -19,8 +20,8 @@ type D1ResourceData = {
   name: string;
   type: string;
   status: string;
-  cfId: string | null;
-  cfName: string | null;
+  providerResourceId?: string | null;
+  providerResourceName?: string | null;
   config: string;
   metadata: string;
   createdAt: string | Date;
@@ -81,12 +82,12 @@ function toSnakeCaseResource(resourceData: D1ResourceData): Resource {
     name: resourceData.name,
     type: resourceData.type as Resource['type'],
     status: resourceData.status as Resource['status'],
-    cf_id: resourceData.cfId,
-    cf_name: resourceData.cfName,
+    provider_resource_id: resourceData.providerResourceId ?? null,
+    provider_resource_name: resourceData.providerResourceName ?? null,
     config: resourceData.config,
     metadata: resourceData.metadata,
-    created_at: (resourceData.createdAt == null ? null : typeof resourceData.createdAt === 'string' ? resourceData.createdAt : resourceData.createdAt.toISOString()),
-    updated_at: (resourceData.updatedAt == null ? null : typeof resourceData.updatedAt === 'string' ? resourceData.updatedAt : resourceData.updatedAt.toISOString()),
+    created_at: textDate(resourceData.createdAt),
+    updated_at: textDate(resourceData.updatedAt),
   };
 }
 
@@ -123,7 +124,8 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const resourceId = c.req.param('id');
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
-  if (!resource.cf_id) {
+  const databaseId = resource.provider_resource_id;
+  if (!databaseId) {
     throw new BadRequestError( 'D1 database not provisioned');
   }
 
@@ -132,14 +134,14 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const tables = await wfp.d1.listD1Tables(resource.cf_id);
+    const tables = await wfp.d1.listD1Tables(databaseId);
 
     const tablesWithInfo = await Promise.all(
       tables.map(async (t: { name: string }) => {
         try {
           const [columns, count] = await Promise.all([
-            wfp.d1.getD1TableInfo(resource.cf_id!, t.name),
-            wfp.d1.getD1TableCount(resource.cf_id!, t.name),
+            wfp.d1.getD1TableInfo(databaseId, t.name),
+            wfp.d1.getD1TableCount(databaseId, t.name),
           ]);
           return {
             name: t.name,
@@ -167,7 +169,8 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const tableName = c.req.param('tableName');
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
-  if (!resource.cf_id) {
+  const databaseId = resource.provider_resource_id;
+  if (!databaseId) {
     throw new BadRequestError( 'D1 database not provisioned');
   }
 
@@ -185,9 +188,9 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     }
 
     const [columns, count, rowsResult] = await Promise.all([
-      wfp.d1.getD1TableInfo(resource.cf_id, safeName),
-      wfp.d1.getD1TableCount(resource.cf_id, safeName),
-      wfp.d1.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
+      wfp.d1.getD1TableInfo(databaseId, safeName),
+      wfp.d1.getD1TableCount(databaseId, safeName),
+      wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
     ]);
 
     // Validate WFP response structure
@@ -229,7 +232,8 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const requiredPermissions: ResourcePermission[] | undefined = isReadOnly ? undefined : ['write', 'admin'];
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
 
-  if (!resource.cf_id) {
+  const databaseId = resource.provider_resource_id;
+  if (!databaseId) {
     throw new BadRequestError( 'D1 database not provisioned');
   }
 
@@ -238,7 +242,7 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const result = await wfp.d1.runD1SQL(resource.cf_id, body.sql);
+    const result = await wfp.d1.runD1SQL(databaseId, body.sql);
 
     return c.json({ result });
   } catch (err) {
@@ -254,7 +258,8 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const body = await parseJsonBody<{ tables?: string[] }>(c);
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 
-  if (!resource.cf_id) {
+  const databaseId = resource.provider_resource_id;
+  if (!databaseId) {
     throw new BadRequestError( 'D1 database not provisioned');
   }
 
@@ -265,12 +270,12 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     }
     const tableRows = body?.tables && body.tables.length > 0
       ? body.tables
-      : (await wfp.d1.listD1Tables(resource.cf_id)).map((t: { name: string }) => t.name);
+      : (await wfp.d1.listD1Tables(databaseId)).map((t: { name: string }) => t.name);
 
     const tables: Record<string, unknown[]> = {};
     for (const table of tableRows) {
       const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
-      const result = await wfp.d1.runD1SQL(resource.cf_id, `SELECT * FROM ${safeName}`);
+      const result = await wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName}`);
       // Validate WFP response structure
       if (!Array.isArray(result) || !result[0]?.results) {
         continue; // Skip tables with invalid response

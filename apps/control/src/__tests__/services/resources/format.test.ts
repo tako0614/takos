@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { toApiResource, toApiResourceAccess, toApiServiceBinding } from '@/services/resources/format';
 
 describe('toApiResource', () => {
@@ -10,8 +10,8 @@ describe('toApiResource', () => {
       name: 'my-database',
       type: 'd1',
       status: 'active',
-      cfId: 'cf-123',
-      cfName: 'my-db',
+      providerResourceId: 'cf-123',
+      providerResourceName: 'my-db',
       config: '{"key":"value"}',
       metadata: '{"meta":"data"}',
       sizeBytes: 1024,
@@ -26,9 +26,11 @@ describe('toApiResource', () => {
     expect(result.space_id).toBe('space-1');
     expect(result.name).toBe('my-database');
     expect(result.type).toBe('d1');
+    expect(result.capability).toBe('sql');
+    expect(result.implementation).toBe('d1');
     expect(result.status).toBe('active');
-    expect(result.cf_id).toBe('cf-123');
-    expect(result.cf_name).toBe('my-db');
+    expect(result.provider_resource_id).toBe('cf-123');
+    expect(result.provider_resource_name).toBe('my-db');
     expect(result.config).toBe('{"key":"value"}');
     expect(result.metadata).toBe('{"meta":"data"}');
     expect(result.size_bytes).toBe(1024);
@@ -43,8 +45,8 @@ describe('toApiResource', () => {
       name: 'my-bucket',
       type: 'r2',
       status: 'active',
-      cfId: null,
-      cfName: null,
+      providerResourceId: null,
+      providerResourceName: null,
       config: '{}',
       metadata: '{}',
       sizeBytes: null,
@@ -55,8 +57,11 @@ describe('toApiResource', () => {
     });
 
     expect(result.space_id).toBeNull();
-    expect(result.cf_id).toBeNull();
-    expect(result.cf_name).toBeNull();
+    expect(result.type).toBe('r2');
+    expect(result.capability).toBe('object_store');
+    expect(result.implementation).toBe('r2');
+    expect(result.provider_resource_id).toBeNull();
+    expect(result.provider_resource_name).toBeNull();
     expect(result.size_bytes).toBeNull();
     expect(result.item_count).toBeNull();
     expect(result.last_used_at).toBeNull();
@@ -70,8 +75,8 @@ describe('toApiResource', () => {
       name: 'test',
       type: 'd1',
       status: 'active',
-      cfId: null,
-      cfName: null,
+      providerResourceId: null,
+      providerResourceName: null,
       config: '{}',
       metadata: '{}',
       sizeBytes: null,

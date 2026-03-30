@@ -1,632 +1,124 @@
 # マニフェストリファレンス
 
-> このページでわかること: app.yml の全フィールドを一覧できるリファレンス。
-
-このページでは `.takos/app.yml` の全フィールドをテーブル形式で掲載します。各フィールドの詳しい説明は個別のガイドページを参照してください。
+このページは `.takos/app.yml` の current surface を要約します。resource と binding は Cloudflare-native の syntax が正本です。
 
 ## トップレベル
 
 | field | required | type | 説明 |
 | --- | --- | --- | --- |
-| `apiVersion` | yes | string | `takos.dev/v1alpha1` 固定 |
-| `kind` | yes | string | `App` 固定 |
-| `metadata` | yes | object | メタデータ |
-| `spec` | yes | object | アプリの仕様 |
-
-## metadata
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | アプリの識別名 |
-| `appId` | no | string | 既存 app identity を pin する場合に使用 |
+| `apiVersion` | yes | string | `takos.dev/v1alpha1` |
+| `kind` | yes | string | `App` |
+| `metadata.name` | yes | string | アプリ名 |
+| `spec.version` | yes | string | デプロイ表示用バージョン |
 
 ## spec
 
-| field | required | type | 説明 | ガイド |
-| --- | --- | --- | --- | --- |
-| `version` | yes | string | デプロイ単位で表示するバージョン（semver 形式） | - |
-| `description` | no | string | アプリの説明 | - |
-| `icon` | no | string | アプリアイコン（リポジトリ内パス or URL） | - |
-| `category` | no | string | カテゴリ（`app`, `service`, `library`, `template`, `social`） | - |
-| `tags` | no | string[] | タグ | - |
-| `capabilities` | no | string[] | 能力宣言（`mcp`, `file-handler` など。任意の文字列を指定可能） | - |
-
-### `spec.icon`
-
-アプリのアイコンを指定する。以下のいずれかの形式:
-
-- **リポジトリ内パス**: `.takos/icon.png` のようなリポジトリルートからの相対パス
-- **URL**: `https://example.com/icon.png` のような外部 URL
-
-```yaml
-spec:
-  icon: .takos/icon.png
-```
-
-```yaml
-spec:
-  icon: https://example.com/my-app-icon.svg
-```
-
-対応フォーマット: PNG、SVG、JPEG など。推奨サイズは 256x256 以上。
-
-### `spec.category`
-
-アプリの分類カテゴリ。有効な値:
-
-| 値 | 説明 |
-| --- | --- |
-| `app` | 一般的なアプリケーション |
-| `service` | バックエンドサービス |
-| `library` | ライブラリ / ユーティリティ |
-| `template` | テンプレート |
-| `social` | ソーシャル・コミュニケーション系 |
-
-```yaml
-spec:
-  category: app
-```
-
-### `spec.capabilities`
-
-アプリが持つ能力を宣言する文字列配列。capability namespace に基づく任意の文字列を指定できる。
-
-代表的な capability namespace:
-
-| namespace | 説明 |
-| --- | --- |
-| `container` | コンテナ操作 |
-| `repo` | リポジトリ操作 |
-| `file` | ファイル操作 |
-| `deploy` | デプロイ操作 |
-| `platform` | プラットフォーム操作 |
-| `runtime` | ランタイム操作 |
-| `storage` | ストレージ操作 |
-| `workspace.files` | ワークスペースファイル操作 |
-| `workspace.env` | ワークスペース環境変数操作 |
-| `workspace.skills` | スキル管理 |
-| `workspace.apps` | アプリ管理 |
-| `workspace.source` | ソースコード操作 |
-| `memory` | メモリ操作 |
-| `web` | Web アクセス |
-| `artifact` | アーティファクト操作 |
-| `agent` | エージェント操作 |
-| `mcp` | MCP Server 連携 |
-| `browser` | ブラウザ自動化 |
-| `discovery` | 検索・発見 |
-
-```yaml
-spec:
-  capabilities:
-    - mcp
-    - browser
-    - web
-```
-
-capabilities はツールの権限チェックに使われる。宣言されていない capability に依存するツールはアプリから利用できない。
-
-この一覧は control-plane の現行 parser を基準にしている。`takos deploy-group` が実際に扱うのは主に Cloudflare 向けの実行面で、AWS / GCP / k8s の各ホスティングは現時点では experimental / partial 扱い。
-
-| field | required | type | 説明 | ガイド |
-| --- | --- | --- | --- | --- |
-| `containers` | no | object | CF Containers 定義 (Worker に紐づく) | [Containers](/apps/containers) |
-| `services` | no | object | 常設コンテナ定義 (VPS/独立稼働) | [Containers](/apps/containers) |
-| `workers` | no | object | CF Workers 定義 | [Workers](/apps/workers) |
-| `routes` | no | array | HTTP エンドポイント | [Routes](/apps/routes) |
-| `resources` | no | object | backing resource | - |
-| `env` | no | object | 環境変数設定 | [環境変数](/apps/environment) |
-| `oauth` | no | object | OAuth client 登録 | - |
-| `takos` | no | object | Takos 固有設定 | - |
-| `lifecycle` | no | object | ライフサイクルフック | - |
-| `update` | no | object | アップデート / ロールバック戦略 | - |
-| `mcpServers` | no | array | MCP Server 公開設定 | [MCP Server](/apps/mcp) |
-| `fileHandlers` | no | array | ファイルハンドラー登録 | [File Handlers](/apps/file-handlers) |
-| `overrides` | no | object | 環境別オーバーライド | - |
-
-## containers.\<name\>
-
-CF Containers (Worker に紐づけて使う Docker コンテナ)。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `dockerfile` | yes | string | Dockerfile パス |
-| `port` | yes | number | コンテナのリッスンポート |
-| `instanceType` | no | string | インスタンスタイプ（`basic`, `standard-2` など） |
-| `maxInstances` | no | number | 最大インスタンス数 |
-| `env` | no | object | コンテナ環境変数 |
-
-## services.\<name\>
-
-常設コンテナ (VPS/独立稼働)。`ipv4: true` で専用 IPv4 を割り当てできる。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `dockerfile` | yes | string | Dockerfile パス |
-| `port` | yes | number | コンテナのリッスンポート |
-| `instanceType` | no | string | インスタンスタイプ |
-| `maxInstances` | no | number | 最大インスタンス数 |
-| `ipv4` | no | boolean | `true` で専用 IPv4 を割り当て |
-| `env` | no | object | コンテナ環境変数 |
-| `healthCheck` | no | object | ヘルスチェック設定 |
-| `volumes` | no | array | 永続ボリュームマウント |
-| `dependsOn` | no | string[] | 依存する他の worker / service 名（起動順序制御） |
-| `bindings` | no | object | リソースバインディング（workers と同形式） |
-| `triggers` | no | object | スケジュール / キュートリガー（workers と同形式） |
-
-## workers.\<name\>
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `build` | yes | object | ビルドソース |
-| `containers` | no | string[] | 紐づける CF Containers（`spec.containers` の名前） |
-| `bindings` | no | object | リソースバインディング |
-| `triggers` | no | object | スケジュール / キュートリガー |
-| `env` | no | object | Worker 固有の環境変数 |
-| `healthCheck` | no | object | ヘルスチェック設定 |
-| `scaling` | no | object | スケーリング設定 |
-| `dependsOn` | no | string[] | 依存する他の worker / service 名（起動順序制御） |
-
-## workers.\<name\>.build.fromWorkflow
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `path` | yes | string | `.takos/workflows/` 配下のワークフローパス |
-| `job` | yes | string | deploy artifact を出すジョブ名 |
-| `artifact` | yes | string | ワークフロー artifact 名 |
-| `artifactPath` | yes | string | artifact 内の Worker バンドルパス |
-
-## workers.\<name\>.bindings
-
-| field | type | 説明 |
+| field | required | 説明 |
 | --- | --- | --- |
-| `d1` | string[] | D1 データベース（`spec.resources` の名前） |
-| `r2` | string[] | R2 バケット（`spec.resources` の名前） |
-| `kv` | string[] | KV Namespace（`spec.resources` の名前） |
-| `queues` | string[] | Queue（`spec.resources` の名前） |
-| `vectorize` | string[] | Vectorize（`spec.resources` の名前） |
-| `analytics` | string[] | Analytics Engine（`spec.resources` の名前） |
-| `workflows` | string[] | Workflows（`spec.resources` の名前） |
-| `durableObjects` | string[] | Durable Objects（`spec.resources` の名前） |
-| `services` | ServiceBinding[] | 外部 Worker service binding（文字列またはオブジェクト形式） |
+| `workers` | no | Workers runtime workload |
+| `services` | no | 常設コンテナ workload |
+| `containers` | no | Worker に紐づく CF Containers |
+| `resources` | no | Cloudflare-native resource 定義 |
+| `routes` | no | workload 公開ルート |
+| `env` | no | 環境変数と注入 |
+| `oauth` | no | OAuth client 設定 |
+| `mcpServers` | no | MCP 公開設定 |
+| `fileHandlers` | no | ファイルハンドラー |
+| `overrides` | no | 環境別 override |
 
-## workers.\<name\>.triggers
+## `workers.<name>`
 
-| field | type | 説明 |
+| field | required | 説明 |
 | --- | --- | --- |
-| `schedules` | array | スケジュールトリガー |
-| `schedules[].cron` | string | cron 式 |
-| `schedules[].export` | string | Worker が export する関数名 |
-| `queues` | array | キュートリガー |
-| `queues[].queue` | string | `spec.resources` 内の `type: queue` 名 |
-| `queues[].export` | string | Worker が export する関数名 |
+| `build` | yes | 現在は `fromWorkflow` のみ |
+| `containers` | no | `spec.containers` の名前 |
+| `bindings` | no | Cloudflare-native bindings |
+| `triggers` | no | `schedules`, `queues` |
+| `env` | no | Worker 固有 env |
+| `healthCheck` | no | ヘルスチェック |
+| `scaling` | no | スケーリング設定 |
+| `dependsOn` | no | 他 workload への依存 |
 
-## routes[]
+## `services.<name>`
 
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | ルート名（テンプレート変数のキー） |
-| `target` | yes | string | 対象の Worker / Container / Service 名 |
-| `path` | no | string | 公開パス |
-| `ingress` | no | string | ingress worker |
-| `timeoutMs` | no | number | ルートタイムアウト（ミリ秒） |
-| `methods` | no | string[] | 許可する HTTP メソッド（`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`） |
+| field | required | 説明 |
+| --- | --- | --- |
+| `dockerfile` | yes | Dockerfile path |
+| `imageRef` | no | `takos apply` が使う deploy 済み image ref |
+| `provider` | no | `oci`, `ecs`, `cloud-run`, `k8s` |
+| `port` | yes | listen port |
+| `bindings` | no | workers と同じ binding syntax |
+| `triggers` | no | 現在は `schedules` のみ |
+| `env` | no | service env |
+| `healthCheck` | no | ヘルスチェック |
+| `volumes` | no | volume mount |
+| `dependsOn` | no | 他 workload への依存 |
 
-## resources.\<name\>
+## `workers.<name>.bindings` / `services.<name>.bindings`
+
+| key | resource type |
+| --- | --- |
+| `d1` | `d1` |
+| `r2` | `r2` |
+| `kv` | `kv` |
+| `queues` | `queue` |
+| `vectorize` | `vectorize` |
+| `analyticsEngine` | `analyticsEngine` |
+| `workflow` | `workflow` |
+| `durableObjects` | `durableObject` |
+| `services` | 他 workload |
+
+## `resources.<name>`
 
 共通フィールド:
 
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `type` | yes | string | リソース種別 |
-| `binding` | yes | string | バインディング名 |
-| `limits` | no | object | リソースサイズ制限（例: `{ maxSizeMb: 500 }`） |
-
-type 別の追加フィールド:
-
-| type | 追加フィールド | 説明 |
+| field | required | 説明 |
 | --- | --- | --- |
-| `d1` | `migrations` | `string` または `{ up: string, down: string }` |
-| `r2` | - | - |
-| `kv` | `migrations` | `string` または `{ up: string, down: string }` |
-| `secretRef` | `generate: boolean` | `true` でデプロイ時にランダムトークン生成 |
-| `vectorize` | `vectorize.dimensions: number`, `vectorize.metric: string` | ベクトル次元数とメトリクス |
-| `queue` | `queue.maxRetries: number`, `queue.deadLetterQueue: string`, `queue.deliveryDelaySeconds: number` | キュー設定 |
-| `analyticsEngine` | `analyticsEngine.dataset: string` | データセット名 |
-| `workflow` | `workflow.service: string`, `workflow.export: string`, `workflow.timeoutMs: number`, `workflow.maxRetries: number` | ワークフロー設定 |
-| `durableObject` | `durableObject.className: string`, `durableObject.scriptName: string` | Durable Object 設定 |
+| `type` | yes | Cloudflare-native resource kind |
+| `binding` | no | runtime binding 名 |
+| `generate` | no | secret 用自動生成 |
+| `migrations` | no | d1 用 migration path |
+| `limits` | no | 論理制限 |
 
-### `vectorize.metric` の有効値
+`type` に使える値:
 
-| 値 | 説明 |
+| type | 追加フィールド |
 | --- | --- |
-| `cosine` | コサイン類似度（デフォルト、推奨） |
-| `euclidean` | ユークリッド距離 |
-| `dot-product` | 内積 |
+| `d1` | `migrations` |
+| `r2` | - |
+| `kv` | - |
+| `queue` | `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds` |
+| `vectorize` | `vectorize.dimensions`, `vectorize.metric` |
+| `analyticsEngine` | `analyticsEngine.dataset` |
+| `secretRef` | `generate` |
+| `workflow` | `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
+| `durableObject` | `durableObject.className`, `durableObject.scriptName` |
 
-## env
+`class` と `backing` はサポートしません。
 
-| field | type | 説明 |
+`workflow` は manifest でも service settings API / tool でも設定できます。dynamic binding でも `workflow.service` と `workflow.export` の metadata が必要です。
+
+`takos apply` は full deployment pipeline を通るため、`workers` は `build.fromWorkflow.artifactPath` から bundle を解決し、`services` / `containers` は `imageRef` を使います。`dockerfile` だけでは online apply の deploy source としては不十分です。
+
+## routes[]
+
+| field | required | 説明 |
 | --- | --- | --- |
-| `required` | string[] | 必須環境変数のリスト |
-| `inject` | object | テンプレート変数による値の注入 |
-
-## oauth
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `clientName` | yes | string | OAuth client の表示名 |
-| `redirectUris` | yes | string[] | リダイレクト URI |
-| `scopes` | yes | string[] | 要求するスコープ |
-| `autoEnv` | no | boolean | `true` で `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` を環境変数に自動注入 |
-| `metadata` | no | object | OAuth client メタデータ |
-
-## oauth.metadata
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `logoUri` | no | string | OAuth 認可画面に表示するロゴ画像の URL |
-| `tosUri` | no | string | 利用規約ページの URL |
-| `policyUri` | no | string | プライバシーポリシーページの URL |
-
-```yaml
-oauth:
-  clientName: My App
-  redirectUris:
-    - "{{routes.api.url}}/oauth/callback"
-  scopes:
-    - storage:read
-    - storage:write
-  autoEnv: true
-  metadata:
-    logoUri: https://example.com/logo.png
-    tosUri: https://example.com/terms
-    policyUri: https://example.com/privacy
-```
-
-`autoEnv: true` にすると、デプロイ時に OAuth client ID と client secret が Worker の環境変数に自動注入される。
-
-## takos
-
-| field | type | 説明 |
-| --- | --- | --- |
-| `scopes` | string[] | Takos-managed token のスコープ |
-| `minVersion` | string | Takos プラットフォームの最小バージョン要件（semver 形式） |
+| `name` | yes | route 名 |
+| `target` | yes | worker / service / container 名 |
+| `path` | no | 公開 path |
+| `ingress` | no | ingress workload |
+| `timeoutMs` | no | route timeout |
+| `methods` | no | 許可 HTTP method |
 
 ## mcpServers[]
 
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | MCP Server 名 |
-| `route` | yes* | string | 対象ルート名。`endpoint` と排他が設計上の想定 |
-| `endpoint` | yes* | string | 対象エンドポイント。`route` と排他が設計上の想定 |
-| `transport` | yes | string | 現在は `streamable-http` のみ |
-| `authSecretRef` | no | string | 認証トークンの `secretRef` リソース名 |
-
-`route` と `endpoint` は、設計上はどちらか一方だけを使う想定。現行 parser はこの排他を厳密に強制しないため、実運用では片方に寄せるのが安全。
-
-## fileHandlers[]
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | ファイルハンドラー名 |
-| `mimeTypes` | yes | string[] | 対応 MIME type |
-| `extensions` | yes | string[] | 対応ファイル拡張子 |
-| `openPath` | yes | string | ファイルを開く際のパス（`:id` がファイル ID に置換） |
-
-## spec.version
-
-`spec.version` は semver (Semantic Versioning) 形式のみ受け付けます。
-
-有効: `1.0.0`, `0.1.0`, `1.0.0-beta.1`, `1.0.0+build.123`
-無効: `v1.0`, `latest`, `banana`
-
-```yaml
-spec:
-  version: 1.0.0
-```
-
-## healthCheck
-
-Worker および Service に設定できるヘルスチェック。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `type` | no | string | チェック種別: `http`（デフォルト）, `tcp`, `exec` |
-| `path` | no | string | ヘルスチェック URL パス（`http` 時に使用） |
-| `port` | no | number | チェック対象ポート（`tcp` 時に使用） |
-| `command` | no | string | 実行コマンド（`exec` 時に使用） |
-| `intervalSeconds` | no | number | チェック間隔（デフォルト: 30） |
-| `timeoutSeconds` | no | number | タイムアウト（デフォルト: 5） |
-| `unhealthyThreshold` | no | number | 失敗回数でダウン判定（デフォルト: 3） |
-
-```yaml
-# http ヘルスチェック（デフォルト）
-workers:
-  web:
-    build: ...
-    healthCheck:
-      path: /health
-      intervalSeconds: 30
-      timeoutSeconds: 5
-      unhealthyThreshold: 3
-```
-
-```yaml
-# tcp ヘルスチェック
-services:
-  db:
-    dockerfile: Dockerfile
-    port: 5432
-    healthCheck:
-      type: tcp
-      port: 5432
-```
-
-```yaml
-# exec ヘルスチェック
-services:
-  db:
-    dockerfile: Dockerfile
-    port: 5432
-    healthCheck:
-      type: exec
-      command: pg_isready
-```
-
-```yaml
-services:
-  my-api:
-    dockerfile: Dockerfile
-    port: 3000
-    healthCheck:
-      path: /healthz
-      intervalSeconds: 60
-```
-
-## lifecycle
-
-デプロイ前後に実行するライフサイクルフック。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `preApply` | no | object | デプロイ適用前に実行 |
-| `postApply` | no | object | デプロイ適用後に実行 |
-
-### lifecycle hook オブジェクト
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `command` | yes | string | 実行するコマンド |
-| `timeoutSeconds` | no | number | タイムアウト（秒） |
-| `sandbox` | no | boolean | `true` でサンドボックス環境内で実行 |
-
-```yaml
-lifecycle:
-  preApply:
-    command: pnpm run migrate
-    timeoutSeconds: 120
-    sandbox: true
-  postApply:
-    command: pnpm run seed
-```
-
-## update
-
-デプロイ時のアップデート戦略とロールバック設定。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `strategy` | no | string | `rolling`, `canary`, `blue-green`, `recreate` のいずれか |
-| `canaryWeight` | no | number | canary トラフィック比率（%） |
-| `healthCheck` | no | string | ヘルスチェック参照名 |
-| `rollbackOnFailure` | no | boolean | 失敗時に自動ロールバック |
-| `timeoutSeconds` | no | number | アップデートタイムアウト（秒） |
-
-```yaml
-update:
-  strategy: canary
-  canaryWeight: 10
-  rollbackOnFailure: true
-  timeoutSeconds: 300
-```
-
-```yaml
-update:
-  strategy: blue-green
-  rollbackOnFailure: true
-```
-
-## takos.minVersion
-
-Takos プラットフォームの最小バージョンを指定する。semver 形式で記述する。
-指定したバージョン未満のプラットフォームではデプロイがブロックされる。
-
-```yaml
-takos:
-  scopes:
-    - threads:read
-  minVersion: '2.0.0'
-```
-
-## service binding バージョン制約
-
-`workers.<name>.bindings.services` は従来の文字列配列に加えて、バージョン制約付きのオブジェクト形式もサポートする。両形式を混在させることも可能。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | バインド先 service 名 |
-| `version` | no | string | semver range 制約 |
-
-```yaml
-# 文字列形式（従来互換）
-bindings:
-  services:
-    - other-worker
-
-# オブジェクト形式（バージョン制約付き）
-bindings:
-  services:
-    - name: other
-      version: ">=2.0.0"
-
-# 混在
-bindings:
-  services:
-    - simple-svc
-    - name: versioned-svc
-      version: "^1.0.0"
-```
-
-## spec.overrides
-
-環境別のオーバーライド設定。`staging` や `production` など環境名をキーにして、spec 内のフィールドを部分的に上書きできる。
-
-```yaml
-spec:
-  containers:
-    browser:
-      dockerfile: Dockerfile
-      port: 8080
-      maxInstances: 10
-  overrides:
-    staging:
-      containers:
-        browser:
-          maxInstances: 2
-    production:
-      containers:
-        browser:
-          maxInstances: 50
-```
-
-デプロイ時にターゲット環境のオーバーライドがマージされる。指定のないフィールドはデフォルト値がそのまま使われる。
-
-## workers.\<name\>.scaling
-
-Worker のスケーリング設定。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `minInstances` | no | number | 最小インスタンス数 |
-| `maxInstances` | no | number | 最大インスタンス数 |
-| `maxConcurrency` | no | number | インスタンスあたりの最大同時リクエスト数 |
-
-```yaml
-workers:
-  web:
-    build: ...
-    scaling:
-      minInstances: 1
-      maxInstances: 10
-      maxConcurrency: 50
-```
-
-## services.\<name\>.volumes
-
-Service に永続ボリュームをマウントする。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `name` | yes | string | ボリューム名 |
-| `mountPath` | yes | string | コンテナ内のマウントパス |
-| `size` | yes | string | ボリュームサイズ（例: `10Gi`） |
-
-```yaml
-services:
-  db:
-    dockerfile: Dockerfile
-    port: 5432
-    volumes:
-      - name: data
-        mountPath: /data
-        size: 10Gi
-```
-
-## \*.dependsOn
-
-Worker や Service の起動順序を制御する。指定された名前の worker / service が先に起動してからこのワークロードが起動する。
-
-```yaml
-services:
-  db:
-    dockerfile: Dockerfile
-    port: 5432
-workers:
-  web:
-    build: ...
-    dependsOn:
-      - db
-```
-
-## services.\<name\>.bindings
-
-Service にもリソースバインディングを設定できる。Worker の `bindings` と同じ形式。
-
-```yaml
-services:
-  api:
-    dockerfile: Dockerfile
-    port: 3000
-    bindings:
-      services:
-        - other-service
-      d1:
-        - main-db
-```
-
-## services.\<name\>.triggers
-
-Service にスケジュールトリガーを設定できる。Worker の `triggers` と同じ形式。
-
-```yaml
-services:
-  worker:
-    dockerfile: Dockerfile
-    port: 8080
-    triggers:
-      schedules:
-        - cron: '*/5 * * * *'
-          export: runJob
-```
-
-## resources.\<name\>.limits
-
-リソースのサイズ制限を設定する。
-
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `maxSizeMb` | no | number | 最大サイズ（MB） |
-
-```yaml
-resources:
-  db:
-    type: d1
-    binding: DB
-    limits:
-      maxSizeMb: 500
-```
-
-## routes[].methods
-
-ルートで許可する HTTP メソッドを制限する。指定しない場合はすべてのメソッドが許可される。
-
-<div v-pre>
-
-有効な値: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`
-
-</div>
-
-```yaml
-routes:
-  - name: api
-    target: web
-    methods:
-      - GET
-      - POST
-```
-
-## 次のステップ
-
-- [アプリ開発](/apps/) --- 各セクションの詳細ガイド
-- [サンプル集](/examples/) --- コピペで始められるサンプル
-- [Deploy System](/deploy/) --- デプロイの仕様詳細
+| field | required | 説明 |
+| --- | --- | --- |
+| `name` | yes | MCP 名 |
+| `route` | yes* | `routes[].name` を参照 |
+| `endpoint` | yes* | 外部 URL |
+| `transport` | yes | `streamable-http` |
+| `authSecretRef` | no | `type: secret` resource 名 |
+
+`route` と `endpoint` は排他です。

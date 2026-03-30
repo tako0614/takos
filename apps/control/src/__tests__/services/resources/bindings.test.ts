@@ -34,8 +34,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'd1',
       status: 'deleting',
-      cf_id: 'cf-123',
-      cf_name: 'my-db',
+      provider_resource_id: 'cf-123',
+      provider_resource_name: 'my-db',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
@@ -47,8 +47,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'd1',
       status: 'active',
-      cf_id: 'cf-d1-123',
-      cf_name: 'my-d1-db',
+      provider_resource_id: 'cf-d1-123',
+      provider_resource_name: 'my-d1-db',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
@@ -65,8 +65,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'r2',
       status: 'active',
-      cf_id: null,
-      cf_name: 'my-bucket',
+      provider_resource_id: null,
+      provider_resource_name: 'my-bucket',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_BUCKET');
@@ -83,8 +83,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'kv',
       status: 'active',
-      cf_id: 'kv-namespace-id',
-      cf_name: 'my-kv',
+      provider_resource_id: 'kv-namespace-id',
+      provider_resource_name: 'my-kv',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_KV');
@@ -101,8 +101,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'vectorize',
       status: 'active',
-      cf_id: null,
-      cf_name: 'my-vectorize-index',
+      provider_resource_id: null,
+      provider_resource_name: 'my-vectorize-index',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_VECTORS');
@@ -119,8 +119,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'queue',
       status: 'active',
-      cf_id: 'queue-id-123',
-      cf_name: 'my-queue',
+      provider_resource_id: 'queue-id-123',
+      provider_resource_name: 'my-queue',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_QUEUE');
@@ -137,8 +137,8 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'analyticsEngine',
       status: 'active',
-      cf_id: null,
-      cf_name: 'events-dataset',
+      provider_resource_id: null,
+      provider_resource_name: 'events-dataset',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'ANALYTICS');
@@ -155,21 +155,21 @@ describe('buildBindingFromResource', () => {
       id: 'res-1',
       type: 'unknown',
       status: 'active',
-      cf_id: null,
-      cf_name: 'test',
+      provider_resource_id: null,
+      provider_resource_name: 'test',
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_BINDING');
     expect(result).toBeNull();
   });
 
-  it('handles null cf_id and cf_name', async () => {
+  it('handles null provider resource fields', async () => {
     mocks.getResourceById.mockResolvedValue({
       id: 'res-1',
       type: 'd1',
       status: 'active',
-      cf_id: null,
-      cf_name: null,
+      provider_resource_id: null,
+      provider_resource_name: null,
     });
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');

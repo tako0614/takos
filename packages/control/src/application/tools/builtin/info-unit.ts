@@ -3,7 +3,7 @@ import { getDb, infoUnits, repositories, edges, nodes } from '../../../infra/db'
 import { eq, and, like, desc, inArray, or } from 'drizzle-orm';
 import type { Database } from '../../../infra/db';
 
-import { EMBEDDING_MODEL } from '../../../../shared/config/limits.ts';
+import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
 export const INFO_UNIT_SEARCH: ToolDefinition = {
   name: 'info_unit_search',

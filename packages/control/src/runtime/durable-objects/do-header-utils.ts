@@ -115,6 +115,24 @@ export function broadcastHeartbeat(connections: Map<string, ExtendedWebSocket>):
   return removed;
 }
 
+const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
+
+/**
+ * Build a sanitized header record for Durable Object requests.
+ * Strips internal-only headers and applies trusted overrides.
+ */
+export function buildSanitizedDOHeaders(
+  source: HeadersInit | undefined,
+  trustedOverrides: Record<string, string>,
+): Record<string, string> {
+  const headers = new Headers(source);
+  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
+  for (const [key, value] of Object.entries(trustedOverrides)) headers.set(key, value);
+  const result: Record<string, string> = {};
+  headers.forEach((v, k) => { result[k] = v; });
+  return result;
+}
+
 /** Schedule a cleanup alarm if one is not already set. */
 export async function scheduleCleanupAlarm(state: DurableObjectState): Promise<void> {
   const currentAlarm = await state.storage.getAlarm();

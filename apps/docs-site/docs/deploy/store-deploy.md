@@ -5,7 +5,7 @@
 `takos deploy` は CLI 上に残っているものの、このリポジトリの current implementation では control plane 側の app-deployments パスに end-to-end で接続されていません。Store に公開する app deploy は、今は「今後の surface」として読むのが正確です。
 
 ::: warning current status
-`takos deploy` と `/api/spaces/:spaceId/app-deployments` は docs と route 定義はありますが、現行コードでは service 実装が未接続です。実運用では `takos deploy-group` を使ってください。
+`takos deploy` と `/api/spaces/:spaceId/app-deployments` は docs と route 定義はありますが、現行コードでは service 実装が未接続です。実運用では `takos apply` を使ってください。
 :::
 
 ## 基本的な使い方
@@ -14,16 +14,16 @@
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
 ```
 
-## deploy-group との違い
+## apply との違い
 
-| 観点 | `takos deploy` | `takos deploy-group` |
+| 観点 | `takos deploy` | `takos apply` |
 | --- | --- | --- |
 | 状態 | current では未接続 | current |
 | 用途 | Store 経由の将来 surface | ローカルから直接デプロイ |
 | 対象 | repo/ref に紐づく artifact | `.takos/app.yml` のグループ定義 |
 | 認証 | Takos の認証 | Cloudflare API トークン |
 | 主な利用場面 | 将来の CI/CD surface | 開発・検証環境 |
-| ロールバック | 将来の contract | 以前のコードで再 deploy-group |
+| ロールバック | 将来の contract | 以前のコードで再 apply |
 | rollout | 将来の contract | なし |
 
 ## デプロイ前の検証
@@ -31,7 +31,7 @@ takos deploy --space SPACE_ID --repo REPO_ID --ref main
 デプロイ前に manifest だけ検証できます。
 
 ```bash
-takos deploy validate
+takos plan
 ```
 
 以下の項目が検証されます。
@@ -143,6 +143,6 @@ curl -X DELETE https://takos.example.com/api/spaces/{spaceId}/app-deployments/{a
 
 ## 次のステップ
 
-- [deploy-group](/deploy/deploy-group) --- ローカルからの直接デプロイ
+- [apply](/deploy/apply) --- `takos apply` による直接デプロイ
 - [ロールバック](/deploy/rollback) --- ロールバックの手順
 - [API リファレンス](/reference/api) --- API の詳細

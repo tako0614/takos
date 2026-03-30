@@ -5,7 +5,7 @@
  * and committing session results back to the account.
  */
 
-import type { SnapshotTree } from '../sync/types';
+import type { SnapshotTree } from '../sync/models';
 import type { WorkflowContext, RuntimeSnapshotResponse } from './workflow-types';
 import { SnapshotManager } from '../sync/snapshot';
 import { generateId } from '../../../shared/utils';

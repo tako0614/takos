@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolContext } from '../../types';
+import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions';
 import { validateKVKey } from './validators';
 
 export const KV_GET: ToolDefinition = {

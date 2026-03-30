@@ -199,8 +199,10 @@ export async function writeState(
   if (useApi(opts)) {
     try {
       await writeGroupStateToApi(group, state);
-      // Also write locally as a cache (no lock check for cache writes)
-      await writeStateToFile(stateDir, group, state).catch(() => {});
+      // Also write locally as a cache (non-critical — log and continue on failure)
+      await writeStateToFile(stateDir, group, state).catch((err) => {
+        process.stderr.write(`Warning: failed to write local state cache: ${err instanceof Error ? err.message : String(err)}\n`);
+      });
       return;
     } catch {
       // API unreachable — fall through to file silently

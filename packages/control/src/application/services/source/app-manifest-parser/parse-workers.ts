@@ -32,28 +32,49 @@ function parseScaling(raw: unknown, _prefix: string): WorkerScaling | undefined 
 
 function parseWorkerBuild(workerName: string, workerSpec: Record<string, unknown>) {
   const buildSpec = asRecord(workerSpec.build);
+  const artifactSpec = asRecord(workerSpec.artifact);
   const fromWorkflow = asRecord(buildSpec.fromWorkflow);
-  if (Object.keys(buildSpec).length === 0) {
-    throw new Error(`spec.workers.${workerName}.build is required`);
-  }
   if (buildSpec.command != null || buildSpec.output != null || buildSpec.cwd != null || workerSpec.entry != null) {
     throw new Error(`spec.workers.${workerName} local build fields are not supported; use build.fromWorkflow`);
   }
-  if (Object.keys(fromWorkflow).length === 0) {
-    throw new Error(`spec.workers.${workerName}.build.fromWorkflow is required`);
+  if (Object.keys(buildSpec).length > 0) {
+    if (Object.keys(fromWorkflow).length === 0) {
+      throw new Error(`spec.workers.${workerName}.build.fromWorkflow is required`);
+    }
+    const workflowPath = normalizeRepoPath(asRequiredString(fromWorkflow.path, `spec.workers.${workerName}.build.fromWorkflow.path`));
+    if (!workflowPath.startsWith('.takos/workflows/')) {
+      throw new Error(`spec.workers.${workerName}.build.fromWorkflow.path must be under .takos/workflows/`);
+    }
+    return {
+      build: {
+        fromWorkflow: {
+          path: workflowPath,
+          job: asRequiredString(fromWorkflow.job, `spec.workers.${workerName}.build.fromWorkflow.job`),
+          artifact: asRequiredString(fromWorkflow.artifact, `spec.workers.${workerName}.build.fromWorkflow.artifact`),
+          artifactPath: normalizeRepoPath(asRequiredString(fromWorkflow.artifactPath, `spec.workers.${workerName}.build.fromWorkflow.artifactPath`)),
+        },
+      },
+    };
   }
-  const workflowPath = normalizeRepoPath(asRequiredString(fromWorkflow.path, `spec.workers.${workerName}.build.fromWorkflow.path`));
-  if (!workflowPath.startsWith('.takos/workflows/')) {
-    throw new Error(`spec.workers.${workerName}.build.fromWorkflow.path must be under .takos/workflows/`);
+  if (artifactSpec.kind === 'bundle') {
+    const deploymentId = typeof artifactSpec.deploymentId === 'string' && artifactSpec.deploymentId.trim().length > 0
+      ? artifactSpec.deploymentId.trim()
+      : undefined;
+    const artifactRef = typeof artifactSpec.artifactRef === 'string' && artifactSpec.artifactRef.trim().length > 0
+      ? artifactSpec.artifactRef.trim()
+      : undefined;
+    if (!deploymentId && !artifactRef) {
+      throw new Error(`spec.workers.${workerName}.artifact.bundle requires deploymentId or artifactRef`);
+    }
+    return {
+      artifact: {
+        kind: 'bundle' as const,
+        ...(deploymentId ? { deploymentId } : {}),
+        ...(artifactRef ? { artifactRef } : {}),
+      },
+    };
   }
-  return {
-    fromWorkflow: {
-      path: workflowPath,
-      job: asRequiredString(fromWorkflow.job, `spec.workers.${workerName}.build.fromWorkflow.job`),
-      artifact: asRequiredString(fromWorkflow.artifact, `spec.workers.${workerName}.build.fromWorkflow.artifact`),
-      artifactPath: normalizeRepoPath(asRequiredString(fromWorkflow.artifactPath, `spec.workers.${workerName}.build.fromWorkflow.artifactPath`)),
-    },
-  };
+  throw new Error(`spec.workers.${workerName} must define build.fromWorkflow or artifact.kind=bundle`);
 }
 
 // ============================================================
@@ -183,7 +204,7 @@ export function parseWorkers(
     const workerDependsOn = asStringArray(workerSpec.dependsOn, `spec.workers.${workerName}.dependsOn`);
     workers[workerName] = {
       ...(containerRefs && containerRefs.length > 0 ? { containers: containerRefs } : {}),
-      build,
+      ...build,
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(workerSpec.env, `spec.workers.${workerName}.env`); return v ? { env: v } : {}; })()),
       ...(workerSpec.bindings ? parseWorkerBindings(workerName, workerSpec) : {}),
       ...(workerSpec.triggers ? parseWorkerTriggers(workerName, workerSpec) : {}),

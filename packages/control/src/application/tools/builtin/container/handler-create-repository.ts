@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { getDb, repositories } from '../../../../infra/db';
 import { and, eq } from 'drizzle-orm';
 import { createRepository, RepositoryCreationError } from '../../../services/source/repos';

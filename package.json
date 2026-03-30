@@ -29,9 +29,6 @@
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "dev:takos": "pnpm --filter takos-control-app dev",
     "dev:runtime": "pnpm --filter takos-runtime dev",
-    "deploy-group": "pnpm --filter takos-cli start -- deploy-group",
-    "deploy-group:dry-run": "pnpm --filter takos-cli start -- deploy-group --dry-run",
-    "deploy-group:service": "pnpm --filter takos-cli start -- deploy-group --service",
     "plan": "pnpm --filter takos-cli start -- plan",
     "apply": "pnpm --filter takos-cli start -- apply",
     "dev:cli": "pnpm --filter takos-cli dev",
@@ -39,7 +36,8 @@
     "clean:dist": "pnpm -r exec rm -rf dist",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "publish:jsr": "pnpm --filter takos-common exec npx jsr publish && pnpm --filter takos-actions-engine exec npx jsr publish && pnpm --filter takos-control exec npx jsr publish && pnpm --filter takos-cli exec npx jsr publish"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

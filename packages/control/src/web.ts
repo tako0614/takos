@@ -121,7 +121,7 @@ app.use('*', async (c, next) => {
 
 // HTTPS enforcement middleware for production (Cloudflare Workers)
 // Check X-Forwarded-Proto header for HTTPS
-app.use('*', async (c, next) => {
+app.use('*', async (c, next): Promise<Response | void> => {
   const proto = c.req.header('X-Forwarded-Proto');
 
   // Use operator-controlled env var instead of client-controlled Host header

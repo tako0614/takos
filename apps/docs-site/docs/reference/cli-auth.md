@@ -18,7 +18,7 @@ HTTP verb をそのまま露出するのではなく、domain ごとの task を
 ## implementation note
 
 CLI の deploy surface は [Deploy System](/deploy/) の public contract に従います。
-`takos deploy` は CLI に残っている contract ですが、このリポジトリの current implementation では end-to-end availability がありません。実運用の current surface は `takos deploy-group` です。
+`takos deploy` は CLI に残っている contract ですが、このリポジトリの current implementation では end-to-end availability がありません。実運用の current surface は `takos apply` です。
 
 ## 認証
 
@@ -120,7 +120,7 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ```bash
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
-takos deploy validate
+takos plan
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
 takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
@@ -136,7 +136,7 @@ takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 | `--approve-source-change` | no | source provenance 差分の承認 |
 | `--json` | no | JSON 出力 |
 
-`takos deploy validate` は local manifest validation だけを行います。
+`takos plan` は manifest validation と現在状態との差分確認を行います。
 
 ## removed legacy surface
 

@@ -5,7 +5,7 @@ import { createBaseContext } from '../../context.js';
 import type { Workflow } from '../../workflow-models.js';
 
 /**
- * Minimal workflow used purely to construct a JobScheduler instance.
+ * JobScheduler インスタンス生成用の最小ワークフロー
  */
 function createMinimalWorkflow(): Workflow {
   return {
@@ -32,15 +32,15 @@ describe('JobScheduler listener management', () => {
       callOrder.push('second');
     });
 
-    // Run triggers multiple emit calls; capture events from the first emit
+    // リスナー実行は複数回の emit を発生させる。最初の emit を確認する
     await scheduler.run(createBaseContext());
 
-    // The first event emitted is 'workflow:start'. Both listeners should have
-    // been called for that first emit because removal happens on a snapshot.
+    // 最初に送信されるイベントは 'workflow:start'。スナップショットを
+    // 元にした emit なので、1回目には 2 つのリスナーが呼ばれるはず。
     expect(callOrder[0]).toBe('first');
     expect(callOrder[1]).toBe('second');
-    // After the first emit, the second listener should be gone.
-    // Subsequent emits should only include 'first'.
+    // 1回目以降は二番目のリスナーは削除されるため、
+    // 次の emit では 'first' のみになる。
     const afterFirstEmit = callOrder.slice(2);
     expect(afterFirstEmit.every((v) => v === 'first')).toBe(true);
   });
@@ -64,7 +64,7 @@ describe('JobScheduler listener management', () => {
 
     await scheduler.run(createBaseContext());
 
-    // 'late' should NOT appear for the first emit, only for subsequent emits.
+    // 'late' は 1回目の emit には出現せず、後続の emit のみ。
     expect(callOrder[0]).toBe('first');
     expect(callOrder[1]).not.toBe('late');
   });
@@ -84,10 +84,10 @@ describe('JobScheduler listener management', () => {
       callOrder.push('third');
     });
 
-    // Should not throw despite a listener throwing
+    // リスナー内で例外が発生しても実行は継続
     await expect(scheduler.run(createBaseContext())).resolves.toBeDefined();
 
-    // All three listeners should have been called for at least the first emit
+    // 最低 1 回目の emit では 3 つのリスナーすべてが呼ばれる
     expect(callOrder.includes('first')).toBe(true);
     expect(callOrder.includes('second')).toBe(true);
     expect(callOrder.includes('third')).toBe(true);

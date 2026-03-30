@@ -6,7 +6,7 @@
  * designed to be called from CLI commands directly, without requiring a
  * full app.yml manifest.
  */
-import type { TakosState, ResourceState } from '../state/state-types.js';
+import type { ResourceState } from '../state/state-types.js';
 import type { ProvisionResult } from '../group-deploy/resource-provider.js';
 import { resolveProvider } from '../group-deploy/provisioner.js';
 import { readState, writeState, getStateDir } from '../state/state-file.js';
@@ -14,7 +14,29 @@ import { createEmptyState } from '../empty-state.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type ResourceType = 'd1' | 'r2' | 'kv' | 'queue' | 'vectorize' | 'secretRef';
+export type ResourceType =
+  | 'sql'
+  | 'object_store'
+  | 'kv'
+  | 'queue'
+  | 'vector_index'
+  | 'secret';
+
+function resolveProvisioningType(type: ResourceType): 'd1' | 'r2' | 'kv' | 'queue' | 'vectorize' | 'secretRef' {
+  switch (type) {
+    case 'sql':
+      return 'd1';
+    case 'object_store':
+      return 'r2';
+    case 'vector_index':
+      return 'vectorize';
+    case 'secret':
+      return 'secretRef';
+    case 'kv':
+    case 'queue':
+      return type;
+  }
+}
 
 export interface CreateResourceOpts {
   type: ResourceType;
@@ -50,9 +72,10 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
   });
 
   const resourceName = `${group}-${opts.env}-${name}`;
+  const resolvedType = resolveProvisioningType(opts.type);
 
   let result: ProvisionResult;
-  switch (opts.type) {
+  switch (resolvedType) {
     case 'd1':
       result = await provider.createDatabase(resourceName);
       break;
@@ -72,7 +95,7 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
       result = await provider.createSecret(resourceName, opts.binding || name);
       break;
     default:
-      result = provider.skipAutoConfigured(name, opts.type);
+      result = provider.skipAutoConfigured(name, resolvedType);
       break;
   }
 
@@ -81,7 +104,7 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
   const stateDir = getStateDir(cwd);
   const state = (await readState(stateDir, group)) || createEmptyState(opts);
   state.resources[name] = {
-    type: opts.type,
+    type: resolvedType,
     id: result.id || resourceName,
     binding: opts.binding || name,
     createdAt: new Date().toISOString(),
@@ -118,9 +141,9 @@ export async function listResources(group: string): Promise<ResourceEntry[]> {
  */
 export async function deleteResource(
   name: string,
-  _opts: { group: string; accountId: string; apiToken: string },
+  opts: { group: string; accountId: string; apiToken: string },
 ): Promise<void> {
-  const group = _opts.group;
+  const group = opts.group;
   const cwd = process.cwd();
   const stateDir = getStateDir(cwd);
   const state = await readState(stateDir, group);

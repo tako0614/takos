@@ -9,6 +9,7 @@ import type { AgentMessage } from './agent-models';
 import { logWarn } from '../../../shared/utils/logger';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 export const THREAD_MESSAGE_VECTOR_KIND = 'thread_message';
 
@@ -343,7 +344,7 @@ export async function indexThreadContext(params: {
         messageId: m.id,
         sequence: m.sequence,
         role: m.role,
-        createdAt: (m.createdAt == null ? null : typeof m.createdAt === 'string' ? m.createdAt : m.createdAt.toISOString()) ?? new Date(0).toISOString(),
+        createdAt: textDateNullable(m.createdAt) ?? new Date(0).toISOString(),
         content: truncateText(m.content ?? '', 1000),
       },
     }));

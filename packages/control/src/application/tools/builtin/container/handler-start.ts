@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { RuntimeSessionManager } from '../../../services/sync';
 import { generateId } from '../../../../shared/utils';
 import { getDb, sessions, sessionRepos, repositories, runs } from '../../../../infra/db';

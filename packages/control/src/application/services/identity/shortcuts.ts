@@ -1,6 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db';
 import { eq, and, asc, inArray } from 'drizzle-orm';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export const ALLOWED_SHORTCUT_RESOURCE_TYPES = ['service', 'resource', 'link'] as const;
 export type ShortcutResourceType = (typeof ALLOWED_SHORTCUT_RESOURCE_TYPES)[number];
@@ -72,8 +73,8 @@ function toApiShortcut(s: {
     name: s.name,
     icon: s.icon,
     position: s.position,
-    created_at: (s.createdAt == null ? null : typeof s.createdAt === 'string' ? s.createdAt : s.createdAt.toISOString()),
-    updated_at: (s.updatedAt == null ? null : typeof s.updatedAt === 'string' ? s.updatedAt : s.updatedAt.toISOString()),
+    created_at: textDate(s.createdAt),
+    updated_at: textDate(s.updatedAt),
     service_hostname: extra?.serviceHostname,
     service_status: extra?.serviceStatus,
     resource_name: extra?.resourceName,

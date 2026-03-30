@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import { AppError, ErrorCodes } from 'takos-common/errors';
 import type { Env, User } from '@/types';
-import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
+import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
+import type * as DbModule from '@/db';
+import type * as RouteAuthModule from '@/routes/route-auth';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
@@ -17,16 +20,19 @@ const mocks = vi.hoisted(() => ({
   listResourceAccess: vi.fn(),
   listResourceBindings: vi.fn(),
   markResourceDeleting: vi.fn(),
-  provisionCloudflareResource: vi.fn(),
+  provisionManagedResource: vi.fn(),
+  deleteManagedResource: vi.fn(),
   updateResourceMetadata: vi.fn(),
   resolveActorPrincipalId: vi.fn(),
   getPlatformServices: vi.fn(),
   getDb: vi.fn(),
   CloudflareResourceService: vi.fn(),
+  upsertGroupDesiredResource: vi.fn(),
+  removeGroupDesiredResource: vi.fn(),
 }));
 
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
+vi.mock('@/routes/route-auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteAuthModule>();
   return {
     ...actual,
     requireSpaceAccess: mocks.requireSpaceAccess,
@@ -45,7 +51,8 @@ vi.mock('@/services/resources', () => ({
   listResourcesForUser: mocks.listResourcesForUser,
   listResourcesForWorkspace: mocks.listResourcesForWorkspace,
   markResourceDeleting: mocks.markResourceDeleting,
-  provisionCloudflareResource: mocks.provisionCloudflareResource,
+  provisionManagedResource: mocks.provisionManagedResource,
+  deleteManagedResource: mocks.deleteManagedResource,
   updateResourceMetadata: mocks.updateResourceMetadata,
 }));
 
@@ -62,8 +69,13 @@ vi.mock('@/platform/providers/cloudflare/resources.ts', () => ({
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
+  ...(await importOriginal<typeof DbModule>()),
   getDb: mocks.getDb,
+}));
+
+vi.mock('@/services/deployment/group-desired-projector', () => ({
+  upsertGroupDesiredResource: mocks.upsertGroupDesiredResource,
+  removeGroupDesiredResource: mocks.removeGroupDesiredResource,
 }));
 
 import resourcesBase from '@/routes/resources/routes';
@@ -130,7 +142,7 @@ describe('resources base routes', () => {
   describe('GET /api/resources?space_id=...', () => {
     it('returns workspace-scoped resources after membership check', async () => {
       mocks.requireSpaceAccess.mockResolvedValue({
-        workspace: { id: 'ws-1' },
+        space: { id: 'ws-1' },
         member: { role: 'viewer' },
       });
       mocks.listResourcesForWorkspace.mockResolvedValue([
@@ -149,11 +161,8 @@ describe('resources base routes', () => {
     });
 
     it('returns 404 when workspace access is denied', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Workspace not found or access denied' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+      mocks.requireSpaceAccess.mockRejectedValue(
+        new AppError('Workspace not found or access denied', ErrorCodes.NOT_FOUND, 404),
       );
 
       const res = await app.fetch(
@@ -170,11 +179,11 @@ describe('resources base routes', () => {
   describe('GET /api/resources/type/:type', () => {
     it('returns resources filtered by valid type', async () => {
       mocks.listResourcesByType.mockResolvedValue([
-        { id: 'res-d1-1', name: 'db-1', type: 'd1' },
+        { id: 'res-d1-1', name: 'db-1', type: 'sql', implementation: 'd1' },
       ]);
 
       const res = await app.fetch(
-        new Request('http://localhost/api/resources/type/d1'),
+        new Request('http://localhost/api/resources/type/sql'),
         env,
         {} as ExecutionContext,
       );
@@ -250,12 +259,13 @@ describe('resources base routes', () => {
   });
 
   describe('POST /api/resources', () => {
-    it('creates a d1 resource and returns 201', async () => {
-      mocks.provisionCloudflareResource.mockResolvedValue(undefined);
+    it('creates a sql resource and returns 201', async () => {
+      mocks.provisionManagedResource.mockResolvedValue(undefined);
       mocks.getResourceById.mockResolvedValue({
         id: 'res-new',
         name: 'new-db',
-        type: 'd1',
+        type: 'sql',
+        implementation: 'd1',
         status: 'ready',
       });
 
@@ -263,14 +273,14 @@ describe('resources base routes', () => {
         new Request('http://localhost/api/resources', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'new-db', type: 'd1' }),
+          body: JSON.stringify({ name: 'new-db', type: 'sql' }),
         }),
         env,
         {} as ExecutionContext,
       );
 
       expect(res.status).toBe(201);
-      expect(mocks.provisionCloudflareResource).toHaveBeenCalled();
+      expect(mocks.provisionManagedResource).toHaveBeenCalled();
     });
 
     it('rejects empty name', async () => {
@@ -285,7 +295,7 @@ describe('resources base routes', () => {
       );
 
       expect(res.status).toBe(400);
-      expect(mocks.provisionCloudflareResource).not.toHaveBeenCalled();
+      expect(mocks.provisionManagedResource).not.toHaveBeenCalled();
     });
 
     it('rejects invalid resource type on POST', async () => {
@@ -304,7 +314,7 @@ describe('resources base routes', () => {
       expect(json.error).toContain('Invalid resource type');
     });
 
-    it('validates that only d1, r2, kv, vectorize are allowed', async () => {
+    it('validates that unsupported capability types are rejected', async () => {
       const res = await app.fetch(
         new Request('http://localhost/api/resources', {
           method: 'POST',
@@ -416,9 +426,10 @@ describe('resources base routes', () => {
       mocks.getResourceById.mockResolvedValue({
         id: 'res-1',
         owner_id: TEST_USER_ID,
-        type: 'd1',
-        cf_id: 'cf-123',
-        cf_name: 'name',
+        type: 'sql',
+        implementation: 'd1',
+        provider_resource_id: 'cf-123',
+        provider_resource_name: 'name',
       });
       mocks.countResourceBindings.mockResolvedValue({ count: 0 });
       mocks.CloudflareResourceService.mockImplementation(() => ({
@@ -444,7 +455,8 @@ describe('resources base routes', () => {
       mocks.getResourceByName.mockResolvedValue({
         _internal_id: 'res-1',
         name: 'my-db',
-        type: 'd1',
+        type: 'sql',
+        implementation: 'd1',
       });
       mocks.listResourceAccess.mockResolvedValue([]);
       mocks.listResourceBindings.mockResolvedValue([]);
@@ -492,9 +504,10 @@ describe('resources base routes', () => {
       mocks.getResourceByName.mockResolvedValue({
         _internal_id: 'res-2',
         name: 'in-use-db',
-        type: 'd1',
-        cf_id: null,
-        cf_name: null,
+        type: 'sql',
+        implementation: 'd1',
+        provider_resource_id: null,
+        provider_resource_name: null,
       });
       mocks.countResourceBindings.mockResolvedValue({ count: 1 });
 

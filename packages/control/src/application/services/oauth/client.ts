@@ -14,6 +14,7 @@ import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash';
 import { parseScopes, validateScopes } from './scopes';
 import { getDb } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type OAuthClientRow = SelectOf<typeof oauthClients>;
 
@@ -36,8 +37,8 @@ function toApiClient(row: OAuthClientRow): OAuthClient {
     owner_id: row.ownerAccountId ?? null,
     registration_access_token_hash: row.registrationAccessTokenHash ?? null,
     status: row.status as OAuthClientStatus,
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
-    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
+    created_at: textDate(row.createdAt),
+    updated_at: textDate(row.updatedAt),
   };
 }
 

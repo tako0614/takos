@@ -15,16 +15,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { cliExit } from '../lib/command-exit.js';
 import { api } from '../lib/api.js';
-import { getConfig } from '../lib/config.js';
-
-function resolveSpaceId(spaceOverride?: string): string {
-  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
-  if (!spaceId) {
-    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
-    cliExit(1);
-  }
-  return spaceId;
-}
+import { resolveSpaceId } from '../lib/cli-utils.js';
 
 // ── Command registration ─────────────────────────────────────────────────────
 

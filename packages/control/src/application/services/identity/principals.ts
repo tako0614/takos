@@ -10,6 +10,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Principal, PrincipalKind } from '../../../shared/types';
 import { getDb, accounts } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const KNOWN_PRINCIPAL_KINDS = new Set(['user', 'space_agent', 'service', 'system', 'tenant_worker']);
 
@@ -28,8 +29,8 @@ function accountToPrincipal(row: {
     id: row.id,
     type: normalizePrincipalType(row.type),
     display_name: row.name,
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
-    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
+    created_at: textDate(row.createdAt),
+    updated_at: textDate(row.updatedAt),
   };
 }
 

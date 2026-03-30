@@ -5,6 +5,7 @@ import { accountMemberships, accounts, getDb, services } from '../../../infra/db
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../identity/principals';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const MAX_SERVICES = 100;
 
@@ -19,6 +20,7 @@ export const WORKSPACE_WORKER_LIMITS = {
 export interface ServiceRow {
   id: string;
   space_id: string;
+  group_id?: string | null;
   service_type: 'app' | 'service';
   status: 'pending' | 'building' | 'deployed' | 'failed' | 'stopped';
   config: string | null;
@@ -62,6 +64,7 @@ export const slugifyWorkerName = slugifyServiceName;
 function toApiService(row: {
   id: string;
   accountId: string;
+  groupId?: string | null;
   workerType: string;
   status: string;
   config: string | null;
@@ -74,14 +77,15 @@ function toApiService(row: {
   return {
     id: row.id,
     space_id: row.accountId,
+    group_id: row.groupId ?? null,
     service_type: row.workerType as 'app' | 'service',
     status: row.status as ServiceRow['status'],
     config: row.config,
     hostname: row.hostname,
     service_name: row.routeRef,
     slug: row.slug,
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
-    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
+    created_at: textDate(row.createdAt),
+    updated_at: textDate(row.updatedAt),
   };
 }
 
@@ -115,6 +119,7 @@ export async function listServicesForUser(d1: D1Database, userId: string) {
   const serviceRows = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,
@@ -134,6 +139,7 @@ export async function listServicesForSpace(d1: D1Database, spaceId: string) {
   const serviceRows = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,
@@ -151,6 +157,7 @@ export async function getServiceById(d1: D1Database, serviceId: string) {
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,
@@ -169,6 +176,7 @@ export async function getServiceRouteRecord(d1: D1Database, serviceId: string): 
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     hostname: services.hostname,
@@ -202,6 +210,7 @@ export async function resolveServiceReferenceRecord(
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     hostname: services.hostname,
@@ -373,7 +382,7 @@ export async function getServiceForUserWithRole(d1: D1Database, serviceId: strin
   return { ...toApiService(service), member_role: membership.role as SpaceRole };
 }
 
-export async function createService(d1: D1Database, input: { spaceId: string; workerType: 'app' | 'service'; slug?: string; config?: string | null; platformDomain: string; }) {
+export async function createService(d1: D1Database, input: { spaceId: string; groupId?: string | null; workerType: 'app' | 'service'; slug?: string; config?: string | null; platformDomain: string; }) {
   const db = getDb(d1);
   const id = generateId();
   const timestamp = new Date().toISOString();
@@ -384,6 +393,7 @@ export async function createService(d1: D1Database, input: { spaceId: string; wo
   await db.insert(services).values({
     id,
     accountId: input.spaceId,
+    groupId: input.groupId ?? null,
     serviceType: input.workerType,
     status: 'pending',
     config: input.config || null,
@@ -397,6 +407,7 @@ export async function createService(d1: D1Database, input: { spaceId: string; wo
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,
@@ -423,4 +434,3 @@ export async function deleteService(d1: D1Database, serviceId: string) {
   const db = getDb(d1);
   await db.delete(services).where(eq(services.id, serviceId));
 }
-

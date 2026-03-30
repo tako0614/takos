@@ -18,6 +18,7 @@ import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db';
 import { eq, and, lt, desc } from 'drizzle-orm';
 import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 // ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -518,7 +519,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           ).get();
 
           if (beforeRow) {
-            beforeTs = (beforeRow.ts == null ? null : typeof beforeRow.ts === 'string' ? beforeRow.ts : beforeRow.ts.toISOString()) ?? undefined;
+            beforeTs = textDateNullable(beforeRow.ts) ?? undefined;
           }
         }
       }

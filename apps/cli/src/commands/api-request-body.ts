@@ -32,7 +32,10 @@ type BodyOptions = {
 };
 
 function prepareJsonBody(options: BodyOptions): BodyPreparation {
-  const raw = options.body !== undefined ? options.body : readFileSync(options.bodyFile!, 'utf8');
+  if (options.body === undefined && !options.bodyFile) {
+    throw new Error('Either --body or --body-file is required for JSON mode');
+  }
+  const raw = options.body !== undefined ? options.body : readFileSync(options.bodyFile as string, 'utf8');
   try {
     const parsed = JSON.parse(raw);
     return {
@@ -52,7 +55,10 @@ function prepareRawBody(options: BodyOptions): BodyPreparation {
     };
   }
 
-  const buffer = readFileSync(options.rawBodyFile!);
+  if (!options.rawBodyFile) {
+    throw new Error('Either --raw-body or --raw-body-file is required for raw mode');
+  }
+  const buffer = readFileSync(options.rawBodyFile);
   return {
     body: buffer,
     contentType: options.contentType ?? 'application/octet-stream',

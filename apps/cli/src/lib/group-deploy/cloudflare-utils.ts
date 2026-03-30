@@ -7,6 +7,8 @@ import { execFile } from 'node:child_process';
 
 export const CF_API = 'https://api.cloudflare.com/client/v4';
 
+const CF_API_TIMEOUT_MS = 30_000;
+
 export async function cfApi<T>(
   accountId: string,
   apiToken: string,
@@ -22,6 +24,7 @@ export async function cfApi<T>(
       'Content-Type': 'application/json',
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(CF_API_TIMEOUT_MS),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -49,7 +52,7 @@ export function execCommand(
       resolve({
         stdout: String(stdout || ''),
         stderr: String(stderr || ''),
-        exitCode: error ? (error as { code?: number }).code || 1 : 0,
+        exitCode: error ? (error as { code?: number }).code ?? 1 : 0,
       });
     });
     if (opts?.stdin && proc.stdin) {

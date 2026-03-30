@@ -35,8 +35,8 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
     const resourceRows = await db.select({
       id: resources.id,
       name: resources.name,
-      cfId: resources.cfId,
-      cfName: resources.cfName,
+      providerResourceId: resources.providerResourceId,
+      providerResourceName: resources.providerResourceName,
     }).from(resources).where(
       and(
         eq(resources.status, 'active'),
@@ -49,8 +49,8 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
     const resourceList = resourceRows.map(r => ({
       id: r.id,
       name: r.name,
-      cf_id: r.cfId,
-      cf_name: r.cfName,
+      provider_resource_id: r.providerResourceId,
+      provider_resource_name: r.providerResourceName,
     }));
 
     const desiredState = new ServiceDesiredStateService(c.env);
@@ -165,7 +165,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
     const desiredState = new ServiceDesiredStateService(c.env);
     await desiredState.replaceResourceBindings({
       workerId: worker.id,
-      bindings: nextBindings,
+      bindings: nextBindings as Parameters<typeof desiredState.replaceResourceBindings>[0]['bindings'],
     });
 
     return c.json({

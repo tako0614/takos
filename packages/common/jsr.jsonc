@@ -1,0 +1,18 @@
+{
+  "name": "@takos/common",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./id": "./src/id.ts",
+    "./validation": "./src/validation.ts",
+    "./abort": "./src/abort.ts",
+    "./errors": "./src/errors.ts",
+    "./middleware/hono": "./src/middleware/hono.ts",
+    "./logger": "./src/logger.ts",
+    "./env-parse": "./src/env-parse.ts"
+  },
+  "publish": {
+    "include": ["src/", "LICENSE", "README.md"],
+    "exclude": ["**/*.test.ts", "**/*.spec.ts"]
+  }
+}

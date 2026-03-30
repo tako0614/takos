@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import { AppError, ErrorCodes } from 'takos-common/errors';
 import type { Env, User } from '@/types';
-import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
+import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => ({
@@ -19,12 +20,12 @@ const mocks = vi.hoisted(() => ({
   listResourceAccess: vi.fn(),
   listResourceBindings: vi.fn(),
   markResourceDeleting: vi.fn(),
-  provisionCloudflareResource: vi.fn(),
+  provisionManagedResource: vi.fn(),
   updateResourceMetadata: vi.fn(),
 }));
 
-vi.mock('@/routes/shared/helpers', async () => {
-  const actual = await vi.importActual<typeof import('@/routes/shared/helpers')>('@/routes/shared/helpers');
+vi.mock('@/routes/route-auth', async () => {
+  const actual = await vi.importActual('@/routes/route-auth');
   return {
     ...actual,
     requireSpaceAccess: mocks.requireSpaceAccess,
@@ -45,7 +46,7 @@ vi.mock('@/services/resources', () => ({
   listResourceAccess: mocks.listResourceAccess,
   listResourceBindings: mocks.listResourceBindings,
   markResourceDeleting: mocks.markResourceDeleting,
-  provisionCloudflareResource: mocks.provisionCloudflareResource,
+  provisionManagedResource: mocks.provisionManagedResource,
   updateResourceMetadata: mocks.updateResourceMetadata,
 }));
 
@@ -126,14 +127,8 @@ describe('resources workspace query membership guard (issue 023)', () => {
   });
 
   it('rejects non-members before querying workspace resources', async () => {
-    mocks.requireSpaceAccess.mockResolvedValue(
-      new Response(
-        JSON.stringify({ error: 'Workspace not found or access denied' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
+    mocks.requireSpaceAccess.mockRejectedValue(
+      new AppError('Workspace not found or access denied', ErrorCodes.NOT_FOUND, 404),
     );
 
     const result = await requestResources(app, env, 'workspace-2');
@@ -145,20 +140,11 @@ describe('resources workspace query membership guard (issue 023)', () => {
 
   it('returns resources only after workspace membership check passes', async () => {
     mocks.requireSpaceAccess.mockResolvedValue({
-      workspace: {
+      space: {
         id: 'workspace-2',
-        name: 'Workspace 2',
-        slug: null,
-        owner_id: TEST_USER_ID,
-        created_at: TEST_TIMESTAMP,
-        updated_at: TEST_TIMESTAMP,
       },
       member: {
-        id: 'member-1',
-        space_id: 'workspace-2',
-        user_id: TEST_USER_ID,
         role: 'viewer',
-        created_at: TEST_TIMESTAMP,
       },
     });
     mocks.listResourcesForWorkspace.mockResolvedValue([
@@ -185,7 +171,7 @@ describe('resources workspace query membership guard (issue 023)', () => {
     });
 
     expect(result.status).toBe(400);
-    expect(result.body).toEqual({ error: 'Invalid resource type', code: 'BAD_REQUEST' });
-    expect(mocks.provisionCloudflareResource).not.toHaveBeenCalled();
+    expect(result.body).toEqual({ error: 'Invalid resource type' });
+    expect(mocks.provisionManagedResource).not.toHaveBeenCalled();
   });
 });

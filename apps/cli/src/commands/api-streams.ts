@@ -235,9 +235,9 @@ export async function executeWebSocketStream(path: string, options: StreamComman
       reject(error);
     });
 
-    socket.on('close', (code: number, reason: Buffer) => {
-      closeCode = code;
-      closeReason = toTextPayload(reason);
+    socket.on('close', (code: unknown, reason: unknown) => {
+      closeCode = typeof code === 'number' ? code : 0;
+      closeReason = toTextPayload(reason as Buffer);
       process.removeListener('SIGINT', onSigint);
       resolve();
     });

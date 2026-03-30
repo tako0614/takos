@@ -7,6 +7,7 @@ import { eq, and, desc, asc, count } from 'drizzle-orm';
 import type { OptionalAuthRouteEnv } from '../route-auth';
 import { parsePagination, paginatedResponse } from '../../../shared/utils';
 import { NotFoundError } from 'takos-common/errors';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
 
@@ -43,7 +44,7 @@ profilesView.get(':username', async (c) => {
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
+    updated_at: textDate(repo.updatedAt),
   }));
 
   const isSelf = !!currentUser && currentUser.id === profileUser.id;
@@ -118,7 +119,7 @@ profilesView.get('/:username/repos', async (c) => {
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
+    updated_at: textDate(repo.updatedAt),
   }));
 
   const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
@@ -196,8 +197,8 @@ profilesView.get('/:username/stars', async (c) => {
       stars: starData.repoStars,
       forks: starData.repoForks,
       is_starred: starredSet.has(starData.repoId),
-      updated_at: (starData.repoUpdatedAt == null ? null : typeof starData.repoUpdatedAt === 'string' ? starData.repoUpdatedAt : starData.repoUpdatedAt.toISOString()),
-      starred_at: (starData.starCreatedAt == null ? null : typeof starData.starCreatedAt === 'string' ? starData.starCreatedAt : starData.starCreatedAt.toISOString()),
+      updated_at: textDate(starData.repoUpdatedAt),
+      starred_at: textDate(starData.starCreatedAt),
     };
   });
 

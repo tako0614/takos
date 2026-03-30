@@ -1,11 +1,11 @@
 /**
- * Dependency resolution using DAG (Directed Acyclic Graph)
+ * DAG（有向非巡回グラフ）で依存関係を解決
  */
 import type { Workflow } from '../workflow-models.js';
 import { normalizeNeedsInput } from './job.js';
 
 /**
- * Error thrown when dependency resolution fails
+ * 依存関係解決失敗時に投げるエラー
  */
 export class DependencyError extends Error {
   constructor(
@@ -18,14 +18,14 @@ export class DependencyError extends Error {
 }
 
 /**
- * Dependency graph representation
+ * 依存グラフの表現
  */
 export interface DependencyGraph {
-  /** All nodes (job IDs) */
+  /** 全ノード（ジョブ ID） */
   nodes: Set<string>;
-  /** Edges: key depends on values */
+  /** エッジ: キーは値側のジョブに依存 */
   edges: Map<string, Set<string>>;
-  /** Reverse edges: key is required by values */
+  /** 逆向きエッジ: キーを依存先として参照するジョブ集合 */
   reverseEdges: Map<string, Set<string>>;
 }
 
@@ -46,21 +46,21 @@ function getOrCreateGraphSet(
 const EMPTY_JOB_SET = new Set<string>();
 
 /**
- * Build dependency graph from workflow
+ * ワークフローから依存グラフを構築する
  */
 export function buildDependencyGraph(workflow: Workflow): DependencyGraph {
   const nodes = new Set<string>();
   const edges = new Map<string, Set<string>>();
   const reverseEdges = new Map<string, Set<string>>();
 
-  // Initialize all nodes
+  // すべてのノードを初期化
   for (const jobId of Object.keys(workflow.jobs)) {
     nodes.add(jobId);
     edges.set(jobId, new Set());
     reverseEdges.set(jobId, new Set());
   }
 
-  // Build edges from 'needs' declarations
+  // 'needs' 宣言からエッジを構築
   for (const [jobId, job] of Object.entries(workflow.jobs)) {
     const needs = normalizeNeedsInput(job.needs);
     for (const need of needs) {
@@ -79,8 +79,8 @@ export function buildDependencyGraph(workflow: Workflow): DependencyGraph {
 }
 
 /**
- * Detect circular dependencies in graph
- * Returns the cycle path if found, empty array otherwise
+ * グラフ内の循環依存を検出
+ * 見つかれば循環パスを返し、なければ空配列を返す
  */
 export function detectCycle(graph: DependencyGraph): string[] {
   const visited = new Set<string>();
@@ -98,7 +98,7 @@ export function detectCycle(graph: DependencyGraph): string[] {
         const cycle = dfs(dep);
         if (cycle) return cycle;
       } else if (recursionStack.has(dep)) {
-        // Found cycle - return the cycle path
+        // 循環を検出、循環パスを返す
         const cycleStart = path.indexOf(dep);
         return [...path.slice(cycleStart), dep];
       }
@@ -130,11 +130,11 @@ function assertAcyclic(graph: DependencyGraph): void {
 }
 
 /**
- * Group jobs into parallel execution phases
- * Jobs in the same phase can run in parallel
+ * ジョブを並列実行フェーズに分類
+ * 同一フェーズ内のジョブは並列実行可能
  */
 export function groupIntoPhases(graph: DependencyGraph): string[][] {
-  // Check for cycles first
+  // 先に循環依存を検査
   assertAcyclic(graph);
 
   const phases: string[][] = [];
@@ -146,7 +146,7 @@ export function groupIntoPhases(graph: DependencyGraph): string[][] {
     for (const node of graph.nodes) {
       if (assigned.has(node)) continue;
 
-      // Check if all dependencies are assigned
+      // 依存ジョブがすべて割り当て済みか確認
       const dependencies = graph.edges.get(node) || EMPTY_JOB_SET;
       let canAdd = true;
       for (const dep of dependencies) {
@@ -162,11 +162,11 @@ export function groupIntoPhases(graph: DependencyGraph): string[][] {
     }
 
     if (phase.length === 0) {
-      // This should not happen if cycle detection works
+      // サイクル検出が正常ならここは発生しない
       throw new DependencyError('Unable to resolve dependencies');
     }
 
-    // Sort phase for deterministic order
+    // 予測可能な順序となるようソート
     phase.sort();
     phases.push(phase);
 

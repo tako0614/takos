@@ -202,6 +202,16 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
     kv: {
       createKVNamespace: (title: string) => kvOps.createKVNamespace(ctx, title),
       deleteKVNamespace: (namespaceId: string) => kvOps.deleteKVNamespace(ctx, namespaceId),
+      listKVEntries: (
+        namespaceId: string,
+        options?: { prefix?: string; cursor?: string; limit?: number },
+      ) => kvOps.listKVEntries(ctx, namespaceId, options),
+      getKVValue: (namespaceId: string, key: string) =>
+        kvOps.getKVValue(ctx, namespaceId, key),
+      putKVValue: (namespaceId: string, key: string, value: string) =>
+        kvOps.putKVValue(ctx, namespaceId, key, value),
+      deleteKVValue: (namespaceId: string, key: string) =>
+        kvOps.deleteKVValue(ctx, namespaceId, key),
     },
     queues: {
       createQueue: (queueName: string, options?: Parameters<typeof queueOps.createQueue>[2]) =>

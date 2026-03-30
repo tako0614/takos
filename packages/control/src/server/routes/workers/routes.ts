@@ -16,7 +16,7 @@ import {
 } from '../../../application/services/platform/workers';
 import { getDb } from '../../../infra/db';
 import { eq } from 'drizzle-orm';
-import { deployments, serviceCustomDomains, serviceDeployments } from '../../../infra/db/schema';
+import { deployments, groups, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db/schema';
 import { deleteHostnameRouting } from '../../../application/services/routing/service';
 import { createCloudflareApiClient } from '../../../application/services/cloudflare/api-client.ts';
 import { deleteCloudflareCustomHostname } from '../../../application/services/platform/custom-domains.ts';
@@ -25,6 +25,57 @@ import { ServiceDesiredStateService } from '../../../application/services/platfo
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
+import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider.ts';
+import { removeGroupDesiredWorkload, upsertGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
+
+function parseServiceConfig(config: string | null): Record<string, unknown> {
+  if (!config) return {};
+  try {
+    return JSON.parse(config) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function buildProjectedWorkerSpec(input: {
+  deploymentId?: string | null;
+  artifactRef?: string | null;
+}) {
+  return {
+    artifact: {
+      kind: 'bundle' as const,
+      ...(input.deploymentId ? { deploymentId: input.deploymentId } : {}),
+      ...(input.artifactRef ? { artifactRef: input.artifactRef } : {}),
+    },
+  };
+}
+
+function buildProjectedServiceSpec(
+  config: Record<string, unknown>,
+  deploymentTarget?: ReturnType<typeof parseDeploymentTargetConfig>,
+) {
+  const imageRef = deploymentTarget?.artifact?.image_ref
+    ?? (typeof config.imageRef === 'string' ? config.imageRef : undefined);
+  const provider = deploymentTarget?.artifact?.kind === 'container-image' && deploymentTarget?.artifact?.image_ref
+    ? undefined
+    : (config.provider === 'oci' || config.provider === 'ecs' || config.provider === 'cloud-run' || config.provider === 'k8s'
+      ? config.provider
+      : undefined);
+  const port = typeof deploymentTarget?.artifact?.exposed_port === 'number'
+    ? deploymentTarget.artifact.exposed_port
+    : (typeof config.port === 'number' ? config.port : 80);
+  const healthPath = typeof deploymentTarget?.artifact?.health_path === 'string'
+    ? deploymentTarget.artifact.health_path
+    : (typeof config.healthPath === 'string' ? config.healthPath : undefined);
+
+  return {
+    port,
+    ...(config.ipv4 === true ? { ipv4: true } : {}),
+    ...(provider ? { provider } : {}),
+    ...(imageRef ? { artifact: { kind: 'image' as const, imageRef, ...(provider ? { provider } : {}) } } : {}),
+    ...(healthPath ? { healthCheck: { path: healthPath, type: 'http' as const } } : {}),
+  };
+}
 
 /** Shape of a single invocation record from the Cloudflare GraphQL Analytics API */
 interface CfInvocationRecord {
@@ -72,6 +123,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 .post('/',
   zValidator('json', z.object({
     space_id: z.string().optional(),
+    group_id: z.string().optional(),
     service_type: z.enum(['app', 'service']).optional(),
     slug: z.string().optional(),
     config: z.string().optional(),
@@ -98,6 +150,18 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
   }
 
   const serviceType = body.service_type || 'app';
+  let groupId: string | null = null;
+  if (body.group_id?.trim()) {
+    const db = getDb(c.env.DB);
+    const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
+      .from(groups)
+      .where(eq(groups.id, body.group_id.trim()))
+      .get();
+    if (!group || group.spaceId !== resolvedSpaceId) {
+      return c.json({ error: 'group_id must belong to the selected workspace' }, 400);
+    }
+    groupId = group.id;
+  }
 
   const currentCount = await countServicesInSpace(c.env.DB, resolvedSpaceId);
   if (currentCount >= WORKSPACE_SERVICE_LIMITS.maxServices) {
@@ -110,6 +174,7 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   const result = await createService(c.env.DB, {
     spaceId: resolvedSpaceId,
+    groupId,
     workerType: serviceType,
     slug: body.slug,
     config: body.config || null,
@@ -130,6 +195,91 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   return c.json({ service: worker });
 })
+
+.patch('/:id/group',
+  zValidator('json', z.object({
+    group_id: z.string().nullable().optional(),
+  })),
+  async (c) => {
+    const user = c.get('user');
+    const workerId = c.req.param('id');
+    const body = c.req.valid('json') as { group_id?: string | null };
+
+    const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+    if (!worker) {
+      throw new NotFoundError('Service');
+    }
+
+    const nextGroupId = body.group_id?.trim() || null;
+    const db = getDb(c.env.DB);
+    if (nextGroupId) {
+      const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
+        .from(groups)
+        .where(eq(groups.id, nextGroupId))
+        .get();
+      if (!group || group.spaceId !== worker.space_id) {
+        return c.json({ error: 'group_id must belong to the same workspace as the service' }, 400);
+      }
+    }
+
+    await db.update(services)
+      .set({
+        groupId: nextGroupId,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(services.id, worker.id))
+      .run();
+
+    if (nextGroupId) {
+      const updatedService = await db.select({
+        id: services.id,
+        serviceType: services.serviceType,
+        config: services.config,
+        activeDeploymentId: services.activeDeploymentId,
+      }).from(services)
+        .where(eq(services.id, worker.id))
+        .get();
+      const activeDeployment = updatedService?.activeDeploymentId
+        ? await db.select().from(deployments).where(eq(deployments.id, updatedService.activeDeploymentId)).get()
+        : null;
+      if (updatedService?.serviceType === 'app') {
+        await upsertGroupDesiredWorkload(c.env, {
+          groupId: nextGroupId,
+          category: 'worker',
+          name: worker.slug ?? worker.id,
+          workload: buildProjectedWorkerSpec({
+            deploymentId: activeDeployment?.id ?? undefined,
+            artifactRef: activeDeployment?.artifactRef ?? worker.service_name,
+          }),
+        });
+      } else {
+        const config = parseServiceConfig(updatedService?.config ?? null);
+        await upsertGroupDesiredWorkload(c.env, {
+          groupId: nextGroupId,
+          category: 'service',
+          name: worker.slug ?? worker.id,
+          workload: buildProjectedServiceSpec(
+            config,
+            activeDeployment
+              ? parseDeploymentTargetConfig({
+                  provider_name: activeDeployment.providerName as never,
+                  target_json: activeDeployment.targetJson,
+                })
+              : undefined,
+          ) as never,
+        });
+      }
+    } else if (worker.group_id) {
+      await removeGroupDesiredWorkload(c.env, {
+        groupId: worker.group_id,
+        category: worker.service_type === 'app' ? 'worker' : 'service',
+        name: worker.slug ?? worker.id,
+      });
+    }
+
+    const updated = await getServiceForUser(c.env.DB, workerId, user.id);
+    return c.json({ service: updated });
+  })
 
 .get('/:id/logs', async (c) => {
   const user = c.get('user');
@@ -225,6 +375,14 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
 
   if (!worker) {
     throw new NotFoundError('Service');
+  }
+
+  if (worker.group_id) {
+    await removeGroupDesiredWorkload(c.env, {
+      groupId: worker.group_id,
+      category: worker.service_type === 'app' ? 'worker' : 'service',
+      name: worker.slug ?? worker.id,
+    });
   }
 
   const db = getDb(c.env.DB);

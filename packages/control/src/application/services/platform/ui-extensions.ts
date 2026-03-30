@@ -8,6 +8,7 @@ import { getDb, uiExtensions } from '../../../infra/db';
 import { eq, and, isNotNull, asc, count as drizzleCount } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export interface UIExtension {
   id: string;
@@ -61,7 +62,7 @@ function mapUIExtension(ext: {
     bundleR2Key: ext.bundleR2Key,
     sidebar: ext.sidebarJson ? parseSidebarJson(ext.sidebarJson) : undefined,
     bundleDeploymentId: ext.bundleDeploymentId || undefined,
-    createdAt: (ext.createdAt == null ? null : typeof ext.createdAt === 'string' ? ext.createdAt : ext.createdAt.toISOString()),
+    createdAt: textDate(ext.createdAt),
   };
 }
 

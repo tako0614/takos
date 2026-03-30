@@ -2,6 +2,7 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import { getDb, workflowRuns, workflowJobs, workflowSteps, accounts } from '../../../infra/db';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { safeJsonParseOrDefault } from '../../../shared/utils';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 type ListWorkflowRunsOptions = {
   repoId: string;
@@ -71,10 +72,10 @@ export async function listWorkflowRuns(db: D1Database, options: ListWorkflowRuns
       conclusion: run.conclusion,
       run_number: run.runNumber,
       run_attempt: run.runAttempt,
-      queued_at: (run.queuedAt == null ? null : typeof run.queuedAt === 'string' ? run.queuedAt : run.queuedAt.toISOString()),
-      started_at: (run.startedAt == null ? null : typeof run.startedAt === 'string' ? run.startedAt : run.startedAt.toISOString()),
-      completed_at: (run.completedAt == null ? null : typeof run.completedAt === 'string' ? run.completedAt : run.completedAt.toISOString()),
-      created_at: (run.createdAt == null ? null : typeof run.createdAt === 'string' ? run.createdAt : run.createdAt.toISOString()),
+      queued_at: textDateNullable(run.queuedAt),
+      started_at: textDateNullable(run.startedAt),
+      completed_at: textDateNullable(run.completedAt),
+      created_at: textDateNullable(run.createdAt),
       actor: run.actorId
         ? {
             id: run.actorId,
@@ -133,15 +134,15 @@ export async function getWorkflowRunDetail(db: D1Database, repoId: string, runId
       status: job.status,
       conclusion: job.conclusion,
       runner_name: job.runnerName,
-      started_at: (job.startedAt == null ? null : typeof job.startedAt === 'string' ? job.startedAt : job.startedAt.toISOString()),
-      completed_at: (job.completedAt == null ? null : typeof job.completedAt === 'string' ? job.completedAt : job.completedAt.toISOString()),
+      started_at: textDateNullable(job.startedAt),
+      completed_at: textDateNullable(job.completedAt),
       steps: stepsData.map((step) => ({
         number: step.number,
         name: step.name,
         status: step.status,
         conclusion: step.conclusion,
-        started_at: (step.startedAt == null ? null : typeof step.startedAt === 'string' ? step.startedAt : step.startedAt.toISOString()),
-        completed_at: (step.completedAt == null ? null : typeof step.completedAt === 'string' ? step.completedAt : step.completedAt.toISOString()),
+        started_at: textDateNullable(step.startedAt),
+        completed_at: textDateNullable(step.completedAt),
       })),
     };
   }));
@@ -158,10 +159,10 @@ export async function getWorkflowRunDetail(db: D1Database, repoId: string, runId
       run_number: runData.runNumber,
       run_attempt: runData.runAttempt,
       inputs: safeJsonParseOrDefault(runData.inputs, null),
-      queued_at: (runData.queuedAt == null ? null : typeof runData.queuedAt === 'string' ? runData.queuedAt : runData.queuedAt.toISOString()),
-      started_at: (runData.startedAt == null ? null : typeof runData.startedAt === 'string' ? runData.startedAt : runData.startedAt.toISOString()),
-      completed_at: (runData.completedAt == null ? null : typeof runData.completedAt === 'string' ? runData.completedAt : runData.completedAt.toISOString()),
-      created_at: (runData.createdAt == null ? null : typeof runData.createdAt === 'string' ? runData.createdAt : runData.createdAt.toISOString()),
+      queued_at: textDateNullable(runData.queuedAt),
+      started_at: textDateNullable(runData.startedAt),
+      completed_at: textDateNullable(runData.completedAt),
+      created_at: textDateNullable(runData.createdAt),
       actor: runData.actorAccountId
         ? {
             id: runData.actorAccountId,
@@ -195,8 +196,8 @@ export async function getWorkflowRunJobs(db: D1Database, repoId: string, runId: 
       status: job.status,
       conclusion: job.conclusion,
       runner_name: job.runnerName,
-      started_at: (job.startedAt == null ? null : typeof job.startedAt === 'string' ? job.startedAt : job.startedAt.toISOString()),
-      completed_at: (job.completedAt == null ? null : typeof job.completedAt === 'string' ? job.completedAt : job.completedAt.toISOString()),
+      started_at: textDateNullable(job.startedAt),
+      completed_at: textDateNullable(job.completedAt),
     })),
   };
 }

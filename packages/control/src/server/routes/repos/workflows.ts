@@ -13,6 +13,7 @@ import { workflows } from '../../../infra/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 import { ok } from '../response-utils';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 interface WorkflowParseResult {
   name: string | null;
@@ -63,7 +64,7 @@ function buildCachedWorkflowResponse(cached: CachedWorkflowRow) {
     name: cached.name,
     content: cached.content,
     triggers: safeJsonParseOrDefault<string[]>(cached.triggers, []),
-    parsed_at: (cached.parsedAt == null ? null : typeof cached.parsedAt === 'string' ? cached.parsedAt : cached.parsedAt.toISOString()),
+    parsed_at: textDateNullable(cached.parsedAt),
   };
 }
 
@@ -174,8 +175,8 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     path: w.path,
     name: w.name,
     triggers: safeJsonParseOrDefault<string[]>(w.triggers, []),
-    parsed_at: (w.parsedAt == null ? null : typeof w.parsedAt === 'string' ? w.parsedAt : w.parsedAt.toISOString()),
-    updated_at: (w.updatedAt == null ? null : typeof w.updatedAt === 'string' ? w.updatedAt : w.updatedAt.toISOString()),
+    parsed_at: textDateNullable(w.parsedAt),
+    updated_at: textDateNullable(w.updatedAt),
   }));
 
   const bucket = c.env.GIT_OBJECTS;

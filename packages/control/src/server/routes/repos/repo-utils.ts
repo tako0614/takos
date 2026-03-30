@@ -10,6 +10,7 @@ import { accounts, repositories } from '../../../infra/db/schema';
 import { eq, ne } from 'drizzle-orm';
 import { logWarn } from '../../../shared/utils/logger';
 import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from '../../../shared/config/limits';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 // ---------------------------------------------------------------------------
 // Constants & type aliases
@@ -67,8 +68,8 @@ export function formatRepositoryResponse(
     stars: repository.stars,
     forks: repository.forks,
     git_enabled: repository.gitEnabled,
-    created_at: (repository.createdAt == null ? null : typeof repository.createdAt === 'string' ? repository.createdAt : repository.createdAt.toISOString()),
-    updated_at: (repository.updatedAt == null ? null : typeof repository.updatedAt === 'string' ? repository.updatedAt : repository.updatedAt.toISOString()),
+    created_at: textDateNullable(repository.createdAt),
+    updated_at: textDateNullable(repository.updatedAt),
   };
 }
 

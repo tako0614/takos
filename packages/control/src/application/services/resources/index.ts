@@ -29,4 +29,4 @@ export {
 } from './bindings';
 
 // lifecycle
-export { provisionCloudflareResource } from './lifecycle';
+export { provisionManagedResource, provisionCloudflareResource, deleteManagedResource } from './lifecycle';

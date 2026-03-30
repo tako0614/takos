@@ -9,7 +9,15 @@
  * returns a graceful 'failed' result rather than throwing.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
+import { isAlreadyExistsError } from '../resource-provider.js';
 import { execCommand } from '../cloudflare-utils.js';
+
+const AWS_ALREADY_EXISTS_PATTERNS = [
+  'already exists',
+  'BucketAlreadyOwnedByYou',
+  'ResourceInUseException',
+  'QueueAlreadyExists',
+];
 
 export class AWSProvider implements ResourceProvider {
   readonly name = 'aws';
@@ -29,8 +37,7 @@ export class AWSProvider implements ResourceProvider {
         },
       });
       if (exitCode !== 0) {
-        // "already exists" patterns from AWS CLI
-        if (stderr.includes('already exists') || stderr.includes('BucketAlreadyOwnedByYou') || stderr.includes('ResourceInUseException') || stderr.includes('QueueAlreadyExists')) {
+        if (isAlreadyExistsError(AWS_ALREADY_EXISTS_PATTERNS, stderr)) {
           return { ok: true, stdout, error: 'already exists' };
         }
         return { ok: false, stdout, error: stderr || `aws exited with code ${exitCode}` };

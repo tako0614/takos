@@ -80,6 +80,8 @@ function checkFilePermissionsFd(
 
     return { secure: true };
   } catch {
+    // Cannot check permissions (e.g. unsupported OS/filesystem) — allow access
+    // rather than blocking the user. The security check is best-effort.
     return { secure: true };
   }
 }
@@ -217,17 +219,23 @@ function tryReadSessionFile(sessionPath: string): SessionFile | null {
       return null;
     }
 
-    if (validation.data!.api_url) {
-      const domainValidation = validateApiUrl(validation.data!.api_url);
+    const sessionData = validation.data;
+    if (!sessionData) {
+      logWarning(`Session file validation returned no data: ${sessionPath}`);
+      return null;
+    }
+
+    if (sessionData.api_url) {
+      const domainValidation = validateApiUrl(sessionData.api_url);
       if (!domainValidation.valid) {
         logWarning(
           `Invalid API URL in session file: ${domainValidation.error}`,
         );
-        validation.data!.api_url = '';
+        sessionData.api_url = '';
       }
     }
 
-    return validation.data!;
+    return sessionData;
   } catch (readError) {
     if (fd !== undefined) {
       try {

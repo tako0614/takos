@@ -124,6 +124,8 @@ export type {
   ServiceStatus,
   Service,
   ServiceBinding,
+  ResourceCapability,
+  ResourcePublicType,
   ResourceType,
   ResourceStatus,
   ResourcePermission,

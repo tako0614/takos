@@ -73,8 +73,8 @@ export interface Resource {
   name: string;
   type: 'd1' | 'r2' | 'kv' | 'vectorize' | 'worker';
   status: 'creating' | 'active' | 'error' | 'deleting' | 'deleted';
-  cf_id: string | null;
-  cf_name: string | null;
+  provider_resource_id: string | null;
+  provider_resource_name: string | null;
   config: string | null;
   metadata: string | null;
   created_at: string;

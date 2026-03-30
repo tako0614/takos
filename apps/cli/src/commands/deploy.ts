@@ -16,7 +16,7 @@ type DeployCommandOptions = {
 
 const DEPLOY_REMOVED_MESSAGE = [
   '`takos deploy` is not available in the current implementation.',
-  'Use `takos deploy-group` or `takos apply` for active deployment flows.',
+  'Use `takos apply` for manifest-driven deployment flows.',
 ];
 
 function exitRemovedDeployCommand(commandName: string): never {
@@ -30,7 +30,7 @@ function exitRemovedDeployCommand(commandName: string): never {
 export function registerDeployCommand(program: Command): void {
   const deploy = program
     .command('deploy')
-    .description('Removed. Use `takos deploy-group` or `takos apply` instead.');
+    .description('Removed. Use `takos apply` instead.');
 
   deploy
     .option('--space <id>', 'Target workspace ID')
@@ -54,7 +54,7 @@ export function registerDeployCommand(program: Command): void {
         manifest_path: manifestPath,
         app: manifest.metadata.name,
         version: manifest.spec.version,
-        workers: Object.keys(manifest.spec.workers),
+        workers: Object.keys(manifest.spec.workers ?? {}),
         resources: Object.keys(manifest.spec.resources || {}),
         routes: (manifest.spec.routes || []).map((route: { name?: string; target: string }) => route.name || route.target),
       };

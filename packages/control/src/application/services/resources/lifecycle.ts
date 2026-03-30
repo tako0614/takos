@@ -2,18 +2,31 @@ import type { Env } from '../../../shared/types';
 import { generateId } from '../../../shared/utils';
 import { insertFailedResource, insertResource } from './store';
 import { CloudflareResourceService, type CloudflareManagedResourceType } from '../../../platform/providers/cloudflare/resources.ts';
+import type { ResourceCapability, ResourceType } from '../../../shared/types';
+import { resolveResourceDriver, resolveResourceImplementation, toPublicResourceType } from './capabilities';
 
-type ProvisionCloudflareResourceInput = {
+type ManagedResourceProvider = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'k8s';
+
+type ProvisionManagedResourceInput = {
   id?: string;
   timestamp?: string;
   ownerId: string;
   spaceId?: string | null;
+  groupId?: string | null;
   name: string;
-  type: CloudflareManagedResourceType;
-  cfName: string;
+  type: string;
+  providerResourceName?: string;
+  publicType?: ResourceType;
+  semanticType?: ResourceCapability;
+  providerName?: string;
+  persist?: boolean;
   config?: Record<string, unknown>;
   recordFailure?: boolean;
   vectorize?: {
+    dimensions: number;
+    metric: 'cosine' | 'euclidean' | 'dot-product';
+  };
+  vectorIndex?: {
     dimensions: number;
     metric: 'cosine' | 'euclidean' | 'dot-product';
   };
@@ -23,66 +36,148 @@ type ProvisionCloudflareResourceInput = {
   analyticsEngine?: {
     dataset?: string;
   };
+  analyticsStore?: {
+    dataset?: string;
+  };
   workflow?: {
     service: string;
     export: string;
     timeoutMs?: number;
     maxRetries?: number;
   };
+  workflowRuntime?: {
+    service: string;
+    export: string;
+    timeoutMs?: number;
+    maxRetries?: number;
+  };
+  durableNamespace?: {
+    className: string;
+    scriptName?: string;
+  };
 };
 
-export async function provisionCloudflareResource(
+function normalizeManagedResourceProvider(providerName?: string | null): ManagedResourceProvider {
+  switch (providerName) {
+    case 'local':
+    case 'aws':
+    case 'gcp':
+    case 'k8s':
+      return providerName;
+    case 'cloudflare':
+    default:
+      return 'cloudflare';
+  }
+}
+
+function inferDefaultManagedResourceProvider(env: Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN'>): ManagedResourceProvider {
+  return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? 'cloudflare' : 'local';
+}
+
+export async function provisionManagedResource(
   env: Env,
-  input: ProvisionCloudflareResourceInput
+  input: ProvisionManagedResourceInput
 ): Promise<{
   id: string;
-  cfId: string | null;
-  cfName: string;
+  providerResourceId: string | null;
+  providerResourceName: string;
 }> {
   const id = input.id || generateId();
   const timestamp = input.timestamp || new Date().toISOString();
-  const provider = new CloudflareResourceService(env);
+  const semanticType = input.semanticType ?? (input.type as ResourceCapability);
+  const publicType = input.publicType ?? toPublicResourceType(semanticType) ?? (input.type as ResourceType);
+  const providerName = normalizeManagedResourceProvider(input.providerName ?? inferDefaultManagedResourceProvider(env));
+  const driver = resolveResourceDriver(semanticType, providerName);
+  const persist = input.persist ?? true;
+  const providerResourceName = input.providerResourceName ?? `${input.type}-${id}`;
+  const workflow = input.workflow ?? input.workflowRuntime;
+  const implementation = resolveResourceImplementation(semanticType) ?? (input.type as CloudflareManagedResourceType);
 
   try {
-    const created = await provider.createResource(input.type, input.cfName, {
-      ...(input.vectorize ? { vectorize: input.vectorize } : {}),
+    if (providerName !== 'cloudflare') {
+      if (persist) {
+        await insertResource(env.DB, {
+          id,
+          owner_id: input.ownerId,
+          name: input.name,
+          type: publicType,
+          semantic_type: semanticType,
+          driver,
+          provider_name: providerName,
+          status: 'active',
+          provider_resource_id:
+            implementation === 'd1' || implementation === 'kv' || implementation === 'queue'
+              ? `${providerResourceName}-${id}`
+              : null,
+          provider_resource_name: providerResourceName,
+          config: input.config || {},
+          space_id: input.spaceId || null,
+          group_id: input.groupId || null,
+          created_at: timestamp,
+          updated_at: timestamp,
+        });
+      }
+
+      return {
+        id,
+        providerResourceId:
+          implementation === 'd1' || implementation === 'kv' || implementation === 'queue'
+            ? `${providerResourceName}-${id}`
+            : null,
+        providerResourceName,
+      };
+    }
+
+    const provider = new CloudflareResourceService(env);
+    const created = await provider.createResource(implementation as CloudflareManagedResourceType, providerResourceName, {
+      ...(input.vectorize || input.vectorIndex ? { vectorize: input.vectorize ?? input.vectorIndex } : {}),
       ...(input.queue ? { queue: input.queue } : {}),
-      ...(input.analyticsEngine ? { analyticsEngine: input.analyticsEngine } : {}),
-      ...(input.workflow ? { workflow: input.workflow } : {}),
+      ...(input.analyticsEngine || input.analyticsStore ? { analyticsEngine: input.analyticsEngine ?? input.analyticsStore } : {}),
+      ...(workflow ? { workflow } : {}),
     });
 
-    await insertResource(env.DB, {
-      id,
-      owner_id: input.ownerId,
-      name: input.name,
-      type: input.type,
-      status: 'active',
-      cf_id: created.cfId,
-      cf_name: created.cfName,
-      config: input.config || {},
-      space_id: input.spaceId || null,
-      created_at: timestamp,
-      updated_at: timestamp,
-    });
+    if (persist) {
+      await insertResource(env.DB, {
+        id,
+        owner_id: input.ownerId,
+        name: input.name,
+        type: publicType,
+        semantic_type: semanticType,
+        driver,
+        provider_name: providerName,
+        status: 'active',
+        provider_resource_id: created.providerResourceId,
+        provider_resource_name: created.providerResourceName,
+        config: input.config || {},
+        space_id: input.spaceId || null,
+        group_id: input.groupId || null,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
 
     return {
       id,
-      cfId: created.cfId,
-      cfName: created.cfName,
+      providerResourceId: created.providerResourceId,
+      providerResourceName: created.providerResourceName,
     };
   } catch (error) {
-    if (input.recordFailure) {
+    if (persist && input.recordFailure) {
       await insertFailedResource(env.DB, {
         id,
         owner_id: input.ownerId,
         name: input.name,
-        type: input.type,
-        cf_name: input.cfName,
+        type: publicType,
+        semantic_type: semanticType,
+        driver,
+        provider_name: providerName,
+        provider_resource_name: providerResourceName,
         config: {
           ...(input.config || {}),
           error: error instanceof Error ? error.message : String(error),
         },
         space_id: input.spaceId || null,
+        group_id: input.groupId || null,
         created_at: timestamp,
         updated_at: timestamp,
       });
@@ -90,3 +185,27 @@ export async function provisionCloudflareResource(
     throw error;
   }
 }
+
+export async function deleteManagedResource(
+  env: Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN' | 'WFP_DISPATCH_NAMESPACE'>,
+  input: {
+    type: string;
+    providerName?: string | null;
+    providerResourceId?: string | null;
+    providerResourceName?: string | null;
+  },
+): Promise<void> {
+  const providerName = normalizeManagedResourceProvider(input.providerName ?? inferDefaultManagedResourceProvider(env));
+  if (providerName !== 'cloudflare') {
+    return;
+  }
+  const provider = new CloudflareResourceService(env);
+  const implementation = resolveResourceImplementation(input.type) ?? (input.type as CloudflareManagedResourceType);
+  await provider.deleteResource({
+    type: implementation,
+    providerResourceId: input.providerResourceId,
+    providerResourceName: input.providerResourceName,
+  });
+}
+
+export const provisionCloudflareResource = provisionManagedResource;

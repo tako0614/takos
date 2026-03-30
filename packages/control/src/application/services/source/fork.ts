@@ -7,6 +7,7 @@ import { getDb, repositories, repoReleases } from '../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 export interface ForkOptions {
   name?: string;
@@ -343,7 +344,7 @@ async function getUpstreamReleases(
     id: r.id,
     tag: r.tag,
     name: r.name,
-    published_at: (r.publishedAt == null ? null : typeof r.publishedAt === 'string' ? r.publishedAt : r.publishedAt.toISOString()),
+    published_at: textDateNullable(r.publishedAt),
     is_newer: r.publishedAt ? r.publishedAt > forkCreatedAt : false,
   }));
 }
