@@ -6,17 +6,20 @@ import { parsePagination } from '../../../shared/utils';
 import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
+import { getPortableSqlDatabase, isPortableResourceProvider } from './portable-runtime.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
+import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities';
 import { textDate } from '../../../shared/utils/db-guards';
 
 type D1ResourceData = {
   id: string;
   ownerAccountId: string;
   accountId: string | null;
+  providerName?: string | null;
   name: string;
   type: string;
   status: string;
@@ -79,6 +82,7 @@ function toSnakeCaseResource(resourceData: D1ResourceData): Resource {
     id: resourceData.id,
     owner_id: resourceData.ownerAccountId,
     space_id: resourceData.accountId,
+    ...(resourceData.providerName !== undefined ? { provider_name: resourceData.providerName } : {}),
     name: resourceData.name,
     type: resourceData.type as Resource['type'],
     status: resourceData.status as Resource['status'],
@@ -99,7 +103,7 @@ async function loadD1ResourceWithAccess(
 ): Promise<Resource> {
   const db = getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
-    and(eq(resources.id, resourceId), eq(resources.type, 'd1'))
+    and(eq(resources.id, resourceId), inArray(resources.type, getResourceTypeQueryValues('sql')))
   ).get();
 
   if (!resourceData) {
@@ -117,20 +121,52 @@ async function loadD1ResourceWithAccess(
   return resource;
 }
 
-const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
+async function listPortableTables(resource: Resource) {
+  const db = await getPortableSqlDatabase(resource);
+  const tablesResult = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all<{ name: string }>();
+  const tables = tablesResult.results ?? [];
 
-.get('/:id/d1/tables', async (c) => {
+  return Promise.all(
+    tables.map(async ({ name }) => {
+      const safeName = name.replace(/[^a-zA-Z0-9_]/g, '');
+      const [columnsResult, countResult] = await Promise.all([
+        db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
+        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<{ count?: number }>('count'),
+      ]);
+      return {
+        name: safeName,
+        columns: columnsResult.results ?? [],
+        row_count: Number(countResult ?? 0),
+      };
+    }),
+  );
+}
+
+async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const tables = await listPortableTables(resource);
+      return c.json({ tables });
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logError('Failed to list portable SQL tables', err, { module: 'routes/resources/d1' });
+      throw new InternalError('Failed to list tables');
+    }
+  }
+
   const databaseId = resource.provider_resource_id;
   if (!databaseId) {
-    throw new BadRequestError( 'D1 database not provisioned');
+    throw new BadRequestError('D1 database not provisioned');
   }
 
   try {
-  const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -149,7 +185,6 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
             row_count: count,
           };
         } catch {
-          // Table introspection failed (e.g. dropped mid-listing); return empty metadata
           return { name: t.name, columns: [], row_count: 0 };
         }
       })
@@ -161,30 +196,52 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     logError('Failed to list D1 tables', err, { module: 'routes/resources/d1' });
     throw new InternalError('Failed to list tables');
   }
-})
+}
 
-.get('/:id/d1/tables/:tableName', async (c) => {
+async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const tableName = c.req.param('tableName');
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
+  const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 1000 });
+  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
+  if (safeName !== tableName) {
+    throw new BadRequestError('Invalid table name');
+  }
+
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const db = await getPortableSqlDatabase(resource);
+      const [columnsResult, countValue, rowsResult] = await Promise.all([
+        db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
+        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<number>('count'),
+        db.prepare(`SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`).all<Record<string, unknown>>(),
+      ]);
+
+      return c.json({
+        table: safeName,
+        columns: columnsResult.results ?? [],
+        rows: rowsResult.results ?? [],
+        total_count: Number(countValue ?? 0),
+        limit,
+        offset,
+      });
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logError('Failed to get portable table data', err, { module: 'routes/resources/d1' });
+      throw new InternalError('Failed to get table data');
+    }
+  }
 
   const databaseId = resource.provider_resource_id;
   if (!databaseId) {
-    throw new BadRequestError( 'D1 database not provisioned');
+    throw new BadRequestError('D1 database not provisioned');
   }
-
-  const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 1000 });
 
   try {
     const wfp = createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
-    }
-
-    const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
-    if (safeName !== tableName) {
-      throw new BadRequestError( 'Invalid table name');
     }
 
     const [columns, count, rowsResult] = await Promise.all([
@@ -193,16 +250,14 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
       wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
     ]);
 
-    // Validate WFP response structure
     if (!Array.isArray(rowsResult) || !rowsResult[0]?.results) {
       throw new InternalError('Invalid response from D1');
     }
-    const rows = rowsResult[0].results;
 
     return c.json({
       table: safeName,
       columns,
-      rows,
+      rows: rowsResult[0].results,
       total_count: count,
       limit,
       offset,
@@ -212,19 +267,15 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     logError('Failed to get table data', err, { module: 'routes/resources/d1' });
     throw new InternalError('Failed to get table data');
   }
-})
+}
 
-.post('/:id/d1/query',
-  zValidator('json', z.object({
-    sql: z.string(),
-  })),
-  async (c) => {
+async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const body = c.req.valid('json');
 
   if (!body.sql?.trim()) {
-    throw new BadRequestError( 'SQL query is required');
+    throw new BadRequestError('SQL query is required');
   }
 
   const sqlTrimmed = body.sql.trim();
@@ -232,9 +283,24 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
   const requiredPermissions: ResourcePermission[] | undefined = isReadOnly ? undefined : ['write', 'admin'];
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
 
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const db = await getPortableSqlDatabase(resource);
+      const statement = db.prepare(body.sql);
+      const result = isReadOnly
+        ? await statement.all<Record<string, unknown>>()
+        : await statement.run<Record<string, unknown>>();
+      return c.json({ result: [result] });
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logError('Failed to execute portable SQL', err, { module: 'routes/resources/d1' });
+      throw new InternalError('SQL execution failed');
+    }
+  }
+
   const databaseId = resource.provider_resource_id;
   if (!databaseId) {
-    throw new BadRequestError( 'D1 database not provisioned');
+    throw new BadRequestError('D1 database not provisioned');
   }
 
   try {
@@ -243,24 +309,48 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
       throw new InternalError('Cloudflare WFP not configured');
     }
     const result = await wfp.d1.runD1SQL(databaseId, body.sql);
-
     return c.json({ result });
   } catch (err) {
     if (isAppError(err)) throw err;
     logError('Failed to execute SQL', err, { module: 'routes/resources/d1' });
     throw new InternalError('SQL execution failed');
   }
-})
+}
 
-.post('/:id/d1/export', async (c) => {
+async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const body = await parseJsonBody<{ tables?: string[] }>(c);
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 
+  if (isPortableResourceProvider(resource.provider_name)) {
+    try {
+      const db = await getPortableSqlDatabase(resource);
+      const tableRows = body?.tables && body.tables.length > 0
+        ? body.tables
+        : (await listPortableTables(resource)).map((table) => table.name);
+
+      const tables: Record<string, unknown[]> = {};
+      for (const table of tableRows) {
+        const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
+        const result = await db.prepare(`SELECT * FROM ${safeName}`).all<Record<string, unknown>>();
+        tables[safeName] = result.results ?? [];
+      }
+
+      return c.json({
+        database: resource.name,
+        tables,
+      });
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logError('Failed to export portable SQL resource', err, { module: 'routes/resources/d1' });
+      throw new InternalError('Export failed');
+    }
+  }
+
   const databaseId = resource.provider_resource_id;
   if (!databaseId) {
-    throw new BadRequestError( 'D1 database not provisioned');
+    throw new BadRequestError('D1 database not provisioned');
   }
 
   try {
@@ -276,12 +366,10 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     for (const table of tableRows) {
       const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
       const result = await wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName}`);
-      // Validate WFP response structure
       if (!Array.isArray(result) || !result[0]?.results) {
-        continue; // Skip tables with invalid response
+        continue;
       }
-      const rows = result[0].results;
-      tables[safeName] = rows;
+      tables[safeName] = result[0].results;
     }
 
     return c.json({
@@ -293,6 +381,28 @@ const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
     logError('Failed to export D1', err, { module: 'routes/resources/d1' });
     throw new InternalError('Export failed');
   }
-});
+}
+
+const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
+.get('/:id/d1/tables', listTablesHandler)
+.get('/:id/sql/tables', listTablesHandler)
+
+.get('/:id/d1/tables/:tableName', tableDetailsHandler)
+.get('/:id/sql/tables/:tableName', tableDetailsHandler)
+
+.post('/:id/d1/query',
+  zValidator('json', z.object({
+    sql: z.string(),
+  })),
+  queryHandler)
+
+.post('/:id/sql/query',
+  zValidator('json', z.object({
+    sql: z.string(),
+  })),
+  queryHandler)
+
+.post('/:id/d1/export', exportHandler)
+.post('/:id/sql/export', exportHandler);
 
 export default resourcesD1;

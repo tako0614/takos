@@ -205,9 +205,9 @@ function resolveTakosRepoRoot(): string {
 }
 
 function resolveDocsDir(repoRoot: string): string {
-  const docsDir = path.join(repoRoot, "apps", "docs-site", "docs");
+  const docsDir = path.join(repoRoot, "docs");
   if (!isDirectory(docsDir)) {
-    throw new Error("Takos docs site not found. Expected apps/docs-site/docs.");
+    throw new Error("Takos docs site not found. Expected docs/.");
   }
   return docsDir;
 }
@@ -632,11 +632,8 @@ function validateSelfContainedDocs(docsDir: string, result: ValidationResult): v
   }
 }
 
-function validateRepoDocsPolicy(repoRoot: string, result: ValidationResult): void {
-  const disallowed = path.join(repoRoot, "docs");
-  if (isDirectory(disallowed)) {
-    result.errors.push("[docs] repository-root docs/ is not allowed. Use apps/docs-site/docs.");
-  }
+function validateRepoDocsPolicy(_repoRoot: string, _result: ValidationResult): void {
+  // docs/ now lives at the repository root — no policy violation to check.
 }
 
 function validateManifestDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {

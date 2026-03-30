@@ -108,6 +108,45 @@ export async function uploadToR2(
 }
 
 /**
+ * Read an object from an R2 bucket using the object endpoint.
+ */
+export async function getR2Object(
+  ctx: WfpContext,
+  bucketName: string,
+  key: string,
+): Promise<{
+  body: ArrayBuffer;
+  contentType: string | null;
+  size: number;
+} | null> {
+  const response = await fetch(
+    `${CF_API_BASE}${ctx.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`)}`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${ctx.config.apiToken}`,
+      },
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new InternalError(`Failed to read from R2: ${response.status} ${text}`);
+  }
+
+  const body = await response.arrayBuffer();
+  return {
+    body,
+    contentType: response.headers.get('content-type'),
+    size: body.byteLength,
+  };
+}
+
+/**
  * Delete an object from an R2 bucket.
  */
 export async function deleteR2Object(ctx: WfpContext, bucketName: string, key: string): Promise<void> {

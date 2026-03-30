@@ -14,7 +14,7 @@ packages:
   - 'apps/control'
   - 'apps/runtime'
   - 'apps/cli'
-  - 'apps/docs-site'
+  - 'docs'
 
   # --- Shared packages ---
   - 'packages/*'

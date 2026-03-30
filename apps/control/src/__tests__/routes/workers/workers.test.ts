@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import { AppError, ErrorCodes, isAppError } from 'takos-common/errors';
 import type { Env, User } from '@/types';
-import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
+import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
 import { createMockEnv } from '../../../../test/integration/setup';
 
 const mocks = vi.hoisted(() => {
@@ -32,6 +33,7 @@ const mocks = vi.hoisted(() => {
     createCloudflareApiClient: vi.fn(),
     deleteCloudflareCustomHostname: vi.fn(),
     CommonEnvService: vi.fn(),
+    deleteServiceTakosAccessTokenConfig: vi.fn(),
     ServiceDesiredStateService: vi.fn(),
     createOptionalCloudflareWfpProvider: vi.fn(),
     getDb: vi.fn(),
@@ -53,8 +55,8 @@ vi.mock('@/services/platform/workers', () => ({
   WORKSPACE_SERVICE_LIMITS: mocks.WORKSPACE_SERVICE_LIMITS,
 }));
 
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
+vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/server/routes/route-auth.ts', async (importOriginal) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     requireSpaceAccess: mocks.requireSpaceAccess,
@@ -75,9 +77,19 @@ vi.mock('@/platform/providers/cloudflare/custom-domains.ts', () => ({
   deleteCloudflareCustomHostname: mocks.deleteCloudflareCustomHostname,
 }));
 
-vi.mock('@/services/common-env', () => ({
-  CommonEnvService: mocks.CommonEnvService,
-}));
+vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/application/services/common-env/index.ts', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    CommonEnvService: mocks.CommonEnvService,
+    deleteServiceTakosAccessTokenConfig: mocks.deleteServiceTakosAccessTokenConfig,
+    createCommonEnvDeps: vi.fn(() => ({
+      manualLink: {
+        deleteServiceTakosAccessTokenConfig: vi.fn(),
+      },
+    })),
+  };
+});
 
 vi.mock('@/services/platform/worker-desired-state', () => ({
   ServiceDesiredStateService: mocks.ServiceDesiredStateService,
@@ -88,7 +100,7 @@ vi.mock('@/platform/providers/cloudflare/wfp.ts', () => ({
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
+  ...(await importOriginal()),
   getDb: mocks.getDb,
 }));
 
@@ -96,6 +108,23 @@ vi.mock('@/services/deployment/group-desired-projector', () => ({
   upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
   removeGroupDesiredWorkload: mocks.removeGroupDesiredWorkload,
 }));
+
+vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/application/services/platform/workers.ts', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    listServicesForUser: mocks.listWorkersForUser,
+    listServicesForSpace: mocks.listWorkersForWorkspace,
+    createService: mocks.createWorker,
+    countServicesInSpace: mocks.countWorkersInWorkspace,
+    deleteService: mocks.deleteWorker,
+    getServiceForUser: mocks.getWorkerForUser,
+    getServiceForUserWithRole: mocks.getWorkerForUserWithRole,
+    slugifyServiceName: mocks.slugifyWorkerName,
+    WORKSPACE_WORKER_LIMITS: mocks.WORKSPACE_WORKER_LIMITS,
+    WORKSPACE_SERVICE_LIMITS: mocks.WORKSPACE_SERVICE_LIMITS,
+  };
+});
 
 import workersBase from '@/routes/workers/routes';
 import workersSlug from '@/routes/workers/slug';
@@ -117,6 +146,15 @@ function createUser(): User {
 
 function createApp(user: User, routeModule: Hono<AuthenticatedRouteEnv> = workersBase) {
   const app = new Hono<AuthenticatedRouteEnv>();
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(
+        error.toResponse(),
+        error.statusCode as 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503 | 504,
+      );
+    }
+    throw error;
+  });
   app.use('*', async (c, next) => {
     c.set('user', user);
     await next();
@@ -157,8 +195,8 @@ describe('services base routes', () => {
   describe('GET /api/services/space/:spaceId', () => {
     it('returns services for the specified workspace', async () => {
       mocks.requireSpaceAccess.mockResolvedValue({
-        workspace: { id: 'ws-1', name: 'My Space' },
-        member: { role: 'owner' },
+        space: { id: 'ws-1', name: 'My Space' },
+        membership: { role: 'owner' },
       });
       mocks.listWorkersForWorkspace.mockResolvedValue([
         { id: 'w-2', slug: 'space-worker' },
@@ -178,11 +216,8 @@ describe('services base routes', () => {
     });
 
     it('returns error when workspace access is denied', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Workspace not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+      mocks.requireSpaceAccess.mockRejectedValue(
+        new AppError('Workspace not found', ErrorCodes.NOT_FOUND, 404),
       );
 
       const app = createApp(createUser());
@@ -246,8 +281,8 @@ describe('services base routes', () => {
 
     it('respects space_id to scope service creation to a workspace', async () => {
       mocks.requireSpaceAccess.mockResolvedValue({
-        workspace: { id: 'ws-2' },
-        member: { role: 'admin' },
+        space: { id: 'ws-2' },
+        membership: { role: 'admin' },
       });
       mocks.countWorkersInWorkspace.mockResolvedValue(0);
       mocks.createWorker.mockResolvedValue({
@@ -369,9 +404,7 @@ describe('services base routes', () => {
         hostname: null,
         service_name: null,
       });
-      mocks.CommonEnvService.mockReturnValue({
-        deleteServiceTakosAccessTokenConfig: vi.fn().mockResolvedValue(undefined),
-      });
+      mocks.deleteServiceTakosAccessTokenConfig.mockResolvedValue(undefined);
       mocks.createOptionalCloudflareWfpProvider.mockReturnValue(null);
 
       const app = createApp(createUser());
@@ -431,7 +464,10 @@ describe('services slug routes', () => {
 
       expect(res.status).toBe(400);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('between 3 and 32');
+      expect(json.error).toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('between 3 and 32'),
+      });
     });
 
     it('rejects reserved subdomains', async () => {
@@ -450,7 +486,10 @@ describe('services slug routes', () => {
 
       expect(res.status).toBe(400);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('reserved');
+      expect(json.error).toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('reserved'),
+      });
     });
 
     it('rejects empty slug', async () => {
