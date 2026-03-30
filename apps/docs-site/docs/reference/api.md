@@ -1,27 +1,10 @@
 # API リファレンス
 
-<!-- docs:api-families seed-repositories,explore,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,pull-requests,app-deployments,browser-sessions,billing,auth,oauth -->
+<!-- docs:api-families seed-repositories,explore,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,pull-requests,app-deployments,browser-sessions,billing,auth,oauth,groups -->
 
 ::: tip Coverage
-このページは **route family 単位の current contract** をまとめています。Takos の public API は `/api/*` 配下で提供され、CLI の task domain もこの family 群にマップされます。
+このページは **全 API エンドポイント** を網羅したリファレンスです。Takos の public API は `/api/*` 配下で提供され、CLI の task domain もこの family 群にマップされます。
 :::
-
-## このリファレンスで依存してよい範囲
-
-- `/api/*` の family ごとの責務
-- auth mode と representative path
-- current API surface の読み分け
-
-## このリファレンスで依存してはいけない範囲
-
-- family 名だけを見て lower-level internal route まで current contract だと解釈すること
-- architecture や実装コードにある補助 route を、このページの代わりに採用判断へ使うこと
-- request / response の完全 wire schema がここに全部書かれていると期待すること
-
-## API の読み方
-
-Takos API は、1 endpoint ずつの一覧よりも family 単位の責務で読む方が迷いません。
-まず family を決め、次に auth mode と representative path を見ます。
 
 ## 認証
 
@@ -64,60 +47,97 @@ Authorization: Bearer <access_token>
 | `FORBIDDEN` | 403 | 権限が不足 |
 | `NOT_FOUND` | 404 | リソースが見つからない |
 | `CONFLICT` | 409 | 競合が発生 |
+| `GONE` | 410 | リソースが期限切れ |
 | `RATE_LIMITED` | 429 | レート制限に到達 |
 | `INTERNAL_ERROR` | 500 | サーバー内部エラー |
+
+## ページネーション
+
+多くのリスト系エンドポイントは `limit` / `offset` または `cursor` ベースのページネーションをサポートする。
+
+```
+GET /api/resources?limit=20&offset=0
+```
+
+| param | type | description |
+| --- | --- | --- |
+| `limit` | number | 取得件数（デフォルトは endpoint 依存、最大値あり） |
+| `offset` | number | スキップ件数（offset ベースの場合） |
+| `cursor` | string | 次ページのカーソル（cursor ベースの場合） |
+
+---
 
 ## Route families
 
 ### Public / optional auth
 
-| family | auth | representative paths | purpose |
-| --- | --- | --- | --- |
-| `seed-repositories` | none | `/api/seed-repositories` | 初回導入用 seed repo 一覧 |
-| `explore` | optional | `/api/explore/repos`, `/api/explore/catalog`, `/api/explore/users` | 公開 catalog / discover |
-| `profiles` | optional | `/api/users/:username`, `/api/users/:username/repos` | 公開 profile / repo view |
-| `public-share` | mixed | `/api/public/thread-shares/:token` | thread share の read / access grant |
-| `mcp` | mixed | `/api/mcp/oauth/callback`, `/api/mcp/servers` | MCP OAuth callback と MCP server 管理 |
-| `billing` | mixed | `/api/billing/webhook` | Stripe webhook |
-| `oauth` | session | `/api/oauth/authorize/context`, `/api/oauth/device/context` | consent UI 用 API |
+| family | auth | purpose |
+| --- | --- | --- |
+| [`seed-repositories`](#seed-repositories) | none | 初回導入用 seed repo 一覧 |
+| [`explore`](#explore) | optional | 公開 catalog / discover |
+| [`profiles`](#profiles) | optional | 公開 profile / repo view / follow / block |
+| [`public-share`](#public-share) | mixed | thread share の read / access grant |
+| [`mcp`](#mcp) | mixed | MCP OAuth callback と MCP server 管理 |
+| [`billing` (webhook)](#billing) | none | Stripe webhook |
+| [`oauth` (consent)](#oauth-consent) | session | consent UI 用 API |
 
 ### Authenticated families
 
-| family | representative paths | purpose |
-| --- | --- | --- |
-| `setup` | `/api/setup/status`, `/api/setup/complete` | 初期セットアップ状態 |
-| `me` | `/api/me`, `/api/me/settings`, `/api/me/oauth/*`, `/api/me/personal-access-tokens` | current user / settings / PAT / OAuth client |
-| `spaces` | `/api/spaces`, `/api/spaces/:spaceId`, `/api/spaces/:spaceId/members` | workspace/space 基本 CRUD |
-| `spaces.storage` | `/api/spaces/:spaceId/storage/*` | file upload/download/list/bulk ops/file handlers |
-| `spaces.common-env` | `/api/spaces/:spaceId/common-env` | 共通 env の read/write/delete |
-| `spaces.stores` | `/api/spaces/:spaceId/stores`, `/api/spaces/:spaceId/store-registry/*` | store / registry / install flows |
-| `shortcuts` | `/api/shortcuts`, `/api/spaces/:spaceId/shortcuts/groups` | shortcut と group 管理 |
-| `services` | `/api/services`, `/api/services/:id` | service CRUD と runtime 管理 |
-| `custom-domains` | `/api/services/:id/custom-domains/*` | custom domain verify / SSL refresh |
-| `resources` | `/api/resources`, `/api/resources/:id/*` | resource CRUD / access / tokens / D1 / R2 |
-| `apps` | `/api/apps`, `/api/apps/:id`, `/api/apps/:id/client-key` | builtin/custom app listing |
-| `threads` | `/api/spaces/:spaceId/threads`, `/api/threads/:id/messages`, `/api/threads/:id/share` | thread / message / share |
-| `runs` | `/api/threads/:threadId/runs`, `/api/runs/:id`, `/api/runs/:id/sse`, `/api/runs/:id/ws` | run 実行・event stream・artifact |
-| `search` | `/api/spaces/:spaceId/search`, `/api/spaces/:spaceId/search/quick` | semantic / quick search |
-| `index` | `/api/spaces/:spaceId/index`, `/api/spaces/:spaceId/graph` | indexing / graph 系 |
-| `memories` | `/api/spaces/:spaceId/memories`, `/api/spaces/:spaceId/reminders` | memory / reminder |
-| `skills` | `/api/spaces/:spaceId/skills`, `/api/workspaces/:workspaceId/skills` | skill catalog / custom skill |
-| `sessions` | `/api/sessions/:sessionId/*` | session health / resume / discard / heartbeat |
-| `git` | `/api/spaces/:spaceId/git/*` | space-scoped git 操作 |
-| `repos` | `/api/spaces/:spaceId/repos`, `/api/repos/:repoId/*` | repo CRUD / tree/blob/commits/branches/releases/actions |
-| `pull-requests` | `/api/repos/:repoId/pulls/*` | PR / review 系 |
-| `agent-tasks` | `/api/spaces/:spaceId/agent-tasks`, `/api/agent-tasks/:id/plan` | task orchestration |
-| `notifications` | `/api/notifications`, `/api/notifications/sse`, `/api/notifications/ws` | notification list / SSE / WS |
-| `app-deployments` | `/api/spaces/:spaceId/app-deployments`, `/rollback`, `/rollout/*` | app deploy / rollback / rollout control |
-| `browser-sessions` | `/api/spaces/:spaceId/browser-sessions`, `/api/browser-sessions/:id/*` | browser session lifecycle |
-| `billing` | `/api/billing`, `/api/billing/usage`, `/api/billing/subscribe`, `/api/billing/invoices/*` | current account billing |
-| `auth` | `/api/auth/me`, `/api/auth/profile`, `/api/auth/logout` | authenticated auth/profile actions |
+| family | purpose |
+| --- | --- |
+| [`setup`](#setup) | 初期セットアップ状態 |
+| [`me`](#me) | current user / settings / PAT / OAuth client |
+| [`spaces`](#spaces) | workspace/space 基本 CRUD / model / export |
+| [`spaces.members`](#spacesmembers) | space メンバー管理 |
+| [`spaces.repositories`](#spacesrepositories) | space 内 repo 初期化 |
+| [`spaces.storage`](#spacesstorage) | file upload/download/list/bulk ops |
+| [`spaces.common-env`](#spacescommon-env) | 共通 env の read/write/delete |
+| [`spaces.stores`](#spacesstores) | ActivityPub store 管理 |
+| [`spaces.store-registry`](#spacesstore-registry) | remote store registry / install |
+| [`shortcuts`](#shortcuts) | shortcut と group 管理 |
+| [`services`](#services) | service CRUD / settings / deployments |
+| [`custom-domains`](#custom-domains) | custom domain verify / SSL refresh |
+| [`resources`](#resources) | resource CRUD / access / tokens / D1 / R2 |
+| [`apps`](#apps) | builtin/custom app listing |
+| [`threads`](#threads) | thread / message / share / export |
+| [`runs`](#runs) | run 実行・event stream・artifact |
+| [`search`](#search) | semantic / quick search |
+| [`index`](#index) | indexing / vectorize / graph |
+| [`memories`](#memories) | memory CRUD / search |
+| [`reminders`](#reminders) | reminder CRUD / trigger |
+| [`skills`](#skills) | skill catalog / custom skill |
+| [`sessions`](#sessions) | session lifecycle / heartbeat |
+| [`git`](#git) | space-scoped git 操作 |
+| [`repos`](#repos) | repo CRUD / tree / blob / branches / commits / stars / forks |
+| [`repos.actions`](#reposactions) | workflow runs / secrets / artifacts |
+| [`repos.releases`](#reposreleases) | release CRUD |
+| [`pull-requests`](#pull-requests) | PR / review / merge |
+| [`agent-tasks`](#agent-tasks) | task orchestration |
+| [`notifications`](#notifications) | notification list / SSE / WS |
+| [`app-deployments`](#app-deployments) | app deploy / rollback / rollout |
+| [`browser-sessions`](#browser-sessions) | browser session lifecycle |
+| [`groups`](#groups) | group 管理 / plan / apply |
+| [`billing`](#billing) | billing / usage / invoices |
+| [`auth`](#auth) | authenticated auth/profile actions |
 
-## Representative operation models
+### Non-API routes
 
-### `seed-repositories`
+| family | purpose |
+| --- | --- |
+| [`smart-http`](#smart-http) | Git Smart HTTP (clone / push) |
+| [`well-known`](#well-known) | OAuth / OIDC discovery |
+| [`activitypub-store`](#activitypub-store) | ActivityPub federation |
+| [`oauth` (server)](#oauth-server) | OAuth 2.0 token / authorize / introspect |
+
+---
+
+## seed-repositories
 
 初回導入時に表示される seed リポジトリの一覧を返す。認証不要。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/seed-repositories` | seed リポジトリ一覧 |
 
 ```bash
 GET /api/seed-repositories
@@ -139,55 +159,270 @@ GET /api/seed-repositories
 }
 ```
 
-### `spaces`
+---
 
-`spaces` family は workspace/space を起点にした surface です。
-基本 CRUD だけでなく、次の subresource を current contract に含みます。
+## explore
 
-- members
-- repos bootstrap
-- storage
-- common env
-- stores
-- store registry
+公開リポジトリ・パッケージ・ユーザーの検索・閲覧。認証はオプション。
 
-#### ワークスペース一覧
+### Repositories
 
-```bash
-GET /api/spaces
-Authorization: Bearer $TOKEN
-```
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/explore/repos` | リポジトリ一覧（フィルタ・検索対応） |
+| GET | `/api/explore/repos/trending` | トレンドリポジトリ |
+| GET | `/api/explore/repos/new` | 新着リポジトリ |
+| GET | `/api/explore/repos/recent` | 最近更新されたリポジトリ |
+| GET | `/api/explore/repos/by-name/:username/:repoName` | オーナー名+リポジトリ名で取得 |
+| GET | `/api/explore/repos/:id` | ID で取得 |
 
-レスポンス:
+### Catalog / Packages
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/explore/catalog` | カタログアイテム一覧 |
+| GET | `/api/explore/suggest` | 検索サジェスト |
+| GET | `/api/explore/catalog/suggest` | カタログサジェスト |
+| GET | `/api/explore/packages` | パッケージ検索 |
+| GET | `/api/explore/packages/suggest` | パッケージサジェスト |
+| GET | `/api/explore/packages/:username/:repoName/latest` | 最新バージョン |
+| GET | `/api/explore/packages/:username/:repoName/versions` | 全バージョン一覧 |
+| GET | `/api/explore/packages/by-repo/:repoId/reviews` | パッケージレビュー一覧 |
+| POST | `/api/explore/packages/by-repo/:repoId/reviews` | レビュー投稿 *(deprecated)* |
+
+### Users
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/explore/users` | ユーザー一覧（検索対応） |
+| GET | `/api/explore/users/:username` | ユーザープロファイル + リポジトリ |
+
+---
+
+## profiles
+
+公開プロファイル閲覧・フォロー・ブロック・ミュート。認証はオプション（一部操作は認証必須）。
+
+### Profile / Repos
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/users/:username` | ユーザープロファイル |
+| GET | `/api/users/:username/repos` | ユーザーのリポジトリ一覧 |
+| GET | `/api/users/:username/stars` | ユーザーの star 一覧 |
+| GET | `/api/users/:username/activity` | アクティビティフィード |
+| GET | `/api/users/:username/:repoName` | リポジトリ詳細（名前指定） |
+| DELETE | `/api/users/:username/:repoName` | リポジトリ削除（名前指定） |
+| GET | `/api/users/:username/:repoName/tree/:ref` | ディレクトリツリー |
+| GET | `/api/users/:username/:repoName/tree/:ref/*` | サブディレクトリツリー |
+| GET | `/api/users/:username/:repoName/blob/:ref` | ファイル内容 |
+| GET | `/api/users/:username/:repoName/blob/:ref/*` | ファイル内容（サブパス） |
+| GET | `/api/users/:username/:repoName/branches` | ブランチ一覧 |
+| GET | `/api/users/:username/:repoName/commits` | コミット一覧 |
+
+### Follow
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/users/:username/followers` | フォロワー一覧 |
+| GET | `/api/users/:username/following` | フォロー中一覧 |
+| GET | `/api/users/:username/follow-requests` | フォローリクエスト一覧 *(auth)* |
+| POST | `/api/users/:username/follow-requests/:id/accept` | フォローリクエスト承認 *(auth)* |
+| POST | `/api/users/:username/follow-requests/:id/reject` | フォローリクエスト拒否 *(auth)* |
+| POST | `/api/users/:username/follow` | フォロー *(auth)* |
+| DELETE | `/api/users/:username/follow` | フォロー解除 *(auth)* |
+
+### Block / Mute
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/users/:username/block` | ブロック *(auth)* |
+| DELETE | `/api/users/:username/block` | ブロック解除 *(auth)* |
+| POST | `/api/users/:username/mute` | ミュート *(auth)* |
+| DELETE | `/api/users/:username/mute` | ミュート解除 *(auth)* |
+
+---
+
+## public-share
+
+thread share の公開アクセス。認証不要（パスワード保護あり）。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/public/thread-shares/:token` | 共有スレッドデータ取得 |
+| POST | `/api/public/thread-shares/:token/access` | パスワード検証・アクセス取得 |
+
+---
+
+## mcp
+
+MCP (Model Context Protocol) サーバー管理。
+
+| method | path | auth | description |
+| --- | --- | --- | --- |
+| GET | `/api/mcp/oauth/callback` | none | OAuth コールバック |
+| GET | `/api/mcp/servers` | required | 登録 MCP サーバー一覧 |
+| POST | `/api/mcp/servers` | required | MCP サーバー登録 |
+| PATCH | `/api/mcp/servers/:id` | required | MCP サーバー更新 |
+| DELETE | `/api/mcp/servers/:id` | required | MCP サーバー削除 |
+| GET | `/api/mcp/servers/:id/tools` | required | MCP サーバーのツール一覧 |
+
+---
+
+## setup
+
+初期セットアップ状態の確認・完了。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/setup/status` | セットアップ状態確認 |
+| POST | `/api/setup/complete` | セットアップ完了（username 必須） |
+| POST | `/api/setup/check-username` | ユーザー名の利用可能性チェック |
+
+---
+
+## me
+
+現在の認証ユーザー情報の取得・更新。
+
+### User info
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/me` | ユーザー情報取得 |
+| GET | `/api/me/personal-space` | パーソナルスペース取得 |
+| GET | `/api/me/settings` | ユーザー設定取得 |
+| PATCH | `/api/me/settings` | ユーザー設定更新 |
+| PATCH | `/api/me/username` | ユーザー名変更 |
+
+#### `GET /api/me`
 
 ```json
 {
-  "spaces": [
-    {
-      "id": "ws_abc123",
-      "name": "My Workspace",
-      "slug": "my-workspace",
-      "kind": "user",
-      "role": "owner"
-    }
-  ]
+  "email": "user@example.com",
+  "name": "Tako",
+  "username": "tako",
+  "picture": "https://example.com/avatar.png",
+  "setup_completed": true
 }
 ```
 
-#### ワークスペース作成
-
-```bash
-POST /api/spaces
-Authorization: Bearer $TOKEN
-Content-Type: application/json
-```
+#### `PATCH /api/me/settings`
 
 リクエスト:
 
 ```json
 {
-  "name": "New Workspace"
+  "setup_completed": true,
+  "auto_update_enabled": true,
+  "private_account": false,
+  "activity_visibility": "public"
 }
+```
+
+`activity_visibility` は `public` | `followers` | `private` のいずれか。
+
+#### `PATCH /api/me/username`
+
+リクエスト:
+
+```json
+{ "username": "new-name" }
+```
+
+### OAuth consents
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/me/oauth/consents` | 同意済みアプリ一覧 |
+| DELETE | `/api/me/oauth/consents/:clientId` | 同意取り消し |
+| GET | `/api/me/oauth/audit-logs` | OAuth 操作ログ |
+
+### OAuth clients
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/me/oauth/clients` | 所有クライアント一覧 |
+| POST | `/api/me/oauth/clients` | クライアント作成 |
+| PATCH | `/api/me/oauth/clients/:clientId` | クライアント更新 |
+| DELETE | `/api/me/oauth/clients/:clientId` | クライアント削除 |
+
+#### `POST /api/me/oauth/clients`
+
+リクエスト:
+
+```json
+{
+  "client_name": "My App",
+  "redirect_uris": ["https://example.com/callback"],
+  "client_uri": "https://example.com",
+  "logo_uri": "https://example.com/logo.png"
+}
+```
+
+### Personal Access Tokens
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/me/personal-access-tokens` | PAT 一覧 |
+| POST | `/api/me/personal-access-tokens` | PAT 作成 |
+| DELETE | `/api/me/personal-access-tokens/:id` | PAT 削除 |
+
+#### `POST /api/me/personal-access-tokens`
+
+リクエスト:
+
+```json
+{
+  "name": "CLI token",
+  "scopes": "*",
+  "expiresAt": "2027-01-01T00:00:00Z"
+}
+```
+
+レスポンス (201):
+
+```json
+{
+  "id": "pat_abc123",
+  "name": "CLI token",
+  "token": "tak_pat_...",
+  "token_prefix": "tak_pat_abcd",
+  "scopes": "*",
+  "expires_at": "2027-01-01T00:00:00Z",
+  "created_at": "2026-03-29T10:00:00Z"
+}
+```
+
+::: warning
+`token` フィールドは作成時のレスポンスにのみ含まれる。再取得はできない。
+:::
+
+---
+
+## spaces
+
+workspace/space の CRUD・モデル設定・エクスポート。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces` | ワークスペース一覧 |
+| POST | `/api/spaces` | ワークスペース作成 |
+| GET | `/api/spaces/me` | パーソナルスペース取得 |
+| GET | `/api/spaces/:spaceId` | ワークスペース詳細 |
+| PATCH | `/api/spaces/:spaceId` | ワークスペース更新 *(owner/admin)* |
+| DELETE | `/api/spaces/:spaceId` | ワークスペース削除 *(owner)* |
+| GET | `/api/spaces/:spaceId/export` | ワークスペースエクスポート情報 |
+| GET | `/api/spaces/:spaceId/model` | AI モデル設定取得 |
+| PATCH | `/api/spaces/:spaceId/model` | AI モデル設定更新 *(owner/admin)* |
+| GET | `/api/spaces/:spaceId/sidebar-items` | サイドバーアイテム取得 |
+
+#### `POST /api/spaces`
+
+リクエスト:
+
+```json
+{ "name": "New Workspace" }
 ```
 
 レスポンス (201):
@@ -207,69 +442,491 @@ Content-Type: application/json
 }
 ```
 
-### `me`
-
-現在のユーザー情報を取得・更新する。
-
-#### ユーザー情報取得
-
-```bash
-GET /api/me
-Authorization: Bearer $TOKEN
-```
-
-レスポンス:
-
-```json
-{
-  "email": "user@example.com",
-  "name": "Tako",
-  "username": "tako",
-  "picture": "https://example.com/avatar.png",
-  "setup_completed": true
-}
-```
-
-### `threads`
-
-スレッド / メッセージの CRUD と共有。
-
-#### スレッド一覧
-
-```bash
-GET /api/spaces/:spaceId/threads
-Authorization: Bearer $TOKEN
-```
-
-レスポンス:
-
-```json
-{
-  "threads": [
-    {
-      "id": "thread_abc",
-      "title": "Debug session",
-      "created_at": "2026-01-15T10:00:00Z",
-      "updated_at": "2026-01-15T12:30:00Z"
-    }
-  ]
-}
-```
-
-#### スレッド作成
-
-```bash
-POST /api/spaces/:spaceId/threads
-Authorization: Bearer $TOKEN
-Content-Type: application/json
-```
+#### `PATCH /api/spaces/:spaceId`
 
 リクエスト:
 
 ```json
 {
-  "title": "debug"
+  "name": "Updated Name",
+  "ai_model": "claude-sonnet-4-6",
+  "ai_provider": "anthropic",
+  "security_posture": "standard"
 }
+```
+
+`security_posture` は `standard` | `restricted_egress` のいずれか。
+
+#### `PATCH /api/spaces/:spaceId/model`
+
+リクエスト:
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "provider": "anthropic"
+}
+```
+
+---
+
+## spaces.members
+
+ワークスペースメンバーの管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/members` | メンバー一覧 |
+| POST | `/api/spaces/:spaceId/members` | メンバー追加 *(owner/admin)* |
+| PATCH | `/api/spaces/:spaceId/members/:username` | ロール変更 *(owner/admin)* |
+| DELETE | `/api/spaces/:spaceId/members/:username` | メンバー削除 *(owner/admin)* |
+
+#### `POST /api/spaces/:spaceId/members`
+
+リクエスト:
+
+```json
+{ "email": "user@example.com", "role": "editor" }
+```
+
+ロール: `admin` | `editor` | `viewer`（`owner` は設定不可）
+
+---
+
+## spaces.repositories
+
+ワークスペース内リポジトリの初期化。
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/init-repo` | デフォルトリポジトリ初期化 *(owner/admin)* |
+
+---
+
+## spaces.storage
+
+ファイルストレージの操作。OAuth スコープ `files:read` / `files:write` に対応。
+
+### ダウンロード
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/storage/:fileId/content` | ファイル内容取得 |
+| PUT | `/api/spaces/:spaceId/storage/:fileId/content` | ファイル内容書き込み |
+| GET | `/api/spaces/:spaceId/storage/download/:fileId` | ファイルダウンロード |
+| GET | `/api/spaces/:spaceId/storage/download-url` | ダウンロード URL 取得 |
+| GET | `/api/spaces/:spaceId/storage/download-zip` | フォルダを ZIP でダウンロード |
+
+### アップロード
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/storage/files` | ファイル作成 |
+| POST | `/api/spaces/:spaceId/storage/upload-url` | アップロード URL 取得 |
+| PUT | `/api/spaces/:spaceId/storage/upload/:fileId` | ファイルアップロード |
+| POST | `/api/spaces/:spaceId/storage/confirm-upload` | アップロード確認 |
+
+### 管理
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/storage` | ファイル一覧 |
+| GET | `/api/spaces/:spaceId/storage/file-handlers` | ファイルハンドラー取得 |
+| POST | `/api/spaces/:spaceId/storage/folders` | フォルダ作成 |
+| GET | `/api/spaces/:spaceId/storage/:fileId` | ファイル詳細 |
+| PATCH | `/api/spaces/:spaceId/storage/:fileId` | リネーム / 移動 |
+| DELETE | `/api/spaces/:spaceId/storage/:fileId` | ファイル削除 |
+| POST | `/api/spaces/:spaceId/storage/bulk-delete` | 一括削除 |
+| POST | `/api/spaces/:spaceId/storage/bulk-move` | 一括移動 |
+| POST | `/api/spaces/:spaceId/storage/bulk-rename` | 一括リネーム |
+
+---
+
+## spaces.common-env
+
+ワークスペース共通環境変数の管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/common-env` | 共通環境変数一覧 |
+| PUT | `/api/spaces/:spaceId/common-env` | 環境変数の作成・更新 *(owner/admin)* |
+| DELETE | `/api/spaces/:spaceId/common-env/:name` | 環境変数削除 *(owner/admin)* |
+
+#### `PUT /api/spaces/:spaceId/common-env`
+
+リクエスト:
+
+```json
+{
+  "name": "DATABASE_URL",
+  "value": "postgres://...",
+  "secret": true
+}
+```
+
+---
+
+## spaces.stores
+
+ワークスペース内 ActivityPub ストアの管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/stores` | ストア一覧 |
+| POST | `/api/spaces/:spaceId/stores` | ストア作成 *(owner/admin)* |
+| PATCH | `/api/spaces/:spaceId/stores/:storeSlug` | ストア更新 *(owner/admin)* |
+| DELETE | `/api/spaces/:spaceId/stores/:storeSlug` | ストア削除 *(owner/admin)* |
+
+#### `POST /api/spaces/:spaceId/stores`
+
+リクエスト:
+
+```json
+{
+  "slug": "my-store",
+  "name": "My Store",
+  "summary": "Public package store",
+  "icon_url": "https://example.com/icon.png"
+}
+```
+
+---
+
+## spaces.store-registry
+
+リモートストアレジストリの管理・インストール。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/store-registry` | 登録ストア一覧 |
+| POST | `/api/spaces/:spaceId/store-registry` | リモートストア追加 *(owner/admin)* |
+| PATCH | `/api/spaces/:spaceId/store-registry/:entryId` | ストア設定更新 *(owner/admin)* |
+| DELETE | `/api/spaces/:spaceId/store-registry/:entryId` | リモートストア削除 *(owner/admin)* |
+| POST | `/api/spaces/:spaceId/store-registry/:entryId/refresh` | メタデータ更新 *(owner/admin)* |
+| GET | `/api/spaces/:spaceId/store-registry/:entryId/repositories` | リモートリポジトリ一覧 |
+| GET | `/api/spaces/:spaceId/store-registry/:entryId/repositories/search` | リモートリポジトリ検索 |
+| POST | `/api/spaces/:spaceId/store-registry/:entryId/install` | リモートストアからインストール *(owner/admin)* |
+| GET | `/api/spaces/:spaceId/store-registry/updates` | サブスクリプション更新確認 |
+| POST | `/api/spaces/:spaceId/store-registry/updates/mark-seen` | 更新を既読にする |
+| POST | `/api/spaces/:spaceId/store-registry/:entryId/poll` | 手動ポーリング *(owner/admin)* |
+
+---
+
+## shortcuts
+
+ショートカットとショートカットグループの管理。
+
+### Shortcuts
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/shortcuts` | ショートカット一覧 |
+| POST | `/api/shortcuts` | ショートカット作成 |
+| PUT | `/api/shortcuts/:id` | ショートカット更新 |
+| DELETE | `/api/shortcuts/:id` | ショートカット削除 |
+| POST | `/api/shortcuts/reorder` | ショートカット並び替え |
+
+### Shortcut groups
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/shortcuts/groups` | グループ一覧 |
+| POST | `/api/spaces/:spaceId/shortcuts/groups` | グループ作成 *(owner/admin/editor)* |
+| GET | `/api/spaces/:spaceId/shortcuts/groups/:groupId` | グループ詳細 |
+| PATCH | `/api/spaces/:spaceId/shortcuts/groups/:groupId` | グループ更新 *(owner/admin/editor)* |
+| DELETE | `/api/spaces/:spaceId/shortcuts/groups/:groupId` | グループ削除 *(owner/admin)* |
+| POST | `/api/spaces/:spaceId/shortcuts/groups/:groupId/items` | アイテム追加 *(owner/admin/editor)* |
+| DELETE | `/api/spaces/:spaceId/shortcuts/groups/:groupId/items/:itemId` | アイテム削除 *(owner/admin/editor)* |
+
+---
+
+## services
+
+サービス（Workers）の CRUD・設定・デプロイ管理。
+
+### 基本 CRUD
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services` | サービス一覧 |
+| GET | `/api/services/space/:spaceId` | スペース内サービス一覧 |
+| POST | `/api/services` | サービス作成 |
+| GET | `/api/services/:id` | サービス詳細 |
+| GET | `/api/services/:id/logs` | サービスログ取得 |
+| DELETE | `/api/services/:id` | サービス削除 |
+
+#### `GET /api/services`
+
+```json
+{
+  "services": [
+    {
+      "id": "svc_abc123",
+      "name": "my-api",
+      "status": "active"
+    }
+  ]
+}
+```
+
+### 設定
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services/:id/settings` | ランタイム設定取得 |
+| PATCH | `/api/services/:id/settings` | ランタイム設定更新 |
+| PATCH | `/api/services/:id/slug` | スラッグ変更 |
+
+#### `PATCH /api/services/:id/settings`
+
+設定項目: `compatibility_date`, `compatibility_flags`, `limits`, `mcp_server`
+
+### 環境変数
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services/:id/env` | ローカル環境変数一覧 |
+| PATCH | `/api/services/:id/env` | ローカル環境変数更新 |
+
+#### `PATCH /api/services/:id/env`
+
+リクエスト:
+
+```json
+{
+  "variables": [
+    { "name": "API_KEY", "value": "secret", "secret": true },
+    { "name": "NODE_ENV", "value": "production" }
+  ]
+}
+```
+
+### Common Env Links
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services/:id/common-env-links` | 共通環境変数リンク一覧 |
+| PUT | `/api/services/:id/common-env-links` | リンク全置換 |
+| PATCH | `/api/services/:id/common-env-links` | リンク差分更新（add/remove/set） |
+
+#### `PATCH /api/services/:id/common-env-links`
+
+リクエスト:
+
+```json
+{
+  "add": ["DATABASE_URL"],
+  "remove": ["OLD_KEY"],
+  "builtins": {
+    "TAKOS_ACCESS_TOKEN": { "scopes": ["files:read"] }
+  }
+}
+```
+
+### Bindings
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services/:id/bindings` | リソースバインディング一覧 |
+| PATCH | `/api/services/:id/bindings` | バインディング更新 |
+
+### Deployments
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/services/:id/deployments` | デプロイ作成 |
+| GET | `/api/services/:id/deployments` | デプロイ履歴 |
+| GET | `/api/services/:id/deployments/:deploymentId` | デプロイ詳細 |
+| POST | `/api/services/:id/deployments/rollback` | ロールバック |
+
+#### `POST /api/services/:id/deployments`
+
+リクエスト:
+
+```json
+{
+  "bundle": "<base64-encoded-bundle>",
+  "deploy_message": "v1.2.0 release",
+  "strategy": "direct",
+  "provider": { "name": "workers-dispatch" },
+  "target": {
+    "artifact": { "kind": "worker-bundle" }
+  }
+}
+```
+
+`strategy`: `direct` | `canary`
+`artifact.kind`: `worker-bundle` | `container-image`
+
+Idempotency-Key ヘッダーで冪等性を保証可能。
+
+---
+
+## custom-domains
+
+サービスのカスタムドメイン管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/services/:id/custom-domains` | カスタムドメイン一覧 |
+| POST | `/api/services/:id/custom-domains` | カスタムドメイン追加 |
+| GET | `/api/services/:id/custom-domains/:domainId` | カスタムドメイン詳細 |
+| POST | `/api/services/:id/custom-domains/:domainId/verify` | ドメイン所有権検証 |
+| DELETE | `/api/services/:id/custom-domains/:domainId` | カスタムドメイン削除 |
+| POST | `/api/services/:id/custom-domains/:domainId/refresh-ssl` | SSL 証明書更新 |
+
+---
+
+## resources
+
+リソースの CRUD・アクセス管理。public surface は Cloudflare-native で、他 provider では translation layer が `implementation` として解決します。
+
+### 基本 CRUD
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources` | リソース一覧（`space_id` でフィルタ可） |
+| GET | `/api/resources/shared/:spaceId` | 共有リソース一覧 |
+| GET | `/api/resources/type/:type` | タイプ別リソース一覧 |
+| GET | `/api/resources/:id` | リソース詳細（アクセス情報・バインディング含む） |
+| GET | `/api/resources/by-name/:name` | 名前でリソース取得 |
+| POST | `/api/resources` | リソース作成 |
+| PATCH | `/api/resources/:id` | リソース更新 |
+| DELETE | `/api/resources/:id` | リソース削除 |
+| DELETE | `/api/resources/by-name/:name` | 名前でリソース削除 |
+
+`type`: `d1` | `r2` | `kv` | `queue` | `vectorize` | `analyticsEngine` | `secretRef` | `workflow` | `durableObject`
+
+### Access
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources/:id/access` | アクセス権一覧 *(owner)* |
+| POST | `/api/resources/:id/access` | アクセス権付与 *(owner)* |
+| DELETE | `/api/resources/:id/access/:spaceId` | アクセス権取消 *(owner)* |
+
+#### `POST /api/resources/:id/access`
+
+リクエスト:
+
+```json
+{
+  "space_id": "ws_abc123",
+  "permission": "write"
+}
+```
+
+`permission`: `read` | `write` | `admin`
+
+### Bindings
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/resources/:id/bind` | サービスバインディング作成 |
+| DELETE | `/api/resources/:id/bind/:serviceId` | バインディング削除 |
+| DELETE | `/api/resources/by-name/:name/bind/:serviceId` | 名前でバインディング削除 |
+
+### Tokens
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources/:id/tokens` | アクセストークン一覧 |
+| GET | `/api/resources/by-name/:name/tokens` | 名前でトークン一覧 |
+| POST | `/api/resources/:id/tokens` | トークン作成 |
+| POST | `/api/resources/by-name/:name/tokens` | 名前でトークン作成 |
+| DELETE | `/api/resources/:id/tokens/:tokenId` | トークン削除 |
+| DELETE | `/api/resources/by-name/:name/tokens/:tokenId` | 名前でトークン削除 |
+| GET | `/api/resources/:id/connection` | 接続情報取得 |
+| GET | `/api/resources/by-name/:name/connection` | 名前で接続情報取得 |
+
+### SQL
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources/:id/sql/tables` | テーブル一覧 |
+| GET | `/api/resources/:id/sql/tables/:tableName` | テーブルデータ取得 |
+| POST | `/api/resources/:id/sql/query` | SQL クエリ実行 |
+| POST | `/api/resources/:id/sql/export` | データベースエクスポート |
+
+### Object Storage
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources/:id/objects` | オブジェクト一覧 |
+| GET | `/api/resources/:id/objects-stats` | バケット統計 |
+| GET | `/api/resources/:id/objects/:key` | オブジェクト取得 |
+| PUT | `/api/resources/:id/objects/:key` | オブジェクト書き込み |
+| DELETE | `/api/resources/:id/objects/:key` | オブジェクト削除 |
+
+### KV (Key-Value Store)
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/resources/:id/kv/entries` | エントリ一覧（prefix, cursor, limit） |
+| GET | `/api/resources/:id/kv/entries/:key` | エントリ取得 |
+| PUT | `/api/resources/:id/kv/entries/:key` | エントリ書き込み |
+| DELETE | `/api/resources/:id/kv/entries/:key` | エントリ削除 |
+
+---
+
+## apps
+
+アプリケーション（builtin/custom）の管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/apps` | アプリ一覧 |
+| GET | `/api/apps/:id` | アプリ詳細 |
+| PATCH | `/api/apps/:id` | アプリメタデータ更新 |
+| POST | `/api/apps/:id/client-key` | クライアントキー再生成 |
+| DELETE | `/api/apps/:id` | カスタムアプリ削除 |
+
+---
+
+## threads
+
+スレッド / メッセージの CRUD・共有・エクスポート。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/threads` | スレッド一覧（status フィルタ対応） |
+| GET | `/api/spaces/:spaceId/threads/search` | スレッド検索（keyword / semantic） |
+| POST | `/api/spaces/:spaceId/threads` | スレッド作成 |
+| GET | `/api/threads/:id` | スレッド詳細 |
+| PATCH | `/api/threads/:id` | スレッド更新（title, locale, status, context_window） |
+| DELETE | `/api/threads/:id` | スレッド削除 |
+| POST | `/api/threads/:id/archive` | アーカイブ |
+| POST | `/api/threads/:id/unarchive` | アーカイブ解除 |
+
+### Messages
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/threads/:id/messages` | メッセージタイムライン（ページネーション対応） |
+| GET | `/api/threads/:id/messages/search` | メッセージ検索 |
+| POST | `/api/threads/:id/messages` | メッセージ作成 |
+| GET | `/api/threads/:id/history` | 実行履歴（runs + messages） |
+
+### Share
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/threads/:id/share` | 共有作成（公開 / パスワード保護 / 有効期限） |
+| GET | `/api/threads/:id/shares` | 共有一覧 |
+| POST | `/api/threads/:id/shares/:shareId/revoke` | 共有取消 |
+
+### Export
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/threads/:id/export` | スレッドエクスポート（markdown / PDF） |
+
+#### `POST /api/spaces/:spaceId/threads`
+
+リクエスト:
+
+```json
+{ "title": "debug" }
 ```
 
 レスポンス (201):
@@ -284,115 +941,193 @@ Content-Type: application/json
 }
 ```
 
-#### メッセージ一覧
+---
+
+## runs
+
+Run の実行・イベントストリーム・アーティファクト管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/threads/:threadId/runs` | スレッド内 Run 一覧（active_only, cursor 対応） |
+| POST | `/api/threads/:threadId/runs` | Run 作成・実行開始 |
+| GET | `/api/runs/:id` | Run 詳細 |
+| POST | `/api/runs/:id/cancel` | Run キャンセル |
+| GET | `/api/runs/:id/events` | Run イベント取得（last_event_id 対応） |
+| GET | `/api/runs/:id/sse` | SSE でリアルタイムイベント受信 |
+| GET | `/api/runs/:id/ws` | WebSocket でリアルタイムイベント受信 |
+| GET | `/api/runs/:id/replay` | イベントリプレイ（cursor ベース） |
+
+### Artifacts
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/runs/:id/artifacts` | Run のアーティファクト一覧 |
+| POST | `/api/runs/:id/artifacts` | アーティファクト作成 |
+| GET | `/api/artifacts/:id` | アーティファクト取得 |
+
+#### SSE ストリーム
 
 ```bash
-GET /api/threads/:id/messages
-Authorization: Bearer $TOKEN
-```
-
-レスポンス:
-
-```json
-{
-  "messages": [
-    {
-      "id": "msg_001",
-      "role": "user",
-      "content": "Hello",
-      "created_at": "2026-01-15T10:00:00Z"
-    },
-    {
-      "id": "msg_002",
-      "role": "assistant",
-      "content": "Hi there!",
-      "created_at": "2026-01-15T10:00:01Z"
-    }
-  ]
-}
-```
-
-### `runs`
-
-`runs` family は request/response だけでなく stream surface も持ちます。
-状態変化を追うときは `/api/runs/:id/sse` または `/api/runs/:id/ws` を使います。
-
-#### Run 詳細取得
-
-```bash
-GET /api/runs/:id
-Authorization: Bearer $TOKEN
-```
-
-レスポンス:
-
-```json
-{
-  "run": {
-    "id": "run_abc123",
-    "thread_id": "thread_abc",
-    "status": "completed",
-    "created_at": "2026-01-15T10:00:00Z",
-    "completed_at": "2026-01-15T10:01:30Z"
-  }
-}
-```
-
-#### Run イベントを SSE で取得
-
-```bash
-GET /api/runs/:id/sse
-Authorization: Bearer $TOKEN
+curl -N \
+  -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/runs/run_123/sse
 ```
 
 Server-Sent Events 形式で Run の状態変化・ログをストリーミングで受信する。
 
-#### Run キャンセル
+---
 
-```bash
-POST /api/runs/:id/cancel
-Authorization: Bearer $TOKEN
-```
+## search
 
-### `services`
+セマンティック検索・クイック検索。ベクトル検索は billing gate で計量。
 
-`services` family は service/runtime surface の current public route family です。
-codebase や UI に `worker` という語が残る場面がありますが、API path の正本は `/api/services` として読みます。
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/search` | セマンティック検索（キャッシュ対応） |
+| GET | `/api/spaces/:spaceId/search/quick` | クイックファイルパス検索 |
 
-#### サービス一覧
+#### `POST /api/spaces/:spaceId/search`
 
-```bash
-GET /api/services
-Authorization: Bearer $TOKEN
-```
-
-レスポンス:
+リクエスト:
 
 ```json
 {
-  "services": [
-    {
-      "id": "svc_abc123",
-      "name": "my-api",
-      "status": "active"
-    }
-  ]
+  "query": "how to deploy",
+  "limit": 10
 }
 ```
 
-### `repos`
+---
 
-`repos` family は repo CRUD に加えて、tree/blob/history、releases、actions、pull requests への入口でもあります。
-Takos CLI で `repo` domain が広い責務を持つのはこのためです。
+## index
 
-#### リポジトリ一覧
+インデックス・ベクトル化・知識グラフ。
 
-```bash
-GET /api/spaces/:spaceId/repos
-Authorization: Bearer $TOKEN
-```
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/index/status` | インデックスステータス |
+| POST | `/api/spaces/:spaceId/index/vectorize` | ベクトルインデックス実行（レート制限あり） |
+| POST | `/api/spaces/:spaceId/index/rebuild` | インデックス再構築（レート制限あり） |
+| POST | `/api/spaces/:spaceId/index/file` | 特定ファイルのインデックス |
+| GET | `/api/spaces/:spaceId/graph/neighbors` | 知識グラフの隣接ノード取得 |
 
-レスポンス:
+---
+
+## memories
+
+ワークスペースメモリの CRUD・検索。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/memories` | メモリ一覧（ページネーション対応） |
+| GET | `/api/spaces/:spaceId/memories/search` | メモリ検索 |
+| POST | `/api/spaces/:spaceId/memories` | メモリ作成 |
+| GET | `/api/memories/:id` | メモリ詳細 |
+| PATCH | `/api/memories/:id` | メモリ更新 |
+| DELETE | `/api/memories/:id` | メモリ削除 |
+
+---
+
+## reminders
+
+リマインダーの CRUD・トリガー。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/reminders` | リマインダー一覧 |
+| POST | `/api/spaces/:spaceId/reminders` | リマインダー作成 |
+| GET | `/api/reminders/:id` | リマインダー詳細 |
+| PATCH | `/api/reminders/:id` | リマインダー更新 |
+| DELETE | `/api/reminders/:id` | リマインダー削除 |
+| POST | `/api/reminders/:id/trigger` | リマインダー手動トリガー |
+
+---
+
+## skills
+
+スキルカタログ・カスタムスキルの管理。`/api/spaces/:spaceId/skills` と `/api/workspaces/:workspaceId/skills` は同じ操作。
+
+### Catalog
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/official-skills` | 公式スキルカタログ |
+| GET | `/api/spaces/:spaceId/official-skills/:skillId` | 公式スキル詳細 |
+| GET | `/api/spaces/:spaceId/skills-context` | 利用可能スキルコンテキスト |
+
+### Custom skills
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/skills` | カスタムスキル一覧 |
+| POST | `/api/spaces/:spaceId/skills` | カスタムスキル作成 |
+
+### By ID
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/skills/id/:skillId` | ID でスキル取得 |
+| PUT | `/api/spaces/:spaceId/skills/id/:skillId` | ID でスキル更新 |
+| PATCH | `/api/spaces/:spaceId/skills/id/:skillId` | ID でスキル有効/無効切替 |
+| DELETE | `/api/spaces/:spaceId/skills/id/:skillId` | ID でスキル削除 |
+
+### By name
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/skills/:skillName` | 名前でスキル取得 |
+| PUT | `/api/spaces/:spaceId/skills/:skillName` | 名前でスキル更新 |
+| PATCH | `/api/spaces/:spaceId/skills/:skillName` | 名前でスキル有効/無効切替 |
+| DELETE | `/api/spaces/:spaceId/skills/:skillName` | 名前でスキル削除 |
+
+---
+
+## sessions
+
+Space File Sync セッションのライフサイクル管理。
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/sessions` | セッション開始 |
+| POST | `/api/sessions/:sessionId/stop` | セッション停止（変更コミット） |
+| POST | `/api/sessions/:sessionId/resume` | セッション再開 |
+| POST | `/api/sessions/:sessionId/discard` | セッション破棄 |
+| POST | `/api/sessions/:sessionId/heartbeat` | ハートビート送信 |
+| GET | `/api/sessions/:sessionId/health` | セッションヘルスチェック |
+
+---
+
+## git
+
+ワークスペーススコープの Git 操作。
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/git/commit` | コミット作成 |
+| GET | `/api/spaces/:spaceId/git/log` | コミット履歴 |
+| GET | `/api/spaces/:spaceId/git/commits/:commitId` | コミット詳細 |
+| GET | `/api/spaces/:spaceId/git/diff/:commitId` | コミット diff |
+| POST | `/api/spaces/:spaceId/git/restore` | ファイル復元 |
+| GET | `/api/spaces/:spaceId/git/history/:path` | ファイル履歴 |
+
+---
+
+## repos
+
+リポジトリの CRUD・Git 操作・ワークフロー管理。
+
+### 基本 CRUD
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/repos` | ワークスペース内リポジトリ一覧 |
+| POST | `/api/spaces/:spaceId/repos` | リポジトリ作成 |
+| GET | `/api/repos/:repoId` | リポジトリ詳細 |
+| PATCH | `/api/repos/:repoId` | リポジトリ設定更新 |
+| DELETE | `/api/repos/:repoId` | リポジトリ削除 |
+
+#### `GET /api/spaces/:spaceId/repos`
 
 ```json
 {
@@ -406,84 +1141,285 @@ Authorization: Bearer $TOKEN
 }
 ```
 
-### `search`
+### Stars / Forks
 
-#### セマンティック検索
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/repos/:repoId/star` | star 追加 |
+| DELETE | `/api/repos/:repoId/star` | star 削除 |
+| GET | `/api/repos/:repoId/star` | star 状態確認 |
+| GET | `/api/repos/starred` | star 済みリポジトリ一覧 |
+| POST | `/api/repos/:repoId/fork` | リポジトリ fork |
 
-```bash
-POST /api/spaces/:spaceId/search
-Authorization: Bearer $TOKEN
-Content-Type: application/json
-```
+### Branches
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/branches` | ブランチ一覧 |
+| POST | `/api/repos/:repoId/branches` | ブランチ作成 |
+| DELETE | `/api/repos/:repoId/branches/:branchName` | ブランチ削除 |
+| POST | `/api/repos/:repoId/branches/:branchName/default` | デフォルトブランチ設定 |
+
+### Commits
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/commits` | コミット一覧（ページネーション・フィルタ対応） |
+
+### Git tree / blob
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/tree/:ref` | ルートディレクトリツリー取得 |
+| GET | `/api/repos/:repoId/tree/:ref/*` | サブディレクトリツリー取得 |
+| GET | `/api/repos/:repoId/blob/:ref` | ルートファイル内容取得 |
+| GET | `/api/repos/:repoId/blob/:ref/*` | ファイル内容取得 |
+| GET | `/api/repos/:repoId/log` | コミットログ |
+| GET | `/api/repos/:repoId/log/:ref` | ref 指定コミットログ |
+| GET | `/api/repos/:repoId/log/:ref/:path` | パス指定コミットログ |
+
+### Search / Diff / Blame
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/search` | リポジトリ内コンテンツ検索 |
+| GET | `/api/repos/:repoId/semantic-search` | セマンティック検索 |
+| GET | `/api/repos/:repoId/diff/:baseHead` | ref 間 diff |
+| GET | `/api/repos/:repoId/blame/:ref` | ルートファイル blame |
+| GET | `/api/repos/:repoId/blame/:ref/:path` | ファイル blame |
+
+### Status / Export
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/status` | リポジトリステータス |
+| GET | `/api/repos/:repoId/export` | リポジトリエクスポート |
+| POST | `/api/repos/:repoId/commit` | コミット作成 |
+| POST | `/api/repos/:repoId/import` | インポート |
+| POST | `/api/repos/:repoId/semantic-index` | セマンティックインデックス実行 |
+
+### External Import
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/repos/import-external` | 外部 Git リポジトリインポート |
+| POST | `/api/repos/:repoId/fetch-remote` | リモートから更新取得 |
+
+#### `POST /api/repos/import-external`
 
 リクエスト:
 
 ```json
 {
-  "query": "how to deploy",
-  "limit": 10
+  "url": "https://github.com/example/repo.git",
+  "space_id": "ws_abc123",
+  "name": "my-imported-repo",
+  "auth": { "token": "ghp_..." },
+  "description": "Imported repository",
+  "visibility": "private"
 }
 ```
 
-### `notifications`
+### Sync
 
-#### 通知一覧
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/repos/:repoId/fetch` | upstream から fetch（fork 用） |
+| POST | `/api/repos/:repoId/sync` | リポジトリ同期 |
+| GET | `/api/repos/:repoId/sync/status` | 同期ステータス |
+
+### Workflows
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/workflows` | ワークフローファイル一覧 |
+| GET | `/api/repos/:repoId/workflows/:path` | ワークフロー詳細 |
+| PUT | `/api/repos/:repoId/workflows/:path` | ワークフロー更新 |
+| DELETE | `/api/repos/:repoId/workflows/:path` | ワークフロー削除 |
+| POST | `/api/repos/:repoId/workflows/:path/sync` | ワークフロー同期 |
+| POST | `/api/repos/:repoId/workflows/sync-all` | 全ワークフロー一括同期 |
+
+---
+
+## repos.actions
+
+ワークフロー実行・シークレット・アーティファクト管理。
+
+### Runs
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/actions/runs` | ワークフロー実行一覧（フィルタ対応） |
+| POST | `/api/repos/:repoId/actions/runs` | ワークフロー実行開始 |
+| GET | `/api/repos/:repoId/actions/runs/:runId` | 実行詳細 |
+| GET | `/api/repos/:repoId/actions/runs/:runId/jobs` | 実行のジョブ一覧 |
+| GET | `/api/repos/:repoId/actions/runs/:runId/ws` | 実行イベント WebSocket |
+| POST | `/api/repos/:repoId/actions/runs/:runId/cancel` | 実行キャンセル |
+| POST | `/api/repos/:repoId/actions/runs/:runId/rerun` | 実行再実行 |
+
+### Jobs
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/actions/jobs/:jobId` | ジョブ詳細（ステップ情報含む） |
+| GET | `/api/repos/:repoId/actions/jobs/:jobId/logs` | ジョブログ取得（range 対応） |
+
+ログの range パラメータ: `offset` (バイト位置), `limit` (バイト数)
+
+### Secrets
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/actions/secrets` | シークレット一覧 *(owner/admin)* |
+| PUT | `/api/repos/:repoId/actions/secrets/:name` | シークレット作成・更新 *(owner/admin)* |
+| DELETE | `/api/repos/:repoId/actions/secrets/:name` | シークレット削除 *(owner/admin)* |
+
+シークレット名は `^[A-Z_][A-Z0-9_]*$` の形式が必要。
+
+### Artifacts
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/actions/runs/:runId/artifacts` | 実行のアーティファクト一覧 |
+| GET | `/api/repos/:repoId/actions/artifacts/:artifactId` | アーティファクトダウンロード |
+| DELETE | `/api/repos/:repoId/actions/artifacts/:artifactId` | アーティファクト削除 *(owner/admin/editor)* |
+
+---
+
+## repos.releases
+
+リリースの CRUD・アセット管理。
+
+### Release CRUD
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/releases` | リリース一覧（ページネーション対応） |
+| GET | `/api/repos/:repoId/releases/latest` | 最新リリース取得 |
+| GET | `/api/repos/:repoId/releases/:tag` | タグでリリース取得 |
+| POST | `/api/repos/:repoId/releases` | リリース作成 |
+| PATCH | `/api/repos/:repoId/releases/:tag` | リリース更新 |
+| DELETE | `/api/repos/:repoId/releases/:tag` | リリース削除 |
+
+### Release Assets
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/releases/:tag/assets` | アセット一覧 |
+| POST | `/api/repos/:repoId/releases/:tag/assets` | アセットアップロード（multipart/form-data） |
+| GET | `/api/repos/:repoId/releases/:tag/assets/:assetId/download` | アセットダウンロード |
+| DELETE | `/api/repos/:repoId/releases/:tag/assets/:assetId` | アセット削除 |
+
+アセットの最大サイズは 100MB。対応ファイル形式: `.takopack`, `.zip`, `.tar.gz`, `.tgz`, `.json` 等。
+
+---
+
+## pull-requests
+
+プルリクエストの作成・レビュー・マージ。
+
+### PR CRUD
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/pulls` | PR 一覧（フィルタ対応） |
+| POST | `/api/repos/:repoId/pulls` | PR 作成 |
+| GET | `/api/repos/:repoId/pulls/:prNumber` | PR 詳細 |
+| PATCH | `/api/repos/:repoId/pulls/:prNumber` | PR 更新 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/close` | PR クローズ |
+| GET | `/api/repos/:repoId/pulls/:prNumber/diff` | PR diff 取得 |
+
+### Comments
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/pulls/:prNumber/comments` | コメント一覧 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/comments` | コメント追加 |
+
+### Reviews
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/pulls/:prNumber/reviews` | レビュー一覧 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/reviews` | レビュー投稿 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/ai-review` | AI レビュー実行 |
+
+### Merge
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/repos/:repoId/pulls/:prNumber/conflicts` | コンフリクト確認 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/resolve` | コンフリクト解決 |
+| POST | `/api/repos/:repoId/pulls/:prNumber/merge` | PR マージ（merge / squash / rebase） |
+
+---
+
+## agent-tasks
+
+エージェントタスクのオーケストレーション。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/agent-tasks` | タスク一覧 |
+| POST | `/api/spaces/:spaceId/agent-tasks` | タスク作成 |
+| GET | `/api/agent-tasks/:id` | タスク詳細 |
+| PATCH | `/api/agent-tasks/:id` | タスク更新 |
+| DELETE | `/api/agent-tasks/:id` | タスク削除 |
+| POST | `/api/agent-tasks/:id/plan` | 実行プラン生成 |
+
+---
+
+## notifications
+
+通知の一覧・既読管理・リアルタイム配信。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/notifications` | 通知一覧（ページネーション・フィルタ対応） |
+| GET | `/api/notifications/unread-count` | 未読件数 |
+| PATCH | `/api/notifications/:id/read` | 既読にする |
+| GET | `/api/notifications/preferences` | 通知設定取得 |
+| PATCH | `/api/notifications/preferences` | 通知設定更新 |
+| GET | `/api/notifications/settings` | 通知詳細設定（muted_until 等） |
+| PATCH | `/api/notifications/settings` | 通知詳細設定更新 |
+
+### リアルタイム配信
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/notifications/sse` | SSE でリアルタイム通知受信 |
+| GET | `/api/notifications/ws` | WebSocket でリアルタイム通知受信 |
 
 ```bash
-GET /api/notifications
-Authorization: Bearer $TOKEN
+curl -N \
+  -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/notifications/sse
 ```
 
-レスポンス:
+---
 
-```json
-{
-  "notifications": [
-    {
-      "id": "notif_abc123",
-      "type": "run_completed",
-      "read": false,
-      "created_at": "2026-01-15T10:00:00Z"
-    }
-  ]
-}
-```
+## app-deployments
 
-#### SSE で通知をストリーミング受信
-
-```bash
-GET /api/notifications/sse
-Authorization: Bearer $TOKEN
-```
-
-### `app-deployments`
-
-`app-deployments` family は repo-local app deploy の public contract ですが、このリポジトリの current implementation では end-to-end に接続されていません。
-主説明面は `services/:id/deployments` ではなく `/api/spaces/:spaceId/app-deployments` という設計メモとして残っています。
+リポジトリベースのアプリデプロイ管理。
 
 ::: warning current implementation
-現行の control-plane 実装では `AppDeploymentService` が legacy pipeline から切り離されており、`takos deploy` と app-deployments の実行経路は未接続です。実運用では `takos deploy-group` を使ってください。
+現行の control-plane 実装では `AppDeploymentService` は legacy surface です。実運用では `takos apply` または first-class `worker` / `service` / `resource` コマンドを使ってください。
 :::
 
-主要 endpoint:
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/app-deployments` | デプロイ開始 |
+| GET | `/api/spaces/:spaceId/app-deployments` | デプロイ一覧 |
+| GET | `/api/spaces/:spaceId/app-deployments/:appDeploymentId` | デプロイ詳細 |
+| POST | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback` | ロールバック |
+| DELETE | `/api/spaces/:spaceId/app-deployments/:appDeploymentId` | デプロイ削除 |
+| GET | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout` | ロールアウト状態 *(deprecated)* |
+| POST | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause` | ロールアウト一時停止 *(deprecated)* |
+| POST | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume` | ロールアウト再開 *(deprecated)* |
+| POST | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort` | ロールアウト中止 *(deprecated)* |
+| POST | `/api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote` | ロールアウト昇格 *(deprecated)* |
 
-- `POST /api/spaces/:spaceId/app-deployments`
-- `GET /api/spaces/:spaceId/app-deployments`
-- `GET /api/spaces/:spaceId/app-deployments/:appDeploymentId`
-- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback`
-- `GET /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout`
-- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause`
-- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume`
-- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort`
-- `POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote`
-
-#### デプロイ開始
-
-```bash
-POST /api/spaces/:spaceId/app-deployments
-Authorization: Bearer $TOKEN
-Content-Type: application/json
-```
+#### `POST /api/spaces/:spaceId/app-deployments`
 
 リクエスト:
 
@@ -515,51 +1451,169 @@ Content-Type: application/json
 }
 ```
 
-#### ロールバック
+---
+
+## browser-sessions
+
+ブラウザセッションのライフサイクル管理。
+
+| method | path | description |
+| --- | --- | --- |
+| POST | `/api/spaces/:spaceId/browser-sessions` | セッション作成 |
+| GET | `/api/browser-sessions/:id` | セッション情報取得 |
+| POST | `/api/browser-sessions/:id/goto` | URL ナビゲーション |
+| POST | `/api/browser-sessions/:id/action` | ブラウザアクション実行 |
+| POST | `/api/browser-sessions/:id/extract` | ページデータ抽出 |
+| GET | `/api/browser-sessions/:id/html` | HTML コンテンツ取得 |
+| GET | `/api/browser-sessions/:id/screenshot` | スクリーンショット取得 |
+| POST | `/api/browser-sessions/:id/pdf` | PDF 生成 |
+| DELETE | `/api/browser-sessions/:id` | セッション破棄 |
+
+---
+
+## groups
+
+デプロイグループの管理・プラン・適用。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/spaces/:spaceId/groups` | グループ一覧 |
+| POST | `/api/spaces/:spaceId/groups` | グループ作成 *(owner/admin/editor)* |
+| GET | `/api/spaces/:spaceId/groups/:groupId` | グループ詳細（インベントリ含む） |
+| PATCH | `/api/spaces/:spaceId/groups/:groupId/metadata` | グループ metadata 更新 *(owner/admin/editor)* |
+| GET | `/api/spaces/:spaceId/groups/:groupId/desired` | desired app manifest 取得 |
+| PUT | `/api/spaces/:spaceId/groups/:groupId/desired` | desired app manifest 置換 *(owner/admin/editor)* |
+| DELETE | `/api/spaces/:spaceId/groups/:groupId` | グループ削除 *(owner/admin)* |
+| GET | `/api/spaces/:spaceId/groups/:groupId/resources` | グループリソース一覧 |
+| GET | `/api/spaces/:spaceId/groups/:groupId/services` | グループサービス一覧 |
+| GET | `/api/spaces/:spaceId/groups/:groupId/deployments` | グループデプロイ一覧 |
+| POST | `/api/spaces/:spaceId/groups/:groupId/plan` | マニフェストプラン *(owner/admin/editor)* |
+| POST | `/api/spaces/:spaceId/groups/:groupId/apply` | マニフェスト適用 *(owner/admin/editor)* |
+| GET | `/api/spaces/:spaceId/groups/:groupId/updates` | 更新チェック |
+
+---
+
+## billing
+
+課金・使用量・サブスクリプション管理。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/billing` | 課金情報取得 |
+| GET | `/api/billing/usage` | 当月使用量 |
+| POST | `/api/billing/subscribe` | サブスクリプション開始（Stripe Checkout） |
+| POST | `/api/billing/credits/checkout` | クレジットトップアップ（Stripe Checkout） |
+| POST | `/api/billing/portal` | Stripe カスタマーポータルセッション作成 |
+| GET | `/api/billing/invoices` | 請求書一覧 |
+| GET | `/api/billing/invoices/:id/pdf` | 請求書 PDF |
+| POST | `/api/billing/invoices/:id/send` | 請求書メール送信 |
+
+### Webhook
+
+| method | path | auth | description |
+| --- | --- | --- | --- |
+| POST | `/api/billing/webhook` | Stripe signature | Stripe webhook ハンドラー |
+
+---
+
+## auth
+
+認証・プロファイル操作。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/auth/me` | 認証中ユーザー情報 |
+| POST | `/api/auth/setup-username` | 初期ユーザー名設定 |
+| PATCH | `/api/auth/profile` | プロファイル更新（表示名・アバター） |
+| POST | `/api/auth/logout` | ログアウト |
+
+---
+
+## oauth-consent
+
+OAuth 同意 UI 用 API。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/api/oauth/authorize/context` | 認可コンテキスト取得 |
+| POST | `/api/oauth/authorize/decision` | 同意決定（approve / deny） |
+| GET | `/api/oauth/device/context` | デバイスフローコンテキスト |
+| POST | `/api/oauth/device/decision` | デバイスフロー決定 |
+
+---
+
+## Non-API routes
+
+### smart-http
+
+Git Smart HTTP プロトコル。`git clone`, `git push` 等で使用。
+
+| method | path | description |
+| --- | --- | --- |
+| GET | `/git/:owner/:repo.git/info/refs` | Git reference advertisement |
+| POST | `/git/:owner/:repo.git/git-upload-pack` | Git fetch / clone |
+| POST | `/git/:owner/:repo.git/git-receive-pack` | Git push |
+
+`:owner` はユーザー名またはワークスペーススラッグ。認証は HTTP Basic（PAT）または匿名（公開リポジトリの読み取り）。
 
 ```bash
-POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback
-Authorization: Bearer $TOKEN
+git clone https://your-takos.example/git/tako/my-app.git
 ```
 
-### `billing`
+### well-known
 
-#### 利用状況
+OAuth / OIDC ディスカバリーエンドポイント。
 
-```bash
-GET /api/billing/usage
-Authorization: Bearer $TOKEN
-```
+| method | path | description |
+| --- | --- | --- |
+| GET | `/.well-known/oauth-authorization-server` | OAuth 2.0 Authorization Server Metadata (RFC 8414) |
+| GET | `/.well-known/jwks.json` | JSON Web Key Set |
+| GET | `/.well-known/openid-configuration` | OpenID Connect Discovery |
 
-#### Stripe Webhook
+### activitypub-store
 
-```bash
-POST /api/billing/webhook
-Stripe-Signature: t=...,v1=...
-```
+ActivityPub フェデレーションエンドポイント。
 
-Stripe の署名検証を使用。セッション認証は不要。
+| method | path | description |
+| --- | --- | --- |
+| GET | `/.well-known/webfinger` | WebFinger プロトコル |
+| GET | `/ns/takos-git` | Takos Git 名前空間定義 |
+| GET | `/ap/stores/:store` | ストアアクター情報 |
+| GET | `/ap/stores/:store/search` | 検索サービス情報 |
+| POST | `/ap/stores/:store/inbox` | ストア Inbox |
+| GET | `/ap/stores/:store/followers` | フォロワーコレクション |
+| GET | `/ap/stores/:store/repositories` | リポジトリ一覧 |
+| GET | `/ap/stores/:store/search/repositories` | リポジトリ検索 |
+| GET | `/ap/stores/:store/repositories/:owner/:repoName` | リポジトリオブジェクト |
+| GET | `/ap/stores/:store/outbox` | アクティビティフィード |
 
-### `auth`
+### oauth-server
 
-#### ログイン中のユーザー情報
+OAuth 2.0 サーバーエンドポイント。
 
-```bash
-GET /api/auth/me
-Authorization: Bearer $TOKEN
-```
+| method | path | description |
+| --- | --- | --- |
+| GET | `/oauth/authorize` | 認可エンドポイント |
+| POST | `/oauth/token` | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
+| POST | `/oauth/introspect` | トークンイントロスペクション |
+| POST | `/oauth/revoke` | トークン失効 |
+| GET | `/oauth/userinfo` | OpenID Connect UserInfo |
+| POST | `/oauth/register` | 動的クライアント登録 |
+| GET | `/oauth/register/:clientId` | クライアント登録情報取得 |
 
-#### ログアウト
+### auth (server-side)
 
-```bash
-POST /api/auth/logout
-Authorization: Bearer $TOKEN
-```
+サーバーサイド認証フロー。
 
-## implementation note
+| method | path | description |
+| --- | --- | --- |
+| GET | `/auth/login` | Google OAuth フロー開始 |
+| GET | `/auth/cli` | CLI 認証エンドポイント |
+| GET | `/auth/external/session` | 外部サービス用セッション確認 |
+| GET | `/auth/link/google` | Google アカウントリンク開始 |
+| GET | `/auth/link/google/callback` | Google リンクコールバック |
 
-deploy family は current public surface ですが、today の implementation gap は [Deploy System](/deploy/) に従って読みます。
-このリファレンスは route family の存在と役割を示すものであり、end-to-end availability の保証は implementation note を優先してください。
+---
 
 ## Examples
 
@@ -618,6 +1672,60 @@ curl -N \
   -H "Authorization: Bearer tak_pat_..." \
   https://your-takos.example/api/notifications/sse
 ```
+
+### リポジトリ内ファイルを取得
+
+```bash
+curl -H "Authorization: Bearer tak_pat_..." \
+  https://your-takos.example/api/repos/repo_123/git/blob/main/src/index.ts
+```
+
+### PR を作成
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer tak_pat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Fix bug","head":"fix/bug","base":"main"}' \
+  https://your-takos.example/api/repos/repo_123/pulls
+```
+
+### サービスをデプロイ
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer tak_pat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"bundle":"<base64>","deploy_message":"v1.0"}' \
+  https://your-takos.example/api/services/svc_123/deployments
+```
+
+### SQL リソースにクエリ実行
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer tak_pat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"sql":"SELECT * FROM users LIMIT 10"}' \
+  https://your-takos.example/api/resources/res_123/sql/query
+```
+
+### グループにマニフェスト適用
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer tak_pat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"manifest":{...}}' \
+  https://your-takos.example/api/spaces/ws_123/groups/grp_456/apply
+```
+
+---
+
+## implementation note
+
+deploy family は current public surface ですが、today の implementation gap は [Deploy System](/deploy/) に従って読みます。
+このリファレンスは全エンドポイントを網羅していますが、end-to-end availability の保証は各 family の implementation note を優先してください。
 
 ## 次に読むページ
 

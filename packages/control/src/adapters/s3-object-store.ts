@@ -17,7 +17,7 @@ import type {
   R2Bucket,
   R2Object,
   R2ObjectBody,
-} from '../../shared/types/bindings.ts';
+} from '../shared/types/bindings.ts';
 import type { R2Objects } from './r2-compat-types.ts';
 import {
   toR2Object as toR2ObjectShared,

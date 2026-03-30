@@ -95,7 +95,7 @@ npm install && npm run build
 ## 6. デプロイ
 
 ```bash
-takos deploy-group --env staging \
+takos apply --env staging \
   --account-id $CLOUDFLARE_ACCOUNT_ID \
   --api-token $CLOUDFLARE_API_TOKEN
 ```
@@ -106,7 +106,7 @@ takos deploy-group --env staging \
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!" が出れば成功。
 
-ドライランで確認だけしたい場合: `takos deploy-group --env staging --dry-run`
+manifest の整合性だけ先に確認したい場合: `takos plan`
 
 ## 次のステップ
 

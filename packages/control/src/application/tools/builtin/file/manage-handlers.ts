@@ -4,7 +4,7 @@
  * Consolidates: file_delete, file_rename.
  */
 
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session';
 import { isBinaryFile } from './limits';
 import { logError, logWarn } from '../../../../shared/utils/logger';

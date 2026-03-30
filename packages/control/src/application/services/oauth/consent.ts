@@ -7,6 +7,7 @@ import { generateId } from './pkce';
 import { getDb } from '../../../infra/db';
 import { eq, and, inArray, desc } from 'drizzle-orm';
 import { revokeAllUserClientTokens } from './token';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type OAuthConsentRow = SelectOf<typeof oauthConsents>;
 
@@ -17,8 +18,8 @@ function toApiConsent(row: OAuthConsentRow): OAuthConsent {
     client_id: row.clientId,
     scopes: row.scopes as JsonStringArray,
     status: row.status as 'active' | 'revoked',
-    granted_at: (row.grantedAt == null ? null : typeof row.grantedAt === 'string' ? row.grantedAt : row.grantedAt.toISOString()),
-    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()),
+    granted_at: textDate(row.grantedAt),
+    updated_at: textDate(row.updatedAt),
   };
 }
 

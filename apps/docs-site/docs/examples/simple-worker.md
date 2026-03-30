@@ -84,7 +84,7 @@ export default {
 ## デプロイ
 
 ```bash
-takos deploy-group --env staging
+takos apply --env staging
 ```
 
 ## ポイント

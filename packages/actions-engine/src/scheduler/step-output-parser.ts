@@ -1,13 +1,13 @@
 /**
- * Output parsing functions for step execution
+ * ステップ実行時の出力パース関数
  */
 
 const SIMPLE_OUTPUT_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
- * Parse GitHub Actions output format from stdout
- * Format: ::set-output name=<name>::<value>
- * Or: echo "name=value" >> $GITHUB_OUTPUT
+ * 標準出力から GitHub Actions 形式の出力をパースする
+ * 形式: ::set-output name=<name>::<value>
+ * もしくは: echo "name=value" >> $GITHUB_OUTPUT
  */
 export function parseOutputs(stdout: string): Record<string, string> {
   const outputs: Record<string, string> = {};

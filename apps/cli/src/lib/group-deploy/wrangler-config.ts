@@ -9,6 +9,7 @@ import type {
 } from './deploy-models.js';
 import { toBinding } from './cloudflare-utils.js';
 import { toPascalCase } from './container.js';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
 
 // ── Wrangler Config Generator ────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ export function generateWranglerConfig(
     const containerConfig: ContainerWranglerConfig = {
       name: scriptName,
       main: service.build.fromWorkflow.artifactPath,
-      compatibility_date: options.compatibilityDate || '2025-01-01',
+      compatibility_date: options.compatibilityDate || DEFAULT_COMPATIBILITY_DATE,
       compatibility_flags: ['nodejs_compat'],
       durable_objects: {
         bindings: service.containers.map((c) => ({
@@ -56,7 +57,7 @@ export function generateWranglerConfig(
   const config: WranglerConfig = {
     name: scriptName,
     main: service.build.fromWorkflow.artifactPath,
-    compatibility_date: options.compatibilityDate || '2025-01-01',
+    compatibility_date: options.compatibilityDate || DEFAULT_COMPATIBILITY_DATE,
   };
 
   if (service.env && Object.keys(service.env).length > 0) {
@@ -65,37 +66,37 @@ export function generateWranglerConfig(
 
   if (service.bindings?.d1 && service.bindings.d1.length > 0) {
     config.d1_databases = service.bindings.d1.map((resourceName: string) => {
-      const p = options.resources.get(resourceName);
-      if (!p?.id) {
+      const provisioned = options.resources.get(resourceName);
+      if (!provisioned?.id) {
         throw new Error(`Resource '${resourceName}' not provisioned: missing database_id`);
       }
       return {
-        binding: p.binding || toBinding(resourceName),
-        database_name: p.name || resourceName,
-        database_id: p.id,
+        binding: provisioned.binding || toBinding(resourceName),
+        database_name: provisioned.name || resourceName,
+        database_id: provisioned.id,
       };
     });
   }
 
   if (service.bindings?.r2 && service.bindings.r2.length > 0) {
     config.r2_buckets = service.bindings.r2.map((resourceName: string) => {
-      const p = options.resources.get(resourceName);
+      const provisioned = options.resources.get(resourceName);
       return {
-        binding: p?.binding || toBinding(resourceName),
-        bucket_name: p?.name || resourceName,
+        binding: provisioned?.binding || toBinding(resourceName),
+        bucket_name: provisioned?.name || resourceName,
       };
     });
   }
 
   if (service.bindings?.kv && service.bindings.kv.length > 0) {
     config.kv_namespaces = service.bindings.kv.map((resourceName: string) => {
-      const p = options.resources.get(resourceName);
-      if (!p?.id) {
+      const provisioned = options.resources.get(resourceName);
+      if (!provisioned?.id) {
         throw new Error(`Resource '${resourceName}' not provisioned: missing KV namespace id`);
       }
       return {
-        binding: p.binding || toBinding(resourceName),
-        id: p.id,
+        binding: provisioned.binding || toBinding(resourceName),
+        id: provisioned.id,
       };
     });
   }
@@ -111,20 +112,20 @@ export function generateWranglerConfig(
 
   if (service.bindings?.queues && service.bindings.queues.length > 0) {
     config.queues_producers = service.bindings.queues.map((resourceName: string) => {
-      const p = options.resources.get(resourceName);
+      const provisioned = options.resources.get(resourceName);
       return {
-        queue: p?.name || resourceName,
-        binding: p?.binding || toBinding(resourceName),
+        queue: provisioned?.name || resourceName,
+        binding: provisioned?.binding || toBinding(resourceName),
       };
     });
   }
 
   if (service.bindings?.vectorize && service.bindings.vectorize.length > 0) {
     config.vectorize_indexes = service.bindings.vectorize.map((resourceName: string) => {
-      const p = options.resources.get(resourceName);
+      const provisioned = options.resources.get(resourceName);
       return {
-        index_name: p?.name || resourceName,
-        binding: p?.binding || toBinding(resourceName),
+        index_name: provisioned?.name || resourceName,
+        binding: provisioned?.binding || toBinding(resourceName),
       };
     });
   }

@@ -25,7 +25,7 @@ export function useResourceExplorer(resource: Resource) {
   }, [resource.name]);
 
   const fetchD1Tables = useCallback(async () => {
-    if (resource.type !== 'd1' || !resource.cf_id) return;
+    if (resource.type !== 'd1' || !resource.provider_resource_id) return;
     setD1Loading(true);
     try {
       const res = await rpc.resources[':id'].d1.tables.$get({ param: { id: resource.id } });
@@ -39,7 +39,7 @@ export function useResourceExplorer(resource: Resource) {
   }, [resource]);
 
   const fetchD1TableData = useCallback(async (table: string) => {
-    if (!resource.cf_id) return;
+    if (!resource.provider_resource_id) return;
     setD1Loading(true);
     try {
       const res = await rpc.resources[':id'].d1.tables[':tableName'].$get({
@@ -56,7 +56,7 @@ export function useResourceExplorer(resource: Resource) {
   }, [resource]);
 
   const executeD1Query = useCallback(async () => {
-    if (!resource.cf_id || !d1Query.trim()) return;
+    if (!resource.provider_resource_id || !d1Query.trim()) return;
     setD1Loading(true);
     try {
       const res = await rpc.resources[':id'].d1.query.$post({

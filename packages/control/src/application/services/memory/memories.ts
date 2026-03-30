@@ -10,6 +10,7 @@ import type {
 import { generateId } from '../../../shared/utils';
 import { getDb, memories, reminders } from '../../../infra/db';
 import { eq, and, or, like, desc, asc, sql, inArray } from 'drizzle-orm';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export const MEMORY_TYPES: readonly string[] = ['episode', 'semantic', 'procedural'];
 const REMINDER_TRIGGER_TYPES: readonly string[] = ['time', 'condition', 'context'];
@@ -70,8 +71,8 @@ function toMemoryApi(m: {
     expires_at: toOptionalIsoString(m.expiresAt),
     last_accessed_at: toOptionalIsoString(m.lastAccessedAt),
     access_count: m.accessCount ?? 0,
-    created_at: (m.createdAt == null ? null : typeof m.createdAt === 'string' ? m.createdAt : m.createdAt.toISOString()),
-    updated_at: (m.updatedAt == null ? null : typeof m.updatedAt === 'string' ? m.updatedAt : m.updatedAt.toISOString()),
+    created_at: textDate(m.createdAt),
+    updated_at: textDate(m.updatedAt),
   };
 }
 
@@ -103,8 +104,8 @@ function toReminderApi(r: {
     status: isReminderStatus(reminderStatus) ? reminderStatus : 'pending',
     triggered_at: toOptionalIsoString(r.triggeredAt),
     priority: isReminderPriority(reminderPriority) ? reminderPriority : 'normal',
-    created_at: (r.createdAt == null ? null : typeof r.createdAt === 'string' ? r.createdAt : r.createdAt.toISOString()),
-    updated_at: (r.updatedAt == null ? null : typeof r.updatedAt === 'string' ? r.updatedAt : r.updatedAt.toISOString()),
+    created_at: textDate(r.createdAt),
+    updated_at: textDate(r.updatedAt),
   };
 }
 

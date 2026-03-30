@@ -3,7 +3,7 @@
 Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。
 
 ::: info アプリ開発者へ
-アプリ開発者向けの current surface は Cloudflare-backed `takos deploy-group` です。`app.yml` を書いて `takos deploy-group --env staging` するのが今の正しい使い方です。
+アプリ開発者向けの current surface は Cloudflare-backed `takos apply` です。`app.yml` を書いて `takos apply --env staging` するのが今の正しい使い方です。
 :::
 
 ## 必要なもの
@@ -50,7 +50,7 @@ takos whoami
 
 ## リソースの手動作成
 
-`deploy-group` は manifest に書かれたリソースを自動作成するけど、control plane 本体のリソースは事前に手動で作成する必要がある。
+`apply` は manifest に書かれたリソースを自動作成するけど、control plane 本体のリソースは事前に手動で作成する必要がある。
 
 ### D1 Database
 
@@ -309,23 +309,23 @@ wrangler secret put GOOGLE_CLIENT_SECRET --env staging
 ## デプロイ
 
 ```bash
-takos deploy-group --env staging
+takos apply --env staging
 ```
 
 production にデプロイする場合:
 
 ```bash
-takos deploy-group --env production
+takos apply --env production
 ```
 
-デプロイの詳細は [deploy-group](/deploy/deploy-group) を参照。
+デプロイの詳細は [apply](/deploy/apply) を参照。
 
 ## Workers
 
 Takos アプリの中核。V8 isolate 上で動く軽量な HTTP ハンドラ。
 
 - `.takos/app.yml` の `workers` セクションで定義
-- `deploy-group` が wrangler.toml を自動生成してデプロイ
+- `apply` が wrangler.toml を自動生成してデプロイ
 - リソース binding は manifest から自動注入
 
 詳しくは [Workers](/apps/workers) を参照。
@@ -353,7 +353,7 @@ workers:
         artifactPath: dist/browser-host.js
 ```
 
-`deploy-group` が以下を自動生成する:
+`apply` が以下を自動生成する:
 
 1. Durable Object ホストクラス（`@cloudflare/containers` の `Container` を extends）
 2. wrangler.toml の `[[containers]]` セクション
@@ -376,7 +376,7 @@ workers:
 
 ## D1 / R2 / KV
 
-`resources` セクションで宣言すると、`deploy-group` が自動で作成・binding する。
+`resources` セクションで宣言すると、`apply` が自動で作成・binding する。
 
 ```yaml
 resources:
@@ -413,7 +413,7 @@ resources:
 テナントごとに Worker を論理分離するための仕組み。
 
 ```bash
-takos deploy-group --env production --namespace production-tenants --group tenant-a
+takos apply --env production --namespace production-tenants --group tenant-a
 ```
 
 - `--namespace` で dispatch namespace にデプロイ
@@ -508,18 +508,18 @@ CF Workflows ベースのワークフロー実行。他環境では Takos-manage
 
 ## マルチクラウド対応
 
-takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `deploy-group` するだけで、デプロイ先を意識する必要はない:
+takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `apply` するだけで、デプロイ先を意識する必要はない:
 
 ```bash
 # アプリ開発者のコマンド（どの環境でも同じ）
-takos deploy-group --env production
+takos apply --env production
 ```
 
 takos 自体を別のクラウドに移行したい場合は、オペレーターがそのクラウド用のインフラを構築して takos の設定を変更する。詳しくは [環境ごとの差異](/hosting/differences) を参照。
 
 ## 次に読むページ
 
-- [deploy-group](/deploy/deploy-group) --- デプロイコマンドの詳細
+- [apply](/deploy/apply) --- `takos apply` の詳細
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [AWS](/hosting/aws) --- AWS にデプロイする場合
 - [GCP](/hosting/gcp) --- GCP にデプロイする場合

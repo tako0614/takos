@@ -3,6 +3,7 @@ import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
 import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
 import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 type DeploymentInsert = InsertOf<typeof deployments>;
 type DeploymentUpdate = Partial<InsertOf<typeof deployments>>;
@@ -40,12 +41,12 @@ export function toApiDeployment(d: DeploymentRow): Deployment {
     idempotency_key: d.idempotencyKey,
     is_rollback: d.isRollback,
     rollback_from_version: d.rollbackFromVersion,
-    rolled_back_at: (d.rolledBackAt == null ? null : typeof d.rolledBackAt === 'string' ? d.rolledBackAt : d.rolledBackAt.toISOString()),
+    rolled_back_at: textDateNullable(d.rolledBackAt),
     rolled_back_by: d.rolledBackBy,
-    started_at: (d.startedAt == null ? null : typeof d.startedAt === 'string' ? d.startedAt : d.startedAt.toISOString()),
-    completed_at: (d.completedAt == null ? null : typeof d.completedAt === 'string' ? d.completedAt : d.completedAt.toISOString()),
-    created_at: (d.createdAt == null ? null : typeof d.createdAt === 'string' ? d.createdAt : d.createdAt.toISOString()) || '',
-    updated_at: (d.updatedAt == null ? null : typeof d.updatedAt === 'string' ? d.updatedAt : d.updatedAt.toISOString()) || '',
+    started_at: textDateNullable(d.startedAt),
+    completed_at: textDateNullable(d.completedAt),
+    created_at: textDateNullable(d.createdAt) || '',
+    updated_at: textDateNullable(d.updatedAt) || '',
   };
 }
 
@@ -240,7 +241,7 @@ export async function getDeploymentEvents(db: SqlDatabaseBinding, deploymentId: 
     step_name: e.stepName,
     message: e.message,
     details: e.details,
-    created_at: (e.createdAt == null ? null : typeof e.createdAt === 'string' ? e.createdAt : e.createdAt.toISOString()) || '',
+    created_at: textDateNullable(e.createdAt) || '',
   }));
 }
 

@@ -1,4 +1,4 @@
-import type { ToolContext } from '../../types';
+import type { ToolContext } from '../../tool-definitions';
 
 function buildFailureDetails(context: ToolContext): string[] {
   const failure = context.getLastContainerStartFailure();

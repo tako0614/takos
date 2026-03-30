@@ -1,5 +1,5 @@
 /**
- * Context management for workflow execution
+ * ワークフロー実行のコンテキスト管理
  */
 import type {
   ExecutionContext,
@@ -9,29 +9,29 @@ import type {
 } from './workflow-models.js';
 
 // ---------------------------------------------------------------------------
-// Base context
+// ベースコンテキスト
 // ---------------------------------------------------------------------------
 
 /**
- * Context builder options
+ * コンテキスト生成時のオプション
  */
 export interface ContextBuilderOptions {
-  /** GitHub context overrides */
+  /** GitHub コンテキストの上書き値 */
   github?: Partial<GitHubContext>;
-  /** Runner context overrides */
+  /** Runner コンテキストの上書き値 */
   runner?: Partial<RunnerContext>;
-  /** Environment variables */
+  /** 環境変数 */
   env?: Record<string, string>;
-  /** Repository variables */
+  /** リポジトリ変数 */
   vars?: Record<string, string>;
-  /** Secrets */
+  /** シークレット */
   secrets?: Record<string, string>;
-  /** Workflow dispatch inputs */
+  /** ワークフローディスパッチ入力 */
   inputs?: InputsContext;
 }
 
 /**
- * Create a base execution context
+ * ベース実行コンテキストを作成する
  */
 export function createBaseContext(
   options: ContextBuilderOptions = {}
@@ -91,15 +91,15 @@ export function createBaseContext(
 }
 
 // ---------------------------------------------------------------------------
-// Environment variable management
+// 環境変数管理
 // ---------------------------------------------------------------------------
 
 const GITHUB_ENV_HEREDOC_PATTERN = /^([a-zA-Z_][a-zA-Z0-9_]*)<<(.+)$/;
 const GITHUB_ENV_SIMPLE_PATTERN = /^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$/;
 
 /**
- * Parse GITHUB_ENV file format
- * Format:
+ * GITHUB_ENV ファイル形式のパース
+ * 形式:
  *   NAME=value
  *   or
  *   NAME<<EOF
@@ -122,7 +122,7 @@ export function parseGitHubEnvFile(content: string): Record<string, string> {
       continue;
     }
 
-    // Check for heredoc format: NAME<<DELIMITER
+    // ヒアドキュメント形式(NAME<<DELIMITER)を確認
     const heredocMatch = line.match(GITHUB_ENV_HEREDOC_PATTERN);
     if (heredocMatch) {
       const [, name, delimiter] = heredocMatch;
@@ -139,7 +139,7 @@ export function parseGitHubEnvFile(content: string): Record<string, string> {
       continue;
     }
 
-    // Simple format: NAME=value
+    // シンプル形式: NAME=value
     const simpleMatch = line.match(GITHUB_ENV_SIMPLE_PATTERN);
     if (simpleMatch) {
       const [, name, value] = simpleMatch;

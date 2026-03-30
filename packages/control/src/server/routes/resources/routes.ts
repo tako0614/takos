@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
-import type { ResourceType } from '../../../shared/types';
+import type { ResourceCapability, ResourceType } from '../../../shared/types';
 import { generateId } from '../../../shared/utils';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { BadRequestError } from 'takos-common/errors';
+import { AppError, BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import {
   checkResourceAccess,
@@ -18,30 +19,119 @@ import {
   listResourcesForUser,
   listResourcesForWorkspace,
   markResourceDeleting,
-  provisionCloudflareResource,
+  provisionManagedResource,
+  deleteManagedResource,
   updateResourceMetadata,
 } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
-import { accountMemberships, resourceAccess, resources, accounts } from '../../../infra/db/schema';
+import { accountMemberships, resourceAccess, resources, accounts, groups } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, AuthorizationError, InternalError } from 'takos-common/errors';
 import { getPlatformServices } from '../../../platform/accessors.ts';
-import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
+import { getStoredResourceImplementation, toPublicResourceType, toResourceCapability } from '../../../application/services/resources/capabilities';
+import { removeGroupDesiredResource, upsertGroupDesiredResource } from '../../../application/services/deployment/group-desired-projector.ts';
 
-async function deleteCfResource(
-  provider: CloudflareResourceService,
-  resource: { type: string; cf_id: string | null; cf_name: string | null },
-): Promise<void> {
-  await provider.deleteResource({
-    type: resource.type,
-    cfId: resource.cf_id,
-    cfName: resource.cf_name,
-  });
+const resourcesBase = new Hono<AuthenticatedRouteEnv>();
+
+resourcesBase.onError((err, c) => {
+  if (err instanceof AppError) {
+    return c.json({ error: err.message }, err.statusCode as ContentfulStatusCode);
+  }
+  logError('Unhandled resources route error', err, { module: 'routes/resources/base' });
+  return c.json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500);
+});
+
+function inferResourceProvider(env: AuthenticatedRouteEnv['Bindings']): 'cloudflare' | 'local' {
+  return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? 'cloudflare' : 'local';
 }
 
-const resourcesBase = new Hono<AuthenticatedRouteEnv>()
+function buildProjectedResourceSpec(
+  name: string,
+  body: {
+    type: ResourceType;
+    config?: Record<string, unknown>;
+  },
+) {
+  const config = body.config ?? {};
+  const workflowConfig = config.workflow && typeof config.workflow === 'object'
+    ? config.workflow as Record<string, unknown>
+    : {};
+  const durableConfig = config.durableObject && typeof config.durableObject === 'object'
+    ? config.durableObject as Record<string, unknown>
+    : {};
+  const binding = typeof config.binding === 'string' && config.binding.trim().length > 0
+    ? config.binding.trim()
+    : name.toUpperCase().replace(/-/g, '_');
+  switch (body.type) {
+    case 'd1':
+      return {
+        type: 'd1' as const,
+        binding,
+      };
+    case 'r2':
+      return {
+        type: 'r2' as const,
+        binding,
+      };
+    case 'kv':
+      return {
+        type: 'kv' as const,
+        binding,
+      };
+    case 'queue':
+      return {
+        type: 'queue' as const,
+        binding,
+        ...(config.queue && typeof config.queue === 'object' ? { queue: config.queue as Record<string, unknown> } : {}),
+      };
+    case 'vectorize':
+      return {
+        type: 'vectorize' as const,
+        binding,
+        ...(config.vectorize && typeof config.vectorize === 'object' ? { vectorize: config.vectorize as { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' } } : {}),
+      };
+    case 'analyticsEngine':
+      return {
+        type: 'analyticsEngine' as const,
+        binding,
+        ...(config.analyticsEngine && typeof config.analyticsEngine === 'object' ? { analyticsEngine: config.analyticsEngine as { dataset?: string } } : {}),
+      };
+    case 'workflow':
+      return {
+        type: 'workflow' as const,
+        binding,
+        workflow: {
+          service: String(config.service ?? workflowConfig.service ?? ''),
+          export: String(config.export ?? workflowConfig.export ?? ''),
+        },
+      };
+    case 'durableObject':
+      return {
+        type: 'durableObject' as const,
+        binding,
+        durableObject: {
+          className: String(config.className ?? durableConfig.className ?? ''),
+          ...(typeof config.scriptName === 'string'
+            ? { scriptName: config.scriptName }
+            : (typeof durableConfig.scriptName === 'string' ? { scriptName: durableConfig.scriptName } : {})),
+        },
+      };
+    case 'secretRef':
+      return {
+        type: 'secretRef' as const,
+        binding,
+      };
+    default:
+      return {
+        type: body.type,
+        binding,
+      };
+  }
+}
+
+resourcesBase
 
 .get('/', async (c) => {
   const dbBinding = getPlatformServices(c).sql?.binding;
@@ -101,9 +191,11 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   const sharedResources: Array<{
     name: string;
     type: string;
+    capability?: string;
+    implementation?: string | null;
     status: string;
-    cf_id: string | null;
-    cf_name: string | null;
+    provider_resource_id: string | null;
+    provider_resource_name: string | null;
     access_level: string;
     owner_name: string;
     owner_email: string | null;
@@ -119,10 +211,12 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 
     sharedResources.push({
       name: resource.name,
-      type: resource.type,
+      type: toPublicResourceType(resource.type, resource.config) ?? resource.type,
+      ...(resource.semanticType ? { capability: resource.semanticType } : {}),
+      ...(getStoredResourceImplementation(resource.type, resource.config) ? { implementation: getStoredResourceImplementation(resource.type, resource.config) } : {}),
       status: resource.status,
-      cf_id: resource.cfId,
-      cf_name: resource.cfName,
+      provider_resource_id: resource.providerResourceId,
+      provider_resource_name: resource.providerResourceName,
       access_level: a.permission,
       owner_name: owner?.name ?? '',
       owner_email: owner?.email ?? null,
@@ -135,16 +229,17 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 .get('/type/:type', async (c) => {
   const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
-  const resourceType = c.req.param('type') as ResourceType;
+  const requestedType = c.req.param('type');
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
   }
 
-  if (!['d1', 'r2', 'worker', 'kv', 'vectorize', 'assets'].includes(resourceType)) {
+  const resourceType = toResourceCapability(requestedType);
+  if (!resourceType) {
     throw new BadRequestError( 'Invalid resource type');
   }
 
-  const resourceList = await listResourcesByType(dbBinding, user.id, resourceType);
+  const resourceList = await listResourcesByType(dbBinding, user.id, resourceType as ResourceCapability);
 
   return c.json({ resources: resourceList });
 })
@@ -185,11 +280,18 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     type: z.string(),
     config: z.record(z.unknown()).optional(),
     space_id: z.string().optional(),
+    group_id: z.string().optional(),
   })),
   async (c) => {
   const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
-  const body = c.req.valid('json') as { name: string; type: ResourceType; config?: Record<string, unknown>; space_id?: string };
+  const body = c.req.valid('json') as {
+    name: string;
+    type: ResourceType;
+    config?: Record<string, unknown>;
+    space_id?: string;
+    group_id?: string;
+  };
   if (!dbBinding) {
     throw new InternalError('Database binding unavailable');
   }
@@ -198,7 +300,8 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError( 'name is required');
   }
 
-  if (!['d1', 'r2', 'kv', 'vectorize'].includes(body.type)) {
+  const resourceCapability = toResourceCapability(body.type);
+  if (!resourceCapability) {
     throw new BadRequestError( 'Invalid resource type');
   }
 
@@ -220,34 +323,60 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     spaceId = user.id;
   }
 
+  let groupId: string | null = null;
+  if (body.group_id?.trim()) {
+    const db = getDb(dbBinding);
+    const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
+      .from(groups)
+      .where(eq(groups.id, body.group_id.trim()))
+      .get();
+    if (!group || group.spaceId !== spaceId) {
+      throw new BadRequestError('group_id must belong to the selected workspace');
+    }
+    groupId = group.id;
+  }
+
   const id = generateId();
   const timestamp = new Date().toISOString();
   const name = body.name.trim();
-  const cfName = `takos-${body.type}-${id}`;
+  const providerResourceName = `takos-${body.type}-${id}`;
+  const providerName = inferResourceProvider(c.env);
 
   try {
-    switch (body.type) {
-      case 'd1':
-      case 'r2':
-      case 'kv':
-      case 'vectorize':
-        await provisionCloudflareResource(c.env, {
-          id,
-          timestamp,
-          ownerId: user.id,
-          spaceId,
-          name,
-          type: body.type,
-          cfName,
-          config: body.config || {},
-          recordFailure: true,
-          ...(body.type === 'vectorize'
-            ? { vectorize: { dimensions: VECTORIZE_DEFAULT_DIMENSIONS, metric: 'cosine' as const } }
-            : {}),
-        });
-        return c.json({ resource: await getResourceById(dbBinding, id) }, 201);
-
+    await provisionManagedResource(c.env, {
+      id,
+      timestamp,
+      ownerId: user.id,
+      spaceId,
+      groupId,
+      name,
+      type: resourceCapability,
+      publicType: body.type,
+      semanticType: resourceCapability,
+      providerName,
+      providerResourceName,
+      config: body.config || {},
+      recordFailure: true,
+      ...(resourceCapability === 'vector_index'
+        ? { vectorIndex: { dimensions: VECTORIZE_DEFAULT_DIMENSIONS, metric: 'cosine' as const } }
+        : {}),
+      ...(resourceCapability === 'workflow_runtime'
+        && typeof body.config?.service === 'string'
+        && typeof body.config?.export === 'string'
+        ? { workflowRuntime: { service: body.config.service as string, export: body.config.export as string } }
+        : {}),
+      ...(resourceCapability === 'durable_namespace' && typeof body.config?.className === 'string'
+        ? { durableNamespace: { className: body.config.className as string, ...(typeof body.config?.scriptName === 'string' ? { scriptName: body.config.scriptName as string } : {}) } }
+        : {}),
+    });
+    if (groupId) {
+      await upsertGroupDesiredResource(c.env, {
+        groupId,
+        name,
+        resource: buildProjectedResourceSpec(name, body) as never,
+      });
     }
+    return c.json({ resource: await getResourceById(dbBinding, id) }, 201);
   } catch (err) {
     logError('Resource creation failed', err, { module: 'routes/resources/base' });
 
@@ -300,6 +429,68 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   return c.json({ resource: updated });
 })
 
+.patch('/:id/group',
+  zValidator('json', z.object({
+    group_id: z.string().nullable().optional(),
+  })),
+  async (c) => {
+    const dbBinding = getPlatformServices(c).sql?.binding;
+    const user = c.get('user');
+    const resourceId = c.req.param('id');
+    const body = c.req.valid('json') as { group_id?: string | null };
+    if (!dbBinding) {
+      throw new InternalError('Database binding unavailable');
+    }
+
+    const resource = await getResourceById(dbBinding, resourceId);
+    if (!resource) {
+      throw new NotFoundError('Resource');
+    }
+    if (resource.owner_id !== user.id) {
+      throw new AuthorizationError('Only the owner can move this resource');
+    }
+
+    const nextGroupId = body.group_id?.trim() || null;
+    if (nextGroupId) {
+      const db = getDb(dbBinding);
+      const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
+        .from(groups)
+        .where(eq(groups.id, nextGroupId))
+        .get();
+      if (!group || group.spaceId !== resource.space_id) {
+        throw new BadRequestError('group_id must belong to the same workspace as the resource');
+      }
+    }
+
+    await getDb(dbBinding).update(resources)
+      .set({
+        groupId: nextGroupId,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(resources.id, resourceId))
+      .run();
+
+    if (nextGroupId) {
+      await upsertGroupDesiredResource(c.env, {
+        groupId: nextGroupId,
+        name: resource.name,
+        resource: buildProjectedResourceSpec(resource.name, {
+          type: resource.type as ResourceType,
+          config: typeof resource.config === 'string'
+            ? safeJsonParseOrDefault<Record<string, unknown>>(resource.config, {})
+            : {},
+        }) as never,
+      });
+    } else if (resource.group_id) {
+      await removeGroupDesiredResource(c.env, {
+        groupId: resource.group_id,
+        name: resource.name,
+      });
+    }
+
+    return c.json({ resource: await getResourceById(dbBinding, resourceId) });
+  })
+
 .delete('/:id', async (c) => {
   const dbBinding = getPlatformServices(c).sql?.binding;
   const user = c.get('user');
@@ -318,6 +509,13 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
     throw new AuthorizationError('Only the owner can delete this resource');
   }
 
+  if (resource.group_id) {
+    await removeGroupDesiredResource(c.env, {
+      groupId: resource.group_id,
+      name: resource.name,
+    });
+  }
+
   const bindingsCount = await countResourceBindings(dbBinding, resourceId);
 
   if (bindingsCount && bindingsCount.count > 0) {
@@ -330,9 +528,14 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   await markResourceDeleting(dbBinding, resourceId);
 
   try {
-    await deleteCfResource(new CloudflareResourceService(c.env), resource);
+    await deleteManagedResource(c.env, {
+      type: getStoredResourceImplementation(resource.type, resource.config) ?? resource.type,
+      providerName: resource.provider_name ?? undefined,
+      providerResourceId: resource.provider_resource_id,
+      providerResourceName: resource.provider_resource_name,
+    });
   } catch (err) {
-    logError('Failed to delete Cloudflare resource', err, { module: 'routes/resources/base' });
+    logError('Failed to delete managed resource', err, { module: 'routes/resources/base' });
   }
 
   await deleteResource(dbBinding, resourceId);
@@ -383,6 +586,13 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
 
   const { _internal_id: resourceId } = resource;
 
+  if (resource.group_id) {
+    await removeGroupDesiredResource(c.env, {
+      groupId: resource.group_id,
+      name: resource.name,
+    });
+  }
+
   const bindingsCount = await countResourceBindings(dbBinding, resourceId);
 
   if (bindingsCount && bindingsCount.count > 0) {
@@ -395,9 +605,14 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>()
   await markResourceDeleting(dbBinding, resourceId);
 
   try {
-    await deleteCfResource(new CloudflareResourceService(c.env), resource);
+    await deleteManagedResource(c.env, {
+      type: getStoredResourceImplementation(resource.type, resource.config) ?? resource.type,
+      providerName: resource.provider_name ?? undefined,
+      providerResourceId: resource.provider_resource_id,
+      providerResourceName: resource.provider_resource_name,
+    });
   } catch (err) {
-    logError('Failed to delete Cloudflare resource', err, { module: 'routes/resources/base' });
+    logError('Failed to delete managed resource', err, { module: 'routes/resources/base' });
   }
 
   await deleteResource(dbBinding, resourceId);

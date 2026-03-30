@@ -393,6 +393,8 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
     TENANT_SOURCE: new MockR2Bucket(),
     GIT_OBJECTS: new MockR2Bucket(),
     VECTORIZE: new MockVectorizeIndex(),
+    // Billing (enabled by default in tests so billing gates behave as expected)
+    BILLING_ENABLED: 'true',
     // Secrets and configuration
     GOOGLE_CLIENT_ID: 'test-google-client-id',
     GOOGLE_CLIENT_SECRET: 'test-google-client-secret',

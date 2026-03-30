@@ -11,6 +11,10 @@ vi.mock('@/services/source/app-manifest-parser', () => ({
   parseAppManifestYaml: vi.fn(),
 }));
 
+vi.mock('@/services/deployment/group-managed-desired-state', () => ({
+  syncGroupManagedDesiredState: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock('@/routes/route-auth', () => ({
   spaceAccess: () => async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
     c.set('access', { space: { id: 'ws1' } });

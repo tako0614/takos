@@ -4,7 +4,7 @@
  * Consolidates: file_read, file_list.
  */
 
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { callSessionApi } from './session';
 import { isBinaryFile } from './limits';
 import { setupFileOperation, handleSessionApiResponse } from './file-operations';

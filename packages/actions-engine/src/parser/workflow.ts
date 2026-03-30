@@ -1,5 +1,5 @@
 /**
- * YAML workflow parser
+ * YAML ワークフローパーサー
  */
 import { parse as parseYaml, stringify as stringifyYaml, YAMLParseError } from 'yaml';
 import type {
@@ -11,7 +11,7 @@ import type {
 import { normalizeNeedsInput } from '../scheduler/job.js';
 
 /**
- * Error thrown when workflow parsing fails
+ * ワークフロー解析失敗時に投げるエラー
  */
 export class WorkflowParseError extends Error {
   constructor(
@@ -24,15 +24,15 @@ export class WorkflowParseError extends Error {
 }
 
 /**
- * Normalize workflow trigger from various formats
+ * 様々な形式のトリガー表現を標準形に変換する
  */
 function normalizeTrigger(on: unknown): WorkflowTrigger {
-  // String format: on: push
+  // 文字列形式: on: push
   if (typeof on === 'string') {
     return { [on]: null } as WorkflowTrigger;
   }
 
-  // Array format: on: [push, pull_request]
+  // 配列形式: on: [push, pull_request]
   if (Array.isArray(on)) {
     const trigger: Record<string, unknown> = {};
     for (const event of on) {
@@ -43,7 +43,7 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
     return trigger as WorkflowTrigger;
   }
 
-  // Object format: on: { push: { branches: [...] } }
+  // オブジェクト形式: on: { push: { branches: [...] } }
   if (typeof on === 'object' && on !== null) {
     return on as WorkflowTrigger;
   }
@@ -52,7 +52,7 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
 }
 
 /**
- * Normalize workflow structure
+ * ワークフロー構造を標準化する
  */
 function normalizeWorkflow(raw: unknown): Workflow {
   if (typeof raw !== 'object' || raw === null) {
@@ -63,10 +63,10 @@ function normalizeWorkflow(raw: unknown): Workflow {
 
   const obj = raw as Record<string, unknown>;
 
-  // Normalize 'on' trigger
+  // 'on' トリガーを標準化
   const on = normalizeTrigger(obj.on);
 
-  // Normalize jobs
+  // jobs を標準化
   const jobs: Workflow['jobs'] = {};
   const rawJobs = obj.jobs;
   if (typeof rawJobs === 'object' && rawJobs !== null) {
@@ -101,10 +101,10 @@ function normalizeWorkflow(raw: unknown): Workflow {
 }
 
 /**
- * Parse YAML workflow content
+ * YAML ワークフロー本文を解析する
  *
- * @param content - YAML content string
- * @returns Parsed workflow with diagnostics
+ * @param content - YAML コンテンツ文字列
+ * @returns 診断情報付きの解析結果
  */
 export function parseWorkflow(content: string): ParsedWorkflow {
   const diagnostics: WorkflowDiagnostic[] = [];
@@ -148,25 +148,25 @@ export function parseWorkflow(content: string): ParsedWorkflow {
 }
 
 /**
- * Parse workflow from file path (for Node.js environments)
+ * ファイルパスからワークフローを解析する（Node.js 環境用）
  *
- * @param filePath - Path to workflow file
- * @returns Parsed workflow
+ * @param filePath - ワークフロー YAML のパス
+ * @returns 解析済みワークフロー
  */
 export async function parseWorkflowFile(
   filePath: string
 ): Promise<ParsedWorkflow> {
-  // Dynamic import for Node.js fs
+  // Node.js の fs は動的 import を使用
   const { readFile } = await import('node:fs/promises');
   const content = await readFile(filePath, 'utf-8');
   return parseWorkflow(content);
 }
 
 /**
- * Stringify workflow back to YAML
+ * ワークフローを YAML 文字列に戻す
  *
- * @param workflow - Workflow object
- * @returns YAML string
+ * @param workflow - ワークフローオブジェクト
+ * @returns YAML 文字列
  */
 export function stringifyWorkflow(workflow: Workflow): string {
   return stringifyYaml(workflow, {

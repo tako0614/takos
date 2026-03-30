@@ -25,6 +25,7 @@ import { parseScopes, areScopesAllowed, validateScopes } from './scopes';
 import { getDb } from '../../../infra/db';
 import { eq, and, lt } from 'drizzle-orm';
 import { revokeTokensByAuthorizationCode } from './token';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type OAuthAuthorizationCodeRow = SelectOf<typeof oauthAuthorizationCodes>;
 
@@ -39,8 +40,8 @@ function toApiAuthorizationCode(row: OAuthAuthorizationCodeRow): OAuthAuthorizat
     code_challenge: row.codeChallenge,
     code_challenge_method: row.codeChallengeMethod as CodeChallengeMethod,
     used: row.used,
-    expires_at: (row.expiresAt == null ? null : typeof row.expiresAt === 'string' ? row.expiresAt : row.expiresAt.toISOString()),
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    expires_at: textDate(row.expiresAt),
+    created_at: textDate(row.createdAt),
   };
 }
 

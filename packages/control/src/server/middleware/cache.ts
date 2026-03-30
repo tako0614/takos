@@ -80,7 +80,7 @@ function runWithWaitUntil(
 }
 
 export function withCache(config: CacheConfig): MiddlewareHandler {
-  return async (c: Context, next: Next) => {
+  return async (c: Context, next: Next): Promise<Response | void> => {
     if (c.req.method !== 'GET') {
       await next();
       return;

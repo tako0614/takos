@@ -111,59 +111,79 @@ export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
 
   switch (row.bindingType) {
     case 'd1':
-      if (!row.resourceCfId) return null;
+      if (!row.resourceProviderResourceId) return null;
       return {
         type: 'd1',
         name: row.bindingName,
-        database_id: row.resourceCfId,
+        database_id: row.resourceProviderResourceId,
       };
     case 'r2':
-      if (!row.resourceCfName) return null;
+      if (!row.resourceProviderResourceName) return null;
       return {
         type: 'r2_bucket',
         name: row.bindingName,
-        bucket_name: row.resourceCfName,
+        bucket_name: row.resourceProviderResourceName,
       };
     case 'kv':
-      if (!row.resourceCfId) return null;
+      if (!row.resourceProviderResourceId) return null;
       return {
         type: 'kv_namespace',
         name: row.bindingName,
-        namespace_id: row.resourceCfId,
+        namespace_id: row.resourceProviderResourceId,
       };
     case 'queue':
-      if (!row.resourceCfName && !row.resourceCfId) return null;
+      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
       return {
         type: 'queue',
         name: row.bindingName,
-        queue_name: row.resourceCfName || row.resourceCfId || undefined,
+        queue_name: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
       };
     case 'analytics_engine':
-      if (!row.resourceCfName && !row.resourceCfId) return null;
+      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
       return {
         type: 'analytics_engine',
         name: row.bindingName,
-        dataset: row.resourceCfName || row.resourceCfId || undefined,
+        dataset: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
       };
     case 'vectorize':
-      if (!row.resourceCfName) return null;
+      if (!row.resourceProviderResourceName) return null;
       return {
         type: 'vectorize',
         name: row.bindingName,
-        index_name: row.resourceCfName,
+        index_name: row.resourceProviderResourceName,
       };
     case 'analyticsEngine':
-      if (!row.resourceCfName && !row.resourceCfId) return null;
+      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
       return {
         type: 'analytics_engine',
         name: row.bindingName,
-        dataset: row.resourceCfName || row.resourceCfId || undefined,
+        dataset: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
       };
+    case 'workflow':
+      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
+      return {
+        type: 'workflow',
+        name: row.bindingName,
+        workflow_name: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
+      };
+    case 'durable_object_namespace':
+    case 'durableObject': {
+      const className = typeof config.className === 'string'
+        ? config.className
+        : row.resourceProviderResourceName || row.resourceProviderResourceId || undefined;
+      if (!className) return null;
+      return {
+        type: 'durable_object_namespace',
+        name: row.bindingName,
+        class_name: className,
+        script_name: typeof config.scriptName === 'string' ? config.scriptName : undefined,
+      };
+    }
     case 'service':
       return {
         type: 'service',
         name: row.bindingName,
-        service: row.resourceCfName || row.resourceCfId || undefined,
+        service: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
         environment: typeof config.environment === 'string' ? config.environment : undefined,
       };
     default:

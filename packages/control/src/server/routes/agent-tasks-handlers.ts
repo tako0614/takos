@@ -4,6 +4,7 @@ import { normalizeModelId } from '../../application/services/agent';
 import { getDb } from '../../infra/db';
 import { agentTasks, threads, runs, artifacts } from '../../infra/db/schema';
 import { eq, desc, inArray } from 'drizzle-orm';
+import { textDateNullable } from '../../shared/utils/db-guards';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -40,11 +41,11 @@ export function toApiTask(row: AgentTaskRow): AgentTaskBase {
     agent_type: row.agentType,
     model: normalizeModelId(row.model) ?? null,
     plan: row.plan ?? null,
-    due_at: (row.dueAt == null ? null : typeof row.dueAt === 'string' ? row.dueAt : row.dueAt.toISOString()),
-    started_at: (row.startedAt == null ? null : typeof row.startedAt === 'string' ? row.startedAt : row.startedAt.toISOString()),
-    completed_at: (row.completedAt == null ? null : typeof row.completedAt === 'string' ? row.completedAt : row.completedAt.toISOString()),
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()) || '',
-    updated_at: (row.updatedAt == null ? null : typeof row.updatedAt === 'string' ? row.updatedAt : row.updatedAt.toISOString()) || '',
+    due_at: textDateNullable(row.dueAt),
+    started_at: textDateNullable(row.startedAt),
+    completed_at: textDateNullable(row.completedAt),
+    created_at: textDateNullable(row.createdAt) || '',
+    updated_at: textDateNullable(row.updatedAt) || '',
   };
 }
 
@@ -189,9 +190,9 @@ export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<Age
         run_id: latestRun.id,
         status: latestRun.status as RunStatus,
         agent_type: latestRun.agentType,
-        started_at: (latestRun.startedAt == null ? null : typeof latestRun.startedAt === 'string' ? latestRun.startedAt : latestRun.startedAt.toISOString()),
-        completed_at: (latestRun.completedAt == null ? null : typeof latestRun.completedAt === 'string' ? latestRun.completedAt : latestRun.completedAt.toISOString()),
-        created_at: (latestRun.createdAt == null ? null : typeof latestRun.createdAt === 'string' ? latestRun.createdAt : latestRun.createdAt.toISOString()) || '',
+        started_at: textDateNullable(latestRun.startedAt),
+        completed_at: textDateNullable(latestRun.completedAt),
+        created_at: textDateNullable(latestRun.createdAt) || '',
         error: latestRun.error ?? null,
         artifact_count: artifactCountByRunId.get(latestRun.id) ?? 0,
       } : null,

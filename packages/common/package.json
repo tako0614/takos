@@ -2,41 +2,15 @@
   "name": "takos-common",
   "version": "1.0.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./id": {
-      "types": "./dist/id.d.ts",
-      "import": "./dist/id.js"
-    },
-    "./validation": {
-      "types": "./dist/validation.d.ts",
-      "import": "./dist/validation.js"
-    },
-    "./abort": {
-      "types": "./dist/abort.d.ts",
-      "import": "./dist/abort.js"
-    },
-    "./errors": {
-      "types": "./dist/errors.d.ts",
-      "import": "./dist/errors.js"
-    },
-    "./middleware/hono": {
-      "types": "./dist/middleware/hono.d.ts",
-      "import": "./dist/middleware/hono.js"
-    },
-    "./logger": {
-      "types": "./dist/logger.d.ts",
-      "import": "./dist/logger.js"
-    },
-    "./env-parse": {
-      "types": "./dist/env-parse.d.ts",
-      "import": "./dist/env-parse.js"
-    }
+    ".": "./src/index.ts",
+    "./id": "./src/id.ts",
+    "./validation": "./src/validation.ts",
+    "./abort": "./src/abort.ts",
+    "./errors": "./src/errors.ts",
+    "./middleware/hono": "./src/middleware/hono.ts",
+    "./logger": "./src/logger.ts",
+    "./env-parse": "./src/env-parse.ts"
   },
   "scripts": {
     "build": "tsc",

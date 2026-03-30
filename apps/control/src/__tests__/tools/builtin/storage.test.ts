@@ -34,7 +34,7 @@ vi.mock('@/db', () => {
       })),
     }),
     files: { id: 'id', accountId: 'account_id', path: 'path', sha256: 'sha256', size: 'size' },
-    resources: { id: 'id', ownerAccountId: 'owner_account_id', accountId: 'account_id', name: 'name', type: 'type', status: 'status', cfId: 'cf_id', cfName: 'cf_name' },
+    resources: { id: 'id', ownerAccountId: 'owner_account_id', accountId: 'account_id', name: 'name', type: 'type', status: 'status', providerResourceId: 'provider_resource_id', providerResourceName: 'provider_resource_name' },
   };
 });
 

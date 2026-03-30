@@ -8,6 +8,7 @@ import type {
   JwtHeartbeatPayload,
   SessionContext,
 } from './session-mappers';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -113,8 +114,8 @@ export async function getSessionHealth(c: SessionContext): Promise<Response> {
     session_id: sessionId,
     status: session.status,
     is_healthy: isHealthy,
-    last_heartbeat: (session.lastHeartbeat == null ? null : typeof session.lastHeartbeat === 'string' ? session.lastHeartbeat : session.lastHeartbeat.toISOString()),
-    created_at: (session.createdAt == null ? null : typeof session.createdAt === 'string' ? session.createdAt : session.createdAt.toISOString()) ?? new Date(0).toISOString(),
+    last_heartbeat: textDateNullable(session.lastHeartbeat),
+    created_at: textDateNullable(session.createdAt) ?? new Date(0).toISOString(),
     reason,
   });
 }

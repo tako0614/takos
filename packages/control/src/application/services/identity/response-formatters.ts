@@ -1,4 +1,5 @@
 import type { RepositoryVisibility, User } from '../../../shared/types';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 // ---------------------------------------------------------------------------
 // Repository response formatter
@@ -29,8 +30,8 @@ export function formatRepositoryResponse(
     stars: repository.stars,
     forks: repository.forks,
     git_enabled: repository.gitEnabled,
-    created_at: (repository.createdAt == null ? null : typeof repository.createdAt === 'string' ? repository.createdAt : repository.createdAt.toISOString()),
-    updated_at: (repository.updatedAt == null ? null : typeof repository.updatedAt === 'string' ? repository.updatedAt : repository.updatedAt.toISOString()),
+    created_at: textDateNullable(repository.createdAt),
+    updated_at: textDateNullable(repository.updatedAt),
   };
 }
 

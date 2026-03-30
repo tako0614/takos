@@ -111,7 +111,6 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
   async function getFirestore(): Promise<unknown> {
     if (!firestorePromise) {
       firestorePromise = (async () => {
-        // @ts-expect-error — @google-cloud/firestore is an optional dependency
         const { Firestore } = await import('@google-cloud/firestore');
         return new Firestore({
           ...(config.projectId ? { projectId: config.projectId } : {}),

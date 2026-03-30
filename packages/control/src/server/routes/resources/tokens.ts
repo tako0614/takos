@@ -301,28 +301,28 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
 
   switch (resource.type) {
     case 'd1':
-      connectionInfo.database_id = resource.cf_id || '';
-      connectionInfo.database_name = resource.cf_name || '';
-      connectionInfo.connection_url = `d1://${resource.cf_id}`;
+      connectionInfo.database_id = resource.provider_resource_id || '';
+      connectionInfo.database_name = resource.provider_resource_name || '';
+      connectionInfo.connection_url = `d1://${resource.provider_resource_id || ''}`;
       break;
 
     case 'r2':
-      connectionInfo.bucket_name = resource.cf_name || '';
-      connectionInfo.access_url = `https://${resource.cf_name}.r2.cloudflarestorage.com`;
+      connectionInfo.bucket_name = resource.provider_resource_name || '';
+      connectionInfo.access_url = `https://${resource.provider_resource_name || ''}.r2.cloudflarestorage.com`;
       break;
 
     case 'kv':
-      connectionInfo.namespace_id = resource.cf_id || '';
-      connectionInfo.namespace_name = resource.cf_name || '';
+      connectionInfo.namespace_id = resource.provider_resource_id || '';
+      connectionInfo.namespace_name = resource.provider_resource_name || '';
       break;
 
     case 'vectorize':
-      connectionInfo.index_name = resource.cf_name || '';
-      connectionInfo.index_id = resource.cf_id || '';
+      connectionInfo.index_name = resource.provider_resource_name || '';
+      connectionInfo.index_id = resource.provider_resource_id || '';
       break;
 
     default:
-      connectionInfo.resource_id = resource.cf_id || resource.id;
+      connectionInfo.resource_id = resource.provider_resource_id || resource.id;
   }
 
   return c.json({
@@ -347,29 +347,29 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
 
   switch (resource.type) {
     case 'd1':
-      connectionInfo.database_id = resource.cf_id || '';
-      connectionInfo.database_name = resource.cf_name || '';
-      connectionInfo.connection_url = `d1://${resource.cf_id}`;
+      connectionInfo.database_id = resource.provider_resource_id || '';
+      connectionInfo.database_name = resource.provider_resource_name || '';
+      connectionInfo.connection_url = `d1://${resource.provider_resource_id || ''}`;
       break;
 
     case 'r2':
-      connectionInfo.bucket_name = resource.cf_name || '';
-      connectionInfo.access_url = `https://${resource.cf_name}.r2.cloudflarestorage.com`;
+      connectionInfo.bucket_name = resource.provider_resource_name || '';
+      connectionInfo.access_url = `https://${resource.provider_resource_name || ''}.r2.cloudflarestorage.com`;
       break;
 
     case 'kv':
-      connectionInfo.namespace_id = resource.cf_id || '';
-      connectionInfo.namespace_name = resource.cf_name || '';
+      connectionInfo.namespace_id = resource.provider_resource_id || '';
+      connectionInfo.namespace_name = resource.provider_resource_name || '';
       break;
 
     case 'vectorize':
-      connectionInfo.index_name = resource.cf_name || '';
-      connectionInfo.index_id = resource.cf_id || '';
+      connectionInfo.index_name = resource.provider_resource_name || '';
+      connectionInfo.index_id = resource.provider_resource_id || '';
       break;
 
     default:
       connectionInfo.resource_id =
-        resource.cf_id || (resource as { _internal_id?: string })._internal_id || '';
+        resource.provider_resource_id || (resource as { _internal_id?: string })._internal_id || '';
   }
 
   return c.json({

@@ -1,7 +1,3 @@
-type BrowserBinding = {
-  connect(): Promise<{ webSocketDebuggerUrl: string }>;
-};
-
 /** Runtime type guard that checks whether the page object exposes a `pdf` method. */
 function hasPdfMethod(
   page: object,
@@ -10,11 +6,13 @@ function hasPdfMethod(
 }
 
 export async function renderPdfWithCloudflareBrowser(
-  browserBinding: BrowserBinding,
+  browserBinding: unknown,
   html: string,
 ): Promise<ArrayBuffer> {
   const { default: puppeteer } = await import('@cloudflare/puppeteer');
-  const browser = await puppeteer.launch(browserBinding);
+  // The binding is cast to satisfy @cloudflare/puppeteer's BrowserWorker
+  // type which is only available inside the Workers runtime.
+  const browser = await puppeteer.launch(browserBinding as Parameters<typeof puppeteer.launch>[0]);
   try {
     const page = await browser.newPage();
     const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
@@ -23,7 +21,13 @@ export async function renderPdfWithCloudflareBrowser(
     if (!hasPdfMethod(page)) {
       throw new Error('PDF export not supported by browser runtime');
     }
-    return page.pdf({ format: 'A4', printBackground: true });
+    const result = await page.pdf({ format: 'A4', printBackground: true });
+    // Normalise to ArrayBuffer — Cloudflare puppeteer may return a Buffer.
+    if (result instanceof ArrayBuffer) {
+      return result;
+    }
+    const bytes = result as unknown as Uint8Array;
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   } finally {
     await browser.close();
   }

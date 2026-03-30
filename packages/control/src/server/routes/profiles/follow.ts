@@ -11,6 +11,7 @@ import { accountFollows, accountFollowRequests, accounts } from '../../../infra/
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
 import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-utils';
 import type { FollowUserResponse, FollowRequestResponse } from './dto';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const followListQuerySchema = z.object({
   limit: z.string().optional(),
@@ -158,7 +159,7 @@ export const followRoutes = new Hono<OptionalAuthRouteEnv>()
         bio: row.requesterBio,
         is_following: followingSet.has(row.requesterId),
       },
-      created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+      created_at: textDate(row.createdAt),
     };
   });
 

@@ -2,6 +2,7 @@ import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
 import { generateId } from '../../../shared/utils';
 import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db';
 import { eq, and, ne, desc } from 'drizzle-orm';
+import { textDate } from '../../../shared/utils/db-guards';
 
 // Types
 export interface GitCommit {
@@ -401,7 +402,7 @@ export class GitService {
       insertions: commit.insertions,
       deletions: commit.deletions,
       tree_hash: commit.treeHash,
-      created_at: (commit.createdAt == null ? null : typeof commit.createdAt === 'string' ? commit.createdAt : commit.createdAt.toISOString()),
+      created_at: textDate(commit.createdAt),
     };
   }
 

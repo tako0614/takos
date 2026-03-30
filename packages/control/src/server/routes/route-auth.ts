@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User, SpaceRole } from '../../../shared/types';
-import type { SpaceAccess } from '../../../application/services/identity/space-access';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
+import type { Env, User, SpaceRole } from '../../shared/types';
+import type { SpaceAccess } from '../../application/services/identity/space-access';
+import { checkSpaceAccess } from '../../application/services/identity/space-access';
 import { AppError, ErrorCodes, NotFoundError, InternalError, AuthenticationError, BadRequestError as BadRequestErr } from 'takos-common/errors';
 
 // Re-export Error classes and types from takos-common/errors (canonical location)
@@ -26,7 +26,7 @@ export {
 } from 'takos-common/errors';
 
 // Re-export non-deprecated helpers from error-response
-export { oauth2Error, type OAuth2ErrorResponse } from '../../../shared/utils/error-response';
+export { oauth2Error, type OAuth2ErrorResponse } from '../../shared/utils/error-response';
 
 /**
  * Base Variables type that all authenticated routes must have.

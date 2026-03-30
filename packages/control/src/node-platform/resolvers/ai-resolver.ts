@@ -3,7 +3,7 @@
  */
 import { optionalEnv } from './env-utils.ts';
 
-export async function resolveAiBinding() {
+export async function resolveAiBinding(): Promise<{ run(model: string, inputs: { text: string[] }): Promise<{ data: number[][] }> } | undefined> {
   const openAiKey = optionalEnv('OPENAI_API_KEY');
   if (openAiKey) {
     const { createOpenAiAiBinding } = await import('../../adapters/openai-binding.ts');
@@ -25,14 +25,14 @@ export async function resolvePgPool(postgresUrl: string | null): Promise<PgPool 
 
   type PgPoolConstructor = new (opts: { connectionString: string }) => PgPool;
 
-  // @ts-expect-error -- pg is an optional dependency; type declarations may not be available.
   const pg: Record<string, unknown> = await import('pg');
   const pgModule = (pg.default ?? pg) as Record<string, unknown>;
   const Pool = pgModule.Pool as PgPoolConstructor;
   return new Pool({ connectionString: postgresUrl });
 }
 
-export async function resolveVectorizeBinding(pool: PgPool | undefined) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function resolveVectorizeBinding(pool: PgPool | undefined): Promise<Record<string, (...args: any[]) => Promise<unknown>> | undefined> {
   if (!pool) return undefined;
   const { createPgVectorStore } = await import('../../adapters/pgvector-store.ts');
   return createPgVectorStore({ pool });

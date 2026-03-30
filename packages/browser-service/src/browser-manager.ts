@@ -1,6 +1,6 @@
 /**
- * Browser lifecycle manager.
- * Manages a Playwright persistent context (Chromium) with tab tracking.
+ * ブラウザライフサイクル管理クラスです。
+ * タブ管理を行いながら Playwright の永続コンテキスト（Chromium）を管理します。
  */
 
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
@@ -14,7 +14,7 @@ const PAGE_LOAD_TIMEOUT_MS = 30_000;
 const DEFAULT_ACTION_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
-// Action types
+// アクション種別
 // ---------------------------------------------------------------------------
 
 export type BrowserAction =
@@ -53,7 +53,7 @@ interface TabInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Action handlers
+// アクションハンドラ
 // ---------------------------------------------------------------------------
 
 type ActionOf<T extends BrowserAction['type']> = Extract<BrowserAction, { type: T }>;
@@ -117,7 +117,7 @@ const actionHandlers: ActionHandlerMap = {
   },
 };
 
-/** Type-safe dispatch: narrows `action` to the handler's expected variant. */
+/** 型安全なディスパッチ: `action` をハンドラが期待する型へ絞り込みます。 */
 function dispatchAction(page: Page, action: BrowserAction): Promise<string> {
   const handler = actionHandlers[action.type] as (
     page: Page,
@@ -128,7 +128,7 @@ function dispatchAction(page: Page, action: BrowserAction): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// BrowserManager
+// ブラウザマネージャ
 // ---------------------------------------------------------------------------
 
 export class BrowserManager {
@@ -160,7 +160,7 @@ export class BrowserManager {
       ignoreHTTPSErrors: false,
     });
 
-    // Use the default page created by persistent context
+    // 永続コンテキストで生成されたデフォルトページを使用
     const pages = this.context.pages();
     this.activePage = pages[0] ?? await this.context.newPage();
 
@@ -242,7 +242,7 @@ export class BrowserManager {
   async tabs(): Promise<TabInfo[]> {
     if (!this.context) return [];
     const pages = this.context.pages();
-    return Promise.all(pages.map(async (page, index) => ({
+    return await Promise.all(pages.map(async (page, index) => ({
       index,
       url: page.url(),
       title: await page.title().catch((e) => { logger.warn('Failed to get page title', { error: String(e) }); return ''; }),
@@ -270,7 +270,7 @@ export class BrowserManager {
     const page = pages[index];
     await page.close();
 
-    // Switch to last remaining page
+    // 残っている最後のページへ切り替え
     const remaining = ctx.pages();
     this.activePage = remaining.length > 0 ? remaining[remaining.length - 1] : null;
     return { ok: true };

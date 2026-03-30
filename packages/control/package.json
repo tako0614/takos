@@ -55,6 +55,7 @@
     "./git/smart/client": "./src/application/services/git-smart/client/index.ts",
     "./git/smart/operations": "./src/application/services/git-smart/operations.ts",
     "./git/source": "./src/application/services/source/index.ts",
+    "./source/app-manifest": "./src/application/services/source/app-manifest.ts",
 
     "./platform": "./src/platform/index.ts",
     "./platform/accessors": "./src/platform/accessors.ts",
@@ -92,12 +93,6 @@
 
     "./runtime/queues/workflow-runtime-client": "./src/runtime/queues/workflow-runtime-client.ts",
 
-    "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts",
-
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "src",
-    "package.json"
-  ]
+    "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts"
+  }
 }

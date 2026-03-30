@@ -1,5 +1,5 @@
 /**
- * Step execution management
+ * ステップ実行管理
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -33,15 +33,15 @@ import {
  * Step runner options
  */
 export interface StepRunnerOptions {
-  /** Custom action resolver */
+  /** カスタムアクション解決器 */
   actionResolver?: ActionResolver;
-  /** Custom shell command executor */
+  /** カスタムシェルコマンド実行器 */
   shellExecutor?: ShellExecutor;
-  /** Default timeout in minutes */
+  /** デフォルトタイムアウト（分） */
   defaultTimeout?: number;
-  /** Working directory */
+  /** 作業ディレクトリ */
   workingDirectory?: string;
-  /** Default shell */
+  /** デフォルトシェル */
   defaultShell?: Step['shell'];
 }
 
@@ -49,7 +49,7 @@ export interface StepRunnerOptions {
  * Metadata for step execution
  */
 export interface StepRunMetadata {
-  /** Zero-based step index within its job */
+  /** ジョブ内の 0 始まりインデックス */
   index?: number;
 }
 
@@ -121,15 +121,14 @@ const defaultShellExecutor: ShellExecutor = async (
   return new Promise<ShellExecutorResult>((resolve, reject) => {
     const shellExecutable = resolveShellExecutable(options.shell);
 
-    // Always invoke the shell as a separate binary with the command passed as
-    // an argument so that shell: false can be used and user-supplied content in
-    // `command` is never interpreted as a shell command name.
+    // shell: false で spawn し、`command` の内容がシェル名として
+    // 解釈されないよう、常に別バイナリとしてコマンド文字列を引数に渡す。
     let spawnFile: string;
     let spawnArgs: string[];
 
     if (shellExecutable === true) {
-      // No explicit shell requested – fall back to the platform default shell
-      // but still spawn it explicitly with shell: false.
+      // 明示的なシェル未指定時は OS 標準シェルにフォールバック
+      // するが、spawn は明示的に shell: false で実行する。
       if (process.platform === 'win32') {
         spawnFile = 'cmd.exe';
         spawnArgs = ['/d', '/s', '/c', command];
@@ -138,7 +137,7 @@ const defaultShellExecutor: ShellExecutor = async (
         spawnArgs = ['-c', command];
       }
     } else {
-      // An explicit shell binary was resolved (bash, powershell, cmd.exe, …).
+      // 明示的に解決したシェルバイナリを使用（bash/powershell/cmd.exe など）。
       if (shellExecutable === 'cmd.exe' || shellExecutable === 'cmd') {
         spawnArgs = ['/d', '/s', '/c', command];
       } else if (
@@ -148,14 +147,14 @@ const defaultShellExecutor: ShellExecutor = async (
       ) {
         spawnArgs = ['-NonInteractive', '-Command', command];
       } else {
-        // Generic POSIX-compatible shell (bash, sh, zsh, …)
+        // 汎用 POSIX シェル（bash/sh/zsh など）
         spawnArgs = ['-c', command];
       }
       spawnFile = shellExecutable;
     }
 
-    // Only pass safe host environment variables to prevent leaking secrets.
-    // Workflow-level env vars are provided via options.env.
+    // 機密情報が漏れないよう、許可されたホスト環境変数のみ渡す。
+    // ワークフローの env は options.env で渡す。
     const safeHostEnv: Record<string, string> = {};
     const ALLOWED_HOST_VARS = [
       'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE',
@@ -247,7 +246,7 @@ const defaultActionResolver: ActionResolver = async (uses: string) => {
       run: async (step, context): Promise<StepResult> => {
         const outputs: Record<string, string> = {};
 
-        // Keep checkout compatibility for workflows that read steps.<id>.outputs.path.
+        // steps.<id>.outputs.path を参照する workflow 互換性を維持
         if (actionName === 'actions/checkout') {
           const configuredPath =
             typeof step.with?.path === 'string' && step.with.path.length > 0
@@ -296,7 +295,7 @@ export class StepRunner {
   }
 
   /**
-   * Run a single step
+   * 単一ステップを実行
    */
   async runStep(
     step: Step,
@@ -313,7 +312,7 @@ export class StepRunner {
     };
 
     try {
-      // Check condition
+      // 条件判定
       if (step.if !== undefined) {
         const shouldRun = evaluateCondition(step.if, context);
         if (!shouldRun) {
@@ -326,22 +325,22 @@ export class StepRunner {
 
       result.status = 'in_progress';
 
-      // Merge environment variables
+      // 環境変数をマージ
       const env = {
         ...context.env,
         ...(step.env || {}),
       };
 
-      // Interpolate environment variables
+      // 環境変数を補間
       const interpolatedEnv = interpolateObject(env, context);
 
-      // Create step context with interpolated env
+      // 補間済み環境変数でステップコンテキストを作成
       const stepContext: ExecutionContext = {
         ...context,
         env: interpolatedEnv,
       };
 
-      // Execute based on step type
+      // ステップ種別ごとに実行
       if (step.uses) {
         await this.runAction(step, stepContext, result);
       } else if (step.run) {
@@ -363,7 +362,7 @@ export class StepRunner {
   }
 
   /**
-   * Run an action step
+   * アクションステップを実行
    */
   private async runAction(
     step: Step,
@@ -377,7 +376,7 @@ export class StepRunner {
       throw new Error(`Action not found: ${uses}`);
     }
 
-    // Interpolate with parameters
+    // パラメータを補間
     const interpolatedWith = step.with
       ? interpolateObject(step.with, context)
       : {};
@@ -390,13 +389,13 @@ export class StepRunner {
 
     const actionResult = await action.run(stepWithInterpolated, context);
 
-    // Merge outputs
+    // 出力を統合
     Object.assign(result.outputs, actionResult.outputs);
     result.conclusion = actionResult.conclusion;
   }
 
   /**
-   * Run a shell command step
+   * シェルコマンドステップを実行
    */
   private async runShell(
     step: Step,
@@ -404,18 +403,18 @@ export class StepRunner {
     sharedEnv: Record<string, string>,
     result: StepResult
   ): Promise<void> {
-    // Interpolate command
+    // コマンド文字列を補間
     const command = interpolateString(step.run!, context);
 
-    // Determine shell
+    // 使用シェルを決定
     const shell = step.shell ?? this.options.defaultShell;
 
-    // Determine working directory
+    // 作業ディレクトリを決定
     const workingDirectory =
       step['working-directory'] ?? this.options.workingDirectory;
     const interpolatedWorkDir = interpolateString(workingDirectory!, context);
 
-    // Calculate timeout
+    // タイムアウトを計算
     const timeout = (step['timeout-minutes'] ?? this.options.defaultTimeout!) * MINUTES_TO_MS;
 
     const commandFiles = await this.createCommandFiles(context);
@@ -429,7 +428,7 @@ export class StepRunner {
     };
 
     try {
-      // Execute command
+      // コマンドを実行
       const shellResult = await this.shellExecutor(command, {
         shell,
         workingDirectory: interpolatedWorkDir,
@@ -437,18 +436,18 @@ export class StepRunner {
         timeout,
       });
 
-      // Parse outputs from stdout (GitHub Actions format)
+      // stdout から GitHub Actions 形式の出力をパース
       const stdoutOutputs = parseOutputs(shellResult.stdout);
       Object.assign(result.outputs, stdoutOutputs);
 
-      // Merge command-file outputs (echo "name=value" >> $GITHUB_OUTPUT)
+      // コマンドファイル出力（echo "name=value" >> $GITHUB_OUTPUT）を統合
       const commandFileOutputs = await this.parseCommandFileOutputs(commandFiles.output);
       Object.assign(result.outputs, commandFileOutputs);
 
-      // Persist GITHUB_ENV and GITHUB_PATH updates for later steps.
+      // GITHUB_ENV と GITHUB_PATH の更新を後続ステップへ反映
       await this.applyCommandFileEnvironmentUpdates(sharedEnv, commandFiles, shellEnv);
 
-      // Set conclusion based on exit code
+      // 終了コードで結果を確定
       result.conclusion = shellResult.exitCode === 0 ? 'success' : 'failure';
 
       if (shellResult.exitCode !== 0) {
@@ -512,7 +511,7 @@ export class StepRunner {
     }
   }
 
-  /** @see {@link MAX_COMMAND_FILE_BYTES} in constants.ts */
+  /** @see {@link MAX_COMMAND_FILE_BYTES}（constants.ts の定義参照） */
   private static readonly MAX_COMMAND_FILE_BYTES = MAX_COMMAND_FILE_BYTES;
 
   private async readCommandFile(path: string): Promise<string> {
@@ -537,7 +536,7 @@ export class StepRunner {
     try {
       await rm(path, { recursive: true, force: true });
     } catch {
-      // Command-file cleanup should never fail step execution.
+      // コマンドファイルのクリーンアップはステップ失敗要因にしない
     }
   }
 }

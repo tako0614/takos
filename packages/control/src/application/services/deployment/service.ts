@@ -90,8 +90,13 @@ export class DeploymentService {
 
     const strategy = input.strategy ?? 'direct';
     const requestedCanaryWeight = input.canaryWeight ?? 1;
+    const defaultProvider = input.provider
+      ?? (!isContainerDeploy
+        && (!this.env.CF_ACCOUNT_ID || !this.env.CF_API_TOKEN || !this.env.WFP_DISPATCH_NAMESPACE)
+        ? { name: 'runtime-host' as const }
+        : undefined);
     const serializedTarget = serializeDeploymentTarget({
-      provider: input.provider,
+      provider: defaultProvider,
       target: input.target,
     });
     const normalizedTarget = parseDeploymentTargetConfig({

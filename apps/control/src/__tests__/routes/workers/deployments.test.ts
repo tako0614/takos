@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getServiceForUser: vi.fn(),
   getServiceForUserWithRole: vi.fn(),
   DeploymentService: vi.fn(),
+  upsertGroupDesiredWorkload: vi.fn(),
 }));
 
 vi.mock('@/services/platform/workers', () => ({
@@ -17,6 +18,10 @@ vi.mock('@/services/platform/workers', () => ({
 
 vi.mock('@/services/deployment/index', () => ({
   DeploymentService: mocks.DeploymentService,
+}));
+
+vi.mock('@/services/deployment/group-desired-projector', () => ({
+  upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
 }));
 
 import workersDeployments from '@/routes/workers/deployments';

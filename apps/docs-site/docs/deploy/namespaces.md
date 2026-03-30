@@ -7,7 +7,7 @@
 ## 基本的な使い方
 
 ```bash
-takos deploy-group --env staging --namespace takos-staging-tenants
+takos apply --env staging --namespace takos-staging-tenants
 ```
 
 ## namespace あり / なしの違い
@@ -28,26 +28,27 @@ takos deploy-group --env staging --namespace takos-staging-tenants
 
 ```bash
 # テナント A
-takos deploy-group --env production \
+takos apply --env production \
   --namespace production-tenants \
   --group tenant-a
 
 # テナント B
-takos deploy-group --env production \
+takos apply --env production \
   --namespace production-tenants \
   --group tenant-b
 ```
 
 `--group` でグループ名を指定すると、Worker 名のプレフィックスが変わります。これにより、同じ namespace 内で複数テナントの Worker を共存させられます。
 
-## wrangler.toml との組み合わせ
+## target 指定との組み合わせ
 
-`--wrangler-config` と `--namespace` を組み合わせると、既存の wrangler.toml に `dispatch_namespace` field を注入してからデプロイします。
+namespace は全体 apply にも部分 apply にも使えます。
 
 ```bash
-takos deploy-group --wrangler-config wrangler.toml \
+takos apply \
   --env staging \
-  --namespace takos-staging-tenants
+  --namespace takos-staging-tenants \
+  --target workers.web
 ```
 
 ## 注意点
@@ -58,6 +59,6 @@ takos deploy-group --wrangler-config wrangler.toml \
 
 ## 次のステップ
 
-- [deploy-group](/deploy/deploy-group) --- デプロイコマンドの詳細
+- [apply](/deploy/apply) --- `takos apply` の詳細
 - [Store 経由デプロイ](/deploy/store-deploy) --- Store 経由のデプロイ
 - [トラブルシューティング](/deploy/troubleshooting) --- よくあるエラーと対処

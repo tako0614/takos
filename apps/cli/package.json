@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "publish:jsr": "npx jsr publish"
   },
   "dependencies": {
     "takos-actions-engine": "workspace:*",
@@ -35,11 +35,6 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "keywords": [
     "takos",
     "cli",
@@ -61,8 +56,5 @@
   "homepage": "https://takos.jp",
   "bugs": {
     "url": "https://github.com/takos-platform/cli/issues"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

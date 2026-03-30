@@ -247,7 +247,7 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
     const imageRef = payload.target.artifact?.image_ref ?? null;
     const exposedPort = payload.target.artifact?.exposed_port ?? 8080;
     const healthPath = payload.target.artifact?.health_path ?? '/health';
-    const runtime: NonNullable<DeployPayload['runtime']> = payload.runtime ?? {};
+    const runtime: NonNullable<DeployPayload['runtime']> = payload.runtime ?? { compatibility_flags: [] };
 
     let newContainerId: string | null = null;
     let resolvedEndpoint: { kind: 'http-url'; base_url: string } | null = null;

@@ -175,6 +175,8 @@ export async function stopSession(
   const repo = await db.select({ defaultBranch: repositories.defaultBranch }).from(repositories).where(eq(repositories.id, repoId)).get();
   const syncBranch = session.branch || repo?.defaultBranch || 'main';
 
+  const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
+
   let pushBeforeSha: string | null = null;
   try {
     const branch = await gitStore.getBranch(dbBinding, repoId, syncBranch);

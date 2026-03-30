@@ -1,13 +1,13 @@
 /**
- * GitHub Actions compatible workflow type definitions
+ * GitHub Actions 互換のワークフロー型定義
  */
 
 // =============================================================================
-// Trigger Configuration Types
+// トリガー設定の型定義
 // =============================================================================
 
 /**
- * Branch/tag filter configuration
+ * ブランチ/タグフィルター設定
  */
 export interface BranchFilter {
   branches?: string[];
@@ -19,14 +19,14 @@ export interface BranchFilter {
 }
 
 /**
- * Pull request event trigger configuration
+ * プルリクエストイベントのトリガー設定
  */
 export interface PullRequestTriggerConfig extends BranchFilter {
   types?: PullRequestEventType[];
 }
 
 /**
- * Pull request event types
+ * プルリクエストイベント種別
  */
 export type PullRequestEventType =
   | 'opened'
@@ -44,7 +44,7 @@ export type PullRequestEventType =
   | 'auto_merge_disabled';
 
 /**
- * Workflow dispatch input definition
+ * workflow_dispatch 入力定義
  */
 export interface WorkflowDispatchInput {
   description?: string;
@@ -55,28 +55,28 @@ export interface WorkflowDispatchInput {
 }
 
 /**
- * Workflow dispatch trigger configuration
+ * workflow_dispatch トリガー設定
  */
 export interface WorkflowDispatchConfig {
   inputs?: Record<string, WorkflowDispatchInput>;
 }
 
 /**
- * Schedule trigger configuration (cron)
+ * スケジュールトリガー設定（cron）
  */
 export interface ScheduleTriggerConfig {
   cron: string;
 }
 
 /**
- * Repository dispatch trigger configuration
+ * repository_dispatch トリガー設定
  */
 export interface RepositoryDispatchConfig {
   types?: string[];
 }
 
 /**
- * Workflow call input definition
+ * workflow_call 入力定義
  */
 export interface WorkflowCallInput {
   description?: string;
@@ -86,7 +86,7 @@ export interface WorkflowCallInput {
 }
 
 /**
- * Workflow call output definition
+ * workflow_call 出力定義
  */
 export interface WorkflowCallOutput {
   description?: string;
@@ -94,7 +94,7 @@ export interface WorkflowCallOutput {
 }
 
 /**
- * Workflow call secret definition
+ * workflow_call シークレット定義
  */
 export interface WorkflowCallSecret {
   description?: string;
@@ -102,7 +102,7 @@ export interface WorkflowCallSecret {
 }
 
 /**
- * Workflow call trigger configuration
+ * workflow_call トリガー設定
  */
 export interface WorkflowCallConfig {
   inputs?: Record<string, WorkflowCallInput>;
@@ -111,7 +111,7 @@ export interface WorkflowCallConfig {
 }
 
 /**
- * All possible workflow triggers
+ * 利用可能な全トリガー
  */
 export interface WorkflowTrigger {
   push?: BranchFilter | null;
@@ -121,12 +121,12 @@ export interface WorkflowTrigger {
   workflow_call?: WorkflowCallConfig | null;
   schedule?: ScheduleTriggerConfig[];
   repository_dispatch?: RepositoryDispatchConfig | null;
-  // Issue events
+  // イベント: issue
   issues?: { types?: string[] } | null;
   issue_comment?: { types?: string[] } | null;
-  // Release events
+  // イベント: release
   release?: { types?: string[] } | null;
-  // Other common events
+  // その他の汎用イベント
   create?: null;
   delete?: null;
   fork?: null;
@@ -134,49 +134,49 @@ export interface WorkflowTrigger {
 }
 
 // =============================================================================
-// Step Types
+// ステップ定義
 // =============================================================================
 
 /**
- * Step definition
+ * ステップ定義
  */
 export interface Step {
-  /** Step identifier */
+  /** ステップ ID */
   id?: string;
-  /** Step display name */
+  /** ステップ表示名 */
   name?: string;
-  /** Action to use (e.g., "actions/checkout@v4") */
+  /** 使用するアクション（例: "actions/checkout@v4"） */
   uses?: string;
-  /** Shell command to run */
+  /** 実行するシェルコマンド */
   run?: string;
-  /** Working directory for run steps */
+  /** run ステップの作業ディレクトリ */
   'working-directory'?: string;
-  /** Shell to use for run steps */
+  /** run ステップで使うシェル */
   shell?: 'bash' | 'pwsh' | 'python' | 'sh' | 'cmd' | 'powershell';
-  /** Input parameters for actions */
+  /** アクションに渡す入力パラメータ */
   with?: Record<string, unknown>;
-  /** Environment variables for this step */
+  /** このステップの環境変数 */
   env?: Record<string, string>;
-  /** Conditional execution */
+  /** 条件付き実行 */
   if?: string;
-  /** Continue on error */
+  /** エラー時も継続 */
   'continue-on-error'?: boolean;
-  /** Timeout in minutes */
+  /** タイムアウト（分） */
   'timeout-minutes'?: number;
 }
 
 // =============================================================================
-// Job Types
+// ジョブ型定義
 // =============================================================================
 
 /**
- * Strategy matrix configuration
- * Note: Uses a more flexible type to support both arrays and include/exclude
+ * 戦略マトリクス設定
+ * 配列と include/exclude の両方を扱うため、より柔軟な型を使用
  */
 export type MatrixConfig = Record<string, unknown[] | Record<string, unknown>[]>;
 
 /**
- * Job strategy configuration
+ * ジョブ戦略設定
  */
 export interface JobStrategy {
   matrix?: MatrixConfig;
@@ -185,7 +185,7 @@ export interface JobStrategy {
 }
 
 /**
- * Container configuration
+ * コンテナ設定
  */
 export interface ContainerConfig {
   image: string;
@@ -200,12 +200,12 @@ export interface ContainerConfig {
 }
 
 /**
- * Job output definition
+ * ジョブ出力定義
  */
 export type JobOutputs = Record<string, string>;
 
 /**
- * Permissions configuration
+ * 権限設定
  */
 export type PermissionLevel = 'read' | 'write' | 'none';
 export type Permissions =
@@ -214,7 +214,7 @@ export type Permissions =
   | Record<string, PermissionLevel>;
 
 /**
- * Concurrency configuration
+ * 同時実行制御設定
  */
 export interface ConcurrencyConfig {
   group: string;
@@ -222,7 +222,7 @@ export interface ConcurrencyConfig {
 }
 
 /**
- * Job defaults configuration
+ * ジョブ既定値設定
  */
 export interface JobDefaults {
   run?: {
@@ -232,238 +232,239 @@ export interface JobDefaults {
 }
 
 /**
- * Job definition
+ * ジョブ定義
  */
 export interface Job {
-  /** Job display name */
+  /** ジョブ表示名 */
   name?: string;
-  /** Runner label or runner group */
+  /** ランナーラベルまたはランナーグループ */
   'runs-on': string | string[];
-  /** Job dependencies */
+  /** 依存ジョブ */
   needs?: string | string[];
-  /** Conditional execution */
+  /** 条件付き実行 */
   if?: string;
-  /** Environment variables for all steps */
+  /** 全ステップ共通の環境変数 */
   env?: Record<string, string>;
-  /** Job steps */
+  /** ジョブステップ */
   steps: Step[];
-  /** Job outputs */
+  /** ジョブ出力 */
   outputs?: JobOutputs;
-  /** Build matrix strategy */
+  /** マトリクス戦略 */
   strategy?: JobStrategy;
-  /** Container to run job in */
+  /** ジョブ実行用コンテナ */
   container?: string | ContainerConfig;
-  /** Service containers */
+  /** サービスコンテナ */
   services?: Record<string, ContainerConfig>;
-  /** Timeout in minutes */
+  /** タイムアウト（分） */
   'timeout-minutes'?: number;
-  /** Continue workflow on job failure */
+  /** ジョブ失敗時にワークフローを継続する */
   'continue-on-error'?: boolean;
-  /** Job permissions */
+  /** ジョブ権限 */
   permissions?: Permissions;
-  /** Concurrency settings */
+  /** 同時実行設定 */
   concurrency?: string | ConcurrencyConfig;
-  /** Default settings for run steps */
+  /** run ステップの既定設定 */
   defaults?: JobDefaults;
-  /** Environment for deployment */
+  /** デプロイ先環境 */
   environment?: string | { name: string; url?: string };
 }
 
 // =============================================================================
-// Workflow Types
+// ワークフロー型定義
 // =============================================================================
 
 /**
- * Complete workflow definition
+ * 完全なワークフロー定義
  */
 export interface Workflow {
-  /** Workflow display name */
+  /** ワークフロー表示名 */
   name?: string;
-  /** Trigger events */
+  /** トリガーイベント */
   on: WorkflowTrigger | string | string[];
-  /** Global environment variables */
+  /** グローバル環境変数 */
   env?: Record<string, string>;
-  /** Job definitions */
+  /** ジョブ定義 */
   jobs: Record<string, Job>;
-  /** Global permissions */
+  /** グローバル権限 */
   permissions?: Permissions;
-  /** Global concurrency settings */
+  /** グローバル同時実行設定 */
   concurrency?: string | ConcurrencyConfig;
-  /** Default settings for all jobs */
+  /** 全ジョブ共通の既定設定 */
   defaults?: JobDefaults;
 }
 
 // =============================================================================
-// Execution State Types
+// 実行状態型
 // =============================================================================
 
 /**
- * GitHub Actions workflow run status.
+ * GitHub Actions ワークフロー実行ステータス
  *
- * This is the *Actions* domain status — intentionally different from the *Agent* RunStatus
- * ('pending'|'queued'|'running'|'completed'|'failed'|'cancelled') in packages/control/src/shared/types/models.ts.
- * The web UI (apps/control/web/src/views/repos/components/actions/actions-types.ts) extends this
- * with an additional 'waiting' value for UI display of concurrency-blocked runs.
+ * これは *Actions* ドメインのステータスで、packages/control 側の
+ * Agent RunStatus（'pending'|'queued'|'running'|'completed'|'failed'|'cancelled'）と
+ * 意図的に異なる形式。
+ * Web UI（apps/control/web/src/views/repos/components/actions/actions-types.ts）では
+ * concurrency ブロック中表示用に 'waiting' を追加している。
  */
 export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'cancelled';
 
 /**
- * Run conclusion
+ * 実行結果
  */
 export type Conclusion = 'success' | 'failure' | 'cancelled' | 'skipped';
 
 /**
- * Step execution result
+ * ステップ実行結果
  */
 export interface StepResult {
-  /** Step identifier */
+  /** ステップ ID */
   id?: string;
-  /** Step name */
+  /** ステップ名 */
   name?: string;
-  /** Execution status */
+  /** 実行状態 */
   status: RunStatus;
-  /** Final conclusion */
+  /** 最終結果 */
   conclusion?: Conclusion;
-  /** Step outputs */
+  /** ステップ出力 */
   outputs: Record<string, string>;
-  /** Start time */
+  /** 開始時刻 */
   startedAt?: Date;
-  /** End time */
+  /** 終了時刻 */
   completedAt?: Date;
-  /** Error message if failed */
+  /** 失敗時のエラーメッセージ */
   error?: string;
 }
 
 /**
- * Job execution result
+ * ジョブ実行結果
  */
 export interface JobResult {
-  /** Job identifier */
+  /** ジョブ ID */
   id: string;
-  /** Job name */
+  /** ジョブ名 */
   name?: string;
-  /** Execution status */
+  /** 実行状態 */
   status: RunStatus;
-  /** Final conclusion */
+  /** 最終結果 */
   conclusion?: Conclusion;
-  /** Step results */
+  /** ステップ結果 */
   steps: StepResult[];
-  /** Job outputs */
+  /** ジョブ出力 */
   outputs: Record<string, string>;
-  /** Start time */
+  /** 開始時刻 */
   startedAt?: Date;
-  /** End time */
+  /** 終了時刻 */
   completedAt?: Date;
-  /** Matrix values if part of matrix build */
+  /** マトリクス実行時の値 */
   matrix?: Record<string, unknown>;
 }
 
 /**
- * Workflow run result
+ * ワークフロー実行結果
  */
 export interface WorkflowResult {
-  /** Run ID */
+  /** 実行 ID */
   id: string;
-  /** Workflow name */
+  /** ワークフロー名 */
   name?: string;
-  /** Execution status */
+  /** 実行状態 */
   status: RunStatus;
-  /** Final conclusion */
+  /** 最終結果 */
   conclusion?: Conclusion;
-  /** Job results */
+  /** ジョブ結果 */
   jobs: Record<string, JobResult>;
-  /** Trigger event */
+  /** トリガーイベント */
   event: string;
-  /** Start time */
+  /** 開始時刻 */
   startedAt?: Date;
-  /** End time */
+  /** 終了時刻 */
   completedAt?: Date;
 }
 
 // =============================================================================
-// Context Types (for expression evaluation)
+// コンテキスト型（式評価用）
 // =============================================================================
 
 /**
- * GitHub context
+ * GitHub コンテキスト
  */
 export interface GitHubContext {
-  /** Event name that triggered the workflow */
+  /** ワークフローを起動したイベント名 */
   event_name: string;
-  /** Event payload */
+  /** イベントペイロード */
   event: Record<string, unknown>;
-  /** Git ref (branch or tag) */
+  /** Git リファレンス（ブランチ/タグ） */
   ref: string;
-  /** Git ref name (branch or tag name) */
+  /** リファレンス名（ブランチまたはタグ名） */
   ref_name: string;
-  /** Git SHA */
+  /** Git SHA（コミットハッシュ） */
   sha: string;
-  /** Repository owner and name */
+  /** リポジトリ所有者とリポジトリ名 */
   repository: string;
-  /** Repository owner */
+  /** リポジトリ所有者 */
   repository_owner: string;
-  /** Actor (user who triggered) */
+  /** 実行者 */
   actor: string;
-  /** Workflow name */
+  /** ワークフロー名 */
   workflow: string;
-  /** Job name */
+  /** ジョブ名 */
   job: string;
-  /** Run ID */
+  /** 実行 ID */
   run_id: string;
-  /** Run number */
+  /** 実行番号 */
   run_number: number;
-  /** Run attempt */
+  /** 再試行回数 */
   run_attempt: number;
-  /** Server URL */
+  /** サーバー URL */
   server_url: string;
-  /** API URL */
+  /** API の URL */
   api_url: string;
-  /** GraphQL URL */
+  /** GraphQL の URL */
   graphql_url: string;
-  /** Workspace path */
+  /** ワークスペースパス */
   workspace: string;
-  /** Action name */
+  /** アクション名 */
   action: string;
-  /** Action path */
+  /** アクションパス */
   action_path: string;
-  /** Token */
+  /** トークン */
   token: string;
-  /** Head ref (for PRs) */
+  /** PR ヘッド参照 */
   head_ref?: string;
-  /** Base ref (for PRs) */
+  /** PR ベース参照 */
   base_ref?: string;
 }
 
 /**
- * Runner context
+ * Runner コンテキスト
  */
 export interface RunnerContext {
-  /** Runner name */
+  /** ランナー名 */
   name: string;
-  /** Runner OS */
+  /** ランナー OS */
   os: 'Linux' | 'Windows' | 'macOS';
-  /** Runner architecture */
+  /** ランナーアーキテクチャ */
   arch: 'X86' | 'X64' | 'ARM' | 'ARM64';
-  /** Temp directory */
+  /** テンポラリディレクトリ */
   temp: string;
-  /** Tool cache directory */
+  /** ツールキャッシュディレクトリ */
   tool_cache: string;
-  /** Debug mode */
+  /** デバッグモード */
   debug: string;
 }
 
 /**
- * Job context
+ * ジョブコンテキスト
  */
 export interface JobContext {
-  /** Job status */
+  /** ジョブステータス */
   status: 'success' | 'failure' | 'cancelled';
-  /** Container information */
+  /** コンテナ情報 */
   container?: {
     id: string;
     network: string;
   };
-  /** Service containers */
+  /** サービスコンテナ */
   services?: Record<
     string,
     {
@@ -475,7 +476,7 @@ export interface JobContext {
 }
 
 /**
- * Steps context (outputs from previous steps)
+ * Steps コンテキスト（直前ステップの結果）
  */
 export type StepsContext = Record<
   string,
@@ -487,7 +488,7 @@ export type StepsContext = Record<
 >;
 
 /**
- * Needs context (outputs from dependent jobs)
+ * Needs コンテキスト（依存ジョブの結果）
  */
 export type NeedsContext = Record<
   string,
@@ -498,7 +499,7 @@ export type NeedsContext = Record<
 >;
 
 /**
- * Strategy context
+ * Strategy コンテキスト
  */
 export interface StrategyContext {
   'fail-fast': boolean;
@@ -508,17 +509,17 @@ export interface StrategyContext {
 }
 
 /**
- * Matrix context
+ * Matrix コンテキスト
  */
 export type MatrixContext = Record<string, unknown>;
 
 /**
- * Inputs context (workflow_dispatch inputs)
+ * Inputs コンテキスト（workflow_dispatch 入力）
  */
 export type InputsContext = Record<string, string | boolean | number>;
 
 /**
- * Complete execution context
+ * 実行コンテキスト
  */
 export interface ExecutionContext {
   github: GitHubContext;
@@ -535,50 +536,50 @@ export interface ExecutionContext {
 }
 
 // =============================================================================
-// Parser/Scheduler Types
+// パーサー / スケジューラー型
 // =============================================================================
 
 /**
- * Parsed workflow with metadata
+ * メタ情報付きの解析済みワークフロー
  */
 export interface ParsedWorkflow {
-  /** Parsed workflow */
+  /** 解析済みワークフロー */
   workflow: Workflow;
-  /** Parse errors/warnings */
+  /** 解析エラー／警告 */
   diagnostics: WorkflowDiagnostic[];
 }
 
 /**
- * Diagnostic severity
+ * 診断の重大度
  */
 export type DiagnosticSeverity = 'error' | 'warning' | 'info';
 
 /**
- * Workflow diagnostic (error/warning)
+ * ワークフロー診断（error/warning）
  */
 export interface WorkflowDiagnostic {
-  /** Severity level */
+  /** 重大度 */
   severity: DiagnosticSeverity;
-  /** Error/warning message */
+  /** エラー／警告メッセージ */
   message: string;
-  /** Location in YAML */
+  /** YAML 上の場所 */
   path?: string;
-  /** Line number */
+  /** 行番号 */
   line?: number;
-  /** Column number */
+  /** カラム番号 */
   column?: number;
 }
 
 /**
- * Job execution order
+ * ジョブ実行順序
  */
 export interface ExecutionPlan {
-  /** Jobs grouped by execution phase (parallel jobs in same phase) */
+  /** 実行フェーズごとのジョブ群（同一フェーズは並列実行） */
   phases: string[][];
 }
 
 /**
- * Step executor function type
+ * ステップ実行関数の型
  */
 export type StepExecutor = (
   step: Step,
@@ -586,7 +587,7 @@ export type StepExecutor = (
 ) => Promise<StepResult>;
 
 /**
- * Action resolver function type
+ * アクション解決関数の型
  */
 export type ActionResolver = (
   uses: string

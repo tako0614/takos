@@ -2,7 +2,7 @@
  * Browser tool definitions for agent use.
  */
 
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition } from '../../tool-definitions';
 
 export const BROWSER_OPEN: ToolDefinition = {
   name: 'browser_open',

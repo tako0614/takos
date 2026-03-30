@@ -36,7 +36,6 @@ const REQUIRED_SITE_FILES = [
   "platform/resource-governance.md",
   "platform/compatibility.md",
   "deploy/index.md",
-  "deploy/deploy-group.md",
   "deploy/store-deploy.md",
   "deploy/namespaces.md",
   "deploy/rollback.md",
@@ -71,8 +70,8 @@ const REQUIRED_PAGE_SNIPPETS: Record<string, string[]> = {
     "## このページで依存してはいけない範囲",
   ],
   "reference/api.md": [
-    "## このリファレンスで依存してよい範囲",
-    "## このリファレンスで依存してはいけない範囲",
+    "## 認証",
+    "## Route families",
     "## implementation note",
     "## 次に読むページ",
   ],
@@ -174,6 +173,7 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   billingRoutes: "billing",
   authApi: "auth",
   oauthConsentApi: "oauth",
+  groupsRouter: "groups",
 };
 
 function isFile(targetPath: string): boolean {
@@ -761,6 +761,202 @@ function validateApiDocs(repoRoot: string, docsDir: string, result: ValidationRe
   }
 }
 
+// ── API endpoint drift detection ──────────────────────────────────────────
+
+const ROUTES_REL = "packages/control/src/server/routes";
+
+/** Per-file mount prefix (relative to routes/).  Takes priority over dir-level. */
+const ENDPOINT_FILE_MOUNT: Record<string, string> = {
+  "me.ts": "/me",
+  "setup.ts": "/setup",
+  "shortcuts.ts": "/shortcuts",
+  "auth-api.ts": "/auth",
+  "oauth-consent-api.ts": "/oauth",
+  "mcp.ts": "/mcp",
+  "public-share.ts": "/public",
+  "runs/sse.ts": "/runs",
+  "notifications-sse.ts": "/notifications",
+};
+
+/** Directory-level mount prefix (first path component → prefix) */
+const ENDPOINT_DIR_MOUNT: Record<string, string> = {
+  workers: "/services",
+  resources: "/resources",
+  spaces: "/spaces",
+  explore: "/explore",
+  profiles: "/users",
+  billing: "/billing",
+};
+
+const ENDPOINT_SKIP_DIRS = new Set(["activitypub-store", "auth", "oauth"]);
+
+const ENDPOINT_SKIP_FILES = new Set([
+  "api.ts",
+  "route-auth.ts",
+  "response-utils.ts",
+  "validation-utils.ts",
+  "zod-validator.ts",
+  "rpc-types.ts",
+  "smart-http.ts",
+  "well-known.ts",
+]);
+
+const ENDPOINT_SKIP_SUFFIXES = [
+  "-queries.ts",
+  "-utils.ts",
+  "-shared.ts",
+  "-mappers.ts",
+  "-context.ts",
+  "-filters.ts",
+];
+
+/** Matches Hono-style endpoint registrations: .get('/path', ...) or .get('/', ...) */
+const ENDPOINT_RE = /\.(get|post|put|patch|delete)\s*\(\s*['"](\/[^'"]*)['"]/gi;
+
+/** Matches documented endpoints in markdown table rows */
+const DOC_ENDPOINT_RE = /^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(\/api\/[^`]+)`/gm;
+
+/**
+ * Paths starting with these prefixes are root-mounted and should not have an
+ * additional mount prefix applied.  Narrowly scoped to avoid false negatives
+ * in directories like explore/ where sub-paths legitimately start with /repos/.
+ *
+ * Current cases: shortcuts.ts exports both a /shortcuts-mounted router and
+ * root-mounted shortcut-group routes whose paths start with /spaces/.
+ */
+const ABSOLUTE_PATH_SIGNALS = ["/spaces/", "/workspaces/"];
+
+function resolveEndpointMount(relPath: string): string {
+  const norm = relPath.replace(/\\/g, "/");
+  if (ENDPOINT_FILE_MOUNT[norm] !== undefined) return ENDPOINT_FILE_MOUNT[norm];
+  const topDir = norm.split("/")[0] ?? "";
+  return ENDPOINT_DIR_MOUNT[topDir] ?? "";
+}
+
+function shouldSkipEndpointFile(relPath: string): boolean {
+  const norm = relPath.replace(/\\/g, "/");
+  const parts = norm.split("/");
+  const fileName = parts[parts.length - 1] ?? "";
+  if (ENDPOINT_SKIP_DIRS.has(parts[0] ?? "")) return true;
+  if (fileName === "dto.ts") return true;
+  if (ENDPOINT_SKIP_FILES.has(fileName)) return true;
+  if (ENDPOINT_SKIP_SUFFIXES.some((s) => fileName.endsWith(s))) return true;
+  return false;
+}
+
+function extractSourceApiEndpoints(repoRoot: string): Set<string> {
+  const routesDir = path.join(repoRoot, ROUTES_REL);
+  const files = walkFiles(routesDir).filter((f) => f.endsWith(".ts"));
+  const endpoints = new Set<string>();
+
+  for (const file of files) {
+    const rel = path.relative(routesDir, file).replace(/\\/g, "/");
+    if (shouldSkipEndpointFile(rel)) continue;
+
+    const content = readFileSync(file, "utf8");
+    const mount = resolveEndpointMount(rel);
+
+    ENDPOINT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = ENDPOINT_RE.exec(content)) !== null) {
+      const method = (m[1] ?? "").toUpperCase();
+      const routePath = m[2] ?? "";
+
+      // If the path looks like a root-scoped route (e.g. shortcut group
+      // routes in shortcuts.ts that start with /spaces/), skip the mount prefix.
+      const full =
+        mount && ABSOLUTE_PATH_SIGNALS.some((h) => routePath.startsWith(h))
+          ? `/api${routePath}`
+          : `/api${mount}${routePath}`;
+      endpoints.add(`${method} ${full}`);
+
+      // /workspaces/:id is an alias for /spaces/:id — add both
+      if (full.includes("/workspaces/")) {
+        endpoints.add(`${method} ${full.replace("/workspaces/", "/spaces/")}`);
+      }
+    }
+  }
+
+  return endpoints;
+}
+
+function extractDocApiEndpoints(docsDir: string): Set<string> {
+  const content = readFileSync(path.join(docsDir, "reference", "api.md"), "utf8");
+  const endpoints = new Set<string>();
+  DOC_ENDPOINT_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = DOC_ENDPOINT_RE.exec(content)) !== null) {
+    endpoints.add(`${(m[1] ?? "").toUpperCase()} ${m[2] ?? ""}`);
+  }
+  return endpoints;
+}
+
+/**
+ * Normalize an endpoint string for comparison:
+ * - Strip trailing slashes
+ * - Replace :paramName{regex} and :paramName with :_ for param-agnostic matching
+ */
+function normalizeEndpointForComparison(endpoint: string): string {
+  const idx = endpoint.indexOf(" ");
+  const method = endpoint.slice(0, idx);
+  let ep = endpoint.slice(idx + 1);
+  // Strip trailing slash (keep root path unchanged)
+  if (ep.length > 1 && ep.endsWith("/")) ep = ep.slice(0, -1);
+  // Normalize param names: :foo{.+} → :_, :foo → :_
+  ep = ep.replace(/:[a-zA-Z_][a-zA-Z0-9_]*(?:\{[^}]+\})?/g, ":_");
+  return `${method} ${ep}`;
+}
+
+function validateApiEndpointCoverage(
+  repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const source = extractSourceApiEndpoints(repoRoot);
+  const docs = extractDocApiEndpoints(docsDir);
+
+  // Build normalized → original maps
+  const sourceNorm = new Map<string, string>();
+  for (const e of source) {
+    const n = normalizeEndpointForComparison(e);
+    if (!sourceNorm.has(n)) sourceNorm.set(n, e);
+  }
+
+  const docNorm = new Map<string, string>();
+  for (const e of docs) {
+    const n = normalizeEndpointForComparison(e);
+    if (!docNorm.has(n)) docNorm.set(n, e);
+  }
+
+  // Known exceptions that the static scanner cannot resolve:
+  // - /workspaces/ is a documented alias of /spaces/ (only /spaces/ in tables)
+  // - Billing webhook handler is mounted separately from billing routes
+  //   but lives in the same source file, so the scanner applies the wrong prefix
+  const isKnownException = (e: string) =>
+    e.includes("/workspaces/") || e === "POST /api/billing/";
+
+  const undocumented = [...sourceNorm.entries()]
+    .filter(([n]) => !docNorm.has(n))
+    .map(([, original]) => original)
+    .filter((e) => !isKnownException(e))
+    .sort();
+  const stale = [...docNorm.entries()]
+    .filter(([n]) => !sourceNorm.has(n))
+    .map(([, original]) => original)
+    .sort();
+
+  if (undocumented.length > 0) {
+    result.errors.push(
+      `[docs] ${undocumented.length} undocumented API endpoint(s):\n${undocumented.map((e) => `  + ${e}`).join("\n")}`,
+    );
+  }
+  if (stale.length > 0) {
+    result.warnings.push(
+      `[docs] ${stale.length} possibly stale documented endpoint(s):\n${stale.map((e) => `  - ${e}`).join("\n")}`,
+    );
+  }
+}
+
 function validateSupplementalDocs(repoRoot: string, result: ValidationResult): void {
   const readmePath = path.join(repoRoot, "README.md");
   const controlDir = path.join(repoRoot, "apps", "control");
@@ -899,6 +1095,7 @@ function main(): void {
   validateManifestDocs(repoRoot, docsDir, result);
   validateCliDocs(repoRoot, docsDir, result);
   validateApiDocs(repoRoot, docsDir, result);
+  validateApiEndpointCoverage(repoRoot, docsDir, result);
   validatePlatformMatrixDoc(docsDir, result);
   validateSupplementalDocs(repoRoot, result);
   validateCurrentTruthFiles(repoRoot, docsDir, result);

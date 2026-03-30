@@ -1,4 +1,5 @@
 import type { Run, RunStatus } from '../../../shared/types';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export type RunRow = {
   id: string;
@@ -96,6 +97,6 @@ export function runRowToApi(row: RunRow): Run {
     worker_heartbeat: toNullableIsoString(serviceHeartbeat),
     started_at: toNullableIsoString(row.startedAt),
     completed_at: toNullableIsoString(row.completedAt),
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    created_at: textDate(row.createdAt),
   };
 }

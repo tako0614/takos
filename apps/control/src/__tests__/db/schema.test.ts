@@ -1210,12 +1210,14 @@ describe('schema-platform', () => {
       expect(cols.status.default).toBe('provisioning');
     });
 
-    it('has indexes on type, status, owner, cfId, and account', () => {
+    it('has indexes on type, semanticType, providerName, status, owner, providerResourceId, and account', () => {
       const idxs = indexNames(resources);
       expect(idxs).toContain('idx_resources_type');
+      expect(idxs).toContain('idx_resources_semantic_type');
+      expect(idxs).toContain('idx_resources_provider_name');
       expect(idxs).toContain('idx_resources_status');
       expect(idxs).toContain('idx_resources_owner_account_id');
-      expect(idxs).toContain('idx_resources_cf_id');
+      expect(idxs).toContain('idx_resources_provider_resource_id');
       expect(idxs).toContain('idx_resources_account_id');
     });
   });

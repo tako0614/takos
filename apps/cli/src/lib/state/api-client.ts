@@ -6,7 +6,7 @@
  * the group-state CRUD endpoints on the takos API.
  *
  * When the user is not authenticated with takos (e.g. only has a CF token
- * for deploy-group / apply), hasApiEndpoint() returns false and callers
+ * for apply), hasApiEndpoint() returns false and callers
  * silently fall back to the file-based backend — no extra login required.
  */
 
@@ -43,10 +43,7 @@ interface GroupDetailResponse {
   entities: EntityRecord[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface GroupCreateResponse {
-  group: GroupRecord;
-}
+
 
 // ---------------------------------------------------------------------------
 // Availability check
@@ -58,7 +55,7 @@ interface GroupCreateResponse {
  * back to file-based state.
  *
  * Note: This intentionally does NOT require CF tokens. When a user only
- * has CF tokens (deploy-group / apply workflow) but no takos login, the
+ * has CF tokens (apply workflow) but no takos login, the
  * caller will automatically fall back to file-based state without
  * requiring additional authentication.
  */
@@ -87,6 +84,12 @@ export function getDefaultSpaceId(): string | undefined {
 
 // ---------------------------------------------------------------------------
 // API helpers — group state CRUD
+//
+// Error convention:
+//   Read operations (readGroupStateFromApi, listGroupsFromApi) return
+//   null/empty on failure — callers fall back to local file state.
+//   Write operations (writeGroupStateToApi, deleteGroupStateFromApi) throw
+//   on failure — callers must handle or propagate the error.
 // ---------------------------------------------------------------------------
 
 /**
@@ -123,7 +126,7 @@ export async function readGroupStateFromApi(group: string): Promise<TakosState |
 export async function writeGroupStateToApi(group: string, state: TakosState): Promise<void> {
   const res = await api<void>(`/api/groups/${encodeURIComponent(group)}/state`, {
     method: 'PUT',
-    body: stateToApiPayload(state) as unknown as Record<string, unknown>,
+    body: stateToApiPayload(state),
     headers: spaceHeaders(),
   });
 
@@ -162,6 +165,11 @@ export async function listGroupsFromApi(): Promise<string[]> {
 // Response / payload converters
 // ---------------------------------------------------------------------------
 
+/** Safely extract a string from an unknown config value, with a fallback. */
+function str(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
 function apiResponseToState(data: GroupDetailResponse): TakosState {
   const { group, entities } = data;
 
@@ -184,39 +192,39 @@ function apiResponseToState(data: GroupDetailResponse): TakosState {
     switch (entity.category) {
       case 'resource':
         state.resources[entity.name] = {
-          type: (config.type as string) ?? 'unknown',
-          id: (config.id as string) ?? '',
-          binding: (config.binding as string) ?? entity.name,
-          createdAt: (config.createdAt as string) ?? '',
+          type: str(config.type, 'unknown'),
+          id: str(config.id),
+          binding: str(config.binding, entity.name),
+          createdAt: str(config.createdAt),
         };
         break;
       case 'worker':
         state.workers[entity.name] = {
-          scriptName: (config.scriptName as string) ?? '',
-          deployedAt: (config.deployedAt as string) ?? '',
-          codeHash: (config.codeHash as string) ?? '',
-          ...(config.containers ? { containers: config.containers as string[] } : {}),
+          scriptName: str(config.scriptName),
+          deployedAt: str(config.deployedAt),
+          codeHash: str(config.codeHash),
+          ...(Array.isArray(config.containers) ? { containers: config.containers as string[] } : {}),
         };
         break;
       case 'container':
         state.containers[entity.name] = {
-          deployedAt: (config.deployedAt as string) ?? '',
-          imageHash: (config.imageHash as string) ?? '',
+          deployedAt: str(config.deployedAt),
+          imageHash: str(config.imageHash),
         };
         break;
       case 'service':
         state.services[entity.name] = {
-          deployedAt: (config.deployedAt as string) ?? '',
-          imageHash: (config.imageHash as string) ?? '',
-          ...(config.ipv4 ? { ipv4: config.ipv4 as string } : {}),
+          deployedAt: str(config.deployedAt),
+          imageHash: str(config.imageHash),
+          ...(typeof config.ipv4 === 'string' ? { ipv4: config.ipv4 } : {}),
         };
         break;
       case 'route':
         state.routes[entity.name] = {
-          target: (config.target as string) ?? '',
-          ...(config.path ? { path: config.path as string } : {}),
-          ...(config.domain ? { domain: config.domain as string } : {}),
-          ...(config.url ? { url: config.url as string } : {}),
+          target: str(config.target),
+          ...(typeof config.path === 'string' ? { path: config.path } : {}),
+          ...(typeof config.domain === 'string' ? { domain: config.domain } : {}),
+          ...(typeof config.url === 'string' ? { url: config.url } : {}),
         };
         break;
     }

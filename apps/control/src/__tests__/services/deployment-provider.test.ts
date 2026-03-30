@@ -3,6 +3,7 @@ import {
   createWorkersDispatchDeploymentProvider,
   createDeploymentProvider,
   createOciDeploymentProvider,
+  createRuntimeHostDeploymentProvider,
   parseDeploymentTargetConfig,
   serializeDeploymentTarget,
 } from '@/services/deployment/provider';
@@ -55,9 +56,11 @@ describe('deployment provider helpers', () => {
 
   it('delegates cloudflare deploys to WFP', async () => {
     const wfp = {
-      createWorker: vi.fn().mockResolvedValue(undefined),
-      createWorkerWithWasm: vi.fn().mockResolvedValue(undefined),
-      workerExists: vi.fn().mockResolvedValue(true),
+      workers: {
+        createWorker: vi.fn().mockResolvedValue(undefined),
+        createWorkerWithWasm: vi.fn().mockResolvedValue(undefined),
+        workerExists: vi.fn().mockResolvedValue(true),
+      },
     };
     const provider = createWorkersDispatchDeploymentProvider(wfp as never);
 
@@ -66,15 +69,41 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: [],
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
     });
 
-    expect(wfp.createWorker).toHaveBeenCalledWith(expect.objectContaining({
+    expect(wfp.workers.createWorker).toHaveBeenCalledWith(expect.objectContaining({
       workerName: 'artifact-ref',
       workerScript: 'export default {}',
     }));
+    await expect(provider.assertRollbackTarget('artifact-ref')).resolves.toBeUndefined();
+  });
+
+  it('accepts runtime-host worker deploys without a remote provider call', async () => {
+    const provider = createRuntimeHostDeploymentProvider();
+
+    await expect(provider.deploy({
+      deployment: {} as never,
+      artifactRef: 'artifact-ref',
+      bundleContent: 'export default {}',
+      wasmContent: null,
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
+    })).resolves.toBeUndefined();
+
     await expect(provider.assertRollbackTarget('artifact-ref')).resolves.toBeUndefined();
   });
 
@@ -110,9 +139,14 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: [],
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
     })).resolves.toBeUndefined();
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://orchestrator.example.test/deploy',
@@ -136,9 +170,14 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: [],
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
     })).rejects.toThrow('OCI deployment target exposed_port must be a positive integer');
   });
 
@@ -168,10 +207,15 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: ['nodejs_compat'],
-      limits: { cpu_ms: 50 },
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: ['nodejs_compat'],
+          limits: { cpu_ms: 50 },
+        },
+      },
     });
 
     expect(fetchImpl).toHaveBeenCalledWith(
@@ -202,6 +246,7 @@ describe('deployment provider helpers', () => {
         },
       },
       runtime: {
+        profile: 'workers',
         compatibility_date: '2026-03-22',
         compatibility_flags: ['nodejs_compat'],
         limits: { cpu_ms: 50 },
@@ -229,9 +274,14 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: [],
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
     });
 
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -257,9 +307,14 @@ describe('deployment provider helpers', () => {
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: '2026-03-22',
-      compatibilityFlags: [],
+      runtime: {
+        profile: 'workers',
+        bindings: [],
+        config: {
+          compatibility_date: '2026-03-22',
+          compatibility_flags: [],
+        },
+      },
     })).rejects.toThrow('OCI deployment target requires OCI_ORCHESTRATOR_URL');
   });
 });

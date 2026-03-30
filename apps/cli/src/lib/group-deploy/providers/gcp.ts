@@ -9,7 +9,14 @@
  * graceful 'failed' result rather than throwing.
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
+import { isAlreadyExistsError } from '../resource-provider.js';
 import { execCommand } from '../cloudflare-utils.js';
+
+const GCP_ALREADY_EXISTS_PATTERNS = [
+  'already exists',
+  'ALREADY_EXISTS',
+  '409',
+];
 
 export class GCPProvider implements ResourceProvider {
   readonly name = 'gcp';
@@ -31,7 +38,7 @@ export class GCPProvider implements ResourceProvider {
       }
       const { stdout, stderr, exitCode } = await execCommand('gcloud', fullArgs);
       if (exitCode !== 0) {
-        if (stderr.includes('already exists') || stderr.includes('ALREADY_EXISTS') || stderr.includes('409')) {
+        if (isAlreadyExistsError(GCP_ALREADY_EXISTS_PATTERNS, stderr)) {
           return { ok: true, stdout, error: 'already exists' };
         }
         return { ok: false, stdout, error: stderr || `gcloud exited with code ${exitCode}` };
@@ -72,7 +79,7 @@ export class GCPProvider implements ResourceProvider {
         'gsutil', ['mb', '-l', this.region, `gs://${bucketName}`],
       );
       if (exitCode !== 0) {
-        if (stderr.includes('already exists') || stderr.includes('409')) {
+        if (isAlreadyExistsError(GCP_ALREADY_EXISTS_PATTERNS, stderr)) {
           return { name, type: 'object-storage', status: 'exists', id: bucketName };
         }
         return { name, type: 'object-storage', status: 'failed', error: stderr || `gsutil exited with code ${exitCode}` };

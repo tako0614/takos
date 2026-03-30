@@ -13,6 +13,7 @@ import type { Database } from '../../../infra/db';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { validatePathSegment } from '../../../shared/utils/path-validation';
 import { logWarn } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type StorageFileRow = SelectOf<typeof accountStorageFiles>;
 
@@ -75,7 +76,7 @@ function toApiResponse(file: StorageFileRow): StorageFileResponse {
     id: file.id, space_id: file.accountId, parent_id: file.parentId, name: file.name,
     path: file.path, type: file.type as SpaceStorageFileType, size: file.size,
     mime_type: file.mimeType, sha256: file.sha256, uploaded_by: file.uploadedByAccountId ?? null,
-    created_at: (file.createdAt == null ? null : typeof file.createdAt === 'string' ? file.createdAt : file.createdAt.toISOString()), updated_at: (file.updatedAt == null ? null : typeof file.updatedAt === 'string' ? file.updatedAt : file.updatedAt.toISOString()),
+    created_at: textDate(file.createdAt), updated_at: textDate(file.updatedAt),
   };
 }
 

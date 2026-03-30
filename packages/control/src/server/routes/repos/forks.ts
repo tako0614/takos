@@ -13,6 +13,7 @@ import { getDb } from '../../../infra/db';
 import { repositories, accounts } from '../../../infra/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type GitObjectsBucket = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
 type CommitDataBucket = Parameters<typeof gitStore.getCommitData>[0];
@@ -137,8 +138,8 @@ export default new Hono<AuthenticatedRouteEnv>()
     stars: forkedRepoData.stars,
     forks: forkedRepoData.forks,
     git_enabled: forkedRepoData.gitEnabled,
-    created_at: (forkedRepoData.createdAt == null ? null : typeof forkedRepoData.createdAt === 'string' ? forkedRepoData.createdAt : forkedRepoData.createdAt.toISOString()),
-    updated_at: (forkedRepoData.updatedAt == null ? null : typeof forkedRepoData.updatedAt === 'string' ? forkedRepoData.updatedAt : forkedRepoData.updatedAt.toISOString()),
+    created_at: textDate(forkedRepoData.createdAt),
+    updated_at: textDate(forkedRepoData.updatedAt),
   } : null;
 
   const sourceAccount = await db.select({

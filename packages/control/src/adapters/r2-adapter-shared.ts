@@ -9,7 +9,7 @@
 import type {
   R2Object,
   R2ObjectBody,
-} from '../../shared/types/bindings.ts';
+} from '../shared/types/bindings.ts';
 import type { R2ChecksumsLike, R2HTTPMetadataLike } from './r2-compat-types.ts';
 
 // ---------------------------------------------------------------------------

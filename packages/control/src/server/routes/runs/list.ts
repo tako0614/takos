@@ -12,6 +12,7 @@ import { getDb } from '../../../infra/db';
 import { runs } from '../../../infra/db/schema';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
 import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization';
+import { textDate } from '../../../shared/utils/db-guards';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -99,7 +100,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
       const runsList = result.map((row) => runRowToApi(asRunRow({ ...row, spaceId: row.accountId })));
       const lastRow = result[result.length - 1];
       const nextCursor = result.length === limit && lastRow
-        ? encodeRunListCursor((lastRow.createdAt == null ? null : typeof lastRow.createdAt === 'string' ? lastRow.createdAt : lastRow.createdAt.toISOString()), lastRow.id)
+        ? encodeRunListCursor(textDate(lastRow.createdAt), lastRow.id)
         : null;
       const normalizedCursor = parsedCursor
         ? (parsedCursor.runId

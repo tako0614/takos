@@ -4,7 +4,7 @@
  * Consolidates: browser_open, browser_goto, browser_close.
  */
 
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import {
   getBrowserSessionId,
   setBrowserSessionId,

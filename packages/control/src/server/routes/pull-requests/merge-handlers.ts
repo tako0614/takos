@@ -26,6 +26,7 @@ import { logError } from '../../../shared/utils/logger';
 import { BadRequestError, NotFoundError, InternalError, AppError } from 'takos-common/errors';
 import { findPullRequest } from './read-model';
 import { triggerPrEvent } from './workflow-trigger';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 // ---------------------------------------------------------------------------
 // Merge, Conflicts & Resolve routes
@@ -114,7 +115,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         body: mergeResult.pullRequest.description,
         state: 'closed',
         merged: true,
-        mergedAt: (mergeResult.pullRequest.mergedAt == null ? null : typeof mergeResult.pullRequest.mergedAt === 'string' ? mergeResult.pullRequest.mergedAt : mergeResult.pullRequest.mergedAt.toISOString()),
+        mergedAt: textDateNullable(mergeResult.pullRequest.mergedAt),
         headRef: mergeResult.pullRequest.headBranch,
         headSha: mergeResult.headSha,
         baseRef: mergeResult.pullRequest.baseBranch,

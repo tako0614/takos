@@ -135,7 +135,7 @@ export async function createPostgresD1Database(connectionString: string): Promis
         return result;
       } catch (error) {
         if (transactionKind === 'commit') {
-          await client.query('ROLLBACK').catch((e) => {
+          await client.query('ROLLBACK').catch((e: unknown) => {
             logWarn('ROLLBACK failed after transaction error (non-critical)', { module: 'persistent-d1', error: e instanceof Error ? e.message : String(e) });
           });
         }

@@ -4,6 +4,7 @@ export type ServiceStatus = 'pending' | 'building' | 'deployed' | 'failed' | 'st
 export interface Service {
   id: string;
   space_id: string;
+  group_id?: string | null;
   service_type: ServiceType;
   name_type: string | null;
   status: ServiceStatus;
@@ -25,16 +26,32 @@ export interface ServiceBinding {
   created_at: string;
 }
 
-export type ResourceType =
+export type ResourceCapability =
+  | 'sql'
+  | 'object_store'
+  | 'kv'
+  | 'queue'
+  | 'vector_index'
+  | 'analytics_store'
+  | 'secret'
+  | 'workflow_runtime'
+  | 'durable_namespace';
+
+export type ResourcePublicType =
   | 'd1'
   | 'r2'
-  | 'worker'
   | 'kv'
-  | 'vectorize'
   | 'queue'
+  | 'vectorize'
   | 'analyticsEngine'
-  | 'analytics_engine'
+  | 'secretRef'
   | 'workflow'
+  | 'durableObject';
+
+export type ResourceType =
+  | ResourcePublicType
+  | 'worker'
+  | 'analytics_engine'
   | 'durable_object'
   | 'assets';
 export type ResourceStatus = 'provisioning' | 'active' | 'failed' | 'deleting' | 'deleted';
@@ -44,11 +61,16 @@ export interface Resource {
   id: string;
   owner_id: string;
   space_id: string | null;
+  group_id?: string | null;
   name: string;
   type: ResourceType;
+  capability?: string;
+  implementation?: string | null;
+  driver?: string | null;
+  provider_name?: string | null;
   status: ResourceStatus;
-  cf_id: string | null;
-  cf_name: string | null;
+  provider_resource_id?: string | null;
+  provider_resource_name?: string | null;
   config: string;
   metadata: string;
   size_bytes?: number;
@@ -75,7 +97,9 @@ export type BindingType =
   | 'queue'
   | 'analyticsEngine'
   | 'analytics_engine'
+  | 'secretRef'
   | 'workflow'
+  | 'durableObject'
   | 'service';
 
 export type AppType = 'platform' | 'builtin' | 'custom';

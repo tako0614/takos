@@ -10,6 +10,7 @@ import type { ResolveReadableCommitResult } from '../../../application/services/
 // ---------------------------------------------------------------------------
 
 export { sanitizeRepoName } from '../../../shared/utils';
+export { type RepoBucketBinding, type GitBucket, toGitBucket } from '../../../shared/utils/git-bucket';
 
 // ---------------------------------------------------------------------------
 // Error / response helpers

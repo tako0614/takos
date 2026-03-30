@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
+import type * as DbModule from '@/db';
+import type * as SharedUtilsModule from '@/shared/utils';
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -7,12 +9,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
+  ...(await importOriginal<typeof DbModule>()),
   getDb: mocks.getDb,
 }));
 
 vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
+  ...(await importOriginal<typeof SharedUtilsModule>()),
   now: mocks.now,
 }));
 
@@ -67,8 +69,8 @@ describe('getResourceById', () => {
       name: 'my-db',
       type: 'd1',
       status: 'active',
-      cfId: 'cf-123',
-      cfName: 'my-d1-db',
+      providerResourceId: 'cf-123',
+      providerResourceName: 'my-d1-db',
       config: '{}',
       metadata: '{}',
       sizeBytes: null,
@@ -87,6 +89,8 @@ describe('getResourceById', () => {
     expect(result!.owner_id).toBe('user-1');
     expect(result!.name).toBe('my-db');
     expect(result!.type).toBe('d1');
+    expect(result!.capability).toBe('sql');
+    expect(result!.implementation).toBe('d1');
     expect(result!.status).toBe('active');
   });
 });
@@ -116,8 +120,8 @@ describe('getResourceByName', () => {
       name: 'my-db',
       type: 'd1',
       status: 'active',
-      cfId: 'cf-123',
-      cfName: 'my-d1-db',
+      providerResourceId: 'cf-123',
+      providerResourceName: 'my-d1-db',
       config: '{}',
       metadata: '{}',
       sizeBytes: null,
@@ -134,6 +138,7 @@ describe('getResourceByName', () => {
     expect(result).not.toBeNull();
     expect(result!._internal_id).toBe('res-1');
     expect(result!.name).toBe('my-db');
+    expect(result!.type).toBe('d1');
   });
 });
 
@@ -162,8 +167,8 @@ describe('updateResourceMetadata', () => {
       name: 'new-name',
       type: 'd1',
       status: 'active',
-      cfId: null,
-      cfName: null,
+      providerResourceId: null,
+      providerResourceName: null,
       config: '{}',
       metadata: '{}',
       sizeBytes: null,
@@ -191,8 +196,8 @@ describe('updateResourceMetadata', () => {
       name: 'test',
       type: 'd1',
       status: 'active',
-      cfId: null,
-      cfName: null,
+      providerResourceId: null,
+      providerResourceName: null,
       config: '{"key":"value"}',
       metadata: '{"meta":"data"}',
       sizeBytes: null,
@@ -262,8 +267,8 @@ describe('insertResource', () => {
       name: 'my-new-db',
       type: 'd1',
       status: 'active',
-      cfId: 'cf-123',
-      cfName: 'my-d1-db',
+      providerResourceId: 'cf-123',
+      providerResourceName: 'my-d1-db',
       config: '{}',
       metadata: '{}',
       sizeBytes: null,
@@ -281,8 +286,8 @@ describe('insertResource', () => {
       name: 'my-new-db',
       type: 'd1',
       status: 'active',
-      cf_id: 'cf-123',
-      cf_name: 'my-d1-db',
+      provider_resource_id: 'cf-123',
+      provider_resource_name: 'my-d1-db',
       config: {},
       space_id: 'space-1',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -310,7 +315,7 @@ describe('insertFailedResource', () => {
       owner_id: 'user-1',
       name: 'failed-db',
       type: 'd1',
-      cf_name: 'my-d1-db',
+      provider_resource_name: 'my-d1-db',
       config: { error: 'provisioning failed' },
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',

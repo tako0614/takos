@@ -1,6 +1,6 @@
 import type {
   R2Object,
-} from '../../shared/types/bindings.ts';
+} from '../shared/types/bindings.ts';
 
 // ---------------------------------------------------------------------------
 // Cloudflare R2 compatibility types

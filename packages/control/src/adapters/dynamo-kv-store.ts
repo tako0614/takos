@@ -5,7 +5,7 @@ import {
   DeleteItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
-import type { KVNamespace } from '../../shared/types/bindings.ts';
+import type { KVNamespace } from '../shared/types/bindings.ts';
 
 export type DynamoKvStoreConfig = {
   region: string;

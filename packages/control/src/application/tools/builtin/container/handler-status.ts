@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { getDb, sessions, sessionRepos, repositories } from '../../../../infra/db';
 import { eq, asc } from 'drizzle-orm';
 import { callSessionApi, checkSessionHealth } from './session';

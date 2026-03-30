@@ -10,6 +10,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { checkSpaceAccess } from '../../../application/services/identity/space-access';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 
 const profilesRepo = new Hono<OptionalAuthRouteEnv>();
 type ProfileRepoContext = Context<OptionalAuthRouteEnv>;
@@ -67,8 +68,8 @@ profilesRepo.get('/:username/:repoName', async (c) => {
       stars: repo.stars,
       forks: repo.forks,
       owner_username: owner.username,
-      created_at: (repo.created_at == null ? null : typeof repo.created_at === 'string' ? repo.created_at : repo.created_at.toISOString()),
-      updated_at: (repo.updated_at == null ? null : typeof repo.updated_at === 'string' ? repo.updated_at : repo.updated_at.toISOString()),
+      created_at: textDateNullable(repo.created_at),
+      updated_at: textDateNullable(repo.updated_at),
     },
     workspace: {
       name: workspace.name,

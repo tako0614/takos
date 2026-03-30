@@ -68,7 +68,7 @@ async function validatePat(
  * Git auth middleware — requires Basic auth with PAT.
  * Sets c.get('user') on success.
  */
-export const requireGitAuth: MiddlewareHandler<{ Bindings: Env; Variables: GitAuthVariables }> = async (c, next) => {
+export const requireGitAuth: MiddlewareHandler<{ Bindings: Env; Variables: GitAuthVariables }> = async (c, next): Promise<Response | void> => {
   const authHeader = c.req.header('Authorization');
   const pat = extractPatFromBasicAuth(authHeader);
 

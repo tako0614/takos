@@ -3,13 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "description": "GitHub Actions compatible CI engine",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc",

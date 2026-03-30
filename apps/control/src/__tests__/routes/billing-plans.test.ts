@@ -489,7 +489,7 @@ describe('billing plan management routes', () => {
       planId: 'plan_payg',
       stripeCustomerId: 'cus_1',
     }));
-    expect(billingMocks.addCredits).toHaveBeenCalledWith(expect.anything(), 'acct-1', 2500, 'Pro top-up credit (starter, 2500¢)');
+    expect(billingMocks.addCredits).toHaveBeenCalledWith(expect.anything(), 'acct-1', 2500, 'Pro top-up credit (starter, 2500¢)', 'stripe:checkout:cs_2');
   });
 
   it('subscription deletion falls back to payg when balance remains', async () => {

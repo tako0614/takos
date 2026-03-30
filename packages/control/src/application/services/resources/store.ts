@@ -1,10 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Resource, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
+import type { Resource, ResourceCapability, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import { getDb, resources, resourceAccess } from '../../../infra/db';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
 import { toApiResource } from './format';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
+import { textDateNullable } from '../../../shared/utils/db-guards';
+import { getResourceTypeQueryValues } from './capabilities';
 
 function buildAccessMap(grants: { resourceId: string; permission: string }[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -16,11 +18,15 @@ function toApiResourceRow(r: {
   id: string;
   ownerAccountId: string;
   accountId: string | null;
+  groupId?: string | null;
   name: string;
   type: string;
+  semanticType?: string | null;
+  driver?: string | null;
+  providerName?: string | null;
   status: string;
-  cfId: string | null;
-  cfName: string | null;
+  providerResourceId?: string | null;
+  providerResourceName?: string | null;
   config: string;
   metadata: string;
   sizeBytes: number | null;
@@ -33,9 +39,15 @@ function toApiResourceRow(r: {
     ...r,
     ownerId: r.ownerAccountId,
     spaceId: r.accountId,
-    lastUsedAt: (r.lastUsedAt == null ? null : typeof r.lastUsedAt === 'string' ? r.lastUsedAt : r.lastUsedAt.toISOString()),
-    createdAt: (r.createdAt == null ? null : typeof r.createdAt === 'string' ? r.createdAt : r.createdAt.toISOString()) ?? new Date(0).toISOString(),
-    updatedAt: (r.updatedAt == null ? null : typeof r.updatedAt === 'string' ? r.updatedAt : r.updatedAt.toISOString()) ?? new Date(0).toISOString(),
+    groupId: r.groupId ?? null,
+    semanticType: r.semanticType ?? null,
+    driver: r.driver ?? null,
+    providerName: r.providerName ?? null,
+    providerResourceId: r.providerResourceId ?? null,
+    providerResourceName: r.providerResourceName ?? null,
+    lastUsedAt: textDateNullable(r.lastUsedAt),
+    createdAt: textDateNullable(r.createdAt) ?? new Date(0).toISOString(),
+    updatedAt: textDateNullable(r.updatedAt) ?? new Date(0).toISOString(),
   });
 }
 
@@ -148,14 +160,15 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
 export async function listResourcesByType(
   db: D1Database,
   userId: string,
-  resourceType: ResourceType
+  resourceType: ResourceType | ResourceCapability
 ) {
   const drizzle = getDb(db);
   const accessibleAccountIds = await resolveAccessibleAccountIds(db, userId);
+  const typeQueryValues = getResourceTypeQueryValues(resourceType);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(
-      eq(resources.type, resourceType),
+      inArray(resources.type, typeQueryValues),
       eq(resources.ownerAccountId, userId),
     ))
     .orderBy(desc(resources.updatedAt))
@@ -173,7 +186,7 @@ export async function listResourcesByType(
   if (sharedResourceIds.length > 0) {
     sharedResources = await drizzle.select().from(resources)
       .where(and(
-        eq(resources.type, resourceType),
+        inArray(resources.type, typeQueryValues),
         ne(resources.ownerAccountId, userId),
         inArray(resources.id, sharedResourceIds),
       ))
@@ -230,11 +243,15 @@ export async function insertResource(
     owner_id: string;
     name: string;
     type: ResourceType;
+    semantic_type?: ResourceCapability | null;
+    driver?: string | null;
+    provider_name?: string | null;
     status: ResourceStatus;
-    cf_id: string | null;
-    cf_name: string;
+    provider_resource_id?: string | null;
+    provider_resource_name?: string | null;
     config: Record<string, unknown>;
     space_id?: string | null;
+    group_id?: string | null;
     created_at: string;
     updated_at: string;
   }
@@ -245,12 +262,16 @@ export async function insertResource(
     ownerAccountId: input.owner_id,
     name: input.name,
     type: input.type,
+    semanticType: input.semantic_type ?? null,
+    driver: input.driver ?? null,
+    providerName: input.provider_name ?? null,
     status: input.status,
-    cfId: input.cf_id,
-    cfName: input.cf_name,
+    providerResourceId: input.provider_resource_id ?? null,
+    providerResourceName: input.provider_resource_name ?? null,
     config: JSON.stringify(input.config || {}),
     metadata: '{}',
     accountId: input.space_id || null,
+    groupId: input.group_id || null,
     createdAt: input.created_at,
     updatedAt: input.updated_at,
   });
@@ -265,9 +286,13 @@ export async function insertFailedResource(
     owner_id: string;
     name: string;
     type: ResourceType;
-    cf_name: string;
+    semantic_type?: ResourceCapability | null;
+    driver?: string | null;
+    provider_name?: string | null;
+    provider_resource_name?: string | null;
     config: Record<string, unknown>;
     space_id?: string | null;
+    group_id?: string | null;
     created_at: string;
     updated_at: string;
   }
@@ -278,11 +303,15 @@ export async function insertFailedResource(
     ownerAccountId: input.owner_id,
     name: input.name,
     type: input.type,
+    semanticType: input.semantic_type ?? null,
+    driver: input.driver ?? null,
+    providerName: input.provider_name ?? null,
     status: 'failed',
-    cfName: input.cf_name,
+    providerResourceName: input.provider_resource_name ?? null,
     config: JSON.stringify(input.config || {}),
     metadata: '{}',
     accountId: input.space_id || null,
+    groupId: input.group_id || null,
     createdAt: input.created_at,
     updatedAt: input.updated_at,
   });

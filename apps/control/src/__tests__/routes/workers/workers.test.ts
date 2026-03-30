@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => {
     ServiceDesiredStateService: vi.fn(),
     createOptionalCloudflareWfpProvider: vi.fn(),
     getDb: vi.fn(),
+    upsertGroupDesiredWorkload: vi.fn(),
+    removeGroupDesiredWorkload: vi.fn(),
   };
 });
 
@@ -88,6 +90,11 @@ vi.mock('@/platform/providers/cloudflare/wfp.ts', () => ({
 vi.mock('@/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/db')>()),
   getDb: mocks.getDb,
+}));
+
+vi.mock('@/services/deployment/group-desired-projector', () => ({
+  upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
+  removeGroupDesiredWorkload: mocks.removeGroupDesiredWorkload,
 }));
 
 import workersBase from '@/routes/workers/routes';

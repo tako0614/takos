@@ -60,8 +60,14 @@ function normalizeHttpMetadata(metadata?: Record<string, string> | Headers): Rec
   return { ...metadata };
 }
 
+function isBucketState(raw: BucketState | LegacyBucketState): raw is BucketState {
+  return 'objects' in raw && 'uploads' in raw &&
+    typeof (raw as Record<string, unknown>).objects === 'object' &&
+    !Array.isArray((raw as Record<string, unknown>).objects);
+}
+
 function normalizeBucketState(raw: BucketState | LegacyBucketState): BucketState {
-  if ('objects' in raw && 'uploads' in raw) {
+  if (isBucketState(raw)) {
     return {
       objects: Object.fromEntries(
         Object.entries(raw.objects).map(([key, record]) => [

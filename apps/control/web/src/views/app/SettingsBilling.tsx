@@ -58,6 +58,12 @@ export function SettingsBilling({ user }: { user: User | null }) {
           return;
         }
 
+        if (nextBilling.billing_enabled === false) {
+          setBillingSummary(null);
+          setBillingLoading(false);
+          return;
+        }
+
         setBillingSummary(nextBilling);
 
         if (!nextBilling.stripe_customer_id) {
@@ -159,6 +165,11 @@ export function SettingsBilling({ user }: { user: User | null }) {
   const handleDownloadInvoice = (invoiceId: string) => {
     window.open(`/api/billing/invoices/${invoiceId}/pdf`, '_blank', 'noopener,noreferrer');
   };
+
+  // Hide billing section entirely when billing is disabled
+  if (!billingLoading && !billingError && !billingSummary) {
+    return null;
+  }
 
   return (
     <Section title={t('billingTitle')}>

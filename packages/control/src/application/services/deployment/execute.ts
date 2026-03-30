@@ -22,7 +22,7 @@ import {
 } from './store';
 import { executeDeploymentStep, updateDeploymentState } from './state';
 import { reconcileManagedWorkerMcpServer } from '../platform/mcp';
-import type { RoutingTarget } from '../routing/types';
+import type { RoutingTarget } from '../routing/routing-models';
 import {
   applyRoutingDbUpdates,
   applyRoutingToHostnames,
@@ -138,10 +138,15 @@ export async function executeDeploymentPipeline(
           artifactRef: deployArtifactRef,
           bundleContent,
           wasmContent,
-          bindings,
-          compatibilityDate,
-          compatibilityFlags,
-          limits: runtimeConfig.limits,
+          runtime: {
+            profile: isContainerDeploy ? 'container-service' : 'workers',
+            bindings,
+            config: {
+              compatibility_date: compatibilityDate,
+              compatibility_flags: compatibilityFlags,
+              limits: runtimeConfig.limits,
+            },
+          },
         });
 
         // Store resolved endpoint from container provider in provider_state_json

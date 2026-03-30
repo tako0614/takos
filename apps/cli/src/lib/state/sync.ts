@@ -89,8 +89,12 @@ export async function syncState(
   }
 
   // Both exist — resolve by version, then by updatedAt
-  const localState = local!;
-  const remoteState = remote!;
+  if (!local || !remote) {
+    // Unreachable: all null cases handled above. Guard for type narrowing.
+    return { action: 'already-in-sync', message: 'State is in sync.' };
+  }
+  const localState = local;
+  const remoteState = remote;
 
   const localVer = localState.version || 0;
   const remoteVer = remoteState.version || 0;

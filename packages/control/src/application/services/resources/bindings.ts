@@ -3,6 +3,7 @@ import { getDb, serviceBindings, services } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { toApiServiceBinding } from './format';
 import { getResourceById } from './store';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export async function listServiceBindings(db: D1Database, resourceId: string) {
   const drizzle = getDb(db);
@@ -32,7 +33,7 @@ export async function listServiceBindings(db: D1Database, resourceId: string) {
       bindingName: wb.bindingName,
       bindingType: wb.bindingType,
       config: wb.config,
-      createdAt: (wb.createdAt == null ? null : typeof wb.createdAt === 'string' ? wb.createdAt : wb.createdAt.toISOString()),
+      createdAt: textDate(wb.createdAt),
     }),
     service_hostname: wb.serviceHostname,
     service_slug: wb.serviceSlug,
@@ -115,47 +116,47 @@ export async function buildBindingFromResource(
       return {
         type: 'd1',
         name: bindingName,
-        id: resource.cf_id || undefined,
+        id: resource.provider_resource_id ?? undefined,
       };
 
     case 'r2':
       return {
         type: 'r2',
         name: bindingName,
-        bucket_name: resource.cf_name || undefined,
+        bucket_name: resource.provider_resource_name ?? undefined,
       };
 
     case 'kv':
       return {
         type: 'kv',
         name: bindingName,
-        namespace_id: resource.cf_id || undefined,
+        namespace_id: resource.provider_resource_id ?? undefined,
       };
 
     case 'vectorize':
       return {
         type: 'vectorize',
         name: bindingName,
-        index_name: resource.cf_name || undefined,
+        index_name: resource.provider_resource_name ?? undefined,
       };
     case 'queue':
       return {
         type: 'queue',
         name: bindingName,
-        queue_name: resource.cf_name || resource.cf_id || undefined,
+        queue_name: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
       };
     case 'analytics_engine':
     case 'analyticsEngine':
       return {
         type: 'analytics_engine',
         name: bindingName,
-        dataset: resource.cf_name || resource.cf_id || undefined,
+        dataset: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
       };
     case 'workflow':
       return {
         type: 'workflow',
         name: bindingName,
-        workflow_name: resource.cf_name || resource.cf_id || undefined,
+        workflow_name: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
       };
 
     case 'durable_object': {
@@ -167,7 +168,9 @@ export async function buildBindingFromResource(
           config = {};
         }
       }
-      const className = (config.className as string) || resource.cf_name || undefined;
+      const className = (config.className as string)
+        || resource.provider_resource_name
+        || undefined;
       if (!className) return null;
       const scriptName = config.scriptName as string | undefined;
       return {

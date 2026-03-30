@@ -16,6 +16,7 @@ import type { PullRequestCommentDto, PullRequestReviewDto } from './dto';
 import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { NotFoundError, InternalError } from 'takos-common/errors';
+import { textDate } from '../../../shared/utils/db-guards';
 
 function toReviewStatus(value: string): ReviewStatus {
   if (value === 'approved' || value === 'changes_requested' || value === 'commented') {
@@ -52,7 +53,7 @@ function toReviewDto(
     status: toReviewStatus(review.status),
     body: review.body,
     analysis: review.analysis,
-    created_at: (review.createdAt == null ? null : typeof review.createdAt === 'string' ? review.createdAt : review.createdAt.toISOString()),
+    created_at: textDate(review.createdAt),
     author: resolveActorLite({
       actorType: review.reviewerType,
       actorId: review.reviewerId,

@@ -2,7 +2,7 @@ import { getDb, infraEndpointRoutes } from '../../../infra/db';
 import { infraEndpoints, serviceRuntimes } from '../../../infra/db/schema-platform-infra';
 import type { Env } from '../../../shared/types';
 import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
-import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/types';
+import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/routing-models';
 import { eq, and, sql } from 'drizzle-orm';
 
 export class InfraService {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   appManifestToBundleDocs,
-  extractBuildSourcesFromManifestJson,
   parseAppManifestYaml,
 } from '@/services/source/app-manifest';
 
@@ -34,6 +33,46 @@ spec:
       dockerfile: 'Dockerfile',
       port: 3000,
       ipv4: true,
+    });
+  });
+
+  it('parses direct-artifact worker and image-based service forms', () => {
+    const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: direct-artifact-app
+spec:
+  version: 1.0.0
+  services:
+    api:
+      port: 8080
+      artifact:
+        kind: image
+        imageRef: ghcr.io/takos/api:latest
+        provider: k8s
+  workers:
+    web:
+      artifact:
+        kind: bundle
+        deploymentId: dep-web-1
+        artifactRef: worker-web-v1
+`);
+
+    expect(manifest.spec.services?.api).toEqual({
+      port: 8080,
+      artifact: {
+        kind: 'image',
+        imageRef: 'ghcr.io/takos/api:latest',
+        provider: 'k8s',
+      },
+    });
+    expect(manifest.spec.workers?.web).toEqual({
+      artifact: {
+        kind: 'bundle',
+        deploymentId: 'dep-web-1',
+        artifactRef: 'worker-web-v1',
+      },
     });
   });
 
@@ -134,8 +173,8 @@ spec:
           artifactPath: dist/api.mjs
       bindings:
         queues: [jobs]
-        analytics: [events]
-        workflows: [onboarding]
+        analyticsEngine: [events]
+        workflow: [onboarding]
       triggers:
         schedules:
           - cron: '*/5 * * * *'
@@ -173,9 +212,9 @@ spec:
     });
     const apiWorker = manifest.spec.workers!.api;
     expect(apiWorker.bindings).toMatchObject({
+      analyticsEngine: ['events'],
       queues: ['jobs'],
-      analytics: ['events'],
-      workflows: ['onboarding'],
+      workflow: ['onboarding'],
     });
     expect(apiWorker.triggers).toEqual({
       schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
@@ -237,9 +276,9 @@ spec:
       metadata: expect.objectContaining({ name: 'api' }),
       spec: expect.objectContaining({
         pluginConfig: expect.objectContaining({
-          bindings: {
-            services: [],
-          },
+          bindings: expect.objectContaining({
+            vectorize: ['semantic-index'],
+          }),
         }),
       }),
     }));
@@ -410,8 +449,8 @@ spec:
           artifactPath: dist/api.mjs
       bindings:
         queues: [jobs]
-        analytics: [events]
-        workflows: [onboarding]
+        analyticsEngine: [events]
+        workflow: [onboarding]
       triggers:
         schedules:
           - cron: '0 * * * *'
@@ -470,9 +509,11 @@ spec:
       metadata: { name: 'api', labels: expect.any(Object) },
       spec: expect.objectContaining({
         pluginConfig: expect.objectContaining({
-          bindings: {
-            services: [],
-          },
+          bindings: expect.objectContaining({
+            analyticsEngine: ['events'],
+            queues: ['jobs'],
+            workflow: ['onboarding'],
+          }),
           triggers: {
             schedules: [{ cron: '0 * * * *', export: 'handleHourly' }],
             queues: [{ queue: 'jobs', export: 'handleJob' }],
@@ -720,7 +761,7 @@ spec:
 `)).toThrow(/route references unknown route: missing/);
     });
 
-    it('rejects mcpServers authSecretRef that is not a secretRef resource', () => {
+    it('rejects mcpServers authSecretRef that is not a secret resource', () => {
       expect(() => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -747,7 +788,7 @@ spec:
     - name: api-mcp
       route: api
       authSecretRef: db
-`)).toThrow(/authSecretRef must reference a secretRef resource: db/);
+`)).toThrow(/authSecretRef must reference a secret resource: db/);
     });
 
     it('parses workers with bindings and triggers', () => {
@@ -763,7 +804,7 @@ spec:
       type: queue
       binding: JOBS
     db:
-      type: d1
+      type: sql
       binding: DB
   workers:
     api:
@@ -1379,6 +1420,72 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
           - other`,
       }));
       expect(manifest.spec.services!.api.bindings?.services).toEqual(['other']);
+    });
+  });
+
+  describe('provider-neutral manifest syntax', () => {
+    it('parses neutral resource classes and service/container resource bindings', () => {
+      const manifest = parseAppManifestYaml(`
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: neutral-app
+spec:
+  version: 1.0.0
+  resources:
+    tenant-db:
+      type: d1
+      binding: DB
+    assets:
+      type: r2
+      binding: ASSETS
+  containers:
+    browser:
+      dockerfile: Dockerfile.browser
+      port: 8080
+      bindings:
+        r2: [assets]
+  services:
+    api:
+      dockerfile: Dockerfile
+      port: 3000
+      bindings:
+        d1: [tenant-db]
+        services:
+          - browser
+  workers:
+    edge:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build
+          artifact: dist
+          artifactPath: dist/worker.js
+  routes:
+    - name: browser-route
+      ingress: api
+      target: browser
+      path: /browser
+`);
+
+      expect(manifest.spec.resources?.['tenant-db']).toMatchObject({
+        type: 'd1',
+      });
+      expect(manifest.spec.resources?.assets).toMatchObject({
+        type: 'r2',
+      });
+      expect(manifest.spec.services?.api.bindings).toMatchObject({
+        d1: ['tenant-db'],
+        services: ['browser'],
+      });
+      expect(manifest.spec.containers?.browser.bindings).toMatchObject({
+        r2: ['assets'],
+      });
+      expect(manifest.spec.routes?.[0]).toMatchObject({
+        name: 'browser-route',
+        ingress: 'api',
+        target: 'browser',
+      });
     });
   });
 

@@ -1,22 +1,22 @@
 import { BadRequestError } from 'takos-common/errors';
 import { generateId } from '../../../shared/utils';
-import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { RoutingTarget } from '../routing/types';
+import type { RoutingTarget } from '../routing/routing-models';
 import { normalizeEnvName } from '../common-env/crypto';
 import { encrypt } from '../../../shared/utils/crypto';
 import {
-  getDb,
-  serviceEnvVars,
-  resources,
   deployments,
+  getDb,
+  resources,
   serviceDeployments,
+  serviceEnvVars,
 } from '../../../infra/db';
-import { serviceBindings, physicalServiceBindings } from '../../../infra/db/schema-services';
-import { eq, and, desc, inArray, isNotNull, gt, sql } from 'drizzle-orm';
+import { physicalServiceBindings, serviceBindings } from '../../../infra/db/schema-services';
+import { and, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { getDeploymentRouteHead } from '../deployment/store';
 
 // Re-export types from the types module
 export type {
+  ServiceBindingSpec,
   ServiceManagedMcpServerState,
   ServiceRuntimeConfigState,
   ServiceLocalEnvVarState,
@@ -26,25 +26,26 @@ export type {
 
 import type {
   DesiredStateEnv,
+  ServiceBindingRow,
+  ServiceBindingSpec,
+  ServiceDesiredStateSnapshot,
+  ServiceLocalEnvVarState,
+  ServiceLocalEnvVarSummary,
   ServiceManagedMcpServerState,
   ServiceRuntimeConfigState,
   ServiceRuntimeLimits,
-  ServiceBindingRow,
-  ServiceLocalEnvVarState,
-  ServiceLocalEnvVarSummary,
-  ServiceDesiredStateSnapshot,
 } from './desired-state-types';
 import { MASKED_SECRET_VALUE } from './desired-state-types';
 
 import {
-  sortBindings,
   normalizeRoutingWeight,
+  sortBindings,
   toServiceBinding,
 } from './resource-bindings';
 
 import {
-  requireEncryptionKey,
   buildServiceEnvSalt,
+  requireEncryptionKey,
   resolveServiceCommonEnvState,
 } from './env-state-resolution';
 
@@ -184,7 +185,7 @@ export class ServiceDesiredStateService {
   async listResourceBindings(serviceId: string): Promise<Array<{
     id: string;
     name: string;
-    type: string;
+    type: ServiceBindingSpec['type'];
     resource_id: string;
     resource_name: string | null;
   }>> {
@@ -204,13 +205,18 @@ export class ServiceDesiredStateService {
     return rows.map((row) => ({
       id: row.id,
       name: row.bindingName,
-      type: row.bindingType === 'r2'
-        ? 'r2_bucket'
-        : row.bindingType === 'kv'
-          ? 'kv_namespace'
-          : row.bindingType === 'analytics_engine'
-            ? 'analytics_engine'
-          : row.bindingType,
+      type: toServiceBinding({
+        id: row.id,
+        bindingName: row.bindingName,
+        bindingType: row.bindingType,
+        config: '{}',
+        resourceId: row.resourceId,
+        resourceName: row.resourceName,
+        resourceType: '',
+        resourceStatus: 'active',
+        resourceProviderResourceId: null,
+        resourceProviderResourceName: row.resourceName,
+      })?.type ?? 'service',
       resource_id: row.resourceId,
       resource_name: row.resourceName,
     }));
@@ -219,7 +225,12 @@ export class ServiceDesiredStateService {
   async replaceResourceBindings(params: {
     serviceId?: string;
     workerId?: string;
-    bindings: Array<{ name: string; type: string; resourceId: string; config?: Record<string, unknown> }>;
+    bindings: Array<{
+      name: string;
+      type: Exclude<ServiceBindingSpec['type'], 'plain_text' | 'secret_text'>;
+      resourceId: string;
+      config?: Record<string, unknown>;
+    }>;
   }): Promise<void> {
     const serviceId = params.serviceId ?? params.workerId;
     if (!serviceId) {
@@ -269,8 +280,8 @@ export class ServiceDesiredStateService {
         resourceName: resources.name,
         resourceType: resources.type,
         resourceStatus: resources.status,
-        resourceCfId: resources.cfId,
-        resourceCfName: resources.cfName,
+        resourceProviderResourceId: resources.providerResourceId,
+        resourceProviderResourceName: resources.providerResourceName,
       })
         .from(serviceBindings)
         .innerJoin(resources, eq(resources.id, serviceBindings.resourceId))
@@ -279,7 +290,7 @@ export class ServiceDesiredStateService {
         .all(),
     ]);
 
-    const resourceBindings: WorkerBinding[] = [];
+    const resourceBindings: ServiceBindingSpec[] = [];
     for (const row of resourceRows) {
       if (row.resourceStatus !== 'active') {
         throw new BadRequestError(`Bound resource is not active: ${row.resourceName || row.resourceId}`);
@@ -383,10 +394,10 @@ export class ServiceDesiredStateService {
 }
 
 // Legacy aliases for backward compatibility
-export type WorkerManagedMcpServerState = import('./desired-state-types').ServiceManagedMcpServerState;
-export type WorkerRuntimeConfigState = import('./desired-state-types').ServiceRuntimeConfigState;
-export type WorkerLocalEnvVarState = import('./desired-state-types').ServiceLocalEnvVarState;
-export type WorkerLocalEnvVarSummary = import('./desired-state-types').ServiceLocalEnvVarSummary;
-export type WorkerDesiredStateSnapshot = import('./desired-state-types').ServiceDesiredStateSnapshot;
+export type WorkerManagedMcpServerState = ServiceManagedMcpServerState;
+export type WorkerRuntimeConfigState = ServiceRuntimeConfigState;
+export type WorkerLocalEnvVarState = ServiceLocalEnvVarState;
+export type WorkerLocalEnvVarSummary = ServiceLocalEnvVarSummary;
+export type WorkerDesiredStateSnapshot = ServiceDesiredStateSnapshot;
 export { ServiceDesiredStateService as WorkerDesiredStateService };
 export { resolveServiceCommonEnvState as resolveWorkerCommonEnvState };

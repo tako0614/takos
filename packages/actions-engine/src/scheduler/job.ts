@@ -1,5 +1,5 @@
 /**
- * Job scheduler and execution management
+ * ジョブスケジューラと実行管理
  */
 import type {
   Workflow,
@@ -28,7 +28,7 @@ import {
   type JobExecutionState,
 } from './job-policy.js';
 
-// --- normalizeNeedsInput ---
+// --- needsInput 正規化 ---
 
 export function normalizeNeedsInput(needs: unknown): string[] {
   if (typeof needs === 'string') return [needs];
@@ -36,22 +36,22 @@ export function normalizeNeedsInput(needs: unknown): string[] {
   return [];
 }
 
-// --- Job scheduler ---
+// --- ジョブスケジューラ ---
 
 /**
- * Job scheduler options
+ * ジョブスケジューラの設定
  */
 export interface JobSchedulerOptions {
-  /** Maximum parallel jobs (0 = unlimited) */
+  /** 最大同時実行ジョブ数（0 は無制限） */
   maxParallel?: number;
-  /** Fail fast - cancel remaining jobs on first failure */
+  /** フェイルファスト: 最初の失敗で残りジョブをキャンセル */
   failFast?: boolean;
-  /** Step runner options */
+  /** ステップランナーの設定 */
   stepRunner?: StepRunnerOptions;
 }
 
 /**
- * Job scheduler event types
+ * ジョブスケジューラのイベント種別
  */
 export type JobSchedulerEvent =
   | { type: 'job:start'; jobId: string; job: Job }
@@ -63,12 +63,12 @@ export type JobSchedulerEvent =
   | { type: 'workflow:complete'; results: Record<string, JobResult> };
 
 /**
- * Job scheduler event listener
+ * ジョブスケジューラのイベントリスナー
  */
 export type JobSchedulerListener = (event: JobSchedulerEvent) => void;
 
 /**
- * Job scheduler for workflow execution
+ * ワークフロー実行のジョブスケジューラ
  */
 export class JobScheduler {
   private workflow: Workflow;
@@ -96,7 +96,7 @@ export class JobScheduler {
   }
 
   /**
-   * Add event listener. Returns an unsubscribe function.
+   * イベントリスナーを追加し、解除関数を返す
    */
   on(listener: JobSchedulerListener): () => void {
     this.listeners.push(listener);
@@ -109,7 +109,7 @@ export class JobScheduler {
   }
 
   /**
-   * Emit event to all listeners
+   * 全リスナーへイベント送信
    */
   private emit(event: JobSchedulerEvent): void {
     const snapshot = [...this.listeners];
@@ -117,21 +117,21 @@ export class JobScheduler {
       try {
         listener(event);
       } catch {
-        // Ignore listener errors
+        // リスナーのエラーは無視
       }
     }
   }
 
   /**
-   * Cancel workflow execution
+   * ワークフロー実行をキャンセル
    */
   cancel(): void {
     this.cancelled = true;
   }
 
   /**
-   * Reset scheduler runtime state for a new run.
-   * Keeps listeners and configuration intact.
+   * 新規実行のためにスケジューラ実行状態をリセット。
+   * リスナーと設定は維持する。
    */
   private reset(): void {
     this.results.clear();
@@ -139,17 +139,17 @@ export class JobScheduler {
   }
 
   /**
-   * Create execution plan
+   * 実行計画を作成
    */
   createPlan(): ExecutionPlan {
-    // groupIntoPhases already detects cycles via assertAcyclic
+    // groupIntoPhases は assertAcyclic でサイクル検査を済ませている
     const phases = groupIntoPhases(this.graph);
 
     return { phases };
   }
 
   /**
-   * Run all jobs in workflow
+   * ワークフロー内の全ジョブを実行
    */
   async run(context: ExecutionContext): Promise<Record<string, JobResult>> {
     if (this.running) {
@@ -169,12 +169,12 @@ export class JobScheduler {
         const phase = plan.phases[phaseIndex];
         this.emit({ type: 'phase:start', phase: phaseIndex, jobs: phase });
 
-        // Run jobs in phase (potentially in parallel)
+        // フェーズ内ジョブを実行（必要に応じ並列）
         await this.runPhase(phase, context);
 
         this.emit({ type: 'phase:complete', phase: phaseIndex });
 
-        // Check for failures in fail-fast mode
+        // フェイルファストモードで失敗を確認
         if (this.options.failFast) {
           const phaseFailed = phase.some(
             (jobId) => this.results.get(jobId)?.conclusion === 'failure'
@@ -203,7 +203,7 @@ export class JobScheduler {
   }
 
   /**
-   * Run jobs in a single phase
+   * 単一フェーズを実行
    */
   private async runPhase(
     jobIds: string[],
@@ -212,7 +212,7 @@ export class JobScheduler {
     const maxParallel = this.options.maxParallel || jobIds.length;
     const chunks: string[][] = [];
 
-    // Split into chunks based on max parallel
+    // 最大同時実行数でチャンク分割
     for (let i = 0; i < jobIds.length; i += maxParallel) {
       chunks.push(jobIds.slice(i, i + maxParallel));
     }
@@ -235,7 +235,7 @@ export class JobScheduler {
   }
 
   /**
-   * Mark pending chunks as cancelled from the specified index.
+   * 指定インデックス以降の未処理チャンクをキャンセル扱いにする
    */
   private markPendingChunksCancelled(
     chunks: string[][],
@@ -247,7 +247,7 @@ export class JobScheduler {
   }
 
   /**
-   * Mark jobs as cancelled if they don't already have a result.
+   * まだ結果を持たないジョブをキャンセルとして登録
    */
   private markJobsCancelled(jobIds: string[]): void {
     for (const jobId of jobIds) {
@@ -267,7 +267,7 @@ export class JobScheduler {
   }
 
   /**
-   * Run a single job
+   * 単一ジョブを実行
    */
   private async runJob(
     jobId: string,
@@ -282,15 +282,15 @@ export class JobScheduler {
       return cancellationShortCircuitResult;
     }
 
-    // Build job-specific context with needs
+    // needs を含むジョブ固有コンテキストを構築
     const jobContext = this.buildJobContext(jobId, context);
 
-    // Check if job should be skipped
+    // ジョブをスキップすべきか確認
     if (!evaluateCondition(job.if, jobContext)) {
       return this.skipJob(jobId, job.name, 'Condition not met');
     }
 
-    // Dependencies are success-only: any non-success dependency conclusion skips this job.
+    // 依存ジョブは成功時のみ継続扱い。非成功時は本ジョブをスキップ。
     const needs = normalizeNeedsInput(job.needs);
     const dependencySkipReason = getDependencySkipReason(needs, this.results);
     if (dependencySkipReason) {
@@ -312,7 +312,7 @@ export class JobScheduler {
   }
 
   /**
-   * Resolve runJob short-circuit result when cancellation state allows bypassing execution.
+   * キャンセル状態時、runJob の実行を短絡的に解決する
    */
   private getCancellationShortCircuitResult(
     jobId: string,
@@ -338,7 +338,7 @@ export class JobScheduler {
   }
 
   /**
-   * Execute all steps for a job and return the final execution state.
+   * ジョブの全ステップを実行し、最終実行状態を返す
    */
   private async executeJobSteps(
     job: Job,
@@ -382,7 +382,7 @@ export class JobScheduler {
   }
 
   /**
-   * Finalize and record a completed job result.
+   * 完了したジョブ結果を最終化して保存
    */
   private finalizeAndStoreJobResult(
     jobId: string,
@@ -394,7 +394,7 @@ export class JobScheduler {
   }
 
   /**
-   * Create, store, and emit skip result for a job.
+   * スキップ結果を作成・保存・通知
    */
   private skipJob(
     jobId: string,
@@ -409,7 +409,7 @@ export class JobScheduler {
   }
 
   /**
-   * Store terminal job result and emit terminal job events.
+   * 終端ジョブ結果を保存し、終端イベントを送信
    */
   private completeTerminalJob(
     jobId: string,
@@ -427,7 +427,7 @@ export class JobScheduler {
   }
 
   /**
-   * Emit terminal observation events for a job.
+   * ジョブの終端観測イベントを送信
    */
   private emitTerminalObservationEvents(
     jobId: string,
@@ -451,7 +451,7 @@ export class JobScheduler {
   }
 
   /**
-   * Build execution context with needs data
+   * needs 情報付きの実行コンテキストを構築
    */
   private buildJobContext(
     jobId: string,
@@ -468,7 +468,7 @@ export class JobScheduler {
   }
 
   /**
-   * Build step context with previous step outputs
+   * 前ステップ出力付きのステップコンテキストを構築
    */
   private buildStepContext(
     jobContext: ExecutionContext,
@@ -483,14 +483,14 @@ export class JobScheduler {
   }
 
   /**
-   * Get current results
+   * 現在の結果を取得
    */
   getResults(): Record<string, JobResult> {
     return structuredClone(Object.fromEntries(this.results));
   }
 
   /**
-   * Get overall conclusion
+   * 全体結論を取得
    */
   getConclusion(): Conclusion {
     let hasFailure = false;
@@ -514,7 +514,7 @@ export class JobScheduler {
 }
 
 /**
- * Create execution plan for workflow
+ * ワークフロー実行計画を作成
  */
 export function createExecutionPlan(workflow: Workflow): ExecutionPlan {
   const graph = buildDependencyGraph(workflow);

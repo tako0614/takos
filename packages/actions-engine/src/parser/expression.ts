@@ -1,22 +1,22 @@
 /**
- * GitHub Actions expression evaluator
- * Handles ${{ }} expressions with variable substitution and simple evaluation
+ * GitHub Actions 式評価モジュール
+ * `${{ }}` 式の変数展開と簡易評価を扱う
  *
- * This module is the public API surface. Implementation is split across:
- * - tokenizer.ts: Token types and tokenization logic
- * - evaluator.ts: Expression parsing and evaluation
+ * このモジュールは公開 API のエントリポイント。実装は以下に分割:
+ * - tokenizer.ts: トークン種別と字句解析ロジック
+ * - evaluator.ts: 式のパースと評価
  */
 import { MAX_EXPRESSION_SIZE } from '../constants.js';
 import type { ExecutionContext } from '../workflow-models.js';
 import { ExpressionError, tokenize } from './tokenizer.js';
 import { ExpressionEvaluator } from './evaluator.js';
 
-// Re-export for consumers that import from this module
+// このモジュール経由で利用する場合の再エクスポート
 export { ExpressionError } from './tokenizer.js';
 
 /**
- * Extract expression content from ${{ }} wrapper.
- * Returns the inner expression if wrapped, or the input unchanged.
+ * `${{ }}` のラッパーから実体式を抽出する
+ * ラップされていれば内側式を、されていなければ入力文字列をそのまま返す
  */
 function extractExpression(expr: string): string {
   const match = expr.match(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/);
@@ -24,9 +24,9 @@ function extractExpression(expr: string): string {
 }
 
 /**
- * Evaluate a single expression
+ * 単一式を評価する
  */
-/** @internal - not re-exported from the package index */
+/** @internal - パッケージインデックスからは再エクスポートされない */
 export function evaluateExpression(
   expr: string,
   context: ExecutionContext
@@ -43,11 +43,11 @@ export function evaluateExpression(
   return evaluator.evaluate();
 }
 
-/** Pattern for matching ${{ }} expressions */
+/** `${{ }}` 式を検出するパターン */
 const EXPRESSION_PATTERN = /\$\{\{([\s\S]+?)\}\}/g;
 
 /**
- * Interpolate all expressions in a string
+ * 文字列中の式をすべて補間する
  */
 export function interpolateString(
   template: string,
@@ -64,8 +64,8 @@ export function interpolateString(
       }
       return String(result);
     } catch (err) {
-      // Log the error for debugging but return empty string to avoid
-      // exposing raw ${{ }} expressions in workflow output.
+      // デバッグ用にエラーはログ出力するが、ワークフロー出力に
+      // 生の `${{ }}` をそのまま残さないため空文字を返す
       if (typeof process !== 'undefined' && process.stderr) {
         process.stderr.write(`[actions-engine] Expression evaluation error: ${err instanceof Error ? err.message : String(err)}\n`);
       }
@@ -75,11 +75,10 @@ export function interpolateString(
 }
 
 /**
- * Convert an expression result to a condition boolean.
+ * 式評価結果を条件判定用ブール値へ変換する
  *
- * This intentionally differs from the evaluator's internal toBoolean():
- * the string 'false' is treated as falsy, matching GitHub Actions behavior
- * for `if:` conditions.
+ * これは評価器の内部 toBoolean() と意図的に差をつけており、
+ * 文字列 `'false'` は偽扱いにする。`if:` 条件の GitHub Actions 挙動と合わせるため。
  */
 function resultToConditionBoolean(result: unknown): boolean {
   if (result === null || result === undefined || result === '') {
@@ -98,7 +97,7 @@ function resultToConditionBoolean(result: unknown): boolean {
 }
 
 /**
- * Evaluate a condition (if: expression)
+ * 条件式 (`if:`) を評価する
  */
 export function evaluateCondition(
   condition: string | undefined,
@@ -109,7 +108,7 @@ export function evaluateCondition(
   }
 
   try {
-    // If not wrapped in ${{ }}, wrap it
+    // `${{ }}` で囲まれていない場合は補間用に囲む
     const expr = condition.startsWith('${{')
       ? condition
       : `\${{ ${condition} }}`;
@@ -121,7 +120,7 @@ export function evaluateCondition(
 }
 
 /**
- * Interpolate environment variables and expressions in an object
+ * オブジェクト内の環境変数と式を補間する
  */
 export function interpolateObject<T extends Record<string, unknown>>(
   obj: T,

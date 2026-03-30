@@ -9,9 +9,12 @@ export type CloudflareManagedResourceType =
   | 'queue'
   | 'analyticsEngine'
   | 'analytics_engine'
+  | 'secret_ref'
   | 'workflow'
-  | 'vectorize';
-export type CloudflareDeletableResourceType = CloudflareManagedResourceType | 'worker';
+  | 'workflow_binding'
+  | 'vectorize'
+  | 'durable_object_namespace';
+export type CloudflareDeletableResourceType = CloudflareManagedResourceType | 'durable_object_namespace' | 'worker';
 
 type VectorizeCreateOptions = {
   dimensions: number;
@@ -33,6 +36,12 @@ type WorkflowCreateOptions = {
   maxRetries?: number;
 };
 
+function generateSecretToken(bytes = 32): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export class CloudflareResourceService {
   readonly wfp: WFPService;
 
@@ -49,42 +58,49 @@ export class CloudflareResourceService {
       analyticsEngine?: AnalyticsEngineCreateOptions;
       workflow?: WorkflowCreateOptions;
     }
-  ): Promise<{ cfId: string | null; cfName: string }> {
+  ): Promise<{ providerResourceId: string | null; providerResourceName: string }> {
     switch (type) {
       case 'd1': {
-        const cfId = await this.wfp.d1.createD1Database(name);
-        return { cfId, cfName: name };
+        const providerResourceId = await this.wfp.d1.createD1Database(name);
+        return { providerResourceId, providerResourceName: name };
       }
       case 'r2':
         await this.wfp.r2.createR2Bucket(name);
-        return { cfId: name, cfName: name };
+        return { providerResourceId: name, providerResourceName: name };
       case 'kv': {
-        const cfId = await this.wfp.kv.createKVNamespace(name);
-        return { cfId, cfName: name };
+        const providerResourceId = await this.wfp.kv.createKVNamespace(name);
+        return { providerResourceId, providerResourceName: name };
       }
       case 'queue': {
         const queue = await this.wfp.queues.createQueue(name, {
           deliveryDelaySeconds: options?.queue?.deliveryDelaySeconds,
         });
-        return { cfId: queue.id, cfName: queue.name };
+        return { providerResourceId: queue.id, providerResourceName: queue.name };
       }
       case 'analyticsEngine':
       case 'analytics_engine':
         return {
-          cfId: null,
-          cfName: options?.analyticsEngine?.dataset?.trim() || name,
+          providerResourceId: null,
+          providerResourceName: options?.analyticsEngine?.dataset?.trim() || name,
+        };
+      case 'secret_ref':
+        return {
+          providerResourceId: generateSecretToken(),
+          providerResourceName: name,
         };
       case 'workflow':
+      case 'workflow_binding':
+      case 'durable_object_namespace':
         return {
-          cfId: null,
-          cfName: name,
+          providerResourceId: null,
+          providerResourceName: name,
         };
       case 'vectorize': {
-        const cfId = await this.wfp.vectorize.createVectorizeIndex(name, options?.vectorize || {
+        const providerResourceId = await this.wfp.vectorize.createVectorizeIndex(name, options?.vectorize || {
           dimensions: VECTORIZE_DEFAULT_DIMENSIONS,
           metric: 'cosine',
         });
-        return { cfId, cfName: name };
+        return { providerResourceId, providerResourceName: name };
       }
       default: {
         const unsupportedType: never = type;
@@ -95,36 +111,39 @@ export class CloudflareResourceService {
 
   async deleteResource(params: {
     type: string;
-    cfId?: string | null;
-    cfName?: string | null;
+    providerResourceId?: string | null;
+    providerResourceName?: string | null;
   }): Promise<void> {
     const type = String(params.type || '').trim() as CloudflareDeletableResourceType;
     switch (type) {
       case 'd1':
-        if (params.cfId) await this.wfp.d1.deleteD1Database(params.cfId);
+        if (params.providerResourceId) await this.wfp.d1.deleteD1Database(params.providerResourceId);
         return;
       case 'r2':
-        if (params.cfName) await this.wfp.r2.deleteR2Bucket(params.cfName);
+        if (params.providerResourceName) await this.wfp.r2.deleteR2Bucket(params.providerResourceName);
         return;
       case 'kv':
-        if (params.cfId) await this.wfp.kv.deleteKVNamespace(params.cfId);
+        if (params.providerResourceId) await this.wfp.kv.deleteKVNamespace(params.providerResourceId);
         return;
       case 'queue':
-        if (params.cfId) {
-          await this.wfp.queues.deleteQueue(params.cfId);
+        if (params.providerResourceId) {
+          await this.wfp.queues.deleteQueue(params.providerResourceId);
           return;
         }
-        if (params.cfName) await this.wfp.queues.deleteQueueByName(params.cfName);
+        if (params.providerResourceName) await this.wfp.queues.deleteQueueByName(params.providerResourceName);
         return;
       case 'analyticsEngine':
       case 'analytics_engine':
+      case 'secret_ref':
       case 'workflow':
+      case 'workflow_binding':
+      case 'durable_object_namespace':
         return;
       case 'vectorize':
-        if (params.cfName) await this.wfp.vectorize.deleteVectorizeIndex(params.cfName);
+        if (params.providerResourceName) await this.wfp.vectorize.deleteVectorizeIndex(params.providerResourceName);
         return;
       case 'worker':
-        if (params.cfName) await this.wfp.workers.deleteWorker(params.cfName);
+        if (params.providerResourceName) await this.wfp.workers.deleteWorker(params.providerResourceName);
         return;
       default:
         return;

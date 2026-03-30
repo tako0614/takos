@@ -13,7 +13,7 @@ export const storageBulkLimiter = RateLimiters.sensitive();
 export const INLINE_SAFE_MIME_PREFIXES = ['image/', 'audio/', 'video/', 'application/pdf'];
 
 export function requireOAuthScope(scope: string): MiddlewareHandler<AuthenticatedRouteEnv> {
-  return async (c, next) => {
+  return async (c, next): Promise<Response | void> => {
     // OAuth middleware may set 'oauth' on the context variables.
     // Access via generic get() since the type is not declared in AuthenticatedRouteEnv.
     const oauth = (c.get as (key: string) => unknown)('oauth') as OAuthContext | undefined;

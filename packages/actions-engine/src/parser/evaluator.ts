@@ -1,6 +1,6 @@
 /**
- * Expression evaluator
- * Handles parsing and evaluation of tokenized GitHub Actions expressions
+ * 式の評価器
+ * トークナイズ済み GitHub Actions 式のパースと評価を行う
  */
 import {
   MAX_EVALUATE_CALLS,
@@ -28,7 +28,7 @@ const BLOCKED_PROPERTY_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
 
 /**
- * Simple expression parser and evaluator
+ * シンプルな式パーサー兼評価器
  */
 export class ExpressionEvaluator {
   private readonly tokens: Token[];
@@ -104,7 +104,7 @@ export class ExpressionEvaluator {
   }
 
   /**
-   * Parse and evaluate expression
+   * 式をパースして評価する
    */
   evaluate(): unknown {
     this.evaluateCallCount++;
@@ -203,12 +203,12 @@ export class ExpressionEvaluator {
     if (token.type === 'identifier') {
       const name = this.getIdentifierValue(this.advance());
 
-      // Check if it's a function call
+      // 関数呼び出しか確認
       if (this.current().type === 'lparen') {
         return this.parseFunction(name);
       }
 
-      // Context variable
+      // コンテキスト変数
       return this.getContextValue(name);
     }
 

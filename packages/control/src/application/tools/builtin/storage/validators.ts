@@ -1,4 +1,4 @@
-import type { ToolContext } from '../../types';
+import type { ToolContext } from '../../tool-definitions';
 
 export function validateStoragePath(path: string, fieldName: string = 'path'): string {
   if (!path || typeof path !== 'string') {

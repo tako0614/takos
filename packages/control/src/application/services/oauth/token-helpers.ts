@@ -1,11 +1,12 @@
 import type { SelectOf } from '../../../shared/types/drizzle-utils';
 import type { OAuthToken, OAuthTokenType } from '../../../shared/types/oauth';
 import { oauthTokens } from '../../../infra/db';
+import { textDate, textDateNullable } from '../../../shared/utils/db-guards';
 
 export type OAuthTokenRow = SelectOf<typeof oauthTokens>;
 
 export function toOptionalIsoString(value: string | Date | null | undefined): string | null {
-  return (value == null ? null : typeof value === 'string' ? value : value.toISOString());
+  return textDateNullable(value);
 }
 
 export interface AccessTokenJwtPayload {
@@ -45,7 +46,7 @@ export function toApiToken(row: OAuthTokenRow): OAuthToken {
     revoked_reason: row.revokedReason ?? null,
     used_at: toOptionalIsoString(row.usedAt),
     token_family: row.tokenFamily ?? null,
-    expires_at: (row.expiresAt == null ? null : typeof row.expiresAt === 'string' ? row.expiresAt : row.expiresAt.toISOString()),
-    created_at: (row.createdAt == null ? null : typeof row.createdAt === 'string' ? row.createdAt : row.createdAt.toISOString()),
+    expires_at: textDate(row.expiresAt),
+    created_at: textDate(row.createdAt),
   };
 }

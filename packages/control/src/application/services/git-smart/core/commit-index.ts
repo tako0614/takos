@@ -11,6 +11,7 @@ import { putCommit, getCommitData } from './object-store';
 import { getDb, commits } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { generateId } from '../../../../shared/utils';
+import { textDateNullable } from '../../../../shared/utils/db-guards';
 
 interface CommitIndexRow {
   sha: string;
@@ -151,10 +152,10 @@ export async function getCommitFromIndex(
     message: indexed.message,
     authorName: indexed.authorName,
     authorEmail: indexed.authorEmail,
-    authorDate: (indexed.authorDate == null ? null : typeof indexed.authorDate === 'string' ? indexed.authorDate : indexed.authorDate.toISOString()) ?? new Date(0).toISOString(),
+    authorDate: textDateNullable(indexed.authorDate) ?? new Date(0).toISOString(),
     committerName: indexed.committerName,
     committerEmail: indexed.committerEmail,
-    commitDate: (indexed.commitDate == null ? null : typeof indexed.commitDate === 'string' ? indexed.commitDate : indexed.commitDate.toISOString()) ?? new Date(0).toISOString(),
+    commitDate: textDateNullable(indexed.commitDate) ?? new Date(0).toISOString(),
   });
 }
 

@@ -1,4 +1,4 @@
-import type { ToolContext } from '../../types';
+import type { ToolContext } from '../../tool-definitions';
 import type { D1Database } from '../../../../shared/types/bindings.ts';
 import { getDb, sessions } from '../../../../infra/db';
 import { eq } from 'drizzle-orm';
@@ -57,8 +57,8 @@ export async function checkSessionHealth(
   const session = {
     id: sessionResult.id,
     status: sessionResult.status,
-    last_heartbeat: (sessionResult.lastHeartbeat == null ? null : typeof sessionResult.lastHeartbeat === 'string' ? sessionResult.lastHeartbeat : sessionResult.lastHeartbeat.toISOString()),
-    created_at: (sessionResult.createdAt == null ? null : typeof sessionResult.createdAt === 'string' ? sessionResult.createdAt : sessionResult.createdAt.toISOString()) ?? new Date(0).toISOString(),
+    last_heartbeat: sessionResult.lastHeartbeat,
+    created_at: sessionResult.createdAt ?? new Date(0).toISOString(),
   };
 
   if (session.status !== 'running') {

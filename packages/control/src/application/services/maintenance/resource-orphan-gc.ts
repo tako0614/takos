@@ -31,8 +31,8 @@ export async function gcOrphanedResources(
   const orphaned = await db.select({
     id: resources.id,
     type: resources.type,
-    cfId: resources.cfId,
-    cfName: resources.cfName,
+    providerResourceId: resources.providerResourceId,
+    providerResourceName: resources.providerResourceName,
   }).from(resources).where(
     and(
       isNotNull(resources.orphanedAt),
@@ -47,8 +47,8 @@ export async function gcOrphanedResources(
     try {
       await provider.deleteResource({
         type: resource.type,
-        cfId: resource.cfId,
-        cfName: resource.cfName,
+        providerResourceId: resource.providerResourceId,
+        providerResourceName: resource.providerResourceName,
       });
       await db.delete(resources).where(
         eq(resources.id, resource.id),

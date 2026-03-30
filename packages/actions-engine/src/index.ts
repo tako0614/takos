@@ -1,11 +1,11 @@
 /**
  * takos-actions-engine
- * GitHub Actions compatible CI engine
+ * GitHub Actions 互換 CI エンジン
  */
 
-// Public types
+// 公開型
 export type {
-  // Trigger types
+  // トリガー型
   BranchFilter,
   PullRequestTriggerConfig,
   PullRequestEventType,
@@ -18,7 +18,7 @@ export type {
   WorkflowCallSecret,
   WorkflowCallConfig,
   WorkflowTrigger,
-  // Step / Job / Workflow types
+  // ステップ / ジョブ / ワークフロー型
   Step,
   MatrixConfig,
   JobStrategy,
@@ -30,13 +30,13 @@ export type {
   JobDefaults,
   Job,
   Workflow,
-  // Execution state types
+  // 実行状態型
   RunStatus,
   Conclusion,
   StepResult,
   JobResult,
   WorkflowResult,
-  // Context types
+  // コンテキスト型
   GitHubContext,
   RunnerContext,
   JobContext,
@@ -46,7 +46,7 @@ export type {
   MatrixContext,
   InputsContext,
   ExecutionContext,
-  // Parser / scheduler types
+  // パーサー / スケジューラー型
   ParsedWorkflow,
   DiagnosticSeverity,
   WorkflowDiagnostic,
@@ -55,10 +55,9 @@ export type {
   ActionResolver,
 } from './workflow-models.js';
 
-// Parser — public API
+// パーサー API（公開）
 export { parseWorkflow } from './parser/workflow.js';
 export { validateWorkflow, type ValidationResult } from './parser/validator.js';
 
-// Scheduler — public API
+// スケジューラー API（公開）
 export { createExecutionPlan } from './scheduler/job.js';
-

@@ -12,6 +12,7 @@ import {
   fetchWithTimeout,
 } from '../../../application/services/execution/run-events';
 import { MAX_EVENTS_PER_RESPONSE } from '../../../shared/config/limits';
+import { textDate } from '../../../shared/utils/db-guards';
 
 type RunNotifierNamespace = {
   idFromName(name: string): unknown;
@@ -120,7 +121,7 @@ async function fetchRunEventsAfter(
       event_id: e.id,
       type: e.type,
       data: e.data,
-      created_at: (e.createdAt == null ? null : typeof e.createdAt === 'string' ? e.createdAt : e.createdAt.toISOString()),
+      created_at: textDate(e.createdAt),
     });
   }
 

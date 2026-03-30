@@ -82,7 +82,7 @@ export async function validateAppManifest(startDir = process.cwd()) {
   const manifest = await loadAppManifest(manifestPath);
   const repoRoot = path.dirname(path.dirname(manifestPath));
 
-  for (const [workerName, worker] of Object.entries(manifest.spec.workers)) {
+  for (const [workerName, worker] of Object.entries(manifest.spec.workers ?? {})) {
     const build = worker.build.fromWorkflow;
     if (!build.artifactPath) {
       throw new Error(`spec.workers.${workerName}.build.fromWorkflow.artifactPath is required`);

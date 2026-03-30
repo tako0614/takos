@@ -12,6 +12,7 @@ import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
+import { textDate } from '../../../shared/utils/db-guards';
 
 function toResource(data: {
   id: string;
@@ -20,15 +21,15 @@ function toResource(data: {
   name: string;
   type: string;
   status: string;
-  cfId: string | null;
-  cfName: string | null;
+  providerResourceId: string | null;
+  providerResourceName: string | null;
   config: string | null;
   metadata: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }): Resource {
-  const createdAt = typeof data.createdAt === 'string' ? data.createdAt : data.createdAt.toISOString();
-  const updatedAt = typeof data.updatedAt === 'string' ? data.updatedAt : data.updatedAt.toISOString();
+  const createdAt = textDate(data.createdAt);
+  const updatedAt = textDate(data.updatedAt);
   return {
     id: data.id,
     owner_id: data.ownerAccountId,
@@ -36,8 +37,8 @@ function toResource(data: {
     name: data.name,
     type: data.type as Resource['type'],
     status: data.status as Resource['status'],
-    cf_id: data.cfId,
-    cf_name: data.cfName,
+    provider_resource_id: data.providerResourceId,
+    provider_resource_name: data.providerResourceName,
     config: data.config ?? '{}',
     metadata: data.metadata ?? '{}',
     created_at: createdAt,
@@ -73,7 +74,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     throw new AuthorizationError();
   }
 
-  if (!resource.cf_name) {
+  if (!resource.provider_resource_name) {
     throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
@@ -86,7 +87,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const result = await wfp.r2.listR2Objects(resource.cf_name, {
+    const result = await wfp.r2.listR2Objects(resource.provider_resource_name, {
       prefix,
       cursor,
       limit,
@@ -123,7 +124,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     throw new AuthorizationError();
   }
 
-  if (!resource.cf_name) {
+  if (!resource.provider_resource_name) {
     throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
@@ -132,7 +133,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    const stats = await wfp.r2.getR2BucketStats(resource.cf_name);
+    const stats = await wfp.r2.getR2BucketStats(resource.provider_resource_name);
 
     return c.json({ stats });
   } catch (err) {
@@ -162,7 +163,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     throw new AuthorizationError();
   }
 
-  if (!resource.cf_name) {
+  if (!resource.provider_resource_name) {
     throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
@@ -171,7 +172,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
-    await wfp.r2.deleteR2Object(resource.cf_name, key);
+    await wfp.r2.deleteR2Object(resource.provider_resource_name, key);
     return c.json({ success: true });
   } catch (err) {
     logError('Failed to delete R2 object', err, { module: 'routes/resources/r2' });

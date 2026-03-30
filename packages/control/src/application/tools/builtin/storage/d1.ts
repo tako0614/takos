@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../../types';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
 
 export const D1_QUERY: ToolDefinition = {
   name: 'd1_query',

@@ -50,22 +50,36 @@ type AnalyticsEngineResource = AppResourceBase & {
   };
 };
 
+type WorkflowConfig = {
+  service: string;
+  export: string;
+  timeoutMs?: number;
+  maxRetries?: number;
+};
+
 type WorkflowResource = AppResourceBase & {
   type: 'workflow';
-  workflow: {
-    service: string;
-    export: string;
-    timeoutMs?: number;
-    maxRetries?: number;
-  };
+  workflow: WorkflowConfig;
+};
+
+type WorkflowRuntimeResource = AppResourceBase & {
+  type: 'workflow_runtime';
+  workflowRuntime: WorkflowConfig;
+};
+
+type DurableObjectConfig = {
+  className: string;
+  scriptName?: string;
 };
 
 type DurableObjectResource = AppResourceBase & {
   type: 'durableObject';
-  durableObject: {
-    className: string;
-    scriptName?: string;
-  };
+  durableObject: DurableObjectConfig;
+};
+
+type DurableNamespaceResource = AppResourceBase & {
+  type: 'durable_namespace';
+  durableNamespace: DurableObjectConfig;
 };
 
 export type AppResource =
@@ -77,7 +91,11 @@ export type AppResource =
   | QueueResource
   | AnalyticsEngineResource
   | WorkflowResource
-  | DurableObjectResource;
+  | WorkflowRuntimeResource
+  | DurableObjectResource
+  | DurableNamespaceResource;
+
+export type AppResourceType = AppResource['type'];
 
 export type WorkflowArtifactBuild = {
   fromWorkflow: {
@@ -86,6 +104,18 @@ export type WorkflowArtifactBuild = {
     artifact: string;
     artifactPath: string;
   };
+};
+
+export type DirectWorkerArtifact = {
+  kind: 'bundle';
+  deploymentId?: string;
+  artifactRef?: string;
+};
+
+export type DirectImageArtifact = {
+  kind: 'image';
+  imageRef: string;
+  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
 };
 
 // --- Health check ---
@@ -146,7 +176,10 @@ export type WorkerScaling = {
 
 /** Container definition (CF Containers — worker に紐づけて使う) */
 export type AppContainer = {
-  dockerfile: string;
+  dockerfile?: string;
+  imageRef?: string;
+  artifact?: DirectImageArtifact;
+  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
   port: number;
   instanceType?: string;
   maxInstances?: number;
@@ -157,7 +190,10 @@ export type AppContainer = {
 
 /** Service definition (常設コンテナ — VPS/独立稼働) */
 export type AppService = {
-  dockerfile: string;
+  dockerfile?: string;
+  imageRef?: string;
+  artifact?: DirectImageArtifact;
+  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
   port: number;
   instanceType?: string;
   maxInstances?: number;
@@ -174,10 +210,24 @@ export type AppService = {
   dependsOn?: string[];
 };
 
+export type AppWorkloadBindings = {
+  resources?: string[];
+  d1?: string[];
+  r2?: string[];
+  kv?: string[];
+  queues?: string[];
+  vectorize?: string[];
+  analyticsEngine?: string[];
+  workflow?: string[];
+  durableObjects?: string[];
+  services?: ServiceBinding[];
+};
+
 /** Worker definition (CF Workers) */
 export type AppWorker = {
   containers?: string[]; // references to keys in spec.containers
-  build: WorkflowArtifactBuild;
+  build?: WorkflowArtifactBuild;
+  artifact?: DirectWorkerArtifact;
   env?: Record<string, string>;
   bindings?: {
     d1?: string[];
@@ -296,6 +346,20 @@ export type BundleDoc = {
   spec: Record<string, unknown>;
 };
 
+// Legacy resource-type aliases that map older manifest names to current ones.
+export type LegacyAppResourceTypeAlias =
+  | 'secret_ref'
+  | 'analytics_engine'
+  | 'workflow_binding'
+  | 'durable_object_namespace';
+
+export const APP_RESOURCE_TYPE_ALIASES: Record<LegacyAppResourceTypeAlias, AppResource['type']> = {
+  secret_ref: 'secretRef',
+  analytics_engine: 'analyticsEngine',
+  workflow_binding: 'workflow',
+  durable_object_namespace: 'durableObject',
+};
+
 export const BUILD_SOURCE_LABELS = {
   workflowPath: 'takos.dev/workflow-path',
   workflowJob: 'takos.dev/workflow-job',
@@ -305,4 +369,3 @@ export const BUILD_SOURCE_LABELS = {
   sourceJobId: 'takos.dev/workflow-job-id',
   sourceSha: 'takos.dev/source-sha',
 } as const;
-

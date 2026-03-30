@@ -18,6 +18,7 @@ export interface BillingTopupPack {
 }
 
 export interface BillingSummary {
+  billing_enabled?: boolean;
   plan: {
     id: string;
     name: string;

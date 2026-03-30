@@ -7,6 +7,7 @@ import { getRunEventsAfterFromR2 } from '../offload/run-events';
 import { logWarn } from '../../../shared/utils/logger';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards';
 const MAX_INFO_UNIT_TOKENS = 2048;
 const MAX_EVENT_TEXT_CHARS = 4000;
 const CHARS_PER_TOKEN = 4;
@@ -256,7 +257,7 @@ export class InfoUnitIndexer {
           .all()
         ).map((event) => ({
           ...event,
-          createdAt: (event.createdAt == null ? null : typeof event.createdAt === 'string' ? event.createdAt : event.createdAt.toISOString()) ?? new Date(0).toISOString(),
+          createdAt: textDateNullable(event.createdAt) ?? new Date(0).toISOString(),
         }));
 
     const entries = events

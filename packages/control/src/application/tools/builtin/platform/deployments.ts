@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../../types';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
 import { generateId } from '../../../../shared/utils';
 import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db';
 import { eq, and, desc } from 'drizzle-orm';
@@ -124,8 +124,8 @@ export const workerListHandler: ToolHandler = async (args, context) => {
       hostname: w.hostname,
       route_ref: routeRef,
       slug: w.slug,
-      created_at: (w.createdAt == null ? null : typeof w.createdAt === 'string' ? w.createdAt : w.createdAt.toISOString()),
-      updated_at: (w.updatedAt == null ? null : typeof w.updatedAt === 'string' ? w.updatedAt : w.updatedAt.toISOString()),
+      created_at: w.createdAt,
+      updated_at: w.updatedAt,
       app_name: appRow?.name || null,
       app_icon: appRow?.icon || null,
       app_description: appRow?.description || null,

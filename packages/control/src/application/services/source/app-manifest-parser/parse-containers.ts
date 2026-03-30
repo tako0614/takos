@@ -65,9 +65,31 @@ export function parseContainers(specRecord: Record<string, unknown>): Record<str
     }
     const containerVolumes = parseVolumes(c.volumes, `spec.containers.${name}`);
     const containerDependsOn = asStringArray(c.dependsOn, `spec.containers.${name}.dependsOn`);
+    const dockerfile = asString(c.dockerfile, `spec.containers.${name}.dockerfile`);
+    const imageRef = asString(c.imageRef, `spec.containers.${name}.imageRef`);
+    const artifactRecord = asRecord(c.artifact);
+    const artifactKind = asString(artifactRecord.kind, `spec.containers.${name}.artifact.kind`);
+    const artifact = artifactKind === 'image'
+      ? {
+          kind: 'image' as const,
+          imageRef: asRequiredString(artifactRecord.imageRef, `spec.containers.${name}.artifact.imageRef`),
+          ...(artifactRecord.provider === 'oci' || artifactRecord.provider === 'ecs' || artifactRecord.provider === 'cloud-run' || artifactRecord.provider === 'k8s'
+            ? { provider: artifactRecord.provider }
+            : {}),
+        }
+      : undefined;
+    if (!dockerfile && !imageRef && !artifact) {
+      throw new Error(`spec.containers.${name} must define dockerfile, imageRef, or artifact.kind=image`);
+    }
+
     containers[name] = {
-      dockerfile: normalizeRepoPath(asRequiredString(c.dockerfile, `spec.containers.${name}.dockerfile`)),
       port,
+      ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
+      ...(imageRef ? { imageRef } : {}),
+      ...(artifact ? { artifact } : {}),
+      ...(c.provider === 'oci' || c.provider === 'ecs' || c.provider === 'cloud-run' || c.provider === 'k8s'
+        ? { provider: c.provider }
+        : {}),
       ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
       ...(c.maxInstances ? { maxInstances: Number(c.maxInstances) } : {}),
       ...(((): { env?: Record<string, string> } => { const v = asStringMap(c.env, `spec.containers.${name}.env`); return v ? { env: v } : {}; })()),

@@ -22,7 +22,7 @@ import {
   updateDeploymentRecord,
   updateServiceDeploymentPointers,
 } from './store';
-import type { RoutingTarget } from '../routing/types';
+import type { RoutingTarget } from '../routing/routing-models';
 import {
   applyRoutingToHostnames,
   buildRoutingTarget,
@@ -33,7 +33,6 @@ import {
 } from './routing';
 import { deployments, getDb, serviceDeployments } from '../../../infra/db';
 import { eq, and, ne, inArray } from 'drizzle-orm';
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
 import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
 import {
   resolveDeploymentServiceId,
@@ -93,10 +92,15 @@ export async function executeRollback(
       deployment: targetDeployment,
       artifactRef: targetArtifactRef,
       wasmContent: null,
-      bindings: [],
-      compatibilityDate: runtimeConfig.compatibility_date || CF_COMPATIBILITY_DATE,
-      compatibilityFlags: runtimeConfig.compatibility_flags,
-      limits: runtimeConfig.limits,
+      runtime: {
+        profile: 'container-service',
+        bindings: [],
+        config: {
+          compatibility_date: runtimeConfig.compatibility_date || '2024-01-01',
+          compatibility_flags: runtimeConfig.compatibility_flags,
+          limits: runtimeConfig.limits,
+        },
+      },
     });
 
     // Update provider_state_json with fresh resolved endpoint

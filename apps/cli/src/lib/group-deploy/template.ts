@@ -56,8 +56,8 @@ export function resolveTemplateString(template: string, context: TemplateContext
     const parts = expr.split('.');
     let current: unknown = context;
     for (const part of parts) {
-      if (current == null || typeof current !== 'object') return _match;
-      current = (current as Record<string, unknown>)[part];
+      if (current == null || typeof current !== 'object' || Array.isArray(current)) return _match;
+      current = (current as Readonly<Record<string, unknown>>)[part];
     }
     return current != null ? String(current) : _match;
   });

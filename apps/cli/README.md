@@ -47,9 +47,11 @@ takos thread create /THREAD_ID/messages --body '{"content":"hello"}'
 takos run list /THREAD_ID
 
 # App deploy
-takos deploy-group --space SPACE_ID --env-file .env --allow-no-domain
-takos deploy validate
-takos apply --spec deploy.json
+takos plan
+takos apply --env staging
+takos apply --env production --target workers.web
+takos worker attach web --group demo-app
+takos resource attach main-db --group demo-app
 ```
 
 Common task verbs:
@@ -132,8 +134,10 @@ The following are removed intentionally:
 `takos deploy` is removed in the current implementation.
 
 - Source of truth: `.takos/app.yml`
-- Active flows: `takos deploy-group` for group deploys, `takos apply` for prepared specs
-- Validation: `takos deploy validate` validates local manifest/workflow references
+- Active flow: `takos apply` for manifest-driven deploys
+- Default group name for `takos apply`: `metadata.name`
+- Direct workloads/resources stay standalone unless you pass `--group` or run `attach`
+- Validation: `takos plan` validates local manifest/workflow references and shows the current diff
 - Removed surface: `/api/spaces/:spaceId/app-deployments` remains unavailable and returns `410 Gone`
 
 ## Container Mode

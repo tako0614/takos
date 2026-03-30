@@ -4,6 +4,7 @@ import * as gitStore from '../git-smart';
 import { getDb, branches, pullRequests } from '../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { decodeBlobContent } from '../../../shared/utils/unified-diff';
+import { textDate, textDateNullable } from '../../../shared/utils/db-guards';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 
@@ -481,9 +482,9 @@ async function advanceBaseBranchAndMarkMerged(
       ...updatedPullRequest,
       status: updatedPullRequest.status as PullRequestStatus,
       authorType: updatedPullRequest.authorType as AuthorType,
-      createdAt: (updatedPullRequest.createdAt == null ? null : typeof updatedPullRequest.createdAt === 'string' ? updatedPullRequest.createdAt : updatedPullRequest.createdAt.toISOString()),
-      updatedAt: (updatedPullRequest.updatedAt == null ? null : typeof updatedPullRequest.updatedAt === 'string' ? updatedPullRequest.updatedAt : updatedPullRequest.updatedAt.toISOString()),
-      mergedAt: (updatedPullRequest.mergedAt == null ? null : typeof updatedPullRequest.mergedAt === 'string' ? updatedPullRequest.mergedAt : updatedPullRequest.mergedAt.toISOString()),
+      createdAt: textDate(updatedPullRequest.createdAt),
+      updatedAt: textDate(updatedPullRequest.updatedAt),
+      mergedAt: textDateNullable(updatedPullRequest.mergedAt),
     },
   };
 }

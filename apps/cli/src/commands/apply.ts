@@ -12,17 +12,41 @@
  *   takos apply --env staging --target resources.db --target workers.web
  *   takos apply --offline --env staging
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import chalk from 'chalk';
 import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
 import { cliExit } from '../lib/command-exit.js';
-import { confirmPrompt } from '../lib/cli-utils.js';
+import { confirmPrompt, resolveSpaceId } from '../lib/cli-utils.js';
 import { api } from '../lib/api.js';
-import { getConfig } from '../lib/config.js';
 import { formatPlan } from '../lib/state/plan.js';
-import type { DiffResult } from '../lib/state/diff.js';
+import { DEFAULT_COMPATIBILITY_DATE } from '../lib/constants.js';
+import { printApplyResult } from '../lib/apply/result-formatter.js';
 import type { ApplyResult } from '../lib/apply/coordinator.js';
+import type { DiffEntry, DiffResult } from '../lib/state/diff.js';
+import type { TakosState } from '../lib/state/state-types.js';
+import type { AppManifest } from '../lib/app-manifest.js';
+import { printTranslationReport, type TranslationReport } from '../lib/translation-report.js';
+
+type PlanByNameResponse = {
+  group: { id: string; name: string };
+  diff: DiffResult;
+  translationReport: TranslationReport;
+};
+
+type ApplyByNameResponse = ApplyResult & {
+  group?: { id: string; name: string };
+  translationReport: TranslationReport;
+};
+
+type ApplyArtifactInput =
+  | { kind: 'worker-bundle'; bundleContent: string; deployMessage?: string }
+  | { kind: 'container-image'; imageRef: string; provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s'; deployMessage?: string };
+
+type ManifestWorker = NonNullable<AppManifest['spec']['workers']>[string];
+type ManifestContainer = NonNullable<AppManifest['spec']['containers']>[string];
+type ManifestService = NonNullable<AppManifest['spec']['services']>[string];
 
 type ApplyCommandOptions = {
   manifest?: string;
@@ -39,54 +63,64 @@ type ApplyCommandOptions = {
   offline?: boolean;
 };
 
-function resolveSpaceId(spaceOverride?: string): string {
-  const spaceId = String(spaceOverride || getConfig().spaceId || '').trim();
-  if (!spaceId) {
-    console.log(chalk.red('Workspace ID is required. Pass --space or configure a default workspace.'));
-    cliExit(1);
-  }
-  return spaceId;
+function targetIncludes(targets: string[], prefixes: string[], name: string): boolean {
+  if (targets.length === 0) return true;
+  return targets.some((target) => {
+    if (target === name) return true;
+    return prefixes.some((prefix) => target === `${prefix}.${name}`);
+  });
 }
 
-/** Print apply result (shared between online and offline). */
-function printApplyResult(result: ApplyResult, env: string, groupName: string): void {
-  console.log('');
-  console.log(chalk.bold(`Apply: ${groupName}`));
-  console.log(`  Environment: ${env}`);
-  console.log('');
+async function collectApplyArtifacts(
+  manifest: AppManifest,
+  manifestPath: string,
+  targets: string[],
+): Promise<Record<string, ApplyArtifactInput>> {
+  const repoRoot = path.dirname(path.dirname(manifestPath));
+  const artifacts: Record<string, ApplyArtifactInput> = {};
 
-  if (result.applied.length > 0) {
-    console.log(chalk.bold('Applied:'));
-    for (const entry of result.applied) {
-      const icon = entry.status === 'success' ? chalk.green('+') : chalk.red('!');
-      const errorInfo = entry.error ? chalk.red(` -- ${entry.error}`) : '';
-      console.log(`  ${icon} ${entry.name} [${entry.category}] ${entry.action}${errorInfo}`);
-    }
-    console.log('');
+  for (const [name, worker] of Object.entries(manifest.spec.workers ?? {}) as Array<[string, ManifestWorker]>) {
+    if (!targetIncludes(targets, ['workers'], name)) continue;
+    if (!worker.build?.fromWorkflow) continue;
+    const artifactPath = path.resolve(repoRoot, worker.build.fromWorkflow.artifactPath);
+    const bundleContent = await fs.readFile(artifactPath, 'utf8').catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to read worker artifact for "${name}": ${message}`);
+    });
+    artifacts[name] = {
+      kind: 'worker-bundle',
+      bundleContent,
+      deployMessage: `takos apply ${name}`,
+    };
   }
 
-  if (result.skipped.length > 0) {
-    console.log(chalk.bold('Unchanged:'));
-    for (const name of result.skipped) {
-      console.log(`  ${chalk.dim('=')} ${name}`);
-    }
-    console.log('');
+  for (const [name, container] of Object.entries(manifest.spec.containers ?? {}) as Array<[string, ManifestContainer]>) {
+    if (!targetIncludes(targets, ['containers'], name)) continue;
+    const imageRef = container.artifact?.kind === 'image' ? container.artifact.imageRef : container.imageRef;
+    const provider = container.artifact?.kind === 'image' ? container.artifact.provider : container.provider;
+    if (!imageRef) continue;
+    artifacts[name] = {
+      kind: 'container-image',
+      imageRef,
+      provider: provider ?? 'oci',
+      deployMessage: `takos apply ${name}`,
+    };
   }
 
-  const succeeded = result.applied.filter(e => e.status === 'success').length;
-  const failed = result.applied.filter(e => e.status === 'failed').length;
-
-  console.log(chalk.bold('Summary:'));
-  console.log(`  Applied:   ${succeeded} succeeded, ${failed} failed`);
-  console.log(`  Unchanged: ${result.skipped.length}`);
-
-  if (failed > 0) {
-    console.log('');
-    console.log(chalk.red('Some steps failed. Review errors above.'));
-  } else {
-    console.log('');
-    console.log(chalk.green('Apply completed successfully.'));
+  for (const [name, service] of Object.entries(manifest.spec.services ?? {}) as Array<[string, ManifestService]>) {
+    if (!targetIncludes(targets, ['services'], name)) continue;
+    const imageRef = service.artifact?.kind === 'image' ? service.artifact.imageRef : service.imageRef;
+    const provider = service.artifact?.kind === 'image' ? service.artifact.provider : service.provider;
+    if (!imageRef) continue;
+    artifacts[name] = {
+      kind: 'container-image',
+      imageRef,
+      provider: provider ?? 'oci',
+      deployMessage: `takos apply ${name}`,
+    };
   }
+
+  return artifacts;
 }
 
 /** Offline fallback: use the local coordinator (original logic). */
@@ -99,15 +133,12 @@ async function handleApplyOffline(
   const { computeDiff } = await import('../lib/state/diff.js');
   const { applyDiff } = await import('../lib/apply/coordinator.js');
   const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-  type TakosState = import('../lib/state/state-types.js').TakosState;
-  type DiffEntry = import('../lib/state/diff.js').DiffEntry;
-  type OfflineDiffResult = import('../lib/state/diff.js').DiffResult;
 
   const accountId = resolveAccountId(options.accountId);
   const apiToken = resolveApiToken(options.apiToken);
 
   const stateDir = getStateDir(process.cwd());
-  const group = options.group || 'default';
+  const group = options.group || manifest.metadata.name;
   let currentState: TakosState | null = null;
   try {
     currentState = await readState(stateDir, group, { offline: true });
@@ -178,7 +209,7 @@ async function handleApplyOffline(
   }
 
   /** Filter diff entries by --target values like "resources.db", "workers.web" */
-  function filterDiffByTargets(diffResult: OfflineDiffResult, filterTargets: string[]): OfflineDiffResult {
+  function filterDiffByTargets(diffResult: DiffResult, filterTargets: string[]): DiffResult {
     if (filterTargets.length === 0) return diffResult;
     const filtered = diffResult.entries.filter((entry: DiffEntry) => {
       const categoryPlural = entry.category === 'resource' ? 'resources' : entry.category === 'worker' ? 'workers' : entry.category === 'container' ? 'containers' : entry.category === 'route' ? 'routes' : 'services';
@@ -206,11 +237,11 @@ export function registerApplyCommand(program: Command): void {
     .option('--auto-approve', 'Skip interactive confirmation prompt')
     .option('--target <key...>', 'Apply only specific resources/services (e.g. resources.db, workers.web)')
     .option('--namespace <name>', 'Dispatch namespace')
-    .option('--group <name>', 'Target group (default: "default")', 'default')
+    .option('--group <name>', 'Target group name (defaults to metadata.name)')
     .option('--space <id>', 'Target workspace ID')
     .option('--account-id <id>', 'Cloudflare account ID (or set CLOUDFLARE_ACCOUNT_ID)')
     .option('--api-token <token>', 'Cloudflare API token (or set CLOUDFLARE_API_TOKEN)')
-    .option('--compatibility-date <date>', 'Worker compatibility date', '2025-01-01')
+    .option('--compatibility-date <date>', 'Worker compatibility date', DEFAULT_COMPATIBILITY_DATE)
     .option('--base-domain <domain>', 'Base domain for template resolution')
     .option('--offline', 'Force file-based state (skip API)')
     .action(async (options: ApplyCommandOptions) => {
@@ -241,13 +272,17 @@ export function registerApplyCommand(program: Command): void {
 
       // Online mode: API-driven plan + apply
       const spaceId = resolveSpaceId(options.space);
-      const group = options.group || 'default';
+      const group = options.group || manifest.metadata.name;
       const targets = options.target || [];
 
       // Step 2: Plan via API
-      const planRes = await api<DiffResult>(`/api/spaces/${spaceId}/groups/${group}/plan`, {
+      const planRes = await api<PlanByNameResponse>(`/api/spaces/${spaceId}/groups/plan`, {
         method: 'POST',
-        body: { manifest },
+        body: {
+          group_name: group,
+          env: options.env,
+          manifest,
+        },
       });
 
       if (!planRes.ok) {
@@ -255,7 +290,8 @@ export function registerApplyCommand(program: Command): void {
         cliExit(1);
       }
 
-      const diff = planRes.data;
+      const diff = planRes.data.diff;
+      const translationReport = planRes.data.translationReport;
 
       // Step 3: Display plan
       console.log('');
@@ -266,6 +302,12 @@ export function registerApplyCommand(program: Command): void {
         console.log(`  Targets:     ${targets.join(', ')}`);
       }
       console.log('');
+
+      printTranslationReport(translationReport);
+
+      if (!translationReport.supported) {
+        cliExit(1);
+      }
 
       const planOutput = formatPlan(diff);
       console.log(planOutput);
@@ -297,10 +339,22 @@ export function registerApplyCommand(program: Command): void {
       console.log(chalk.cyan('Applying changes...'));
       console.log('');
 
-      const applyRes = await api<ApplyResult>(`/api/spaces/${spaceId}/groups/${group}/apply`, {
+      let artifacts: Record<string, ApplyArtifactInput> = {};
+      try {
+        artifacts = await collectApplyArtifacts(manifest, manifestPath, targets);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(chalk.red(message));
+        cliExit(1);
+      }
+
+      const applyRes = await api<ApplyByNameResponse>(`/api/spaces/${spaceId}/groups/apply`, {
         method: 'POST',
         body: {
+          group_name: group,
+          env: options.env,
           manifest,
+          artifacts,
           target: targets.length > 0 ? targets : undefined,
         },
         timeout: 120_000,
@@ -312,7 +366,8 @@ export function registerApplyCommand(program: Command): void {
       }
 
       const result = applyRes.data;
-      const groupName = options.group || manifest.metadata.name;
+      const groupName = result.group?.name || options.group || manifest.metadata.name;
+      printTranslationReport(result.translationReport);
       printApplyResult(result, options.env, groupName);
 
       const hasFailures = result.applied.some(e => e.status === 'failed');

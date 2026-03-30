@@ -10,7 +10,7 @@ function makeManifest() {
     spec: {
       version: '1.0.0',
       resources: {
-        db: { type: 'd1', binding: 'DB' },
+        db: { type: 'sql', binding: 'DB' },
       },
       workers: {
         api: {
@@ -58,8 +58,11 @@ describe('group desired state compiler', () => {
 
     expect(compiled.groupName).toBe('demo-prod');
     expect(compiled.env).toBe('production');
-    expect(compiled.resources.db.binding).toBe('DB');
-    expect(compiled.workloads.api.category).toBe('worker');
+    expect(compiled.resources.db.bindingName).toBe('DB');
+    expect(compiled.resources.db.resourceClass).toBe('sql');
+    expect(compiled.resources.db.backing).toBe('d1');
+    expect(compiled.workloads.api.sourceKind).toBe('worker');
+    expect(compiled.workloads.api.executionProfile).toBe('workers');
     expect(compiled.workloads.api.routeNames).toEqual(['api-route']);
     expect((compiled.workloads.api.spec as { env?: Record<string, string> }).env?.MODE).toBe('prod');
     expect(compiled.routes['web-route']).toMatchObject({ target: 'web', path: '/' });
@@ -94,7 +97,9 @@ describe('group diff', () => {
       api: {
         serviceId: 'svc-api',
         name: 'api',
-        category: 'worker',
+        sourceKind: 'worker',
+        executionProfile: 'workers',
+        artifactKind: 'worker-bundle',
         status: 'deployed',
         hostname: 'api.example.test',
         routeRef: 'worker-api',
@@ -104,7 +109,9 @@ describe('group diff', () => {
       web: {
         serviceId: 'svc-web',
         name: 'web',
-        category: 'service',
+        sourceKind: 'service',
+        executionProfile: 'oci-service',
+        artifactKind: 'container-image',
         status: 'deployed',
         hostname: 'web.example.test',
         specFingerprint: desired.workloads.web.specFingerprint,
@@ -122,9 +129,12 @@ describe('group diff', () => {
       resources: {
         db: {
           name: 'db',
-          type: 'd1',
+          manifestType: 'sql',
+          resourceClass: 'sql',
+          backing: 'd1',
           resourceId: 'db-1',
-          binding: 'OLD_DB',
+          bindingName: 'OLD_DB',
+          bindingType: 'sql',
           status: 'active',
           specFingerprint: 'stale-resource',
           updatedAt: '2026-03-29T00:00:00.000Z',
@@ -134,7 +144,9 @@ describe('group diff', () => {
         api: {
           serviceId: 'svc-api',
           name: 'api',
-          category: 'worker',
+          sourceKind: 'worker',
+          executionProfile: 'workers',
+          artifactKind: 'worker-bundle',
           status: 'deployed',
           hostname: 'api.example.test',
           routeRef: 'worker-api',
@@ -144,7 +156,9 @@ describe('group diff', () => {
         web: {
           serviceId: 'svc-web',
           name: 'web',
-          category: 'service',
+          sourceKind: 'service',
+          executionProfile: 'oci-service',
+          artifactKind: 'container-image',
           status: 'deployed',
           hostname: 'web.example.test',
           specFingerprint: desired.workloads.web.specFingerprint,
@@ -164,7 +178,7 @@ describe('group diff', () => {
     expect(diff.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'db', category: 'resource', action: 'update' }),
-        expect.objectContaining({ name: 'api', category: 'worker', action: 'update' }),
+        expect.objectContaining({ name: 'api', category: 'service', sourceKind: 'worker', action: 'update' }),
         expect.objectContaining({ name: 'web-route', category: 'route', action: 'update' }),
       ]),
     );

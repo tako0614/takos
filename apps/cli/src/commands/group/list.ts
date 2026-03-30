@@ -1,0 +1,51 @@
+/**
+ * `takos group list` subcommand.
+ */
+import { Command } from 'commander';
+import chalk from 'chalk';
+import {
+  getStateDir,
+  getStateFilePath,
+  listStateGroups,
+} from '../../lib/state/state-file.js';
+import { listApiGroups, resolveGroupSpaceId, toAccessOpts } from './helpers.js';
+
+export function registerGroupListCommand(groupCmd: Command): void {
+  groupCmd
+    .command('list')
+    .description('List all groups')
+    .option('--json', 'Machine-readable JSON output')
+    .option('--space <id>', 'Target workspace ID')
+    .option('--offline', 'Force file-based state (skip API)')
+    .action(async (options: { json?: boolean; offline?: boolean; space?: string }) => {
+      const cwd = process.cwd();
+      const stateDir = getStateDir(cwd);
+      const accessOpts = toAccessOpts(options);
+      const groups = options.offline
+        ? await listStateGroups(stateDir, accessOpts)
+        : (await listApiGroups(resolveGroupSpaceId(options.space))).map((group) => group.name);
+
+      if (options.json) {
+        process.stdout.write(`${JSON.stringify(groups, null, 2)}\n`);
+        return;
+      }
+
+      if (groups.length === 0) {
+        console.log(chalk.dim('No groups found. Run `takos apply` to create one.'));
+        return;
+      }
+
+      console.log('');
+      console.log(chalk.bold('Groups:'));
+      for (const name of groups) {
+        if (accessOpts.offline) {
+          const stateFilePath = getStateFilePath(stateDir, name);
+          console.log(`  ${name}  ${chalk.dim(stateFilePath)}`);
+        } else {
+          console.log(`  ${name}`);
+        }
+      }
+      console.log('');
+      console.log(chalk.dim(`${groups.length} group(s)`));
+    });
+}

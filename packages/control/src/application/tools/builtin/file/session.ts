@@ -1,4 +1,4 @@
-import type { ToolContext } from '../../types';
+import type { ToolContext } from '../../tool-definitions';
 import { getDb, sessionRepos, sessions } from '../../../../infra/db';
 import { eq, and } from 'drizzle-orm';
 import { validatePath } from '../../../../shared/utils/path-validation';

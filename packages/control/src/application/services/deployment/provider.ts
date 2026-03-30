@@ -15,15 +15,22 @@ export type DeploymentProviderDeployResult = {
   logsRef?: string;
 };
 
+export type DeploymentProviderRuntimeInput = {
+  profile: 'workers' | 'container-service';
+  bindings?: WorkerBinding[];
+  config?: {
+    compatibility_date?: string;
+    compatibility_flags?: string[];
+    limits?: { cpu_ms?: number; subrequests?: number };
+  };
+};
+
 export type DeploymentProviderDeployInput = {
   deployment: Deployment;
   artifactRef: string;
   bundleContent?: string;
   wasmContent: ArrayBuffer | null;
-  bindings: WorkerBinding[];
-  compatibilityDate: string;
-  compatibilityFlags: string[];
-  limits?: { cpu_ms?: number; subrequests?: number };
+  runtime: DeploymentProviderRuntimeInput;
 };
 
 export type DeploymentProvider = {
@@ -45,11 +52,39 @@ type OciDeploymentOrchestratorConfig = {
   fetchImpl?: typeof fetch;
 };
 
+type DeploymentProviderRegistryEntry = {
+  name: DeploymentProviderName;
+  config?: {
+    orchestratorUrl?: string;
+    orchestratorToken?: string;
+  };
+};
+
 type DeploymentProviderFactoryConfig = OciDeploymentOrchestratorConfig & {
   cloudflareEnv?: WfpDeploymentProviderEnv;
+  providerRegistry?: {
+    get(name: DeploymentProviderName): DeploymentProviderRegistryEntry | undefined;
+  };
 };
 
 type PersistedDeploymentContract = Pick<Deployment, 'provider_name' | 'target_json'>;
+
+function normalizeDeployRuntime(input: DeploymentProviderDeployInput): {
+  profile: 'workers' | 'container-service';
+  bindings: WorkerBinding[];
+  compatibilityDate: string;
+  compatibilityFlags: string[];
+  limits?: { cpu_ms?: number; subrequests?: number };
+} {
+  const runtime = input.runtime;
+  return {
+    profile: runtime.profile,
+    bindings: runtime.bindings ?? [],
+    compatibilityDate: runtime.config?.compatibility_date ?? '2024-01-01',
+    compatibilityFlags: runtime.config?.compatibility_flags ?? [],
+    limits: runtime.config?.limits,
+  };
+}
 
 function safeJsonParse<T>(raw: string, fallback: T): T {
   try {
@@ -159,13 +194,14 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
   return {
     name: 'workers-dispatch',
     async deploy(input) {
+      const runtime = normalizeDeployRuntime(input);
       if (input.wasmContent) {
         await wfp.workers.createWorkerWithWasm(
           input.artifactRef,
           input.bundleContent || '',
           input.wasmContent,
           {
-            bindings: input.bindings as Array<{
+            bindings: runtime.bindings as Array<{
               type: string;
               name: string;
               id?: string;
@@ -173,9 +209,9 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
               namespace_id?: string;
               text?: string;
             }>,
-            compatibility_date: input.compatibilityDate,
-            compatibility_flags: input.compatibilityFlags,
-            limits: input.limits,
+            compatibility_date: runtime.compatibilityDate,
+            compatibility_flags: runtime.compatibilityFlags,
+            limits: runtime.limits,
           },
         );
         return;
@@ -184,10 +220,10 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
       await wfp.workers.createWorker({
         workerName: input.artifactRef,
         workerScript: input.bundleContent || '',
-        bindings: input.bindings,
-        compatibility_date: input.compatibilityDate,
-        compatibility_flags: input.compatibilityFlags,
-        limits: input.limits,
+        bindings: runtime.bindings,
+        compatibility_date: runtime.compatibilityDate,
+        compatibility_flags: runtime.compatibilityFlags,
+        limits: runtime.limits,
       });
     },
     async assertRollbackTarget(artifactRef) {
@@ -202,6 +238,26 @@ export function createWorkersDispatchDeploymentProvider(wfp: WFPService): Deploy
   };
 }
 
+export function createRuntimeHostDeploymentProvider(): DeploymentProvider {
+  return {
+    name: 'runtime-host',
+    async deploy(input) {
+      const runtime = normalizeDeployRuntime(input);
+      if (runtime.profile !== 'workers') {
+        throw new Error('runtime-host provider only supports workers runtime profiles');
+      }
+      if (!input.bundleContent || input.bundleContent.trim().length === 0) {
+        throw new Error('runtime-host deployment requires a worker bundle');
+      }
+      // runtime-host resolves active deployments lazily from DB + WORKER_BUNDLES.
+      // Creating the deployment row and storing the bundle is sufficient here.
+    },
+    async assertRollbackTarget(_artifactRef) {
+      // runtime-host loads rollback targets from Takos-managed deployment records.
+    },
+  };
+}
+
 export function createOciDeploymentProvider(
   deployment: PersistedDeploymentContract,
   config?: OciDeploymentOrchestratorConfig,
@@ -212,6 +268,7 @@ export function createOciDeploymentProvider(
   return {
     name: 'oci',
     async deploy(input) {
+      const runtime = normalizeDeployRuntime(input);
       const serviceRef = target.endpoint?.kind === 'service-ref'
         ? target.endpoint.ref.trim()
         : target.route_ref?.trim() || input.artifactRef;
@@ -267,9 +324,10 @@ export function createOciDeploymentProvider(
             },
           },
           runtime: {
-            compatibility_date: input.compatibilityDate,
-            compatibility_flags: input.compatibilityFlags,
-            limits: input.limits ?? null,
+            profile: runtime.profile,
+            compatibility_date: runtime.compatibilityDate,
+            compatibility_flags: runtime.compatibilityFlags,
+            limits: runtime.limits ?? null,
           },
         }),
       });
@@ -299,6 +357,7 @@ export function createOciDeploymentProvider(
           logsRef: responseBody.logs_ref,
         };
       }
+      return;
     },
     async assertRollbackTarget(_artifactRef) {
       // OCI rollback validity is external to Takos; routing can still point at the artifact ref.
@@ -310,14 +369,18 @@ export function createDeploymentProvider(
   deployment: PersistedDeploymentContract,
   config: DeploymentProviderFactoryConfig = {},
 ): DeploymentProvider {
+  const registryEntry = config.providerRegistry?.get(deployment.provider_name);
+  const registryOrchestratorUrl = registryEntry?.config?.orchestratorUrl;
+  const registryOrchestratorToken = registryEntry?.config?.orchestratorToken;
+
   switch (deployment.provider_name) {
     case 'oci':
     case 'ecs':
     case 'cloud-run':
     case 'k8s':
       return createOciDeploymentProvider(deployment, {
-        orchestratorUrl: config.orchestratorUrl,
-        orchestratorToken: config.orchestratorToken,
+        orchestratorUrl: registryOrchestratorUrl ?? config.orchestratorUrl,
+        orchestratorToken: registryOrchestratorToken ?? config.orchestratorToken,
         fetchImpl: config.fetchImpl,
       });
 
@@ -337,6 +400,9 @@ export function createDeploymentProvider(
         WFP_DISPATCH_NAMESPACE: dispatchNamespace,
       }));
     }
+
+    case 'runtime-host':
+      return createRuntimeHostDeploymentProvider();
 
     default:
       throw new Error(`Unknown deployment provider: ${deployment.provider_name}`);

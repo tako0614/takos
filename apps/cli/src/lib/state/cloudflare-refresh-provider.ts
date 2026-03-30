@@ -41,14 +41,17 @@ export class CloudflareStateRefreshProvider implements RefreshableProvider {
     }
 
     switch (type) {
+      case 'sql':
       case 'd1':
         return checkCloudflareEndpoint(this.accountId, this.apiToken, `/d1/database/${encodeURIComponent(id)}`);
+      case 'object_store':
       case 'r2':
         return checkCloudflareEndpoint(this.accountId, this.apiToken, `/r2/buckets/${encodeURIComponent(id)}`);
       case 'kv':
         return checkCloudflareEndpoint(this.accountId, this.apiToken, `/storage/kv/namespaces/${encodeURIComponent(id)}`);
       case 'queue':
         return checkCloudflareEndpoint(this.accountId, this.apiToken, `/queues/${encodeURIComponent(id)}`);
+      case 'vector_index':
       case 'vectorize':
         return checkCloudflareEndpoint(this.accountId, this.apiToken, `/vectorize/v2/indexes/${encodeURIComponent(id)}`);
       case 'worker':

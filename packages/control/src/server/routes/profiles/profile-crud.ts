@@ -11,6 +11,7 @@ import { accounts, repositories, repoStars } from '../../../infra/db/schema';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-utils';
 import type { UserProfileResponse, ProfileRepoResponse } from './dto';
+import { textDate } from '../../../shared/utils/db-guards';
 
 export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
 
@@ -117,7 +118,7 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
     stars: repo.stars,
     forks: repo.forks,
     is_starred: starredSet.has(repo.id),
-    updated_at: (repo.updatedAt == null ? null : typeof repo.updatedAt === 'string' ? repo.updatedAt : repo.updatedAt.toISOString()),
+    updated_at: textDate(repo.updatedAt),
   }));
 
   const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
@@ -206,8 +207,8 @@ export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
       stars: starData.repoStars,
       forks: starData.repoForks,
       is_starred: starredSet.has(starData.repoId),
-      updated_at: (starData.repoUpdatedAt == null ? null : typeof starData.repoUpdatedAt === 'string' ? starData.repoUpdatedAt : starData.repoUpdatedAt.toISOString()),
-      starred_at: (starData.starCreatedAt == null ? null : typeof starData.starCreatedAt === 'string' ? starData.starCreatedAt : starData.starCreatedAt.toISOString()),
+      updated_at: textDate(starData.repoUpdatedAt),
+      starred_at: textDate(starData.starCreatedAt),
     };
   });
 

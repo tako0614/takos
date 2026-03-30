@@ -4,7 +4,7 @@
  * Consolidates: browser_action, browser_extract, browser_html, browser_screenshot.
  */
 
-import type { ToolHandler } from '../../types';
+import type { ToolHandler } from '../../tool-definitions';
 import { requireBrowserSessionId, browserHostFetch } from './session';
 
 /* ------------------------------------------------------------------ */

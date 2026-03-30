@@ -244,7 +244,7 @@ function handleServerListening(
   console.log(chalk.gray(`Callback URL: ${callbackUrl}`));
   console.log(chalk.gray(`Auth URL: ${authUrl}`));
 
-  openAuthUrl(authUrl).catch(() => {
+  void openAuthUrl(authUrl).catch(() => {
     console.log(chalk.yellow(`\nCould not open browser automatically.`));
     console.log(chalk.yellow(`Please open this URL manually:\n${authUrl}`));
   });

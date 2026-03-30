@@ -90,9 +90,31 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       }
     }
 
+    const dockerfile = asString(s.dockerfile, `spec.services.${name}.dockerfile`);
+    const imageRef = asString(s.imageRef, `spec.services.${name}.imageRef`);
+    const artifactRecord = asRecord(s.artifact);
+    const artifactKind = asString(artifactRecord.kind, `spec.services.${name}.artifact.kind`);
+    const artifact = artifactKind === 'image'
+      ? {
+          kind: 'image' as const,
+          imageRef: asRequiredString(artifactRecord.imageRef, `spec.services.${name}.artifact.imageRef`),
+          ...(artifactRecord.provider === 'oci' || artifactRecord.provider === 'ecs' || artifactRecord.provider === 'cloud-run' || artifactRecord.provider === 'k8s'
+            ? { provider: artifactRecord.provider }
+            : {}),
+        }
+      : undefined;
+    if (!dockerfile && !imageRef && !artifact) {
+      throw new Error(`spec.services.${name} must define dockerfile, imageRef, or artifact.kind=image`);
+    }
+
     services[name] = {
-      dockerfile: normalizeRepoPath(asRequiredString(s.dockerfile, `spec.services.${name}.dockerfile`)),
       port,
+      ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
+      ...(imageRef ? { imageRef } : {}),
+      ...(artifact ? { artifact } : {}),
+      ...(s.provider === 'oci' || s.provider === 'ecs' || s.provider === 'cloud-run' || s.provider === 'k8s'
+        ? { provider: s.provider }
+        : {}),
       ...(s.instanceType ? { instanceType: String(s.instanceType) } : {}),
       ...(s.maxInstances ? { maxInstances: Number(s.maxInstances) } : {}),
       ...(s.ipv4 === true ? { ipv4: true } : {}),

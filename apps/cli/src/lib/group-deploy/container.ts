@@ -13,6 +13,7 @@ import type {
   ServiceDeployResult,
 } from './deploy-models.js';
 import { execCommand } from './cloudflare-utils.js';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
 
 // ── Container Deploy Helpers ─────────────────────────────────────────────
 
@@ -30,13 +31,16 @@ export function generateContainerWranglerConfig(
     ? `${groupName}-${serviceName}`
     : serviceName;
 
-  const container = service.container!;
+  if (!service.container) {
+    throw new Error(`Service "${serviceName}" is missing container configuration`);
+  }
+  const container = service.container;
   const className = `${toPascalCase(serviceName)}Container`;
 
   return {
     name: scriptName,
     main: 'index.js',
-    compatibility_date: options.compatibilityDate || '2025-01-01',
+    compatibility_date: options.compatibilityDate || DEFAULT_COMPATIBILITY_DATE,
     compatibility_flags: ['nodejs_compat'],
     durable_objects: {
       bindings: [{
@@ -144,7 +148,10 @@ export async function deployContainerWithWrangler(
   const config = generateContainerWranglerConfig(serviceName, service, options);
 
   if (options.dryRun) {
-    const container = service.container!;
+    const container = service.container;
+    if (!container) {
+      return { name: serviceName, type: 'container', status: 'failed', error: 'Missing container configuration' };
+    }
     return {
       name: serviceName,
       type: 'container',
