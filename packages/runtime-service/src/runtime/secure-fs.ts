@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import { constants as fsConstants } from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import * as path from 'node:path';
 import {
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
@@ -24,8 +24,8 @@ function isSymlinkOpenError(err: unknown): boolean {
 export async function writeFileWithinSpace(
   baseDir: string,
   fullPath: string,
-  content: string | Buffer,
-  encoding?: BufferEncoding,
+  content: string | Uint8Array,
+  encoding?: string,
   mode?: number
 ): Promise<number> {
   await verifyNoSymlinkPathComponents(baseDir, fullPath, 'path');
@@ -66,7 +66,7 @@ export async function writeFileWithinSpace(
   try {
     await verifyPathWithinAfterAccess(baseDir, fullPath, 'path');
     if (typeof content === 'string') {
-      await handle.writeFile(content, encoding);
+      await handle.writeFile(content, encoding as Parameters<typeof handle.writeFile>[1]);
     } else {
       await handle.writeFile(content);
     }

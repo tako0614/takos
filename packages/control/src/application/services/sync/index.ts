@@ -1,6 +1,6 @@
 // types
-export type { Session } from './models';
+export type { Session } from './models.ts';
 
 // runtime-session
-export { RuntimeSessionManager } from './runtime-session';
-export type { SessionInitResult } from './runtime-session';
+export { RuntimeSessionManager } from './runtime-session.ts';
+export type { SessionInitResult } from './runtime-session.ts';

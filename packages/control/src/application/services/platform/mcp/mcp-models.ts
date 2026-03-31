@@ -4,9 +4,9 @@
  * Shared types, interfaces, and constants used across MCP modules.
  */
 
-import type { Env } from '../../../../shared/types';
-import type { SelectOf } from '../../../../shared/types/drizzle-utils';
-import type { mcpServers } from '../../../../infra/db';
+import type { Env } from '../../../../shared/types/index.ts';
+import type { SelectOf } from '../../../../shared/types/drizzle-utils.ts';
+import type { mcpServers } from '../../../../infra/db/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types

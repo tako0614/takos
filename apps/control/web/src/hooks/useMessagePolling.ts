@@ -1,8 +1,8 @@
 import { createSignal, createEffect } from 'solid-js';
 import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpcJson } from '../lib/rpc';
-import type { Message } from '../types';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpcJson } from '../lib/rpc.ts';
+import type { Message } from '../types/index.ts';
 
 export interface UseMessagePollingOptions {
   threadId: string;

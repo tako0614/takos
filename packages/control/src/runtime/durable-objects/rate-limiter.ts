@@ -4,10 +4,10 @@ import {
   enforceKeyLimit,
   hitTokenBucket,
   type TokenBucketState,
-} from '../../shared/utils/rate-limiter';
+} from '../../shared/utils/rate-limiter.ts';
 
-import { jsonResponse } from './do-header-utils';
-import { logWarn } from '../../shared/utils/logger';
+import { jsonResponse } from './do-header-utils.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 interface RateLimitEntry {
   timestamps: number[];

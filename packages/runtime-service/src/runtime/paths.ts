@@ -1,5 +1,5 @@
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.ts';
 import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.ts';
 

@@ -7,10 +7,10 @@
  * metadata so the assets are served alongside the worker.
  */
 
-import type { WFPConfig, CFAPIResponse } from './client';
-import { CF_API_BASE, sanitizeErrorMessage } from './client';
-import type { WfpClient } from './client';
-import { bytesToHex, bytesToBase64 } from '../../../shared/utils/encoding-utils';
+import type { WFPConfig, CFAPIResponse } from './client.ts';
+import { CF_API_BASE, sanitizeErrorMessage } from './client.ts';
+import type { WfpClient } from './client.ts';
+import { bytesToHex, bytesToBase64 } from '../../../shared/utils/encoding-utils.ts';
 
 const ASSET_UPLOAD_TIMEOUT_MS = 60_000;
 

@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, eq } from 'drizzle-orm';
 
-import { accountMetadata, getDb } from '../../../infra/db';
-import { isSkillLocale } from '../agent/official-skills';
-import type { SkillLocale } from '../agent/skill-contracts';
+import { accountMetadata, getDb } from '../../../infra/db/index.ts';
+import { isSkillLocale } from '../agent/official-skills.ts';
+import type { SkillLocale } from '../agent/skill-contracts.ts';
 
 export async function getSpaceLocale(
   dbBinding: D1Database,

@@ -4,9 +4,9 @@
  * Session file I/O lives in ./config-session-io.ts.
  */
 
-import { homedir } from 'os';
-import { join } from 'path';
-import { existsSync, chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { existsSync, chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { PRODUCTION_DOMAIN } from 'takos-control/shared/constants';
 import { logWarning } from './cli-log.ts';
 import { validateApiUrl, isValidId } from './config-validation.ts';

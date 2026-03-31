@@ -6,7 +6,7 @@
  * Subclasses provide domain-specific identity, persistence shape,
  * auth checks, and any extra endpoints or emit-time side effects.
  */
-import { logError, logWarn } from '../../shared/utils/logger';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
 import {
   jsonResponse,
   type RingBufferEvent,
@@ -20,7 +20,7 @@ import {
   safeClose,
   RECONNECT_CLOSE_CODE,
   RECONNECT_CLOSE_REASON,
-} from './do-header-utils';
+} from './do-header-utils.ts';
 
 export { jsonResponse, type RingBufferEvent, type ExtendedWebSocket };
 
@@ -283,7 +283,7 @@ export abstract class NotifierBase implements DurableObject {
       }
     }
 
-    return new Response(null, { status: 101, webSocket: client });
+    return new Response(null, { status: 101, webSocket: client } as unknown as ResponseInit);
   }
 
   /**

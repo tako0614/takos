@@ -1,6 +1,6 @@
 import { createSignal, createEffect, on, onCleanup } from 'solid-js';
-import type { ExploreSort, SearchOrder, SearchSort, SourceRepo, SourceTab } from '../types/repos';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { ExploreSort, SearchOrder, SearchSort, SourceRepo, SourceTab } from '../types/repos.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface UseReposDataOptions {
   selectedSpaceId?: string;

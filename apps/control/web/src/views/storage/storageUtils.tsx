@@ -1,6 +1,6 @@
 import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import type { StorageFile } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import type { StorageFile } from '../../types/index.ts';
 
 export interface FileHandler {
   id: string;

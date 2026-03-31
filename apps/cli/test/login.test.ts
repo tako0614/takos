@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { Command } from 'commander';
 import { CliCommandExit } from '../src/lib/command-exit.ts';
 
@@ -55,7 +56,7 @@ const loginMocks = {
 };
 
 // [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
-// [Deno] vi.mock removed - manually stub imports from 'http'
+// [Deno] vi.mock removed - manually stub imports from 'node:http'
 // [Deno] vi.mock removed - manually stub imports from 'open'
 import { registerLoginCommand } from '../src/commands/login.ts';
 

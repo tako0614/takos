@@ -1,4 +1,4 @@
-import { MockDurableObjectNamespace } from '../../../../test/integration/setup';
+import { MockDurableObjectNamespace } from '../../../../test/integration/setup.ts';
 import type { Env } from '@/types';
 
 import { emitRunUsageEvent } from '@/services/offload/usage-client';

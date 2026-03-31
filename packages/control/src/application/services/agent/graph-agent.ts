@@ -17,8 +17,8 @@ import {
   SystemMessage,
   ToolMessage,
 } from '@langchain/core/messages';
-import { RunCancelledError } from './run-lifecycle';
-import { logWarn } from '../../../shared/utils/logger';
+import { RunCancelledError } from './run-lifecycle.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 // Re-export everything from the split modules for backward compatibility
 export {
@@ -31,20 +31,20 @@ export {
   createLangChainTool,
   type LangGraphEvent,
   type CreateAgentOptions,
-} from './graph-tools';
+} from './graph-tools.ts';
 
 export {
   AgentState,
   type AgentStateType,
   createLangGraphAgent,
-} from './agent-graph';
+} from './agent-graph.ts';
 
-export { D1CheckpointSaver } from './graph-checkpointer';
+export { D1CheckpointSaver } from './graph-checkpointer.ts';
 
 // Import what we need for the functions that remain in this file
-import { extractMessageText, throwIfAborted, type LangGraphEvent } from './graph-tools';
-import { createLangGraphAgent, type AgentStateType } from './agent-graph';
-import type { DbMessageOutput } from './message-utils';
+import { extractMessageText, throwIfAborted, type LangGraphEvent } from './graph-tools.ts';
+import { createLangGraphAgent, type AgentStateType } from './agent-graph.ts';
+import type { DbMessageOutput } from './message-utils.ts';
 
 // ── Runner ──────────────────────────────────────────────────────────────
 

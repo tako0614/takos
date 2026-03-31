@@ -1,27 +1,27 @@
-import type { ToolContext, ToolResult, ToolCall, ToolDefinition } from './tool-definitions';
-import { ToolResolver } from './resolver';
-import { CircuitBreaker, type CircuitStats } from './circuit-breaker';
-import type { ToolObserver } from '../services/memory-graph/graph-models';
-import { checkIdempotency, completeOperation } from './idempotency';
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { MAX_TOOL_OUTPUT_SIZE, MAX_PARALLEL_TOOL_EXECUTIONS } from '../../shared/config/limits';
-import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from '../../shared/config/timeouts';
+import type { ToolContext, ToolResult, ToolCall, ToolDefinition } from './tool-definitions.ts';
+import { ToolResolver } from './resolver.ts';
+import { CircuitBreaker, type CircuitStats } from './circuit-breaker.ts';
+import type { ToolObserver } from '../services/memory-graph/graph-models.ts';
+import { checkIdempotency, completeOperation } from './idempotency.ts';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
+import { MAX_TOOL_OUTPUT_SIZE, MAX_PARALLEL_TOOL_EXECUTIONS } from '../../shared/config/limits.ts';
+import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from '../../shared/config/timeouts.ts';
 import type { SqlDatabaseBinding } from '../../shared/types/bindings.ts';
 
 // Re-export error-classifier types so existing consumers keep working
-export { ErrorCodes, ToolError } from './tool-error-classifier';
-export type { ErrorCode, ErrorSeverity } from './tool-error-classifier';
+export { ErrorCodes, ToolError } from './tool-error-classifier.ts';
+export type { ErrorCode, ErrorSeverity } from './tool-error-classifier.ts';
 
 // Extracted modules
-import { classifyError, SEVERITY_HINTS } from './tool-error-classifier';
-import { assertToolPermission, filterAccessibleTools } from './tool-permission';
-import { ToolCircuitBreaker } from './tool-circuit-breaker';
+import { classifyError, SEVERITY_HINTS } from './tool-error-classifier.ts';
+import { assertToolPermission, filterAccessibleTools } from './tool-permission.ts';
+import { ToolCircuitBreaker } from './tool-circuit-breaker.ts';
 
 // Re-export from split modules for backward compatibility
-export { createToolExecutor, SessionState } from './executor-setup';
-export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils';
+export { createToolExecutor, SessionState } from './executor-setup.ts';
+export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils.ts';
 
-import type { SessionState } from './executor-setup';
+import type { SessionState } from './executor-setup.ts';
 
 export interface ToolExecutorLike {
   execute(toolCall: ToolCall): Promise<ToolResult>;

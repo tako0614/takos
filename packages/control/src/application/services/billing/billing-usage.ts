@@ -3,8 +3,8 @@
  * and weekly runtime limits.
  */
 
-import { getDb, billingAccounts, billingTransactions, usageEvents, usageRollups } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, billingAccounts, billingTransactions, usageEvents, usageRollups } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import { InternalError } from 'takos-common/errors';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { eq, and, gte, sum, asc, sql } from 'drizzle-orm';
@@ -15,10 +15,10 @@ import type {
   UsageRecordResult,
   RollingUsageSnapshot,
   WeeklyRuntimeLimitCheck,
-} from './billing-types';
-import { WEEKLY_RUNTIME_WINDOW_DAYS, WEEKLY_RUNTIME_LIMIT_SECONDS } from './billing-types';
-import { loadBillingAccountWithPlan } from './billing-plans';
-import { getOrCreateBillingAccount } from './billing-accounts';
+} from './billing-types.ts';
+import { WEEKLY_RUNTIME_WINDOW_DAYS, WEEKLY_RUNTIME_LIMIT_SECONDS } from './billing-types.ts';
+import { loadBillingAccountWithPlan } from './billing-plans.ts';
+import { getOrCreateBillingAccount } from './billing-accounts.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

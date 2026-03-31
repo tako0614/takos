@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResult, ToolContext } from '../../tools/tool-definitions';
+import type { ToolCall, ToolResult, ToolContext } from '../../tools/tool-definitions.ts';
 
 // Re-export canonical types so existing imports from this file keep working.
 export type { ToolCall, ToolResult };

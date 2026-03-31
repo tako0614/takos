@@ -1,19 +1,19 @@
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
-import type { Resource, ResourcePermission } from '../../../shared/types';
-import { type AuthenticatedRouteEnv, parseJsonBody } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Resource, ResourcePermission } from '../../../shared/types/index.ts';
+import { type AuthenticatedRouteEnv, parseJsonBody } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { AuthorizationError, BadRequestError, InternalError, NotFoundError, isAppError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getPortableSqlDatabase, isPortableResourceProvider } from './portable-runtime.ts';
-import { checkResourceAccess } from '../../../application/services/resources';
-import { getDb } from '../../../infra/db';
-import { resources } from '../../../infra/db/schema';
+import { checkResourceAccess } from '../../../application/services/resources/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { resources } from '../../../infra/db/schema.ts';
 import { and, eq, inArray } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
-import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities';
-import { textDate } from '../../../shared/utils/db-guards';
+import { logError } from '../../../shared/utils/logger.ts';
+import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 import { resolvePostgresUrl } from '../../../node-platform/resolvers/env-utils.ts';
 
 type D1ResourceData = {
@@ -143,7 +143,7 @@ async function listPortableTables(resource: Resource) {
     const tables = tablesResult.results ?? [];
 
     return Promise.all(
-      tables.map(async ({ table_name: name }) => {
+      tables.map(async ({ table_name: name }: { table_name: string }) => {
         const [columnsResult, countResult] = await Promise.all([
           db.prepare(
             `SELECT
@@ -172,7 +172,7 @@ async function listPortableTables(resource: Resource) {
   const tables = tablesResult.results ?? [];
 
   return Promise.all(
-    tables.map(async ({ name }) => {
+    tables.map(async ({ name }: { name: string }) => {
       const safeName = name.replace(/[^a-zA-Z0-9_]/g, '');
       const [columnsResult, countResult] = await Promise.all([
         db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
@@ -418,7 +418,7 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
       const db = await getPortableSqlDatabase(resource);
       const tableRows = body?.tables && body.tables.length > 0
         ? body.tables
-        : (await listPortableTables(resource)).map((table) => table.name);
+        : (await listPortableTables(resource)).map((table: { name: string }) => table.name);
 
       const tables: Record<string, unknown[]> = {};
       for (const table of tableRows) {

@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-utils';
+import { createdAtColumn, timestamps } from './schema-utils.ts';
 
 // 54. ModerationAuditLog
 export const moderationAuditLogs = sqliteTable('moderation_audit_logs', {

@@ -1,12 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Resource, ResourceCapability, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { getDb, resources, resourceAccess } from '../../../infra/db';
+import type { Resource, ResourceCapability, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { getDb, resources, resourceAccess } from '../../../infra/db/index.ts';
 import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
-import { toApiResource } from './format';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
-import { textDateNullable } from '../../../shared/utils/db-guards';
-import { getResourceTypeQueryValues } from './capabilities';
+import { toApiResource } from './format.ts';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import { getResourceTypeQueryValues } from './capabilities.ts';
 
 function buildAccessMap(grants: { resourceId: string; permission: string }[]): Map<string, string> {
   const map = new Map<string, string>();

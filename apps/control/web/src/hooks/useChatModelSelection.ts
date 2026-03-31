@@ -1,7 +1,7 @@
 import { createSignal, onMount } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc';
-import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog';
-import type { ModelOption } from '../views/agent/work/task-work-types';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog.ts';
+import type { ModelOption } from '../views/agent/work/task-work-types.ts';
 
 export interface UseChatModelSelectionOptions {
   spaceId: string;

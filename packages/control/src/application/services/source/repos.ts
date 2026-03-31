@@ -1,13 +1,13 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, Repository, RepositoryVisibility, SpaceRole } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { checkSpaceAccess } from '../identity/space-access';
-import { getDb, accounts, repositories } from '../../../infra/db';
+import type { Env, Repository, RepositoryVisibility, SpaceRole } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { checkSpaceAccess } from '../identity/space-access.ts';
+import { getDb, accounts, repositories } from '../../../infra/db/index.ts';
 import { and, desc, eq } from 'drizzle-orm';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { generateId, sanitizeRepoName } from '../../../shared/utils';
-import * as gitStore from '../git-smart';
-import { logError } from '../../../shared/utils/logger';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { generateId, sanitizeRepoName } from '../../../shared/utils/index.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export interface RepoAccess {
   repo: Repository;

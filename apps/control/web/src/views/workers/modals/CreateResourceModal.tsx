@@ -1,7 +1,7 @@
 
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import type { Resource } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Resource } from '../../../types/index.ts';
 
 export interface CreateResourceModalProps {
   resourceName: string;

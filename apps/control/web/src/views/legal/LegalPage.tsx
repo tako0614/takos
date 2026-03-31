@@ -1,4 +1,4 @@
-import { Icons } from '../../lib/Icons';
+import { Icons } from '../../lib/Icons.tsx';
 
 type LegalPageType = 'terms' | 'privacy' | 'tokushoho';
 

@@ -1,11 +1,11 @@
 import type { D1Database, ExecutionContext, Queue, R2Bucket } from '../../../shared/types/bindings.ts';
 import { parseWorkflow, type BranchFilter, type PullRequestTriggerConfig, type Workflow, type WorkflowTrigger } from 'takos-actions-engine';
-import { getDb, pullRequests, repositories } from '../../../infra/db';
+import { getDb, pullRequests, repositories } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import type { WorkflowJobQueueMessage } from '../../../shared/types';
-import * as gitStore from '../git-smart';
-import { createWorkflowEngine } from '../execution/workflow-engine';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import type { WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { createWorkflowEngine } from '../execution/workflow-engine.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 
 export type PullRequestWorkflowAction = 'opened' | 'edited' | 'closed' | 'synchronize';
 export interface PullRequestWorkflowEvent { action: PullRequestWorkflowAction; number: number; title: string; body?: string | null; state: 'open' | 'closed'; merged: boolean; mergedAt?: string | null; headRef: string; headSha?: string | null; baseRef: string; baseSha?: string | null; changedFiles?: string[]; authorId?: string | null; }

@@ -1,17 +1,17 @@
 import { eq, and, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import { ConflictError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils';
-import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
 import {
   decryptCommonEnvValue,
   encryptCommonEnvValue,
   normalizeEnvName,
-} from './crypto';
-import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
-import { listSpaceEnvRows } from './repository';
-import { assertSpaceCommonEnvKeyAllowed, getChanges } from './link-state';
-import { getDb, accountEnvVars } from '../../../infra/db';
+} from './crypto.ts';
+import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
+import { listSpaceEnvRows } from './repository.ts';
+import { assertSpaceCommonEnvKeyAllowed, getChanges } from './link-state.ts';
+import { getDb, accountEnvVars } from '../../../infra/db/index.ts';
 
 export interface SpaceEnvDeps {
   env: Env;

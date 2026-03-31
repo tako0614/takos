@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import { SEED_REPOSITORIES } from '../../application/services/seed-repositories';
+import { SEED_REPOSITORIES } from '../../application/services/seed-repositories.ts';
 
 const router = new Hono();
 

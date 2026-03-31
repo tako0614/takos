@@ -8,24 +8,24 @@
  */
 
 import { Hono } from 'hono';
-import type { Env, User, Repository } from '../../shared/types';
-import { requireGitAuth, optionalGitAuth } from '../middleware/git-auth';
-import { handleInfoRefs } from '../../application/services/git-smart/smart-http/info-refs';
-import { handleUploadPack } from '../../application/services/git-smart/smart-http/upload-pack';
-import { handleReceivePack, handleReceivePackFromStream } from '../../application/services/git-smart/smart-http/receive-pack';
-import { triggerPushWorkflows } from '../../application/services/actions/actions-triggers';
-import { getDb } from '../../infra/db';
-import { accounts, repositories } from '../../infra/db/schema';
+import type { Env, User, Repository } from '../../shared/types/index.ts';
+import { requireGitAuth, optionalGitAuth } from '../middleware/git-auth.ts';
+import { handleInfoRefs } from '../../application/services/git-smart/smart-http/info-refs.ts';
+import { handleUploadPack } from '../../application/services/git-smart/smart-http/upload-pack.ts';
+import { handleReceivePack, handleReceivePackFromStream } from '../../application/services/git-smart/smart-http/receive-pack.ts';
+import { triggerPushWorkflows } from '../../application/services/actions/actions-triggers.ts';
+import { getDb } from '../../infra/db/index.ts';
+import { accounts, repositories } from '../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { checkSpaceAccess } from '../../application/services/identity/space-access';
-import { logError } from '../../shared/utils/logger';
-import { MAX_GIT_REQUEST_BODY_BYTES, GIT_PUSH_LOCK_LEASE_MS } from '../../shared/config/limits';
+import { checkSpaceAccess } from '../../application/services/identity/space-access.ts';
+import { logError } from '../../shared/utils/logger.ts';
+import { MAX_GIT_REQUEST_BODY_BYTES, GIT_PUSH_LOCK_LEASE_MS } from '../../shared/config/limits.ts';
 import type {
   D1Database,
   DurableObjectStubBinding,
   R2Bucket,
 } from '../../shared/types/bindings.ts';
-import { textDateNullable } from '../../shared/utils/db-guards';
+import { textDateNullable } from '../../shared/utils/db-guards.ts';
 
 type Variables = {
   user?: User;

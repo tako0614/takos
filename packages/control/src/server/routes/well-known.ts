@@ -8,10 +8,10 @@
 
 import { Hono } from 'hono';
 import * as jose from 'jose';
-import type { Env } from '../../shared/types';
-import type { OAuthServerMetadata } from '../../shared/types/oauth';
-import { ALL_SCOPES, DEVICE_CODE_GRANT_TYPE } from '../../shared/types/oauth';
-import { logError } from '../../shared/utils/logger';
+import type { Env } from '../../shared/types/index.ts';
+import type { OAuthServerMetadata } from '../../shared/types/oauth.ts';
+import { ALL_SCOPES, DEVICE_CODE_GRANT_TYPE } from '../../shared/types/oauth.ts';
+import { logError } from '../../shared/utils/logger.ts';
 import { InternalError } from 'takos-common/errors';
 
 const wellKnown = new Hono<{ Bindings: Env }>();

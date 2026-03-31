@@ -1,6 +1,6 @@
 import { parseWorkflow, validateWorkflow, type Workflow } from 'takos-actions-engine';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
-import type { AppResource, AppWorker, ResourceLimits } from './app-manifest-types';
+import type { AppResource, AppWorker, ResourceLimits } from './app-manifest-types.ts';
 import { toPublicResourceType } from '../resources/capabilities.ts';
 import {
   asRecord,
@@ -9,7 +9,7 @@ import {
   asOptionalInteger,
   normalizeRepoPath,
   filterWorkflowErrors,
-} from './app-manifest-utils';
+} from './app-manifest-utils.ts';
 
 /** Minimal service shape used by resource validation (supports both workers and containers) */
 type ValidatableService = {

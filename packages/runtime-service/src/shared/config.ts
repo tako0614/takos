@@ -1,4 +1,4 @@
-import os from 'os';
+import os from 'node:os';
 import { parseIntEnv } from 'takos-common/env-parse';
 
 function requireEnv(name: string): string {

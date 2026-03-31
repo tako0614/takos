@@ -16,13 +16,13 @@ import {
 } from './container-runtime.ts';
 import type { DurableObjectNamespace, R2Bucket } from '../../shared/types/bindings.ts';
 import { Hono } from 'hono';
-import { generateProxyToken } from './executor-proxy-config';
-import { constantTimeEqual } from '../../shared/utils/hash';
+import { generateProxyToken } from './executor-proxy-config.ts';
+import { constantTimeEqual } from '../../shared/utils/hash.ts';
 import type {
   BrowserSessionTokenInfo,
   CreateSessionPayload,
   BrowserSessionState,
-} from './browser-session-types';
+} from './browser-session-types.ts';
 import { getErrorMessage } from 'takos-common/errors';
 
 // ---------------------------------------------------------------------------

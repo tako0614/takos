@@ -1,9 +1,9 @@
-import * as gitStore from '../../../application/services/git-smart';
-import { getDb, type Database } from '../../../infra/db';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { getDb, type Database } from '../../../infra/db/index.ts';
 import { eq, and, count, desc, inArray, sql } from 'drizzle-orm';
-import { pullRequests, prReviews, prComments } from '../../../infra/db/schema';
-import type { PullRequestStatus } from '../../../shared/types';
-import { buildRepoDiffPayload, type RepoDiffPayload } from './diff';
+import { pullRequests, prReviews, prComments } from '../../../infra/db/schema.ts';
+import type { PullRequestStatus } from '../../../shared/types/index.ts';
+import { buildRepoDiffPayload, type RepoDiffPayload } from './diff.ts';
 import {
   buildUserLiteMap,
   resolveActorLite,
@@ -11,10 +11,10 @@ import {
   toPullRequestRecord,
   type PullRequestDto,
   type PullRequestRecord,
-} from './dto';
-import { toGitBucket } from '../../../shared/utils/git-bucket';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { logError } from '../../../shared/utils/logger';
+} from './dto.ts';
+import { toGitBucket } from '../../../shared/utils/git-bucket.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export type PullRequestDetail = {
   pullRequest: PullRequestDto;

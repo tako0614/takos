@@ -1,2 +1,2 @@
-export { default } from './routes';
-export { smartHttpRoutes } from './smart-http';
+export { default } from './routes.ts';
+export { smartHttpRoutes } from './smart-http.ts';

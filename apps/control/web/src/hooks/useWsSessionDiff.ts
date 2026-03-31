@@ -1,7 +1,7 @@
 import { createSignal, type Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson, rpcPath, sessionDiff as fetchSessionDiffRpc, sessionMerge } from '../lib/rpc';
-import type { Run, SessionDiff } from '../types';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson, rpcPath, sessionDiff as fetchSessionDiffRpc, sessionMerge } from '../lib/rpc.ts';
+import type { Run, SessionDiff } from '../types/index.ts';
 
 export interface SessionDiffState {
   sessionId: string;

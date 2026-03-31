@@ -1,8 +1,8 @@
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import type {
   StripeWebhookEvent,
   StripeWebhookEventType,
-} from '../../../application/services/billing/stripe';
+} from '../../../application/services/billing/stripe.ts';
 
 export const PLUS_SUBSCRIPTION_PURCHASE_KIND = 'plus_subscription';
 export const PRO_TOPUP_PURCHASE_KIND = 'pro_topup';

@@ -1,5 +1,5 @@
-import { hashAuditIp, type CommonEnvAuditActor } from '../../application/services/common-env/audit';
-import type { Env } from '../../shared/types';
+import { hashAuditIp, type CommonEnvAuditActor } from '../../application/services/common-env/audit.ts';
+import type { Env } from '../../shared/types/index.ts';
 
 /**
  * Build an audit actor from a Hono request context and user ID.

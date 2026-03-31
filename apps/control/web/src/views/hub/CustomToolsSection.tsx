@@ -1,12 +1,12 @@
 import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useCustomTools } from '../../hooks/useCustomTools';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
-import type { CustomTool, Space } from '../../types';
-import { ToolCard } from './ToolCard';
-import { CreateToolModal, EditToolModal } from './ToolModals';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useCustomTools } from '../../hooks/useCustomTools.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { Modal } from '../../components/ui/Modal.tsx';
+import type { CustomTool, Space } from '../../types/index.ts';
+import { ToolCard } from './ToolCard.tsx';
+import { CreateToolModal, EditToolModal } from './ToolModals.tsx';
 
 interface CustomToolsSectionProps {
   spaces: Space[];

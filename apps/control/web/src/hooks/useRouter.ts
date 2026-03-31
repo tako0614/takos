@@ -1,5 +1,5 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
-import { DeploySection, RouteState, View, isDeploySection } from '../types';
+import { DeploySection, RouteState, View, isDeploySection } from '../types/index.ts';
 
 function parseDeploySection(section: string | undefined): DeploySection | undefined {
   return isDeploySection(section) ? section : undefined;

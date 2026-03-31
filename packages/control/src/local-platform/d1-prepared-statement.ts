@@ -84,7 +84,7 @@ export function createPostgresPreparedStatement(
         return toPgRawRows(result) as [string[], ...T[]];
       }
       const columns = result.fields.map((field: { name: string }) => field.name);
-      return result.rows.map((row: Record<string, unknown>) => columns.map((column) => row[column])) as T[];
+      return result.rows.map((row: Record<string, unknown>) => columns.map((column: string) => row[column])) as T[];
     },
   };
 

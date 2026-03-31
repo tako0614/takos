@@ -1,12 +1,12 @@
 ﻿import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import resourcesAccess from './access';
-import resourcesBase from './routes';
-import resourcesBindings from './bindings';
-import resourcesD1 from './d1';
-import resourcesKv from './kv';
-import resourcesR2 from './r2';
-import resourcesTokens from './tokens';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import resourcesAccess from './access.ts';
+import resourcesBase from './routes.ts';
+import resourcesBindings from './bindings.ts';
+import resourcesD1 from './d1.ts';
+import resourcesKv from './kv.ts';
+import resourcesR2 from './r2.ts';
+import resourcesTokens from './tokens.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .route('/', resourcesBase)

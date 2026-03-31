@@ -1,4 +1,4 @@
-import type { SpaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types/index.ts';
 
 export type CapabilityKind = 'tool' | 'skill';
 

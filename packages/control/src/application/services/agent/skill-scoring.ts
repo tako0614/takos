@@ -11,9 +11,9 @@
 import type {
   SkillCategory,
   SkillExecutionContract,
-} from './skill-contracts';
-import type { SkillContext, SkillSelection, SkillResolutionContext } from './skill-resolution';
-import { getDelegationPacketFromRunInput } from './delegation';
+} from './skill-contracts.ts';
+import type { SkillContext, SkillSelection, SkillResolutionContext } from './skill-resolution.ts';
+import { getDelegationPacketFromRunInput } from './delegation.ts';
 
 // ── Constants ───────────────────────────────────────────────────────────
 

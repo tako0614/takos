@@ -6,14 +6,14 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { SpaceStorageFileType } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { getDb, accountStorageFiles } from '../../../infra/db';
-import type { Database } from '../../../infra/db';
+import type { SpaceStorageFileType } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { getDb, accountStorageFiles } from '../../../infra/db/index.ts';
+import type { Database } from '../../../infra/db/index.ts';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
-import { validatePathSegment } from '../../../shared/utils/path-validation';
-import { logWarn } from '../../../shared/utils/logger';
-import { textDate } from '../../../shared/utils/db-guards';
+import { validatePathSegment } from '../../../shared/utils/path-validation.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type StorageFileRow = SelectOf<typeof accountStorageFiles>;
 

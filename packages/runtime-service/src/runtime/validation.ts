@@ -1,5 +1,6 @@
 import { ALLOWED_COMMANDS_SET, COMMAND_BLOCKLIST_PATTERNS } from '../shared/config.ts';
 import { createLogger } from 'takos-common/logger';
+import { Buffer } from "node:buffer";
 
 /**
  * Matches all C0 control characters (0x00-0x1F) plus DEL (0x7F).

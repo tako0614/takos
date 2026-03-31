@@ -1,11 +1,11 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types';
-import { getDb, notificationSettings, notificationPreferences, notifications } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, notificationSettings, notificationPreferences, notifications } from '../../../infra/db/index.ts';
 import { eq, and, lt, inArray, isNull, count, desc } from 'drizzle-orm';
-import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
 
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_CHANNELS,
@@ -13,7 +13,7 @@ import {
   type NotificationChannel,
   type NotificationPreferenceMatrix,
   type NotificationType,
-} from './notification-models';
+} from './notification-models.ts';
 
 // ── Zod schemas for API input validation ──
 

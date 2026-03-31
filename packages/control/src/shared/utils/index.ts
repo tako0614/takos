@@ -11,7 +11,7 @@
 export {
   slugifyName,
   sanitizeRepoName,
-} from './naming-utils';
+} from './naming-utils.ts';
 
 // --- ID generation ---
 
@@ -21,27 +21,27 @@ export { generateId } from 'takos-common/id';
 
 export {
   InMemoryRateLimiter,
-} from './rate-limiter';
+} from './rate-limiter.ts';
 
 // --- Logging ---
 
 export {
   safeJsonParseOrDefault,
-} from './logger';
+} from './logger.ts';
 
 // --- Encoding ---
 
 export {
   bytesToHex,
   base64UrlEncode,
-} from './encoding-utils';
+} from './encoding-utils.ts';
 
 // --- Cryptography ---
 
 export {
   encrypt,
   decrypt,
-} from './crypto';
+} from './crypto.ts';
 
 // --- Pagination ---
 
@@ -50,4 +50,4 @@ export {
   paginatedResponse,
   type PaginationParams,
   type PaginatedResult,
-} from './pagination';
+} from './pagination.ts';

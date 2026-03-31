@@ -6,16 +6,16 @@ import type {
   PullRequestReview,
   ReviewStatus,
   ReviewerType,
-} from '../../../shared/types';
-import type { AgentMessage } from '../agent/agent-models';
-import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
-import { textDate } from '../../../shared/utils/db-guards';
-import { getWorkspaceModelSettings } from '../identity/spaces';
-import { LLMClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
-import { getDb, prReviews, prComments } from '../../../infra/db';
+} from '../../../shared/types/index.ts';
+import type { AgentMessage } from '../agent/agent-models.ts';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
+import { getWorkspaceModelSettings } from '../identity/spaces.ts';
+import { LLMClient, getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId } from '../agent/index.ts';
+import { getDb, prReviews, prComments } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import * as gitStore from '../git-smart';
-import { decodeBlobContent, formatUnifiedDiff } from '../../../shared/utils/unified-diff';
+import * as gitStore from '../git-smart/index.ts';
+import { decodeBlobContent, formatUnifiedDiff } from '../../../shared/utils/unified-diff.ts';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 

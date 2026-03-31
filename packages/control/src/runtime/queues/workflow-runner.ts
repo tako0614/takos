@@ -3,11 +3,11 @@
 // Imported by the unified takos-worker entrypoint (src/runtime/worker/index.ts).
 import type { MessageBatch } from '../../shared/types/bindings.ts';
 
-import { createWorkflowQueueConsumer, handleWorkflowJobDlq, type WorkflowQueueEnv } from './workflow-jobs';
-import { handleDeploymentJob, handleDeploymentJobDlq, isValidDeploymentQueueMessage, type DeploymentQueueMessage } from './deploy-jobs';
-import type { DeploymentEnv } from '../../application/services/deployment/index';
-import { validateWorkflowRunnerEnv, createEnvGuard } from '../../shared/utils/validate-env';
-import { logError, logWarn } from '../../shared/utils/logger';
+import { createWorkflowQueueConsumer, handleWorkflowJobDlq, type WorkflowQueueEnv } from './workflow-jobs.ts';
+import { handleDeploymentJob, handleDeploymentJobDlq, isValidDeploymentQueueMessage, type DeploymentQueueMessage } from './deploy-jobs.ts';
+import type { DeploymentEnv } from '../../application/services/deployment/index.ts';
+import { validateWorkflowRunnerEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
 
 // Cached environment validation guard.
 const envGuard = createEnvGuard(validateWorkflowRunnerEnv);

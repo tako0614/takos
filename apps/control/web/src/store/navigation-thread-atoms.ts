@@ -1,8 +1,8 @@
 import { atom } from 'jotai/vanilla';
-import { getSpaceIdentifier } from '../lib/spaces';
-import { rpc, rpcJson } from '../lib/rpc';
-import { spacesAtom } from './auth';
-import type { Thread, Space } from '../types';
+import { getSpaceIdentifier } from '../lib/spaces.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { spacesAtom } from './auth.ts';
+import type { Thread, Space } from '../types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Thread data atoms

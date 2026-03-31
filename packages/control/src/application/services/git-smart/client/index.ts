@@ -6,5 +6,5 @@
  * any remote git HTTP server (GitHub, GitLab, self-hosted, etc.).
  */
 
-export { fetchRemoteRefs, type RemoteRef, type FetchRefsResult } from './fetch-refs';
-export { fetchPackFromRemote } from './fetch-pack';
+export { fetchRemoteRefs, type RemoteRef, type FetchRefsResult } from './fetch-refs.ts';
+export { fetchPackFromRemote } from './fetch-pack.ts';

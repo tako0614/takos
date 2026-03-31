@@ -4,19 +4,19 @@
  * Exports tool definitions and handlers for browser automation.
  */
 
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { BROWSER_TOOL_DEFINITIONS } from './browser/definitions';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { BROWSER_TOOL_DEFINITIONS } from './browser/definitions.ts';
 import {
   browserOpenHandler,
   browserGotoHandler,
   browserCloseHandler,
-} from './browser/navigation-handlers';
+} from './browser/navigation-handlers.ts';
 import {
   browserActionHandler,
   browserScreenshotHandler,
   browserExtractHandler,
   browserHtmlHandler,
-} from './browser/interaction-handlers';
+} from './browser/interaction-handlers.ts';
 
 export const BROWSER_TOOLS: ToolDefinition[] = BROWSER_TOOL_DEFINITIONS;
 

@@ -1,10 +1,10 @@
 import { Show } from 'solid-js';
-import type { PullRequest } from '../../../types';
-import { Icons } from '../../../lib/Icons';
-import { Button } from '../../../components/ui/Button';
-import { Card } from '../../../components/ui/Card';
-import { ConflictResolver } from './ConflictResolver';
-import { useI18n } from '../../../store/i18n';
+import type { PullRequest } from '../../../types/index.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Card } from '../../../components/ui/Card.tsx';
+import { ConflictResolver } from './ConflictResolver.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface PRActionsProps {
   repoId: string;

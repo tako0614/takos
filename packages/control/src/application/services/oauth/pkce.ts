@@ -1,6 +1,6 @@
-import type { CodeChallengeMethod } from '../../../shared/types/oauth';
-import { constantTimeEqual } from '../../../shared/utils/hash';
-import { base64UrlEncode, bytesToHex } from '../../../shared/utils';
+import type { CodeChallengeMethod } from '../../../shared/types/oauth.ts';
+import { constantTimeEqual } from '../../../shared/utils/hash.ts';
+import { base64UrlEncode, bytesToHex } from '../../../shared/utils/index.ts';
 
 export function generateCodeVerifier(): string {
   const bytes = new Uint8Array(32);

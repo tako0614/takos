@@ -1,14 +1,14 @@
 import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { Icons } from '../../../lib/Icons';
-import { Card } from '../../../components/ui/Card';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { rpc, rpcJson, rpcPath } from '../../../lib/rpc';
-import { formatDateTime } from '../../../lib/format';
-import type { Worker } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Card } from '../../../components/ui/Card.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Badge } from '../../../components/ui/Badge.tsx';
+import { rpc, rpcJson, rpcPath } from '../../../lib/rpc.ts';
+import { formatDateTime } from '../../../lib/format.ts';
+import type { Worker } from '../../../types/index.ts';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';

@@ -1,8 +1,8 @@
 import { createEffect, onCleanup } from 'solid-js';
-import { parseRoute } from './useRouter';
-import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces';
-import type { TranslationKey } from '../i18n';
-import type { RouteState, View, Space } from '../types';
+import { parseRoute } from './useRouter.ts';
+import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces.ts';
+import type { TranslationKey } from '../i18n.ts';
+import type { RouteState, View, Space } from '../types/index.ts';
 
 /**
  * Resolves /app/:appId routes by looking up the app and redirecting

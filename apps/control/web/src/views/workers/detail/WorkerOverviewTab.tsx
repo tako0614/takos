@@ -1,6 +1,6 @@
-import { useI18n } from '../../../store/i18n';
-import type { Worker } from '../../../types';
-import { getWorkerDisplayHostname, getWorkerUrl } from '../utils/workerUtils';
+import { useI18n } from '../../../store/i18n.ts';
+import type { Worker } from '../../../types/index.ts';
+import { getWorkerDisplayHostname, getWorkerUrl } from '../utils/workerUtils.ts';
 
 export interface WorkerOverviewTabProps {
   worker: Worker;

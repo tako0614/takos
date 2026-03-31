@@ -1,8 +1,8 @@
 import { Show, For } from 'solid-js';
-import type { Repository, Branch } from '../../../types';
-import { Icons } from '../../../lib/Icons';
-import { UpstreamSyncWidget } from './UpstreamSyncWidget';
-import { useI18n } from '../../../store/i18n';
+import type { Repository, Branch } from '../../../types/index.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { UpstreamSyncWidget } from './UpstreamSyncWidget.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface RepoDetailSidebarProps {
   repo: Repository;

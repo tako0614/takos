@@ -1,9 +1,9 @@
-import type { Env } from '../../../shared/types';
-import { getDb } from '../../../infra/db';
-import { resources } from '../../../infra/db/schema';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { resources } from '../../../infra/db/schema.ts';
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { deleteManagedResource } from '../resources/lifecycle.ts';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export interface ResourceOrphanGcSummary {
   deleted: number;

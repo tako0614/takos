@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as os from 'os';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { SANDBOX_LIMITS } from '../../shared/config.ts';
 import { createSandboxEnv } from '../../utils/sandbox-env.ts';
 import { createSecretsSanitizer } from '../../runtime/actions/secrets.ts';
@@ -24,7 +25,7 @@ import type { StartJobRequest } from './action-types.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // Job lifecycle

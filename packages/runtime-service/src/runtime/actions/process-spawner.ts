@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { randomUUID } from 'crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { pushLog } from '../logging.ts';
 import { SANDBOX_LIMITS } from '../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
@@ -10,6 +10,7 @@ import { gracefulKill } from '../../utils/process-kill.ts';
 
 const logger = createLogger({ service: 'process-spawner' });
 import type { ExecutorStepResult } from './executor.ts';
+import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -205,7 +206,7 @@ export async function spawnWithTimeout(
       return;
     }
 
-    let forceKillHandle: NodeJS.Timeout | undefined;
+    let forceKillHandle: ReturnType<typeof setTimeout> | undefined;
     const timeoutHandle = setTimeout(() => {
       state.isTimedOut = true;
       pushLog(ctx.logs, `[TIMEOUT] Command timed out after ${options.timeout}ms`);

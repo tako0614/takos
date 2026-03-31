@@ -11,7 +11,7 @@ export type {
   RuntimeExecResponse,
   DeployRequest,
   DeployResponse,
-} from './tool-definitions';
+} from './tool-definitions.ts';
 
 export {
   BUILTIN_TOOLS,
@@ -21,21 +21,21 @@ export {
   getBuiltinHandler,
   isBuiltinTool,
   getToolsByCategory,
-} from './builtin';
+} from './builtin/index.ts';
 
-export { ToolExecutor } from './executor';
-export { createToolExecutor, SessionState } from './executor-setup';
-export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils';
-export { ErrorCodes, ToolError, classifyError, SEVERITY_HINTS } from './tool-error-classifier';
-export type { ErrorCode, ErrorSeverity } from './tool-error-classifier';
-export { assertToolPermission, filterAccessibleTools, getAllRequiredCapabilities, canRoleAccessExposedTool, canUseToolCapabilities } from './tool-permission';
-export { ToolCircuitBreaker } from './tool-circuit-breaker';
+export { ToolExecutor } from './executor.ts';
+export { createToolExecutor, SessionState } from './executor-setup.ts';
+export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils.ts';
+export { ErrorCodes, ToolError, classifyError, SEVERITY_HINTS } from './tool-error-classifier.ts';
+export type { ErrorCode, ErrorSeverity } from './tool-error-classifier.ts';
+export { assertToolPermission, filterAccessibleTools, getAllRequiredCapabilities, canRoleAccessExposedTool, canUseToolCapabilities } from './tool-permission.ts';
+export { ToolCircuitBreaker } from './tool-circuit-breaker.ts';
 export type {
   SensitiveReadPolicy,
   ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-} from './tool-policy';
+} from './tool-policy.ts';
 export {
   AGENT_DISABLED_BUILTIN_TOOLS,
   SPACE_OPERATION_POLICIES,
@@ -58,4 +58,4 @@ export {
   isToolAllowedForAgent,
   filterAgentAllowedToolNames,
   validateBuiltinToolPolicies,
-} from './tool-policy';
+} from './tool-policy.ts';

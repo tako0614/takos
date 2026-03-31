@@ -7,7 +7,7 @@
  */
 
 import { InternalError } from 'takos-common/errors';
-import type { WfpContext } from './wfp-contracts';
+import type { WfpContext } from './wfp-contracts.ts';
 
 // ---------------------------------------------------------------------------
 // Queue CRUD

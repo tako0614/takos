@@ -1,4 +1,4 @@
-import type { ConditionContext, ExpressionContext } from './workflow-types';
+import type { ConditionContext, ExpressionContext } from './workflow-types.ts';
 
 // ---------------------------------------------------------------------------
 // Expression evaluation

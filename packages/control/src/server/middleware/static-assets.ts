@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import type { Env } from '../../shared/types';
+import type { Env } from '../../shared/types/index.ts';
 import { getPlatformServices } from '../../platform/accessors.ts';
 
 export const staticAssetsMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: Record<string, unknown> }> = async (c, next) => {

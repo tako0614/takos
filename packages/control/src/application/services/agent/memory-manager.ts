@@ -5,12 +5,12 @@
  */
 
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types';
-import type { AgentContext } from './agent-models';
-import type { AgentRunnerIo } from './runner-io';
-import type { ToolExecutorLike } from '../../tools/executor';
-import { AgentMemoryRuntime, type AgentMemoryBackend } from '../memory-graph/memory-graph-runtime';
-import { logWarn } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import type { AgentContext } from './agent-models.ts';
+import type { AgentRunnerIo } from './runner-io.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import { AgentMemoryRuntime, type AgentMemoryBackend } from '../memory-graph/memory-graph-runtime.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export interface MemoryManagerDeps {
   db: SqlDatabaseBinding;

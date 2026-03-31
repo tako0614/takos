@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 /**
  * Generate a short random suffix for temporary file/directory names.

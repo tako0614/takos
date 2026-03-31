@@ -1,8 +1,8 @@
 import { atom } from 'jotai/vanilla';
-import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces';
-import { spacesAtom, spacesLoadedAtom } from './auth';
-import { routeAtom } from './navigation-route-atoms';
-import type { Space } from '../types';
+import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces.ts';
+import { spacesAtom, spacesLoadedAtom } from './auth.ts';
+import { routeAtom } from './navigation-route-atoms.ts';
+import type { Space } from '../types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Space resolution atoms (derived)

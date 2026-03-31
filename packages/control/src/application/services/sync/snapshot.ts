@@ -1,17 +1,17 @@
-import type { Env } from '../../../shared/types';
-import type { Snapshot, SnapshotTree, BlobFetcher } from './models';
-import { generateId } from '../../../shared/utils';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { getDb, snapshots, blobs, files } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import type { Snapshot, SnapshotTree, BlobFetcher } from './models.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { getDb, snapshots, blobs, files } from '../../../infra/db/index.ts';
 import { eq, and, inArray, lte, ne, sql } from 'drizzle-orm';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
-import { SnapshotStorage } from './snapshot-storage';
+import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
+import { SnapshotStorage } from './snapshot-storage.ts';
 import {
     cleanupPendingSnapshots as cleanupPendingSnapshotsImpl,
     getReachableSnapshots as getReachableSnapshotsImpl,
     runGC as runGCImpl,
-} from './snapshot-cleanup';
-import { textDate } from '../../../shared/utils/db-guards';
+} from './snapshot-cleanup.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 /** Extract non-empty blob hashes from a snapshot tree. */
 function extractTreeHashes(tree: SnapshotTree): string[] {

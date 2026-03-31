@@ -2,7 +2,7 @@
  * TOML parsing helpers for reading wrangler.toml configuration.
  */
 
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 
 import { WRANGLER_TOML_PATH } from './constants.ts';
 import { escapeRegExp } from './sql-utils.ts';

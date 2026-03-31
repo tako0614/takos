@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, spaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
+import { requireSpaceAccess, spaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   createWorkspaceWithDefaultRepo,
   deleteWorkspace,
@@ -11,7 +11,7 @@ import {
   listWorkspacesForUser,
   updateWorkspace,
   updateWorkspaceModel,
-} from '../../../application/services/identity/spaces';
+} from '../../../application/services/identity/spaces.ts';
 import {
   DEFAULT_MODEL_ID,
   getModelProvider,
@@ -19,12 +19,12 @@ import {
   resolveHistoryTokenBudget,
   VALID_PROVIDERS,
   type ModelProvider,
-} from '../../../application/services/agent';
-import { getUISidebarItems } from '../../../application/services/platform/ui-extensions';
-import { toWorkspaceResponse } from '../../../application/services/identity/response-formatters';
-import { getDb } from '../../../infra/db';
+} from '../../../application/services/agent/index.ts';
+import { getUISidebarItems } from '../../../application/services/platform/ui-extensions.ts';
+import { toWorkspaceResponse } from '../../../application/services/identity/response-formatters.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, ne, and, or, desc, inArray } from 'drizzle-orm';
-import { repositories, threads, resources, resourceAccess } from '../../../infra/db/schema';
+import { repositories, threads, resources, resourceAccess } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 
 const VALID_SECURITY_POSTURES = ['standard', 'restricted_egress'] as const;

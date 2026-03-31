@@ -14,8 +14,8 @@
  * a validated {@link FileOperationContext}.
  */
 
-import type { ToolContext } from '../../tool-definitions';
-import { buildSessionPath, requireContainer, resolveMountPath } from './session';
+import type { ToolContext } from '../../tool-definitions.ts';
+import { buildSessionPath, requireContainer, resolveMountPath } from './session.ts';
 
 /**
  * Pre-validated context returned after common file operation setup.

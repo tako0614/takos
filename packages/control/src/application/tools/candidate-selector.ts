@@ -1,6 +1,6 @@
-import type { SpaceRole } from '../../shared/types';
-import type { CapabilityDescriptor } from './capability-types';
-import type { CapabilityRegistry } from './capability-registry';
+import type { SpaceRole } from '../../shared/types/index.ts';
+import type { CapabilityDescriptor } from './capability-types.ts';
+import type { CapabilityRegistry } from './capability-registry.ts';
 
 export const DISCOVERY_TOOL_NAMES = new Set(['capability_search', 'capability_families', 'capability_invoke']);
 

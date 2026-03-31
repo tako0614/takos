@@ -1,7 +1,7 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { checkRepoAccess } from '../../services/source/repos';
-import { listCatalogItems } from '../../services/source/explore';
-import { forkWithWorkflows } from '../../services/source/fork';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { checkRepoAccess } from '../../services/source/repos.ts';
+import { listCatalogItems } from '../../services/source/explore.ts';
+import { forkWithWorkflows } from '../../services/source/fork.ts';
 
 const STORE_SORT_OPTIONS = ['trending', 'new', 'stars', 'updated', 'downloads'] as const;
 const STORE_TYPE_OPTIONS = ['all', 'repo', 'deployable-app'] as const;

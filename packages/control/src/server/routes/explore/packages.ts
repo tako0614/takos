@@ -1,20 +1,20 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
+import type { Env, User } from '../../../shared/types/index.ts';
 import {
   listCatalogItems,
-} from '../../../application/services/source/explore';
+} from '../../../application/services/source/explore.ts';
 import {
   searchPackages,
   suggestPackages,
   getTakopackRatingSummary,
-} from '../../../application/services/source/explore-packages';
-import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { getDb } from '../../../infra/db';
-import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
+} from '../../../application/services/source/explore-packages.ts';
+import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema.ts';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
-import { parsePagination } from '../../../shared/utils';
+import { toReleaseAssets } from '../../../application/services/source/repo-release-assets.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from 'takos-common/errors';
 import {
   buildCatalogSuggestions,
@@ -24,7 +24,7 @@ import {
   parseExploreFilters,
   validateExploreFilters,
   type ReleaseAsset,
-} from './explore-filters';
+} from './explore-filters.ts';
 
 type Variables = {
   user?: User;

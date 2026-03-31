@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, accounts } from '../../../infra/db';
+import { getDb, workflowRuns, workflowJobs, workflowSteps, accounts } from '../../../infra/db/index.ts';
 import { eq, and, desc, asc } from 'drizzle-orm';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 type ListWorkflowRunsOptions = {
   repoId: string;

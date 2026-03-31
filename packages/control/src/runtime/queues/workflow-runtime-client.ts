@@ -1,12 +1,12 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
 import type { Step } from 'takos-actions-engine';
-import type { WorkflowEngine, WorkflowStepResult } from '../../application/services/execution/workflow-engine';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, repositories } from '../../infra/db';
+import type { WorkflowEngine, WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
+import { getDb, workflowRuns, workflowJobs, workflowSteps, repositories } from '../../infra/db/index.ts';
 import { eq, and, ne, asc } from 'drizzle-orm';
-import { safeJsonParseOrDefault } from '../../shared/utils';
-import { callRuntimeRequest } from '../../application/services/execution/runtime-request-handler';
-import { logWarn } from '../../shared/utils/logger';
-import type { WorkflowQueueEnv, RunContext } from './workflow-types';
+import { safeJsonParseOrDefault } from '../../shared/utils/index.ts';
+import { callRuntimeRequest } from '../../application/services/execution/runtime-request-handler.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
+import type { WorkflowQueueEnv, RunContext } from './workflow-types.ts';
 
 // ---------------------------------------------------------------------------
 // Runtime helpers

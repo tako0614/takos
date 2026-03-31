@@ -1,5 +1,5 @@
-import { rpc, rpcJson } from '../lib/rpc';
-import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata.ts';
 
 function sanitizeAttachmentFileName(name: string): string {
   const trimmed = name.trim();

@@ -16,15 +16,15 @@ import type {
   SkillExecutionContract,
   SkillLocale,
   SkillSource,
-} from './skill-contracts';
-import { cloneExecutionContract } from './skill-scoring';
-import { selectRelevantSkills } from './skill-scoring';
-import { logWarn } from '../../../shared/utils/logger';
-import { sanitizeSkillContent } from './injection-detector';
+} from './skill-contracts.ts';
+import { cloneExecutionContract } from './skill-scoring.ts';
+import { selectRelevantSkills } from './skill-scoring.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { sanitizeSkillContent } from './injection-detector.ts';
 
 // ── Re-exported types from skill-contracts ──────────────────────────────
 
-export type { SkillSource, SkillCategory } from './skill-contracts';
+export type { SkillSource, SkillCategory } from './skill-contracts.ts';
 
 // ── Types ───────────────────────────────────────────────────────────────
 

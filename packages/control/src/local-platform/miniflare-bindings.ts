@@ -1,11 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { Buffer } from "node:buffer";
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts';
 import type { WorkerBinding } from '../application/services/wfp/index.ts';
 import { deployments, getDb } from '../infra/db/index.ts';
-import { services } from '../infra/db/schema-services';
+import { services } from '../infra/db/schema-services.ts';
 import { decrypt, decryptEnvVars, type EncryptedData } from '../shared/utils/crypto.ts';
 import type { ServiceTargetMap } from './url-registry.ts';
 

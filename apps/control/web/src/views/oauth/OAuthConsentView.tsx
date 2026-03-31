@@ -1,9 +1,9 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import { ConsentLayout, ConsentLogo } from './ConsentLayout';
-import { ScopeList } from './ScopeList';
-import { LoadingScreen } from '../../components/common/LoadingScreen';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { ConsentLayout, ConsentLogo } from './ConsentLayout.tsx';
+import { ScopeList } from './ScopeList.tsx';
+import { LoadingScreen } from '../../components/common/LoadingScreen.tsx';
 
 /** Validate redirect URL before navigation (defense-in-depth). */
 function safeRedirect(url: string): void {

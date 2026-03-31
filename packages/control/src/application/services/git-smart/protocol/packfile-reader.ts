@@ -10,10 +10,10 @@
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
 import { inflateSync } from 'fflate';
-import { concatBytes } from '../core/sha1';
-import { putRawObject, getRawObject } from '../core/object-store';
-import { decodeObjectHeader } from '../core/object';
-import { bytesToHex } from '../../../../shared/utils/encoding-utils';
+import { concatBytes } from '../core/sha1.ts';
+import { putRawObject, getRawObject } from '../core/object-store.ts';
+import { decodeObjectHeader } from '../core/object.ts';
+import { bytesToHex } from '../../../../shared/utils/encoding-utils.ts';
 
 const TEXT_ENCODER = new TextEncoder();
 
@@ -288,7 +288,7 @@ function inflateSyncWithConsumed(
   const outputChunks: Uint8Array[] = [];
   let totalOutput = 0;
 
-  const inflater = new Inflate((chunk, final) => {
+  const inflater = new Inflate((chunk: Uint8Array, final: boolean) => {
     outputChunks.push(chunk);
     totalOutput += chunk.length;
   });

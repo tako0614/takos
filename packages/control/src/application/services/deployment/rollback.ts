@@ -1,12 +1,12 @@
-import type { DbEnv } from '../../../shared/types';
-import type { RoutingBindings } from '../routing/routing-models';
+import type { DbEnv } from '../../../shared/types/index.ts';
+import type { RoutingBindings } from '../routing/routing-models.ts';
 import type { ObjectStoreBinding } from '../../../shared/types/bindings.ts';
-import { deleteHostnameRouting } from '../routing/service';
-import { restoreRoutingSnapshot, type RoutingSnapshot } from './routing';
-import { logDeploymentEvent } from './store';
-import type { Deployment } from './models';
-import type { DeploymentProvider } from './provider';
-import { logError } from '../../../shared/utils/logger';
+import { deleteHostnameRouting } from '../routing/service.ts';
+import { restoreRoutingSnapshot, type RoutingSnapshot } from './routing.ts';
+import { logDeploymentEvent } from './store.ts';
+import type { Deployment } from './models.ts';
+import type { DeploymentProvider } from './provider.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 type RollbackEnv = DbEnv & RoutingBindings & { WORKER_BUNDLES?: ObjectStoreBinding };
 

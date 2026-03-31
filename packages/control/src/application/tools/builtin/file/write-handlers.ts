@@ -4,11 +4,11 @@
  * Consolidates: file_write, file_write_binary, file_copy, file_mkdir.
  */
 
-import type { ToolHandler } from '../../tool-definitions';
-import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session';
-import { validateContent, validateBinaryContent, isBinaryFile } from './limits';
-import { logError, logWarn } from '../../../../shared/utils/logger';
-import { setupFileOperation, handleSessionApiResponse } from './file-operations';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session.ts';
+import { validateContent, validateBinaryContent, isBinaryFile } from './limits.ts';
+import { logError, logWarn } from '../../../../shared/utils/logger.ts';
+import { setupFileOperation, handleSessionApiResponse } from './file-operations.ts';
 
 /* ------------------------------------------------------------------ */
 /*  file_write                                                         */

@@ -1,11 +1,11 @@
 import { createEffect, on } from 'solid-js';
-import type { Space } from '../types';
-import { useSourceFiltering, type SourceFilter, type SourceSort } from './useSourceFiltering';
-import { useSourcePagination } from './useSourcePagination';
-import { useSourceFetch } from './useSourceFetch';
+import type { Space } from '../types/index.ts';
+import { useSourceFiltering, type SourceFilter, type SourceSort } from './useSourceFiltering.ts';
+import { useSourcePagination } from './useSourcePagination.ts';
+import { useSourceFetch } from './useSourceFetch.ts';
 
-export type { SourceFilter, SourceSort } from './useSourceFiltering';
-export type { CatalogSuggestionUser, CatalogSuggestionRepo } from './useSourceFiltering';
+export type { SourceFilter, SourceSort } from './useSourceFiltering.ts';
+export type { CatalogSuggestionUser, CatalogSuggestionRepo } from './useSourceFiltering.ts';
 
 export interface SourceItemTakopack {
   available: boolean;

@@ -3,14 +3,14 @@
  */
 import type { Context } from 'hono';
 import { NotFoundError } from 'takos-common/errors';
-import type { ResolveReadableCommitResult } from '../../../application/services/git-smart';
+import type { ResolveReadableCommitResult } from '../../../application/services/git-smart/index.ts';
 
 // ---------------------------------------------------------------------------
 // Re-exports
 // ---------------------------------------------------------------------------
 
-export { sanitizeRepoName } from '../../../shared/utils';
-export { type RepoBucketBinding, type GitBucket, toGitBucket } from '../../../shared/utils/git-bucket';
+export { sanitizeRepoName } from '../../../shared/utils/index.ts';
+export { type RepoBucketBinding, type GitBucket, toGitBucket } from '../../../shared/utils/git-bucket.ts';
 
 // ---------------------------------------------------------------------------
 // Error / response helpers

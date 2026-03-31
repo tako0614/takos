@@ -1,19 +1,19 @@
-import type { Env } from '../../../../shared/types';
-import { getDb, serviceCustomDomains } from '../../../../infra/db';
+import type { Env } from '../../../../shared/types/index.ts';
+import { getDb, serviceCustomDomains } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 
-import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service';
-import type { RoutingTarget } from '../../routing/routing-models';
-import { ServiceDesiredStateService } from '../worker-desired-state';
-import { logError } from '../../../../shared/utils/logger';
+import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service.ts';
+import type { RoutingTarget } from '../../routing/routing-models.ts';
+import { ServiceDesiredStateService } from '../worker-desired-state.ts';
+import { logError } from '../../../../shared/utils/logger.ts';
 import {
   SSL_TERMINAL_FAILURE_STATUSES,
   CustomDomainError,
-} from './domain-models';
-import type { DomainStatus, VerifyCustomDomainResult } from './domain-models';
-import { getServiceForUser, requireServiceWriteAccess } from './access';
-import { verifyDNS } from './dns';
-import { createCloudflareCustomHostname, deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './cloudflare';
+} from './domain-models.ts';
+import type { DomainStatus, VerifyCustomDomainResult } from './domain-models.ts';
+import { getServiceForUser, requireServiceWriteAccess } from './access.ts';
+import { verifyDNS } from './dns.ts';
+import { createCloudflareCustomHostname, deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './cloudflare.ts';
 
 export async function verifyCustomDomain(
   env: Env,

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess } from '../route-auth';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { zValidator } from '../zod-validator';
+import { requireSpaceAccess } from '../route-auth.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   countServicesInSpace,
   createService,
@@ -13,17 +13,17 @@ import {
   listServicesForUser,
   listServicesForSpace,
   WORKSPACE_SERVICE_LIMITS,
-} from '../../../application/services/platform/workers';
-import { getDb } from '../../../infra/db';
+} from '../../../application/services/platform/workers.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { deployments, groups, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db/schema';
-import { deleteHostnameRouting } from '../../../application/services/routing/service';
+import { deployments, groups, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db/schema.ts';
+import { deleteHostnameRouting } from '../../../application/services/routing/service.ts';
 import { createCloudflareApiClient } from '../../../application/services/cloudflare/api-client.ts';
 import { deleteCloudflareCustomHostname } from '../../../application/services/platform/custom-domains.ts';
-import { createCommonEnvDeps, deleteServiceTakosAccessTokenConfig } from '../../../application/services/common-env';
-import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
+import { createCommonEnvDeps, deleteServiceTakosAccessTokenConfig } from '../../../application/services/common-env/index.ts';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 import { parseDeploymentTargetConfig } from '../../../application/services/deployment/provider.ts';
 import { removeGroupDesiredWorkload, upsertGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';

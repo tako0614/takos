@@ -1,5 +1,5 @@
 import { sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { timestamps } from './schema-utils';
+import { timestamps } from './schema-utils.ts';
 
 export const groups = sqliteTable('groups', {
   id: text('id').primaryKey(),

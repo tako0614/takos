@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons';
+import { Icons } from '../../lib/Icons.tsx';
 
 interface ProfileLoadingStateProps {
   label?: string;

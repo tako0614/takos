@@ -1,4 +1,4 @@
-import type { SpaceRole } from '../../../../shared/types';
+import type { SpaceRole } from '../../../../shared/types/index.ts';
 
 export const MAX_CUSTOM_DOMAINS_PER_SERVICE = 20;
 export const CUSTOM_DOMAIN_WRITE_ROLES: SpaceRole[] = ['owner', 'admin', 'editor'];

@@ -1,8 +1,8 @@
 import { Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { formatFileSize } from '../../lib/format';
-import { StorageNewDropdown } from './StorageNewDropdown';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { formatFileSize } from '../../lib/format.ts';
+import { StorageNewDropdown } from './StorageNewDropdown.tsx';
 
 interface StorageToolbarProps {
   loading: boolean;

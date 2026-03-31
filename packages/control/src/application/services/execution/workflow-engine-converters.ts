@@ -3,9 +3,9 @@
  */
 
 import type { Job } from 'takos-actions-engine';
-import type { WorkflowJobDefinition, WorkflowShell } from '../../../shared/types';
-import type { DrizzleWorkflowRun, WorkflowRunRecord } from './workflow-engine-types';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import type { WorkflowJobDefinition, WorkflowShell } from '../../../shared/types/index.ts';
+import type { DrizzleWorkflowRun, WorkflowRunRecord } from './workflow-engine-types.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 export function normalizeWorkflowShell(shell: string | undefined): WorkflowShell | undefined {
   if (

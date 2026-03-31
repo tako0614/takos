@@ -1,6 +1,6 @@
-import type { ToolObserver, ToolObservation, Claim, Evidence } from './graph-models';
-import { RunOverlay } from './overlay';
-import { bytesToHex } from '../../../shared/utils/encoding-utils';
+import type { ToolObserver, ToolObservation, Claim, Evidence } from './graph-models.ts';
+import { RunOverlay } from './overlay.ts';
+import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
 
 function randomHexId(): string {
   const bytes = new Uint8Array(12);

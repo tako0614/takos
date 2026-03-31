@@ -1,8 +1,8 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
-import { getDb, workflowSecrets } from '../../infra/db';
+import { getDb, workflowSecrets } from '../../infra/db/index.ts';
 import { eq, and, inArray } from 'drizzle-orm';
-import { decrypt } from '../../shared/utils';
-import { logError } from '../../shared/utils/logger';
+import { decrypt } from '../../shared/utils/index.ts';
+import { logError } from '../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Secret resolution

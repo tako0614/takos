@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
-import { supportsGrantType, validateClientCredentials, getClientAllowedScopes } from '../../../application/services/oauth/client';
-import { exchangeAuthorizationCode } from '../../../application/services/oauth/authorization';
+import { supportsGrantType, validateClientCredentials, getClientAllowedScopes } from '../../../application/services/oauth/client.ts';
+import { exchangeAuthorizationCode } from '../../../application/services/oauth/authorization.ts';
 import {
   buildAuthorizationCodeTokenFamily,
   generateTokenResponse,
@@ -8,14 +8,14 @@ import {
   rotateRefreshToken,
   getRefreshTokenWithReuseCheck,
   revokeTokenFamily,
-} from '../../../application/services/oauth/token';
-import { areScopesAllowed, parseScopes } from '../../../application/services/oauth/scopes';
-import { consumeApprovedDeviceAuthorization, pollDeviceAuthorization } from '../../../application/services/oauth/device';
-import { DEVICE_CODE_GRANT_TYPE } from '../../../shared/types/oauth';
-import { tryLogOAuthEvent, getBodyValue } from './request-utils';
-import type { PublicRouteEnv } from '../route-auth';
-import { RateLimiters } from '../../../shared/utils/rate-limiter';
-import { logWarn } from '../../../shared/utils/logger';
+} from '../../../application/services/oauth/token.ts';
+import { areScopesAllowed, parseScopes } from '../../../application/services/oauth/scopes.ts';
+import { consumeApprovedDeviceAuthorization, pollDeviceAuthorization } from '../../../application/services/oauth/device.ts';
+import { DEVICE_CODE_GRANT_TYPE } from '../../../shared/types/oauth.ts';
+import { tryLogOAuthEvent, getBodyValue } from './request-utils.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 const oauthToken = new Hono<PublicRouteEnv>();
 

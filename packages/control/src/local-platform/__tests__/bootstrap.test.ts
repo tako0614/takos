@@ -8,18 +8,18 @@ import {
   createLocalExecutorHostFetchForTests,
   createLocalRuntimeHostFetchForTests,
   createLocalWebFetchForTests,
-} from '../bootstrap';
+} from '../bootstrap.ts';
 import {
   LOCAL_DEV_DEFAULTS,
   clearNodePlatformDataForTests,
   createNodeWebEnv,
   resetNodePlatformStateForTests,
-} from '../../node-platform/env-builder';
-import { createLocalTenantWorkerRuntimeRegistry } from '../tenant-worker-runtime';
+} from '../../node-platform/env-builder.ts';
+import { createLocalTenantWorkerRuntimeRegistry } from '../tenant-worker-runtime.ts';
 import type { WorkerBinding } from '../../application/services/wfp/index.ts';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
 import { accounts, deployments, getDb } from '../../infra/db/index.ts';
-import { services } from '../../infra/db/schema-services';
+import { services } from '../../infra/db/schema-services.ts';
 import { encrypt } from '../../shared/utils/crypto.ts';
 import { MockMiniflare } from './mock-miniflare.ts';
 
@@ -33,17 +33,17 @@ const queueMocks = ({
 
 // [Deno] vi.mock removed - manually stub imports from 'miniflare'// [Deno] vi.mock removed - manually stub imports from '../../adapters/sqs-queue.ts'
 async function runMiniflareDispatchSmoke(): Promise<{ status: number; body: unknown }> {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-  process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+  Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
     'hello.local': {
       type: 'deployments',
       deployments: [{ routeRef: 'worker-demo-v1', weight: 100, status: 'active' }],
     },
-  });
+  }));
 
   const tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-dispatch-smoke-'));
-  process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
+  Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
   await clearNodePlatformDataForTests();
   await resetNodePlatformStateForTests();
 
@@ -148,27 +148,27 @@ async function seedTenantWorkerBundle(params: {
 
 
   const originalEnv = {
-    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN,
-    TENANT_BASE_DOMAIN: process.env.TENANT_BASE_DOMAIN,
-    TAKOS_LOCAL_ROUTING_JSON: process.env.TAKOS_LOCAL_ROUTING_JSON,
-    TAKOS_LOCAL_DISPATCH_TARGETS_JSON: process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON,
-    TAKOS_LOCAL_DATA_DIR: process.env.TAKOS_LOCAL_DATA_DIR,
-    TAKOS_LOCAL_RUNTIME_URL: process.env.TAKOS_LOCAL_RUNTIME_URL,
-    TAKOS_LOCAL_EXECUTOR_URL: process.env.TAKOS_LOCAL_EXECUTOR_URL,
-    TAKOS_LOCAL_BROWSER_URL: process.env.TAKOS_LOCAL_BROWSER_URL,
+    ADMIN_DOMAIN: Deno.env.get('ADMIN_DOMAIN'),
+    TENANT_BASE_DOMAIN: Deno.env.get('TENANT_BASE_DOMAIN'),
+    TAKOS_LOCAL_ROUTING_JSON: Deno.env.get('TAKOS_LOCAL_ROUTING_JSON'),
+    TAKOS_LOCAL_DISPATCH_TARGETS_JSON: Deno.env.get('TAKOS_LOCAL_DISPATCH_TARGETS_JSON'),
+    TAKOS_LOCAL_DATA_DIR: Deno.env.get('TAKOS_LOCAL_DATA_DIR'),
+    TAKOS_LOCAL_RUNTIME_URL: Deno.env.get('TAKOS_LOCAL_RUNTIME_URL'),
+    TAKOS_LOCAL_EXECUTOR_URL: Deno.env.get('TAKOS_LOCAL_EXECUTOR_URL'),
+    TAKOS_LOCAL_BROWSER_URL: Deno.env.get('TAKOS_LOCAL_BROWSER_URL'),
   };
   let tempDataDir: string | null = null;
   Deno.test('local bootstrap - serves takos-web health without Cloudflare bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -184,9 +184,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -199,16 +199,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - does not synthesize fake Cloudflare credentials in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -224,9 +224,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -239,16 +239,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - allows loopback health checks in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -264,9 +264,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -279,16 +279,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - allows compose-internal health checks in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -304,9 +304,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -319,27 +319,27 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - returns 503 when dispatch routing resolves to an unconfigured worker target', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'deployments',
         deployments: [{ routeRef: 'tenant-app', weight: 100, status: 'active' }],
       },
-    });
+    }));
     const fetch = await createLocalDispatchFetchForTests();
 
     const response = await fetch(new Request('http://hello.local/runs'));
@@ -353,9 +353,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -368,16 +368,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves dispatch health in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -393,9 +393,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -408,24 +408,24 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - rejects tenant worker URL overrides in local dispatch config', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_DISPATCH_TARGETS_JSON', JSON.stringify({
       'tenant-app': 'http://worker.internal/base/',
-    });
+    }));
 
     await await assertRejects(async () => { await createLocalDispatchFetchForTests(); }, 
       /TAKOS_LOCAL_DISPATCH_TARGETS_JSON may only override infra service targets/,
@@ -434,9 +434,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -449,22 +449,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - forwards dispatch traffic to http-endpoint-set URL targets', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'http-endpoint-set',
         endpoints: [
@@ -478,7 +478,7 @@ async function seedTenantWorkerBundle(params: {
           },
         ],
       },
-    });
+    }));
 
     const upstreamFetch = async (request: Request) => {
       assertEquals(request.url, 'http://worker.internal/base/api/runs?view=full');
@@ -500,9 +500,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -515,16 +515,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - dispatches to a locally materialized tenant worker via Miniflare when no URL target is configured', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -542,9 +542,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -557,27 +557,27 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes tenant workers by default when no URL target is configured', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'deployments',
         deployments: [{ routeRef: 'worker-demo-v1', weight: 100, status: 'active' }],
       },
-    });
+    }));
 
     const env = await createNodeWebEnv();
     const db = getDb(env.DB);
@@ -634,9 +634,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -649,16 +649,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - dispatches scheduled events through the canonical local tenant runtime registry', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -717,9 +717,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -732,16 +732,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - dispatches queue events through the canonical local tenant runtime registry', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -813,9 +813,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -828,16 +828,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - dispatches scheduled events against the selected deployment when stable route refs share a service name', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -920,9 +920,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -935,16 +935,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - dispatches queue events against the selected deployment when stable route refs share a service name', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1034,9 +1034,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1049,16 +1049,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - creates a workflow instance when local tenant workflow invocation is requested', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1096,9 +1096,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1111,16 +1111,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - rejects deployment ids that do not belong to the requested tenant worker', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1161,9 +1161,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1176,16 +1176,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes local tenant queue producer bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1228,9 +1228,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1243,16 +1243,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes provider-backed tenant queue producer bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1302,9 +1302,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1317,16 +1317,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes local tenant durable object bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1375,9 +1375,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1390,16 +1390,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes local tenant analytics engine bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1446,9 +1446,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1461,16 +1461,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes local tenant workflow bindings', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1515,9 +1515,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1530,22 +1530,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes canary worker bundles when routing selects a canary route ref', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'deployments',
         deployments: [
@@ -1553,7 +1553,7 @@ async function seedTenantWorkerBundle(params: {
           { routeRef: 'worker-demo-v2', weight: 99, status: 'canary' },
         ],
       },
-    });
+    }));
 
     const env = await createNodeWebEnv();
     const db = getDb(env.DB);
@@ -1630,9 +1630,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1645,22 +1645,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - materializes canary worker bundles when weighted targets share a stable service route ref', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'deployments',
         deployments: [
@@ -1668,7 +1668,7 @@ async function seedTenantWorkerBundle(params: {
           { routeRef: 'worker-demo', deploymentId: 'deployment-demo-v2', weight: 99, status: 'canary' },
         ],
       },
-    });
+    }));
 
     const env = await createNodeWebEnv();
     const db = getDb(env.DB);
@@ -1745,9 +1745,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1760,27 +1760,27 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - re-resolves stable service route refs when the active deployment pointer changes', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
+  Deno.env.set('TAKOS_LOCAL_ROUTING_JSON', JSON.stringify({
       'hello.local': {
         type: 'deployments',
         deployments: [{ routeRef: 'worker-demo', weight: 100, status: 'active' }],
       },
-    });
+    }));
 
     const env = await createNodeWebEnv();
     const db = getDb(env.DB);
@@ -1863,9 +1863,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1878,16 +1878,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves runtime-host in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1903,9 +1903,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1918,16 +1918,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves runtime-host health in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -1943,9 +1943,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -1958,22 +1958,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - forwards runtime-host traffic to a configured runtime service', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_RUNTIME_URL = 'http://runtime.internal/base/';
+  Deno.env.set('TAKOS_LOCAL_RUNTIME_URL', 'http://runtime.internal/base/');
 
     const upstreamFetch = async (request: Request) => {
       assertEquals(request.url, 'http://runtime.internal/base/health');
@@ -1992,9 +1992,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2007,16 +2007,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves executor-host in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -2032,9 +2032,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2047,16 +2047,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves executor-host health in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -2072,9 +2072,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2087,22 +2087,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - forwards executor dispatch to a configured executor service with canonical control RPC fields', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_EXECUTOR_URL = 'http://executor.internal/base/';
+  Deno.env.set('TAKOS_LOCAL_EXECUTOR_URL', 'http://executor.internal/base/');
 
     const upstreamFetch = async (request: Request) => {
       assertEquals(request.url, 'http://executor.internal/base/start');
@@ -2136,9 +2136,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2151,16 +2151,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves browser-host in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -2184,9 +2184,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2199,16 +2199,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - serves browser-host health in local mode', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -2224,9 +2224,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2239,22 +2239,22 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - forwards browser bootstrap to a configured browser service', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
     queueMocks.sqsSendBatch;
   try {
-  process.env.TAKOS_LOCAL_BROWSER_URL = 'http://browser.internal/base/';
+  Deno.env.set('TAKOS_LOCAL_BROWSER_URL', 'http://browser.internal/base/');
 
     const upstreamFetch = async (request: Request) => {
       assertEquals(request.url, 'http://browser.internal/base/internal/bootstrap');
@@ -2287,9 +2287,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;
@@ -2302,16 +2302,16 @@ async function seedTenantWorkerBundle(params: {
   }
 })
   Deno.test('local bootstrap - persists sqlite, kv, and r2 state across adapter resets when a data dir is configured', async () => {
-  process.env.ADMIN_DOMAIN = 'admin.local';
-    process.env.TENANT_BASE_DOMAIN = 'tenant.local';
-    delete process.env.TAKOS_LOCAL_ROUTING_JSON;
-    delete process.env.TAKOS_LOCAL_DISPATCH_TARGETS_JSON;
-    delete process.env.TAKOS_LOCAL_RUNTIME_URL;
-    delete process.env.TAKOS_LOCAL_EXECUTOR_URL;
-    delete process.env.TAKOS_LOCAL_BROWSER_URL;
+  Deno.env.set('ADMIN_DOMAIN', 'admin.local');
+    Deno.env.set('TENANT_BASE_DOMAIN', 'tenant.local');
+    Deno.env.delete('TAKOS_LOCAL_ROUTING_JSON');
+    Deno.env.delete('TAKOS_LOCAL_DISPATCH_TARGETS_JSON');
+    Deno.env.delete('TAKOS_LOCAL_RUNTIME_URL');
+    Deno.env.delete('TAKOS_LOCAL_EXECUTOR_URL');
+    Deno.env.delete('TAKOS_LOCAL_BROWSER_URL');
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
-    delete process.env.AWS_REGION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDataDir);
+    Deno.env.delete('AWS_REGION');
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
     queueMocks.sqsSend;
@@ -2355,9 +2355,9 @@ async function seedTenantWorkerBundle(params: {
   /* TODO: call fakeTime.restore() */ void 0;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        delete process.env[key];
+        Deno.env.delete(key);
       } else {
-        process.env[key] = value;
+        Deno.env.set(key, value);
       }
     }
     /* TODO: restore mocks manually */ void 0;

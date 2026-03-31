@@ -12,7 +12,7 @@
 // cloudflare-compat is not necessary; we just conform to the subset that
 // EmbeddingsService calls.
 
-import { logWarn } from '../shared/utils/logger';
+import { logWarn } from '../shared/utils/logger.ts';
 
 const MODEL_MAP: Record<string, { openAiModel: string; dimensions?: number }> = {
   '@cf/baai/bge-base-en-v1.5': { openAiModel: 'text-embedding-3-small', dimensions: 768 },

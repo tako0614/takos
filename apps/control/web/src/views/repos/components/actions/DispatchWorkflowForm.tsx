@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import type { Setter } from 'solid-js';
-import { Icons } from '../../../../lib/Icons';
-import { useI18n } from '../../../../store/i18n';
+import { Icons } from '../../../../lib/Icons.tsx';
+import { useI18n } from '../../../../store/i18n.ts';
 
 interface DispatchWorkflowFormProps {
   workflowPath: string;

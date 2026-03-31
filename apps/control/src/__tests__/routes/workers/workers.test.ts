@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AppError, ErrorCodes, isAppError } from 'takos-common/errors';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
-import { createMockEnv } from '../../../../test/integration/setup';
+import { createMockEnv } from '../../../../test/integration/setup.ts';
 
 import { assertEquals, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
 import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';

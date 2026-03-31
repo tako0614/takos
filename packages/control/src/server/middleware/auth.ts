@@ -1,13 +1,13 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import type { Env, User } from '../../shared/types';
-import { getDb, sessions } from '../../infra/db';
-import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../application/services/identity/session';
-import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache';
-import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens';
+import type { Env, User } from '../../shared/types/index.ts';
+import { getDb, sessions } from '../../infra/db/index.ts';
+import { getSession, getSessionIdFromCookie, normalizeSessionId } from '../../application/services/identity/session.ts';
+import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache.ts';
+import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens.ts';
 
 import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
-import { logError, logWarn } from '../../shared/utils/logger';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
 import { getPlatformServices } from '../../platform/accessors.ts';
 
 type AuthVariables = {

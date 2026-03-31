@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 // [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
 import {
   validateCommandLine,

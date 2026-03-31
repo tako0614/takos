@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
 import { StepExecutor, type ExecutorStepResult } from '../../runtime/actions/executor.ts';
 import { SANDBOX_LIMITS } from '../../shared/config.ts';
 import { shouldBlockForSecretExposure, mightExposeSecrets } from '../../runtime/actions/secrets.ts';
@@ -26,7 +27,7 @@ import {
 } from '../../runtime/actions/job-manager.ts';
 import { internalError } from 'takos-common/middleware/hono';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // checkout

@@ -5,7 +5,7 @@ import type {
   AppRoute,
   AppService,
   AppWorker,
-} from '../source/app-manifest-types';
+} from '../source/app-manifest-types.ts';
 
 export type GroupWorkloadCategory = 'worker' | 'container' | 'service';
 

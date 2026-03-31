@@ -1,4 +1,4 @@
-import type { BillingMode, BillingTopupPack } from '../../types';
+import type { BillingMode, BillingTopupPack } from '../../types/index.ts';
 
 export function sortBillingTopupPacks(packs: BillingTopupPack[]): BillingTopupPack[] {
   return [...packs].sort((left, right) => {

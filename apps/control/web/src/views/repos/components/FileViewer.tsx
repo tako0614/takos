@@ -1,15 +1,15 @@
 import { createSignal, createEffect, on, onCleanup, Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { detectLanguage } from '../../../lib/languageMap';
-import { useI18n } from '../../../store/i18n';
-import type { FileContent } from '../../../types';
-import { formatDateTime } from '../../../lib/format';
-import { rpcJson, repoBlob } from '../../../lib/rpc';
-import type { BlameResponse } from './CodeViewer';
-import { FileHistoryModal } from './FileHistoryModal';
-import type { FileHistoryResponse } from './FileHistoryModal';
-import { FileViewerToolbar } from './FileViewerToolbar';
-import { FileContentRenderer } from './FileContentRenderer';
+import { Icons } from '../../../lib/Icons.tsx';
+import { detectLanguage } from '../../../lib/languageMap.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import type { FileContent } from '../../../types/index.ts';
+import { formatDateTime } from '../../../lib/format.ts';
+import { rpcJson, repoBlob } from '../../../lib/rpc.ts';
+import type { BlameResponse } from './CodeViewer.tsx';
+import { FileHistoryModal } from './FileHistoryModal.tsx';
+import type { FileHistoryResponse } from './FileHistoryModal.tsx';
+import { FileViewerToolbar } from './FileViewerToolbar.tsx';
+import { FileContentRenderer } from './FileContentRenderer.tsx';
 
 interface FileViewerProps {
   repoId: string;

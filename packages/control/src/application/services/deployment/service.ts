@@ -6,10 +6,10 @@
  * rollback, artifact, and helper sub-modules.
  */
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { generateId } from '../../../shared/utils';
-import { encrypt, encryptEnvVars } from '../../../shared/utils/crypto';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { ServiceDesiredStateService } from '../platform/worker-desired-state';
+import { generateId } from '../../../shared/utils/index.ts';
+import { encrypt, encryptEnvVars } from '../../../shared/utils/crypto.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
 import type {
   ArtifactKind,
   Deployment,
@@ -17,11 +17,11 @@ import type {
   DeploymentEnv,
   CreateDeploymentInput,
   RollbackInput,
-} from './models';
+} from './models.ts';
 import {
   parseDeploymentTargetConfig,
   serializeDeploymentTarget,
-} from './provider';
+} from './provider.ts';
 import {
   createDeploymentWithVersion,
   getDeploymentById,
@@ -31,29 +31,29 @@ import {
   getServiceDeploymentBasics,
   logDeploymentEvent,
   updateDeploymentRecord,
-} from './store';
-import { detectStuckDeployments, resetStuckDeployment } from './state';
-import { getDb, services } from '../../../infra/db';
+} from './store.ts';
+import { detectStuckDeployments, resetStuckDeployment } from './state.ts';
+import { getDb, services } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
 import {
   resolveDeploymentArtifactBaseRef,
   resolveDeploymentServiceId,
   snapshotFromOverride,
   assertMatchingIdempotentRequest,
-} from './artifact-refs';
+} from './artifact-refs.ts';
 // Re-export for backward compatibility — external code imports buildDeploymentArtifactRef / DeploymentEnv from here.
-export { buildDeploymentArtifactRef } from './artifact-refs';
-export type { DeploymentEnv } from './models';
-import { buildDeploymentArtifactRef } from './artifact-refs';
-import { executeDeploymentPipeline } from './execute';
-import { executeRollback } from './rollback-orchestrator';
+export { buildDeploymentArtifactRef } from './artifact-refs.ts';
+export type { DeploymentEnv } from './models.ts';
+import { buildDeploymentArtifactRef } from './artifact-refs.ts';
+import { executeDeploymentPipeline } from './execute.ts';
+import { executeRollback } from './rollback-orchestrator.ts';
 import {
   getEnvVars,
   getMaskedEnvVars,
   decryptBindings,
-} from './artifact-io';
+} from './artifact-io.ts';
 
 export class DeploymentService {
   private encryptionKey: string;

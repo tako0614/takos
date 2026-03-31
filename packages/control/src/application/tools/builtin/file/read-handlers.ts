@@ -4,10 +4,10 @@
  * Consolidates: file_read, file_list.
  */
 
-import type { ToolHandler } from '../../tool-definitions';
-import { callSessionApi } from './session';
-import { isBinaryFile } from './limits';
-import { setupFileOperation, handleSessionApiResponse } from './file-operations';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { callSessionApi } from './session.ts';
+import { isBinaryFile } from './limits.ts';
+import { setupFileOperation, handleSessionApiResponse } from './file-operations.ts';
 
 /* ------------------------------------------------------------------ */
 /*  file_read                                                          */

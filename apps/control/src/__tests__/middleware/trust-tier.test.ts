@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { requireTrustTier, meetsMinTier } from '@/middleware/trust-tier';
-import { createMockEnv } from '../../../test/integration/setup';
+import { createMockEnv } from '../../../test/integration/setup.ts';
 
 type TestVars = { user?: User };
 type TestEnv = { Bindings: Env; Variables: TestVars };

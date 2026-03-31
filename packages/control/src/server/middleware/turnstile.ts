@@ -6,9 +6,9 @@
  * If not configured, middleware is a no-op (allows development without Turnstile).
  */
 import type { MiddlewareHandler } from 'hono';
-import type { Env } from '../../shared/types';
+import type { Env } from '../../shared/types/index.ts';
 import { AuthorizationError } from 'takos-common/errors';
-import { logWarn } from '../../shared/utils/logger';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 

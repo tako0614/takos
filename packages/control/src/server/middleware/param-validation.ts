@@ -1,8 +1,8 @@
 import type { MiddlewareHandler } from 'hono';
-import type { Env } from '../../shared/types';
-import { isValidOpaqueId } from '../../shared/utils/db-guards';
+import type { Env } from '../../shared/types/index.ts';
+import { isValidOpaqueId } from '../../shared/utils/db-guards.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { logWarn } from '../../shared/utils/logger';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 // Route params that must be opaque IDs
 const OPAQUE_ID_PARAM_NAMES = new Set([

@@ -1,8 +1,8 @@
 import type { Ai, VectorizeIndex, D1Database } from '../../../shared/types/bindings.ts';
-import type { SkillCategory, SkillSource } from '../agent/skills';
-import type { SkillCatalogEntry } from '../agent/skills';
-import { CATEGORY_LABELS, getCategoryLabel } from '../agent/official-skills';
-import { logWarn } from '../../../shared/utils/logger';
+import type { SkillCategory, SkillSource } from '../agent/skills.ts';
+import type { SkillCatalogEntry } from '../agent/skills.ts';
+import { CATEGORY_LABELS, getCategoryLabel } from '../agent/official-skills.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export interface SkillCatalogEntrySummary {
   id: string;

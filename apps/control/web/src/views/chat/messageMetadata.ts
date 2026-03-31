@@ -1,4 +1,4 @@
-import type { ToolExecution } from '../../types';
+import type { ToolExecution } from '../../types/index.ts';
 
 export interface ChatAttachmentMetadata {
   file_id?: string;

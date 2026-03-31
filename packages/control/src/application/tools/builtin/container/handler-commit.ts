@@ -1,14 +1,14 @@
-import type { ToolHandler } from '../../tool-definitions';
-import { RuntimeSessionManager } from '../../../services/sync';
-import { getDb, sessions, sessionRepos, repositories, accounts } from '../../../../infra/db';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { RuntimeSessionManager } from '../../../services/sync/index.ts';
+import { getDb, sessions, sessionRepos, repositories, accounts } from '../../../../infra/db/index.ts';
 import { eq, and, asc } from 'drizzle-orm';
 import {
   callSessionApi,
   checkSessionHealth,
   validateStringInput,
-} from './session';
-import { appendContainerStartFailureContext } from './availability';
-import { logError } from '../../../../shared/utils/logger';
+} from './session.ts';
+import { appendContainerStartFailureContext } from './availability.ts';
+import { logError } from '../../../../shared/utils/logger.ts';
 
 export const containerCommitHandler: ToolHandler = async (args, context) => {
   const rawMessage = validateStringInput(args.message, 'message');

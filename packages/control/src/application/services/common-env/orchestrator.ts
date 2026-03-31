@@ -1,12 +1,12 @@
-import type { Env } from '../../../shared/types';
-import { normalizeEnvName, uniqueEnvNames } from './crypto';
+import type { Env } from '../../../shared/types/index.ts';
+import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
 import {
   CommonEnvReconcileJobStore,
   type CommonEnvReconcileTrigger,
-} from './reconcile-jobs';
-import { listServiceIdsLinkedToEnvKey } from './repository';
-import { CommonEnvReconciler } from './reconciler';
-import { logError } from '../../../shared/utils/logger';
+} from './reconcile-jobs.ts';
+import { listServiceIdsLinkedToEnvKey } from './repository.ts';
+import { CommonEnvReconciler } from './reconciler.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export class CommonEnvOrchestrator {
   constructor(

@@ -1,26 +1,26 @@
 import { Hono, type Context } from 'hono';
-import { generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils/index.ts';
 import {
   createSession,
   deleteSession,
   setSessionCookie,
   clearSessionCookie,
   getSessionIdFromCookie,
-} from '../../../application/services/identity/session';
+} from '../../../application/services/identity/session.ts';
 import {
   storeOAuthState,
   validateOAuthState,
   auditLog,
   createAuthSession,
   cleanupUserSessions,
-} from '../../../application/services/identity/auth-utils';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { sanitizeReturnTo, provisionGoogleOAuthUser } from './provisioning';
-import { errorPage } from './html';
-import { getDb } from '../../../infra/db';
-import { accounts, authIdentities } from '../../../infra/db/schema';
+} from '../../../application/services/identity/auth-utils.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { sanitizeReturnTo, provisionGoogleOAuthUser } from './provisioning.ts';
+import { errorPage } from './html.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, authIdentities } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 
 export const authSessionRouter = new Hono<OptionalAuthRouteEnv>();

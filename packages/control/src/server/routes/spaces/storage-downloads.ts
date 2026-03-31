@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   getStorageItem,
   getStorageItemByPath,
@@ -10,13 +10,13 @@ import {
   escapeSqlLike,
   PRESIGN_EXPIRY_SECONDS,
   MAX_ZIP_ENTRIES,
-} from '../../../application/services/source/space-storage';
-import { createZipStream } from '../../../shared/utils/zip-stream';
-import { getDb } from '../../../infra/db';
+} from '../../../application/services/source/space-storage.ts';
+import { createZipStream } from '../../../shared/utils/zip-stream.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, sql, asc } from 'drizzle-orm';
-import { accountStorageFiles } from '../../../infra/db/schema';
+import { accountStorageFiles } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
-import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-operations';
+import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-operations.ts';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Content read endpoint ---

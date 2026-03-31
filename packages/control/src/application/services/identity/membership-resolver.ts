@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, accountMemberships } from '../../../infra/db';
+import { getDb, accountMemberships } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 
 /**

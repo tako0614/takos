@@ -1,13 +1,13 @@
-import { useI18n } from '../../../store/i18n';
-import type { TranslationKey } from '../../../i18n';
-import { Icons } from '../../../lib/Icons';
-import type { AgentTask } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import type { TranslationKey } from '../../../i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { AgentTask } from '../../../types/index.ts';
 import {
   getStatusClasses,
   getPriorityClasses,
   parsePlan,
   resolveAgentTypeLabel,
-} from './task-work-utils';
+} from './task-work-utils.ts';
 
 interface TaskCardProps {
   task: AgentTask;

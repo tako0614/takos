@@ -1,31 +1,31 @@
 import { onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { LoadingScreen } from './components/common/LoadingScreen';
-import { ToastRenderer } from './components/common/Toast';
-import { ConfirmDialogRenderer } from './components/common/ConfirmDialog';
-import { SetupPage } from './views/SetupPage';
-import { LoginPage } from './views/app/AuthViews';
-import { AuthenticatedRoutes } from './views/AuthenticatedRoutes';
-import { AppModals } from './components/layout/AppModals';
-import { rpc, rpcJson } from './lib/rpc';
-import { getErrorMessage } from './lib/errors';
-import { getSpaceIdentifier } from './lib/spaces';
-import { useI18n } from './store/i18n';
+import { LoadingScreen } from './components/common/LoadingScreen.tsx';
+import { ToastRenderer } from './components/common/Toast.tsx';
+import { ConfirmDialogRenderer } from './components/common/ConfirmDialog.tsx';
+import { SetupPage } from './views/SetupPage.tsx';
+import { LoginPage } from './views/app/AuthViews.tsx';
+import { AuthenticatedRoutes } from './views/AuthenticatedRoutes.tsx';
+import { AppModals } from './components/layout/AppModals.tsx';
+import { rpc, rpcJson } from './lib/rpc.ts';
+import { getErrorMessage } from './lib/errors.ts';
+import { getSpaceIdentifier } from './lib/spaces.ts';
+import { useI18n } from './store/i18n.ts';
 
-import { useAppRouteResolver } from './hooks/useAppRouteResolver';
-import type { Space } from './types';
+import { useAppRouteResolver } from './hooks/useAppRouteResolver.ts';
+import type { Space } from './types/index.ts';
 
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from './hooks/useAuth.ts';
 import { useSetAtom } from 'solid-jotai';
-import { showCreateSpaceAtom } from './store/modal';
-import { useNavigation, useNavigationSync } from './store/navigation';
+import { showCreateSpaceAtom } from './store/modal.ts';
+import { useNavigation, useNavigationSync } from './store/navigation.ts';
 
-import { SourcePage } from './views/source/SourcePage';
-import { RepoDetailPage } from './views/repos/RepoDetailPage';
-import { LegalPage } from './views/legal/LegalPage';
-import { SharedThreadPage } from './views/share/SharedThreadPage';
-import { OAuthConsentView } from './views/oauth/OAuthConsentView';
-import { DeviceAuthView } from './views/oauth/DeviceAuthView';
+import { SourcePage } from './views/source/SourcePage.tsx';
+import { RepoDetailPage } from './views/repos/RepoDetailPage.tsx';
+import { LegalPage } from './views/legal/LegalPage.tsx';
+import { SharedThreadPage } from './views/share/SharedThreadPage.tsx';
+import { OAuthConsentView } from './views/oauth/OAuthConsentView.tsx';
+import { DeviceAuthView } from './views/oauth/DeviceAuthView.tsx';
 
 function AppContent() {
   const { t } = useI18n();

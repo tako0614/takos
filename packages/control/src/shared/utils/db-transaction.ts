@@ -3,7 +3,7 @@ import type {
   SqlPreparedStatementBinding,
   SqlResultBinding,
 } from '../types/bindings.ts';
-import { logError } from './logger';
+import { logError } from './logger.ts';
 
 const VALID_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 

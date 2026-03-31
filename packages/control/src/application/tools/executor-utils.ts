@@ -1,7 +1,7 @@
-import type { ToolResolver } from './resolver';
-import { CapabilityRegistry } from './capability-registry';
-import { buildToolDescriptor } from './descriptor-builder';
-import type { ToolExecutor } from './executor';
+import type { ToolResolver } from './resolver.ts';
+import { CapabilityRegistry } from './capability-registry.ts';
+import { buildToolDescriptor } from './descriptor-builder.ts';
+import type { ToolExecutor } from './executor.ts';
 
 export function buildPerRunCapabilityRegistry(executor: ToolExecutor): CapabilityRegistry {
   const registry = new CapabilityRegistry();

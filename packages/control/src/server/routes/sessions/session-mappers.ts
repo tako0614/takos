@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
-import type { Env } from '../../../shared/types';
-import type { Session } from '../../../application/services/sync';
-import type { BaseVariables } from '../route-auth';
+import type { Env } from '../../../shared/types/index.ts';
+import type { Session } from '../../../application/services/sync/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
 
 export type SessionContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 

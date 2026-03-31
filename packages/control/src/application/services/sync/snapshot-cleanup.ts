@@ -1,9 +1,9 @@
-import type { Env } from '../../../shared/types';
-import type { SnapshotTree } from './models';
-import { getDb, snapshots, blobs, sessions, sessionFiles, accounts } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import type { SnapshotTree } from './models.ts';
+import { getDb, snapshots, blobs, sessions, sessionFiles, accounts } from '../../../infra/db/index.ts';
 import { eq, and, inArray, lte, lt, sql } from 'drizzle-orm';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
-import type { SnapshotManager } from './snapshot';
+import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
+import type { SnapshotManager } from './snapshot.ts';
 
 /** Extract non-empty blob hashes from a snapshot tree. */
 function extractTreeHashes(tree: SnapshotTree): string[] {

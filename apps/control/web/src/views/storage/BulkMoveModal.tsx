@@ -1,7 +1,7 @@
-import { useI18n } from '../../store/i18n';
-import { Modal } from '../../components/ui/Modal';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
+import { useI18n } from '../../store/i18n.ts';
+import { Modal } from '../../components/ui/Modal.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { Button } from '../../components/ui/Button.tsx';
 
 interface BulkMoveModalProps {
   isOpen: boolean;

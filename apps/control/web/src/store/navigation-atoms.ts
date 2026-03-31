@@ -1,8 +1,8 @@
 import { atom } from 'jotai/vanilla';
-import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces';
-import { rpc, rpcJson } from '../lib/rpc';
-import { spacesAtom, spacesLoadedAtom } from './auth';
-import type { RouteState, Thread, Space } from '../types';
+import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { spacesAtom, spacesLoadedAtom } from './auth.ts';
+import type { RouteState, Thread, Space } from '../types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Route state atoms (driven by useRouter, synced via hook)

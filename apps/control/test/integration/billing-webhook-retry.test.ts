@@ -1,5 +1,5 @@
 import type { Env } from '@/shared/types';
-import { createMockEnv } from './setup';
+import { createMockEnv } from './setup.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
 import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';

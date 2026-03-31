@@ -1,19 +1,19 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Resource } from '../../../shared/types';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Resource } from '../../../shared/types/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getPortableObjectStore, isPortableResourceProvider } from './portable-runtime.ts';
-import { checkResourceAccess } from '../../../application/services/resources';
+import { checkResourceAccess } from '../../../application/services/resources/index.ts';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { getDb } from '../../../infra/db';
-import { resources } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { resources } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
-import { textDate } from '../../../shared/utils/db-guards';
+import { logError } from '../../../shared/utils/logger.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 import type { R2Bucket, R2Object, R2ObjectBody } from '../../../shared/types/bindings.ts';
 
 function toResource(data: {

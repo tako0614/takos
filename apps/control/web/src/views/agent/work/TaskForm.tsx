@@ -1,14 +1,14 @@
 
-import { useI18n } from '../../../store/i18n';
-import type { TranslationKey } from '../../../i18n';
-import { Icons } from '../../../lib/Icons';
-import type { AgentTask, AgentTaskPriority, AgentTaskStatus } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import type { TranslationKey } from '../../../i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { AgentTask, AgentTaskPriority, AgentTaskStatus } from '../../../types/index.ts';
 import {
   STATUS_ORDER,
   PRIORITY_OPTIONS,
   type ModelSelectOption,
-} from './task-work-types';
-import { getAgentTypeOptions, getLocalDateInputMin } from './task-work-utils';
+} from './task-work-types.ts';
+import { getAgentTypeOptions, getLocalDateInputMin } from './task-work-utils.ts';
 
 interface TaskFormProps {
   editingTask: AgentTask | null;

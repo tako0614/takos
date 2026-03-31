@@ -13,7 +13,7 @@ import {
 } from '../application/services/run-notifier/index.ts';
 import { recordRunUsageBatch } from '../application/services/billing/billing.ts';
 import { jsonResponse, readBearerToken } from './runtime-http.ts';
-import { logWarn } from '../shared/utils/logger';
+import { logWarn } from '../shared/utils/logger.ts';
 
 type LocalExecutorHostEnv = {
   DB: D1Database;

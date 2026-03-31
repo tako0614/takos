@@ -6,11 +6,11 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId } from '../../../shared/utils';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { getDb, sessionFiles, files } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { getDb, sessionFiles, files } from '../../../infra/db/index.ts';
 import { eq, and, ne, asc } from 'drizzle-orm';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 export interface SessionFile {
   id: string;

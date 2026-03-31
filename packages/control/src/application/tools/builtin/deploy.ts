@@ -1,5 +1,5 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { deployFrontendFromWorkspace } from '../../services/source/apps';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { deployFrontendFromWorkspace } from '../../services/source/apps.ts';
 
 export const DEPLOY_FRONTEND: ToolDefinition = {
   name: 'deploy_frontend',

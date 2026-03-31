@@ -1,2 +1,2 @@
-export * from './navigation-atoms';
-export * from './navigation-hooks';
+export * from './navigation-atoms.ts';
+export * from './navigation-hooks.ts';

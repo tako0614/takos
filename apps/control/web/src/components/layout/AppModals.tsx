@@ -1,11 +1,11 @@
 import { Show } from 'solid-js';
 import { useAtomValue, useSetAtom } from 'solid-jotai';
-import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal';
-import { ChatSearchModal } from '../../views/chat/ChatSearchModal';
-import { AgentModal } from '../../views/AgentModal';
-import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal';
-import { useNavigation } from '../../store/navigation';
-import { useAuth } from '../../hooks/useAuth';
+import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal.tsx';
+import { ChatSearchModal } from '../../views/chat/ChatSearchModal.tsx';
+import { AgentModal } from '../../views/AgentModal.tsx';
+import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal.ts';
+import { useNavigation } from '../../store/navigation.ts';
+import { useAuth } from '../../hooks/useAuth.ts';
 
 interface AppModalsProps {
   onCreateSpace: (name: string, description: string) => Promise<void>;

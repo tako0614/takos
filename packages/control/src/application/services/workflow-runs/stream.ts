@@ -1,6 +1,6 @@
-import { getDb, workflowRuns } from '../../../infra/db';
+import { getDb, workflowRuns } from '../../../infra/db/index.ts';
 import { and, eq } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 
 const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
 

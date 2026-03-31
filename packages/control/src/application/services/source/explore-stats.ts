@@ -2,8 +2,8 @@
 // Rating / stats helpers for takopack packages
 // ---------------------------------------------------------------------------
 
-import type { Database } from '../../../infra/db';
-import type { TakopackRatingStats, PackageWithTakopack } from './explore-package-types';
+import type { Database } from '../../../infra/db/index.ts';
+import type { TakopackRatingStats, PackageWithTakopack } from './explore-package-types.ts';
 
 export async function getTakopackRatingStats(
   _db: Database,

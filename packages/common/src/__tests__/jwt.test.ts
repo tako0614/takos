@@ -1,4 +1,5 @@
-import * as crypto from 'crypto';
+import { Buffer } from 'node:buffer';
+import * as crypto from 'node:crypto';
 import {
   verifyServiceToken,
 } from '../jwt.ts';

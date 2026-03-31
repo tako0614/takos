@@ -1,8 +1,9 @@
-import { parentPort } from 'worker_threads';
-import vm from 'vm';
+import { parentPort } from 'node:worker_threads';
+import vm from 'node:vm';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import { createLogger } from 'takos-common/logger';
+import { Buffer } from "node:buffer";
 import {
   normalizeAllowedDomains,
   parseFetchUrl,

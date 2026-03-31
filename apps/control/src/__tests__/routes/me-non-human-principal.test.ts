@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup';
+import { createMockEnv } from '../../../test/integration/setup.ts';
 import meRoutes from '@/routes/me';
 
 type TestEnv = {

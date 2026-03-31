@@ -1,14 +1,14 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
 import { eq, and, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import { ALL_SCOPES } from '../../../shared/types/oauth';
-import { generateId } from '../../../shared/utils';
-import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto';
-import { getCommonEnvSecret, normalizeEnvName } from './crypto';
-import type { SyncState } from './repository';
-import { issueTakosAccessToken } from '../identity/takos-access-tokens';
-import { getDb, accounts, accountMemberships, serviceManagedTakosTokens } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { ALL_SCOPES } from '../../../shared/types/oauth.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto.ts';
+import { getCommonEnvSecret, normalizeEnvName } from './crypto.ts';
+import type { SyncState } from './repository.ts';
+import { issueTakosAccessToken } from '../identity/takos-access-tokens.ts';
+import { getDb, accounts, accountMemberships, serviceManagedTakosTokens } from '../../../infra/db/index.ts';
 
 export const TAKOS_API_URL_ENV_NAME = 'TAKOS_API_URL';
 export const TAKOS_ACCESS_TOKEN_ENV_NAME = 'TAKOS_ACCESS_TOKEN';

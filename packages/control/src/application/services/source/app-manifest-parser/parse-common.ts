@@ -2,8 +2,8 @@ import type {
   LifecycleHooks,
   LifecycleHook,
   UpdateStrategy,
-} from '../app-manifest-types';
-import { asRecord, asString, asRequiredString } from '../app-manifest-utils';
+} from '../app-manifest-types.ts';
+import { asRecord, asString, asRequiredString } from '../app-manifest-utils.ts';
 
 // ============================================================
 // Semver validation

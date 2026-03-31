@@ -3,8 +3,8 @@ import type {
   AppWorker,
   AppService,
   EnvironmentOverrides,
-} from '../app-manifest-types';
-import { asRecord, asStringMap, normalizeRepoPath } from '../app-manifest-utils';
+} from '../app-manifest-types.ts';
+import { asRecord, asStringMap, normalizeRepoPath } from '../app-manifest-utils.ts';
 
 // ============================================================
 // Partial container/worker/service parsers (for environment overrides)

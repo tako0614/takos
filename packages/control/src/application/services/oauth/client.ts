@@ -1,20 +1,20 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { oauthClients } from '../../../infra/db';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { oauthClients } from '../../../infra/db/index.ts';
 import type {
   OAuthClient,
   OAuthClientStatus,
   ClientRegistrationRequest,
   ClientRegistrationResponse,
   JsonStringArray,
-} from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth';
-import { generateRandomString, generateId } from './pkce';
-import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash';
-import { parseScopes, validateScopes } from './scopes';
-import { getDb } from '../../../infra/db';
+} from '../../../shared/types/oauth.ts';
+import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth.ts';
+import { generateRandomString, generateId } from './pkce.ts';
+import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash.ts';
+import { parseScopes, validateScopes } from './scopes.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type OAuthClientRow = SelectOf<typeof oauthClients>;
 

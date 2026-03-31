@@ -4,9 +4,9 @@ import type {
   SourceItem,
   SourceItemInstallation,
   SourceItemTakopack,
-} from './useSourceData';
-import { useSourceFetchQueries } from './useSourceFetchQueries';
-import { useSourceFetchActions } from './useSourceFetchActions';
+} from './useSourceData.ts';
+import { useSourceFetchQueries } from './useSourceFetchQueries.ts';
+import { useSourceFetchActions } from './useSourceFetchActions.ts';
 
 export interface UseSourceFetchOptions {
   isAuthenticated: boolean;

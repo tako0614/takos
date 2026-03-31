@@ -1,17 +1,19 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import * as fs from 'fs';
-import * as fsPromises from 'fs/promises';
-import path from 'path';
-import { Transform } from 'stream';
-import { pipeline } from 'stream/promises';
-import { Readable } from 'stream';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
+import path from 'node:path';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { badRequest, internalError, notFound } from 'takos-common/middleware/hono';
 import { REPOS_BASE_DIR } from '../../shared/config.ts';
 import { isPathWithinBase, verifyPathWithinAfterAccess } from '../../runtime/paths.ts';
 import { validateGitName } from '../../runtime/validation.ts';
 import { runGitHttpBackend } from '../../runtime/git-http-backend.ts';
 import { enforceSpaceScopeMiddleware } from '../../middleware/space-scope.ts';
+import { Buffer } from "node:buffer";
 
 // --- LFS policy helpers ---
 
@@ -184,7 +186,7 @@ export interface ValidatedLfsObjectRequest {
   repo: ResolvedRepoGitDir;
 }
 
-export function validateRepoParams(c: Context): ValidatedRepoParams | { error: Response } {
+export function validateRepoParams(c: Context<RuntimeEnv>): ValidatedRepoParams | { error: Response } {
   const spaceId = c.req.param('spaceId') ?? c.req.param('workspaceId') ?? '';
   const pathParts = c.req.path.split('/').filter(Boolean);
   const repoSegment = c.req.param('repoName') ?? pathParts[2] ?? '';
@@ -203,7 +205,7 @@ export function validateRepoParams(c: Context): ValidatedRepoParams | { error: R
 }
 
 export async function resolveRepoGitDir(
-  c: Context
+  c: Context<RuntimeEnv>
 ): Promise<ResolvedRepoGitDir | { error: Response }> {
   const params = validateRepoParams(c);
   if ('error' in params) return params;
@@ -234,7 +236,7 @@ export async function resolveRepoGitDir(
   };
 }
 
-export function validateLfsObjectOid(c: Context): string | { error: Response } {
+export function validateLfsObjectOid(c: Context<RuntimeEnv>): string | { error: Response } {
   const normalizedOid = normalizeLfsOid(c.req.param('oid'));
   if (!normalizedOid) {
     return { error: badRequest(c, 'Invalid LFS object id') };
@@ -243,7 +245,7 @@ export function validateLfsObjectOid(c: Context): string | { error: Response } {
 }
 
 export async function validateLfsObjectRequest(
-  c: Context,
+  c: Context<RuntimeEnv>,
   oid: string | null = null
 ): Promise<ValidatedLfsObjectRequest | { error: Response }> {
   const normalizedOidResult = oid ?? validateLfsObjectOid(c);
@@ -273,13 +275,13 @@ export async function validateLfsObjectRequest(
 // Route helpers
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 const enforceSpaceScope = enforceSpaceScopeMiddleware((c) => [
   c.req.param('spaceId'),
 ]);
 
-function getLfsObjectHref(c: import('hono').Context, spaceId: string, repoName: string, oid: string): string {
+function getLfsObjectHref(c: Context<RuntimeEnv>, spaceId: string, repoName: string, oid: string): string {
   const protocol = c.req.header('x-forwarded-proto') || 'http';
   const host = c.req.header('host') || 'localhost';
   return `${protocol}://${host}/git/${spaceId}/${repoName}.git/info/lfs/objects/${oid}`;
@@ -302,7 +304,7 @@ async function fileExists(filePath: string): Promise<boolean> {
  * Validate space/repo params and return safe git path suffix, or return error Response.
  */
 function validateGitParams(
-  c: import('hono').Context,
+  c: Context<RuntimeEnv>,
   suffix: string
 ): string | { error: Response } {
   const params = validateRepoParams(c);
@@ -313,7 +315,7 @@ function validateGitParams(
 }
 
 function sendGitResult(
-  c: import('hono').Context,
+  c: Context<RuntimeEnv>,
   result: { status: number; headers: Record<string, string>; body: Buffer }
 ): Response {
   const headers = new Headers();
@@ -486,7 +488,7 @@ app.get('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
 
     // Read the file and return as binary response
     const buffer = await fsPromises.readFile(objectPath);
-    return new Response(new Blob([buffer]), {
+    return new Response(new Blob([new Uint8Array(buffer)]), {
       status: 200,
       headers: {
         'content-type': 'application/octet-stream',
@@ -525,7 +527,7 @@ app.get('/git/:spaceId/:repoName.git/info/refs', async (c) => {
 });
 
 function createPackHandler(service: 'git-upload-pack' | 'git-receive-pack') {
-  return async (c: import('hono').Context) => {
+  return async (c: Context<RuntimeEnv>) => {
     try {
       const gitPathResult = validateGitParams(c, service);
       if (typeof gitPathResult === 'object' && 'error' in gitPathResult) return gitPathResult.error;

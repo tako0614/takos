@@ -1,15 +1,15 @@
 import { Hono, type Context } from 'hono';
-import type { Env } from '../../shared/types';
-import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
+import type { Env } from '../../shared/types/index.ts';
+import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from './route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
 import {
   quickSearchPaths,
   searchWorkspace,
   type SearchRequestBody,
-} from '../../application/services/source/search';
-import { CacheTags, CacheTTL } from '../middleware/cache';
-import { computeSHA256 } from '../../shared/utils/hash';
-import { logError } from '../../shared/utils/logger';
+} from '../../application/services/source/search.ts';
+import { CacheTags, CacheTTL } from '../middleware/cache.ts';
+import { computeSHA256 } from '../../shared/utils/hash.ts';
+import { logError } from '../../shared/utils/logger.ts';
 
 type SearchContext = Context<SpaceAccessRouteEnv>;
 const search = new Hono<SpaceAccessRouteEnv>();

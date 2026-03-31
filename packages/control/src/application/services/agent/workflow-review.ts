@@ -5,15 +5,15 @@
  * LLM-based analysis, and review persistence.
  */
 
-import type { AgentMessage } from './agent-models';
-import type { WorkflowContext, ReviewResult } from './workflow-types';
-import { REVIEW_PROMPT } from './workflow-types';
-import { LLMClient } from './llm';
-import { getDb, pullRequests, prReviews } from '../../../infra/db';
+import type { AgentMessage } from './agent-models.ts';
+import type { WorkflowContext, ReviewResult } from './workflow-types.ts';
+import { REVIEW_PROMPT } from './workflow-types.ts';
+import { LLMClient } from './llm.ts';
+import { getDb, pullRequests, prReviews } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { buildPRDiffText } from '../pull-requests/ai-review';
-import { logError } from '../../../shared/utils/logger';
+import { generateId } from '../../../shared/utils/index.ts';
+import { buildPRDiffText } from '../pull-requests/ai-review.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 // ── Review ──────────────────────────────────────────────────────────────
 

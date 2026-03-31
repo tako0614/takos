@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { validateClientCredentials } from '../../../application/services/oauth/client';
-import { getRefreshToken, revokeToken, verifyAccessToken } from '../../../application/services/oauth/token';
-import { tryLogOAuthEvent, getBodyValue, type FormBody } from './request-utils';
-import type { PublicRouteEnv } from '../route-auth';
-import { RateLimiters } from '../../../shared/utils/rate-limiter';
+import { validateClientCredentials } from '../../../application/services/oauth/client.ts';
+import { getRefreshToken, revokeToken, verifyAccessToken } from '../../../application/services/oauth/token.ts';
+import { tryLogOAuthEvent, getBodyValue, type FormBody } from './request-utils.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
 
 const oauthRevoke = new Hono<PublicRouteEnv>();
 

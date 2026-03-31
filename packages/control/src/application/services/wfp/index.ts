@@ -14,9 +14,9 @@ export {
   type CloudflareBindingRecord,
   createWfpService,
   WFPService,
-} from './service';
-export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator';
-export type { AssetManifestEntry, AssetUploadFile, AssetsUploadSession, AssetsUploadCompletion } from './assets';
+} from './service.ts';
+export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator.ts';
+export type { AssetManifestEntry, AssetUploadFile, AssetsUploadSession, AssetsUploadCompletion } from './assets.ts';
 export {
   CF_API_BASE,
   WfpClient,
@@ -26,9 +26,9 @@ export {
   type WFPConfig,
   type CFAPIResponse,
   type CloudflareAPIError,
-} from './client';
+} from './client.ts';
 export {
   createAssetsUploadSession,
   uploadAssets,
   uploadAllAssets,
-} from './assets';
+} from './assets.ts';

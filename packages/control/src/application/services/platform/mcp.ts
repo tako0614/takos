@@ -20,13 +20,13 @@ export type {
   McpServerRecord,
   RegisterExternalMcpServerResult,
   McpEndpointUrlOptions,
-} from './mcp/mcp-models';
+} from './mcp/mcp-models.ts';
 
 // Validation
 export {
   getMcpEndpointUrlOptions,
   assertAllowedMcpEndpointUrl,
-} from './mcp/validation';
+} from './mcp/validation.ts';
 
 // OAuth flow
 export {
@@ -36,7 +36,7 @@ export {
   completeMcpOAuthFlow,
   refreshMcpToken,
   decryptAccessToken,
-} from './mcp/oauth';
+} from './mcp/oauth.ts';
 
 // CRUD & managed servers
 export {
@@ -48,4 +48,4 @@ export {
   listMcpServers,
   deleteMcpServer,
   updateMcpServer,
-} from './mcp/crud';
+} from './mcp/crud.ts';

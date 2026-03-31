@@ -1,4 +1,4 @@
-import { normalizeUsernameInput, syncRouteWithUsernameChange } from '../../../views/app/settings-username';
+import { normalizeUsernameInput, syncRouteWithUsernameChange } from '../../../views/app/settings-username.ts';
 
 
 import { assertEquals } from 'jsr:@std/assert';

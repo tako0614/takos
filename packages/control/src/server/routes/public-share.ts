@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../shared/types';
-import { zValidator } from './zod-validator';
-import { verifyThreadShareAccess } from '../../application/services/threads/thread-shares';
-import { getDb } from '../../infra/db';
-import { threads, messages } from '../../infra/db/schema';
+import type { Env } from '../../shared/types/index.ts';
+import { zValidator } from './zod-validator.ts';
+import { verifyThreadShareAccess } from '../../application/services/threads/thread-shares.ts';
+import { getDb } from '../../infra/db/index.ts';
+import { threads, messages } from '../../infra/db/schema.ts';
 import { eq, asc } from 'drizzle-orm';
-import { InMemoryRateLimiter } from '../../shared/utils/rate-limiter';
+import { InMemoryRateLimiter } from '../../shared/utils/rate-limiter.ts';
 import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from 'takos-common/errors';
 
 type Variables = Record<string, never>;

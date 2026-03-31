@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 // Mock playwright-core before importing
 // [Deno] vi.mock removed - manually stub imports from 'playwright-core'
 // [Deno] vi.mock removed - manually stub imports from 'takos-common/logger'

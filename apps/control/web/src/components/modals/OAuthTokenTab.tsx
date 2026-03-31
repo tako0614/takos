@@ -1,12 +1,12 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import { Show, For } from 'solid-js';
-import type { PersonalAccessToken } from './OAuthSettingsModal';
-import { formatShortDate } from '../../lib/format';
-import { Icons } from '../../lib/Icons';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { useI18n } from '../../store/i18n';
+import type { PersonalAccessToken } from './OAuthSettingsModal.tsx';
+import { formatShortDate } from '../../lib/format.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Card } from '../ui/Card.tsx';
+import { Button } from '../ui/Button.tsx';
+import { Input } from '../ui/Input.tsx';
+import { useI18n } from '../../store/i18n.ts';
 
 interface OAuthTokenTabProps {
   loading: boolean;

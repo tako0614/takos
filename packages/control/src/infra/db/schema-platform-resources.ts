@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-utils';
+import { createdAtColumn, timestamps } from './schema-utils.ts';
 
 // 80. ResourceAccess
 export const resourceAccess = sqliteTable('resource_access', {

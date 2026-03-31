@@ -5,16 +5,16 @@
  * KV payload building, and Durable Object interaction helpers.
  */
 
-import { getRoutingDOStub } from './sharding';
+import { getRoutingDOStub } from './sharding.ts';
 import type {
   ParsedRoutingValue,
   ResolvedRouting,
   RoutingBindings,
   RoutingRecord,
   RoutingTarget,
-} from './routing-models';
+} from './routing-models.ts';
 import type { PlatformExecutionContext } from '../../../shared/types/bindings.ts';
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export const ROUTING_LOG_PREFIX = '[Routing]';
 

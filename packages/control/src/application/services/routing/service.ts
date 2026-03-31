@@ -9,13 +9,13 @@ import type {
   ResolvedRouting,
   RoutingBindings,
   RoutingTarget,
-} from './routing-models';
+} from './routing-models.ts';
 import type { PlatformExecutionContext } from '../../../shared/types/bindings.ts';
 
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 // Re-export public APIs from resolver and cache so existing consumers keep working.
-export type { RoutingBindings } from './routing-models';
+export type { RoutingBindings } from './routing-models.ts';
 
 export {
   selectRouteRefFromRoutingTarget,
@@ -24,11 +24,11 @@ export {
   selectRouteRefFromHttpEndpointSet,
   parseRoutingValue,
   normalizeHostname,
-} from './resolver';
+} from './resolver.ts';
 
-export { getRoutingPhase } from './phase';
+export { getRoutingPhase } from './phase.ts';
 
-import { parseRoutingValue, normalizeHostname } from './resolver';
+import { parseRoutingValue, normalizeHostname } from './resolver.ts';
 import {
   ROUTING_LOG_PREFIX,
   L2_KV_TTL_SECONDS,
@@ -44,8 +44,8 @@ import {
   doPutRecord,
   doDeleteRecord,
   runBackground,
-} from './cache';
-import { getRoutingPhase } from './phase';
+} from './cache.ts';
+import { getRoutingPhase } from './phase.ts';
 
 export async function resolveHostnameRouting(options: {
   env: RoutingBindings;
@@ -142,7 +142,7 @@ export async function resolveHostnameRouting(options: {
           tombstoneUntil: resolved.record.tombstoneUntil,
         });
 
-        const task = options.env.HOSTNAME_ROUTING.put(hostname, payload).catch((err) => {
+        const task = options.env.HOSTNAME_ROUTING.put(hostname, payload).catch((err: unknown) => {
           logWarn(`${ROUTING_LOG_PREFIX} KV refresh failed for ${hostname}`, { module: 'services/routing', detail: err });
         });
         options.executionCtx?.waitUntil?.(task);
@@ -179,7 +179,7 @@ export async function resolveHostnameRouting(options: {
         tombstoneUntil: resolved.record.tombstoneUntil,
       });
       const kvOpts = phase >= 4 ? { expirationTtl: L2_KV_TTL_SECONDS } : undefined;
-      const task = options.env.HOSTNAME_ROUTING.put(hostname, payload, kvOpts).catch((err) => {
+      const task = options.env.HOSTNAME_ROUTING.put(hostname, payload, kvOpts).catch((err: unknown) => {
         logWarn(`${ROUTING_LOG_PREFIX} KV cache refresh failed for ${hostname}`, { module: 'services/routing', detail: err });
       });
       options.executionCtx?.waitUntil?.(task);
@@ -242,7 +242,7 @@ export async function upsertHostnameRouting(options: {
 
   await doPutRecord(options.env, hostname, options.target, nowMs, timeoutMs);
 
-  const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, kvOpts).catch((err) => {
+  const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, kvOpts).catch((err: unknown) => {
     logWarn(`${ROUTING_LOG_PREFIX} KV put failed for ${hostname}`, { module: 'services/routing', detail: err });
   });
   await runBackground(options.executionCtx, kvTask);
@@ -290,7 +290,7 @@ export async function deleteHostnameRouting(options: {
   const tombstoneUntil = nowMs + tombstoneTtlMs;
   const kvPayload = buildKVPayload({ target: null, updatedAt: nowMs, tombstoneUntil });
   const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, { expirationTtl: L2_KV_TTL_SECONDS }).catch(
-    (err) => {
+    (err: unknown) => {
       logWarn(`${ROUTING_LOG_PREFIX} KV tombstone put failed for ${hostname}`, { module: 'services/routing', detail: err });
     }
   );

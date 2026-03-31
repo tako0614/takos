@@ -7,7 +7,7 @@ import type { PubSub } from '@google-cloud/pubsub';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
 import type { D1Database, KVNamespace, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { ResourceCapability } from '../../../shared/types';
+import type { ResourceCapability } from '../../../shared/types/index.ts';
 import { createAwsSecretsStore } from '../../../adapters/aws-secrets-store.ts';
 import { createDynamoKvStore } from '../../../adapters/dynamo-kv-store.ts';
 import { createFirestoreKvStore } from '../../../adapters/firestore-kv-store.ts';
@@ -776,8 +776,8 @@ export function createPrefixedKvNamespace(base: KVNamespace, prefix: string): KV
       return {
         ...result,
         keys: (result.keys ?? [])
-          .filter((entry) => entry.name.startsWith(prefixValue))
-          .map((entry) => ({ ...entry, name: stripPrefix(entry.name) })),
+          .filter((entry: { name: string }) => entry.name.startsWith(prefixValue))
+          .map((entry: { name: string }) => ({ ...entry, name: stripPrefix(entry.name) })),
       };
     },
   };
@@ -878,7 +878,7 @@ async function clearPortableObjectStore(resource: PortableResourceRef): Promise<
     const page = await bucket.list({ cursor });
     const objects = page.objects ?? [];
     if (objects.length === 0) break;
-    await Promise.all(objects.map((object) => bucket.delete(object.key)));
+    await Promise.all(objects.map((object: { key: string }) => bucket.delete(object.key)));
     cursor = page.truncated ? page.cursor ?? undefined : undefined;
   } while (cursor);
 }
@@ -891,7 +891,7 @@ async function clearPortableKvNamespace(resource: PortableResourceRef): Promise<
     const page = await kv.list({ cursor, limit: 1000 });
     const keys = page.keys ?? [];
     if (keys.length === 0) break;
-    await Promise.all(keys.map((entry) => kv.delete(entry.name)));
+    await Promise.all(keys.map((entry: { name: string }) => kv.delete(entry.name)));
     cursor = page.list_complete ? undefined : page.cursor ?? undefined;
   } while (cursor);
 }

@@ -11,6 +11,7 @@ import type {
   R2ObjectBody,
 } from '../shared/types/bindings.ts';
 import type { R2ChecksumsLike, R2HTTPMetadataLike } from './r2-compat-types.ts';
+import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Types

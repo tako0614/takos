@@ -8,8 +8,8 @@
 import { z } from 'zod';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import type { BaseMessage } from '@langchain/core/messages';
-import type { ToolExecutorLike } from '../../tools/executor';
-import type { ToolDefinition, ToolParameter } from '../../tools/tool-definitions';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { ToolDefinition, ToolParameter } from '../../tools/tool-definitions.ts';
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 

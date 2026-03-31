@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import {
   jobManager,
   sanitizeOutputs,
 } from '../../runtime/actions/job-manager.ts';
 import { notFound } from 'takos-common/middleware/hono';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // Job status & logs

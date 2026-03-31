@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import type { SourceRepo } from '../../types/repos';
+import { Icons } from '../../lib/Icons.tsx';
+import type { SourceRepo } from '../../types/repos.ts';
 
 const formatRepoDate = (dateString: string) => {
   const date = new Date(dateString);

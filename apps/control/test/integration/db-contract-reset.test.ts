@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { assert, assertStringIncludes } from 'jsr:@std/assert';
 
 const docsCandidates = [
-  process.env.TAKOS_DOCS_DIR ? resolve(process.env.TAKOS_DOCS_DIR, 'takos/reference/database.md') : null,
+  Deno.env.get('TAKOS_DOCS_DIR') ? resolve(Deno.env.get('TAKOS_DOCS_DIR'), 'takos/reference/database.md') : null,
 ].filter((candidate): candidate is string => Boolean(candidate));
 
 const docsDatabasePath = docsCandidates.find((candidate) => existsSync(candidate));

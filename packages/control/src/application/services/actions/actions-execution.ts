@@ -1,16 +1,16 @@
 import type { Queue, D1Database } from '../../../shared/types/bindings.ts';
 import { createExecutionPlan, type Workflow, type Job } from 'takos-actions-engine';
-import { generateId } from '../../../shared/utils';
-import { getDb, workflowSecrets, workflowJobs, workflowSteps } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, workflowSecrets, workflowJobs, workflowSteps } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   type WorkflowJobDefinition,
   type WorkflowJobQueueMessage,
-} from '../../../shared/types';
-import { buildWorkflowDispatchEnv } from './actions-env';
-import { logWarn } from '../../../shared/utils/logger';
-import { normalizeWorkflowShell, toWorkflowJobDefinition } from '../execution/workflow-engine-converters';
+} from '../../../shared/types/index.ts';
+import { buildWorkflowDispatchEnv } from './actions-env.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { normalizeWorkflowShell, toWorkflowJobDefinition } from '../execution/workflow-engine-converters.ts';
 
 export async function getWorkflowSecretIds(
   db: D1Database,

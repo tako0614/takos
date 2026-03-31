@@ -5,10 +5,10 @@
  * previously inlined in ToolExecutor.
  */
 
-import type { ToolContext, ToolDefinition } from './tool-definitions';
-import { canRoleAccessTool, filterToolsForRole } from './tool-policy';
-import { getRequiredCapabilitiesForTool } from './capabilities';
-import { ToolError, ErrorCodes } from './tool-error-classifier';
+import type { ToolContext, ToolDefinition } from './tool-definitions.ts';
+import { canRoleAccessTool, filterToolsForRole } from './tool-policy.ts';
+import { getRequiredCapabilitiesForTool } from './capabilities.ts';
+import { ToolError, ErrorCodes } from './tool-error-classifier.ts';
 
 // ---------------------------------------------------------------------------
 // Pure helpers

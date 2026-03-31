@@ -1,4 +1,4 @@
-import { logInfo, logWarn } from '../../shared/utils/logger';
+import { logInfo, logWarn } from '../../shared/utils/logger.ts';
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export interface CircuitStats {

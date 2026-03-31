@@ -1,6 +1,6 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import type { FollowUser } from '../types/profile';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { FollowUser } from '../types/profile.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface FollowersResponse {
   followers: FollowUser[];

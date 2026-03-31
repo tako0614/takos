@@ -1,7 +1,7 @@
 import { createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useI18n } from '../../../store/i18n.ts';
 
 type SearchMatch = {
   path: string;

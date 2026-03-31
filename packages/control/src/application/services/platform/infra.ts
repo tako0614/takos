@@ -1,8 +1,8 @@
-import { getDb, infraEndpointRoutes } from '../../../infra/db';
-import { infraEndpoints, serviceRuntimes } from '../../../infra/db/schema-platform-infra';
-import type { Env } from '../../../shared/types';
-import { generateId, safeJsonParseOrDefault } from '../../../shared/utils';
-import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/routing-models';
+import { getDb, infraEndpointRoutes } from '../../../infra/db/index.ts';
+import { infraEndpoints, serviceRuntimes } from '../../../infra/db/schema-platform-infra.ts';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId, safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/routing-models.ts';
 import { eq, and, sql } from 'drizzle-orm';
 
 export class InfraService {

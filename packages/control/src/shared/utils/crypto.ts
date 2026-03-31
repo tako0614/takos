@@ -1,5 +1,5 @@
 import type { webcrypto } from 'node:crypto';
-import { hexToBytes, bytesToBase64, base64ToBytes } from './encoding-utils';
+import { hexToBytes, bytesToBase64, base64ToBytes } from './encoding-utils.ts';
 
 /** Number of PBKDF2 iterations for key derivation. */
 const PBKDF2_ITERATIONS = 100_000;
@@ -78,7 +78,7 @@ export async function encrypt(
   const plaintextBytes = new TextEncoder().encode(plaintext);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
-    key,
+    key as unknown as CryptoKey,
     plaintextBytes
   );
 
@@ -107,7 +107,7 @@ export async function decrypt(
 
   const plaintextBytes = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
-    key,
+    key as unknown as CryptoKey,
     ciphertext
   );
 

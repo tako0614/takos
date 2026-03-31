@@ -3,15 +3,15 @@ import type {
   AppWorker,
   ServiceBinding,
   WorkerScaling,
-} from '../app-manifest-types';
+} from '../app-manifest-types.ts';
 import {
   asRecord,
   asRequiredString,
   asStringArray,
   asStringMap,
   normalizeRepoPath,
-} from '../app-manifest-utils';
-import { parseHealthCheck } from './parse-containers';
+} from '../app-manifest-utils.ts';
+import { parseHealthCheck } from './parse-containers.ts';
 
 // ============================================================
 // Worker scaling parser

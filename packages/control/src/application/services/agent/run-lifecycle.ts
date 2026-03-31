@@ -1,7 +1,7 @@
-import type { RunStatus } from '../../../shared/types';
-import type { RunTerminalPayload } from '../run-notifier';
-import type { AgentEvent } from './agent-models';
-import { logError } from '../../../shared/utils/logger';
+import type { RunStatus } from '../../../shared/types/index.ts';
+import type { RunTerminalPayload } from '../run-notifier/index.ts';
+import type { AgentEvent } from './agent-models.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 // --- RunCancelledError (formerly services/agent/errors.ts) ---
 

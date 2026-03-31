@@ -1,9 +1,9 @@
 // Worker runtime factory implementation.
 // Creates the unified worker runtime with fetch, queue, and scheduled handlers.
 import type { MessageBatch, ScheduledEvent } from '../../shared/types/bindings.ts';
-import type { WorkerEnv as Env } from './env';
-import type { IndexJobQueueMessage } from '../../shared/types';
-import { logError } from '../../shared/utils/logger';
+import type { WorkerEnv as Env } from './env.ts';
+import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
+import { logError } from '../../shared/utils/logger.ts';
 import { buildWorkersWorkerPlatform } from '../../platform/adapters/workers.ts';
 import type { ControlPlatform } from '../../platform/platform-config.ts';
 
@@ -24,7 +24,7 @@ export function createWorkerRuntime(
     } as Env & {
       PLATFORM?: ControlPlatform<Env>;
     };
-    const { default: egress } = await import('./egress');
+    const { default: egress } = await import('./egress.ts');
     return egress.fetch(request, runtimeBindings);
   },
 
@@ -46,18 +46,18 @@ export function createWorkerRuntime(
       queueName === 'takos-runs' ||
       queueName === 'takos-runs-dlq'
     ) {
-      const { default: runner } = await import('../runner/index');
+      const { default: runner } = await import('../runner/index.ts');
       return runner.queue(batch, bindings);
     }
 
     // --- indexer queues ---
     if (queueName === 'takos-index-jobs') {
-      const { default: indexer } = await import('../indexer/index');
+      const { default: indexer } = await import('../indexer/index.ts');
       return indexer.queue(batch as MessageBatch<IndexJobQueueMessage>, bindings);
     }
 
     if (queueName === 'takos-index-jobs-dlq') {
-      const { handleIndexJobDlq } = await import('../indexer/index');
+      const { handleIndexJobDlq } = await import('../indexer/index.ts');
       for (const message of batch.messages) {
         try {
           await handleIndexJobDlq(message.body, bindings, message.attempts);
@@ -77,7 +77,7 @@ export function createWorkerRuntime(
       queueName === 'takos-deployment-jobs' ||
       queueName === 'takos-deployment-jobs-dlq'
     ) {
-      const { default: workflowRunner } = await import('../queues/workflow-runner');
+      const { default: workflowRunner } = await import('../queues/workflow-runner.ts');
       return workflowRunner.queue(batch, bindings);
     }
 
@@ -98,7 +98,7 @@ export function createWorkerRuntime(
     } as Env & {
       PLATFORM?: ControlPlatform<Env>;
     };
-    const { default: runner } = await import('../runner/index');
+    const { default: runner } = await import('../runner/index.ts');
     return runner.scheduled(event, bindings);
   },
   };

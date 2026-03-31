@@ -1,4 +1,4 @@
-import { createMockEnv, MockR2Bucket } from './setup';
+import { createMockEnv, MockR2Bucket } from './setup.ts';
 import {
   runD1BackupIntegrityCheck,
   runD1BackupInventory,

@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import * as gitStore from '../../../application/services/git-smart';
-import { getContentTypeFromPath } from '../../../shared/utils/content-type';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { getContentTypeFromPath } from '../../../shared/utils/content-type.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes.ts';
 import { BadRequestError, NotFoundError, InternalError, isAppError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
-import { requireParam, requireFound } from '../validation-utils';
+import { logError } from '../../../shared/utils/logger.ts';
+import { requireParam, requireFound } from '../validation-utils.ts';
 import {
   type RepoContext,
   requireBucket,
   warnDegradedCommit,
   throwIfTreeFlattenLimit,
-} from './git-shared';
+} from './git-shared.ts';
 
 async function handleRepoTreeRequest(c: RepoContext) {
   const user = c.get('user');

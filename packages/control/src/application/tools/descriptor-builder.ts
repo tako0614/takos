@@ -1,10 +1,10 @@
-import type { ToolDefinition } from './tool-definitions';
+import type { ToolDefinition } from './tool-definitions.ts';
 import type {
   CapabilityDescriptor,
   CapabilityNamespace,
-} from './capability-types';
-import type { LocalizedOfficialSkill } from '../services/agent/official-skills';
-import { TOOL_NAMESPACE_MAP } from './namespace-map';
+} from './capability-types.ts';
+import type { LocalizedOfficialSkill } from '../services/agent/official-skills.ts';
+import { TOOL_NAMESPACE_MAP } from './namespace-map.ts';
 
 /** Derive tags from a tool's category + namespace metadata. */
 function deriveToolTags(tool: ToolDefinition): string[] {

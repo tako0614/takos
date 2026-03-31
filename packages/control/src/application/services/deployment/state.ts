@@ -1,6 +1,6 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { DeployState, DeploymentStatus, Deployment } from './models';
-import { logDeploymentEvent, updateDeploymentRecord, getStuckDeployments } from './store';
+import type { DeployState, DeploymentStatus, Deployment } from './models.ts';
+import { logDeploymentEvent, updateDeploymentRecord, getStuckDeployments } from './store.ts';
 
 export async function updateDeploymentState(
   db: SqlDatabaseBinding,

@@ -20,11 +20,12 @@
  * - Event IDs are re-numbered per-run starting at 1 (dense, monotonic).
  */
 
-import { spawnSync } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { gzipSync } from 'zlib';
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { Buffer } from "node:buffer";
 
 type RemoteEnvironment = 'staging' | 'production';
 

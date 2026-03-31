@@ -1,10 +1,10 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { OAuthToken } from '../../../shared/types/oauth';
-import { oauthTokens } from '../../../infra/db';
-import { getDb } from '../../../infra/db';
+import type { OAuthToken } from '../../../shared/types/oauth.ts';
+import { oauthTokens } from '../../../infra/db/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { toApiToken } from './token-helpers';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { toApiToken } from './token-helpers.ts';
 
 export async function getRefreshToken(
   dbBinding: D1Database,

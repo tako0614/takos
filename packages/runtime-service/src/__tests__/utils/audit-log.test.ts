@@ -11,7 +11,7 @@ const mockStat = ((..._args: any[]) => undefined) as any;
 const mockRename = ((..._args: any[]) => undefined) as any;
 const mockUnlink = ((..._args: any[]) => undefined) as any;
 
-// [Deno] vi.mock removed - manually stub imports from 'fs/promises'
+// [Deno] vi.mock removed - manually stub imports from 'node:fs/promises'
 // [Deno] vi.mock removed - manually stub imports from 'takos-common/logger'
 async function freshWriteAuditLog() {
   /* modules reset (no-op in Deno) */ void 0;

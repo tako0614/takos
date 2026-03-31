@@ -1,7 +1,7 @@
 import { BadRequestError } from 'takos-common/errors';
-import { normalizeEnvName } from './crypto';
-import { isReservedSpaceCommonEnvKey } from './crypto';
-import type { LinkSource, ServiceLinkRow, SyncState } from './repository';
+import { normalizeEnvName } from './crypto.ts';
+import { isReservedSpaceCommonEnvKey } from './crypto.ts';
+import type { LinkSource, ServiceLinkRow, SyncState } from './repository.ts';
 
 export interface EffectiveLink {
   envName: string;

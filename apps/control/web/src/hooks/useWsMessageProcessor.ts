@@ -1,24 +1,24 @@
 import { createSignal, type Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
 import type {
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../types';
+} from '../types/index.ts';
 import type {
   ChatRunArtifactMap,
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/chat-types';
+} from '../views/chat/chat-types.ts';
 import {
   normalizeTimelineEventType,
   parseEventData,
   summarizeEvent,
   type WebSocketEventPayload,
-} from '../views/chat/timeline';
+} from '../views/chat/timeline.ts';
 
 // Re-export from wsEventHandlers for consumers that import from this module
 export {
@@ -29,11 +29,11 @@ export {
   getRunStatusFromPayload,
   resolveThinkingText,
   type EventHandlerContext,
-} from './wsEventHandlers';
+} from './wsEventHandlers.ts';
 
-import { ACTIVE_RUN_STATUSES } from './wsEventHandlers';
+import { ACTIVE_RUN_STATUSES } from './wsEventHandlers.ts';
 
-export { parseEventData, type WebSocketEventPayload } from '../views/chat/timeline';
+export { parseEventData, type WebSocketEventPayload } from '../views/chat/timeline.ts';
 
 type MutableRefObject<T> = { current: T };
 

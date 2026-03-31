@@ -1,9 +1,9 @@
-import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { insertFailedResource, insertResource } from './store';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { insertFailedResource, insertResource } from './store.ts';
 import { CloudflareResourceService, type CloudflareManagedResourceType } from '../../../platform/providers/cloudflare/resources.ts';
-import type { ResourceCapability, ResourceType } from '../../../shared/types';
-import { resolveResourceDriver, resolveResourceImplementation, toPublicResourceType } from './capabilities';
+import type { ResourceCapability, ResourceType } from '../../../shared/types/index.ts';
+import { resolveResourceDriver, resolveResourceImplementation, toPublicResourceType } from './capabilities.ts';
 import {
   deletePortableManagedResource,
   ensurePortableManagedResource,

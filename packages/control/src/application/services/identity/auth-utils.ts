@@ -6,10 +6,10 @@
  */
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, authSessions, oauthStates } from '../../../infra/db';
+import { getDb, authSessions, oauthStates } from '../../../infra/db/index.ts';
 import { eq, and, gt, lt, desc, notInArray, sql } from 'drizzle-orm';
-import { logInfo } from '../../../shared/utils/logger';
-import { bytesToHex } from '../../../shared/utils/encoding-utils';
+import { logInfo } from '../../../shared/utils/logger.ts';
+import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Internal helpers (not exported)

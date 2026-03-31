@@ -1,8 +1,8 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { EmptyState } from '../common/EmptyState';
-import type { ActivityEvent } from '../../types/profile';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { EmptyState } from '../common/EmptyState.tsx';
+import type { ActivityEvent } from '../../types/profile.ts';
 
 function formatDay(value: string): string {
   const d = new Date(value);

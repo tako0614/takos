@@ -1,8 +1,8 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import type { Resource } from '../types';
-import type { D1QueryResult, D1TableData } from '../views/workers/worker-models';
+import type { Resource } from '../types/index.ts';
+import type { D1QueryResult, D1TableData } from '../views/workers/worker-models.ts';
 
 export function useResourceExplorer(resource: Resource) {
   const [d1Tables, setD1Tables] = createSignal<string[]>([]);

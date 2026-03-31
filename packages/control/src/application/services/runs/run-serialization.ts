@@ -1,5 +1,5 @@
-import type { Run, RunStatus } from '../../../shared/types';
-import { textDate } from '../../../shared/utils/db-guards';
+import type { Run, RunStatus } from '../../../shared/types/index.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export type RunRow = {
   id: string;

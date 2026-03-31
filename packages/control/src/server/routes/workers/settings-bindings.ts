@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { getDb } from '../../../infra/db';
+import { zValidator } from '../zod-validator.ts';
+import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, or, inArray } from 'drizzle-orm';
-import { resources, resourceAccess } from '../../../infra/db/schema';
-import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
-import { logError } from '../../../shared/utils/logger';
+import { resources, resourceAccess } from '../../../infra/db/schema.ts';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
 const settingsBindings = new Hono<AuthenticatedRouteEnv>()

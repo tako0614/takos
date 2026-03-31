@@ -7,6 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { Buffer } from "node:buffer";
 import type { R2Bucket, R2Object, R2ObjectBody } from '../shared/types/bindings.ts';
 import { readJsonFile, writeJsonFile } from './persistent-shared.ts';
 

@@ -1,8 +1,8 @@
 import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
-import { useI18n, type TranslationKey } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import { useFileAttachment } from '../../../hooks/useFileAttachment';
-import type { Space } from '../../../types';
+import { useI18n, type TranslationKey } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useFileAttachment } from '../../../hooks/useFileAttachment.ts';
+import type { Space } from '../../../types/index.ts';
 
 interface WelcomeViewProps {
   space?: Space;

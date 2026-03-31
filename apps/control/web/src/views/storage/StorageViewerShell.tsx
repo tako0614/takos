@@ -1,12 +1,12 @@
 import { Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { formatFileSize, formatDateTime } from '../../lib/format';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui/Button';
-import type { StorageFile } from '../../types';
-import type { ResolvedHandler } from './storageUtils';
-import { handlerDisplayName } from './storageUtils';
-import { StorageHandlerDropdown } from './StorageHandlerPicker';
+import { formatFileSize, formatDateTime } from '../../lib/format.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import type { StorageFile } from '../../types/index.ts';
+import type { ResolvedHandler } from './storageUtils.tsx';
+import { handlerDisplayName } from './storageUtils.tsx';
+import { StorageHandlerDropdown } from './StorageHandlerPicker.tsx';
 
 export function StorageViewerShell(props: {
   file: StorageFile;

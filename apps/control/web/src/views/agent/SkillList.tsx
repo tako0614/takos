@@ -1,7 +1,7 @@
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Badge, Button, Card } from '../../components/ui';
-import type { OfficialSkill, Skill } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Badge, Button, Card } from '../../components/ui/index.ts';
+import type { OfficialSkill, Skill } from '../../types/index.ts';
 
 function formatList(values?: string[]) {
   return values && values.length > 0 ? values.join(', ') : 'none';

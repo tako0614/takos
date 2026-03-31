@@ -6,39 +6,39 @@
  * instead of relying on `this`.
  */
 
-import type { RunStatus, Env } from '../../../shared/types';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models';
-import type { ToolExecutorLike } from '../../tools/executor';
-import type { ToolCall } from './agent-models';
-import type { AgentRunnerIo } from './runner-io';
-import type { EventEmitterState } from './runner-events';
-import type { ToolExecution } from './runner-utils';
-import type { LLMState } from './llm-manager';
-import type { SkillState, SkillPlanDeps } from './skill-plan';
-import type { MemoryState, MemoryManagerDeps } from './memory-manager';
-import type { RunTerminalPayload } from '../run-notifier';
-import type { RunLifecycleDeps } from './run-lifecycle';
+import type { RunStatus, Env } from '../../../shared/types/index.ts';
+import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { ToolCall } from './agent-models.ts';
+import type { AgentRunnerIo } from './runner-io.ts';
+import type { EventEmitterState } from './runner-events.ts';
+import type { ToolExecution } from './runner-utils.ts';
+import type { LLMState } from './llm-manager.ts';
+import type { SkillState, SkillPlanDeps } from './skill-plan.ts';
+import type { MemoryState, MemoryManagerDeps } from './memory-manager.ts';
+import type { RunTerminalPayload } from '../run-notifier/index.ts';
+import type { RunLifecycleDeps } from './run-lifecycle.ts';
 
-import { safeJsonParseOrDefault, generateId } from '../../../shared/utils';
+import { safeJsonParseOrDefault, generateId } from '../../../shared/utils/index.ts';
 import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
-import { logError, logWarn } from '../../../shared/utils/logger';
-import { RunCancelledError } from './run-lifecycle';
-import { runLangGraphRunner } from './graph-runner';
-import { buildSkillPlan, resolveAndApplySkills } from './skill-plan';
-import { bootstrapMemory, finalizeMemory } from './memory-manager';
-import { buildToolCatalogContent } from './prompt-builder';
-import { buildBudgetedSystemPrompt, LANE_PRIORITY, LANE_MAX_TOKENS, type PromptLane } from './prompt-budget';
-import { RemoteToolExecutor } from './remote-tool-executor';
-import { getDelegationPacketFromRunInput } from './delegation';
-import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
-import { sanitizeErrorMessage } from './runner-utils';
-import { normalizeRunStatus } from './runner-history';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
+import { RunCancelledError } from './run-lifecycle.ts';
+import { runLangGraphRunner } from './graph-runner.ts';
+import { buildSkillPlan, resolveAndApplySkills } from './skill-plan.ts';
+import { bootstrapMemory, finalizeMemory } from './memory-manager.ts';
+import { buildToolCatalogContent } from './prompt-builder.ts';
+import { buildBudgetedSystemPrompt, LANE_PRIORITY, LANE_MAX_TOKENS, type PromptLane } from './prompt-budget.ts';
+import { RemoteToolExecutor } from './remote-tool-executor.ts';
+import { getDelegationPacketFromRunInput } from './delegation.ts';
+import { runWithSimpleLoop, runWithoutLLM } from './simple-loop.ts';
+import { sanitizeErrorMessage } from './runner-utils.ts';
+import { normalizeRunStatus } from './runner-history.ts';
 import {
   handleSuccessfulRunCompletion,
   handleCancelledRun,
   handleFailedRun,
-} from './run-lifecycle';
+} from './run-lifecycle.ts';
 
 // ── Shared deps type for orchestration functions ──────────────────────
 

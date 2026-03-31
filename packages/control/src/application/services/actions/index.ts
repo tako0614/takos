@@ -1,5 +1,5 @@
-export { type WorkflowDispatchEnvOptions, buildWorkflowDispatchEnv } from './actions-env';
-export { getWorkflowSecretIds, enqueueFirstPhaseJobs, createWorkflowJobs } from './actions-execution';
+export { type WorkflowDispatchEnvOptions, buildWorkflowDispatchEnv } from './actions-env.ts';
+export { getWorkflowSecretIds, enqueueFirstPhaseJobs, createWorkflowJobs } from './actions-execution.ts';
 export type {
   PullRequestWorkflowAction,
   PullRequestWorkflowEvent,
@@ -9,10 +9,10 @@ export type {
   TriggerPushWorkflowsConfig,
   TriggerPushWorkflowsEvent,
   PushWorkflowTriggerResult,
-} from './actions-triggers';
+} from './actions-triggers.ts';
 export {
   triggerPullRequestWorkflows,
   triggerPullRequestSynchronizeForHeadUpdate,
   triggerPushWorkflows,
   scheduleActionsAutoTrigger,
-} from './actions-triggers';
+} from './actions-triggers.ts';

@@ -1,8 +1,8 @@
 import type { Setter } from 'solid-js';
-import type { Run } from '../types';
-import type { WebSocketEventPayload } from '../views/chat/timeline';
-import { parseTimelineEventId } from '../views/chat/timeline';
-import type { TranslationKey } from '../store/i18n';
+import type { Run } from '../types/index.ts';
+import type { WebSocketEventPayload } from '../views/chat/timeline.ts';
+import { parseTimelineEventId } from '../views/chat/timeline.ts';
+import type { TranslationKey } from '../store/i18n.ts';
 
 type MutableRefObject<T> = { current: T };
 
@@ -55,7 +55,7 @@ export interface EventHandlerContext {
   ) => void>;
   handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
   setCurrentRun: Setter<Run | null>;
-  setStreaming: Setter<import('../views/chat/chat-types').ChatStreamingState>;
+  setStreaming: Setter<import('../views/chat/chat-types.ts').ChatStreamingState>;
   setIsLoading: Setter<boolean>;
   setError: (value: string | null) => void;
   closeWebSocket: () => void;

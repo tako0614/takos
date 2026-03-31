@@ -1,10 +1,10 @@
 import type { Accessor, Setter } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 import type {
   SourceItem,
   SourceItemInstallation,
-} from './useSourceData';
-import { PAGE_SIZE } from './useSourcePagination';
+} from './useSourceData.ts';
+import { PAGE_SIZE } from './useSourcePagination.ts';
 
 export interface UseSourceFetchQueriesOptions {
   isAuthenticated: boolean;

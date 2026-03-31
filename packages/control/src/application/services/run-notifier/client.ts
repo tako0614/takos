@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import type { DurableObjectStubBinding } from '../../../shared/types/bindings.ts';
-import type { RunNotifierEmitPayload } from './run-notifier-payload';
+import type { RunNotifierEmitPayload } from './run-notifier-payload.ts';
 
 
 type RunNotifierNamespace = {

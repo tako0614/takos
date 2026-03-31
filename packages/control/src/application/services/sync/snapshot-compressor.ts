@@ -1,4 +1,4 @@
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 /** Concatenate an array of Uint8Array chunks into a single Uint8Array. */
 function concatChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {

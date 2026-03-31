@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
-import type { StorageFile } from '../types';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { StorageFile } from '../types/index.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 import { getErrorMessage } from 'takos-common/errors';
 
 interface UseSpaceStorageReturn {

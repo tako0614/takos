@@ -3,7 +3,7 @@ import {
   formatBillingCurrency,
   formatBillingDate,
   sortBillingTopupPacks,
-} from '../../../views/app/settings-billing';
+} from '../../../views/app/settings-billing.ts';
 
 
 import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';

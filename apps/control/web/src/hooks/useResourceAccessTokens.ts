@@ -1,8 +1,8 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from '../store/toast';
-import { useI18n } from '../store/i18n';
-import type { Resource } from '../types';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useToast } from '../store/toast.ts';
+import { useI18n } from '../store/i18n.ts';
+import type { Resource } from '../types/index.ts';
 
 export interface ResourceAccessToken {
   id: string;

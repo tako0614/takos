@@ -32,23 +32,23 @@ import {
   HostContainerInternals,
   HostContainerRuntime,
 } from './container-runtime.ts';
-import { recordRunUsageBatch } from '../../application/services/billing/billing';
-import { validateExecutorHostEnv, createEnvGuard } from '../../shared/utils/validate-env';
+import { recordRunUsageBatch } from '../../application/services/billing/billing.ts';
+import { validateExecutorHostEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
 import {
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
   resolveAgentExecutorServiceId,
   type AgentExecutorDispatchPayload,
   type AgentExecutorControlConfig,
-} from './executor-dispatch';
+} from './executor-dispatch.ts';
 import {
   buildAgentExecutorContainerEnvVars,
   buildAgentExecutorProxyConfig,
-} from './executor-proxy-config';
+} from './executor-proxy-config.ts';
 
-import { constantTimeEqual } from '../../shared/utils/hash';
-import { logError } from '../../shared/utils/logger';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
+import { constantTimeEqual } from '../../shared/utils/hash.ts';
+import { logError } from '../../shared/utils/logger.ts';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
 
 // Sub-module imports — utilities, auth, run state, control RPC, proxy handlers
 import {
@@ -61,17 +61,17 @@ import {
   forwardToControlPlane,
   resolveContainerNamespace,
   parseExecutorTier,
-} from './executor-utils';
+} from './executor-utils.ts';
 import type {
   AgentExecutorEnv,
   ProxyTokenInfo,
   Env,
-} from './executor-utils';
+} from './executor-utils.ts';
 import {
   getRequiredProxyCapability,
   validateProxyResourceAccess,
   claimsMatchRequestBody,
-} from './executor-auth';
+} from './executor-auth.ts';
 import {
   handleHeartbeat,
   handleRunStatus,
@@ -83,7 +83,7 @@ import {
   handleNoLlmComplete,
   handleCurrentSession,
   handleIsCancelled,
-} from './executor-run-state';
+} from './executor-run-state.ts';
 import {
   handleConversationHistory,
   handleSkillPlan,
@@ -95,7 +95,7 @@ import {
   handleToolExecute,
   handleToolCleanup,
   handleRunEvent,
-} from './executor-control-rpc';
+} from './executor-control-rpc.ts';
 import {
   handleDbProxy,
   handleR2Proxy,
@@ -106,7 +106,7 @@ import {
   handleRuntimeProxy,
   handleBrowserProxy,
   handleQueueProxy,
-} from './executor-proxy-handlers';
+} from './executor-proxy-handlers.ts';
 
 // ---------------------------------------------------------------------------
 // Re-exports — maintain backward compatibility for all external importers
@@ -128,7 +128,7 @@ export { getRequiredProxyCapability, validateProxyResourceAccess };
 // dispatch payload (defaults to tier 1).
 // ---------------------------------------------------------------------------
 
-function createExecutorContainerClass(tier: import('./executor-utils').ExecutorTier, sleepAfterOverride?: string) {
+function createExecutorContainerClass(tier: import('./executor-utils.ts').ExecutorTier, sleepAfterOverride?: string) {
   return class extends HostContainerRuntime<Env> {
     defaultPort = 8080;
     sleepAfter = sleepAfterOverride ?? '5m';
@@ -144,7 +144,7 @@ function createExecutorContainerClass(tier: import('./executor-utils').ExecutorT
       };
     }
 
-    async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch').AgentExecutorDispatchResult> {
+    async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch.ts').AgentExecutorDispatchResult> {
       const serviceId = resolveAgentExecutorServiceId(body);
       if (!serviceId) {
         return {
@@ -207,7 +207,7 @@ export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
     this.envVars = buildAgentExecutorContainerEnvVars(env);
   }
 
-  async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch').AgentExecutorDispatchResult> {
+  async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch.ts').AgentExecutorDispatchResult> {
     const serviceId = resolveAgentExecutorServiceId(body);
     if (!serviceId) {
       return {

@@ -1,13 +1,13 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { getErrorMessage } from '../../lib/errors';
-import { splitSpaces, findSpaceByIdentifier } from '../../lib/spaces';
-import type { Space } from '../../types';
-import { Button } from '../../components/ui/Button';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useConfirmDialog } from '../../store/confirm-dialog.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { getErrorMessage } from '../../lib/errors.ts';
+import { splitSpaces, findSpaceByIdentifier } from '../../lib/spaces.ts';
+import type { Space } from '../../types/index.ts';
+import { Button } from '../../components/ui/Button.tsx';
 import {
   SpaceInfoCard,
   MembersCard,
@@ -15,7 +15,7 @@ import {
   PersonalSpaceNote,
   CreateSpaceModal,
   type SpaceMember,
-} from './SpaceSettingsCards';
+} from './SpaceSettingsCards.tsx';
 
 interface SpaceSettingsSectionProps {
   spaces: Space[];

@@ -1,4 +1,4 @@
-import * as fs from 'fs/promises';
+import * as fs from 'node:fs/promises';
 import { createLogger } from 'takos-common/logger';
 import { pushLog } from '../logging.ts';
 import { type SecretsSanitizer } from './secrets.ts';

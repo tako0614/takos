@@ -7,9 +7,9 @@
  * namespace. Also provides the canonical D1 migration SQL for new tenants.
  */
 
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
-import type { WfpContext, WorkerBinding } from './wfp-contracts';
+import type { WfpContext, WorkerBinding } from './wfp-contracts.ts';
 
 // ---------------------------------------------------------------------------
 // Deployment orchestration

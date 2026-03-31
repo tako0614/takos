@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
+import { zValidator } from '../zod-validator.ts';
+import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers.ts';
 import {
   TAKOS_ACCESS_TOKEN_ENV_NAME,
   createCommonEnvDeps,
@@ -14,13 +14,13 @@ import {
   patchServiceManualLinks,
   upsertServiceTakosAccessTokenConfig,
   deleteServiceTakosAccessTokenConfig,
-} from '../../../application/services/common-env';
-import { buildCommonEnvActor } from '../common-env-handlers';
-import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto';
-import { getDb } from '../../../infra/db';
+} from '../../../application/services/common-env/index.ts';
+import { buildCommonEnvActor } from '../common-env-handlers.ts';
+import { normalizeCommonEnvName } from '../../../application/services/common-env/crypto.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { serviceCommonEnvLinks } from '../../../infra/db/schema';
-import { logError } from '../../../shared/utils/logger';
+import { serviceCommonEnvLinks } from '../../../infra/db/schema.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
 const workerBuiltinsSchema = z.object({

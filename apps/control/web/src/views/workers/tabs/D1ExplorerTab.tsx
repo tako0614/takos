@@ -1,7 +1,7 @@
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import type { Resource } from '../../../types';
-import { useResourceExplorer } from '../../../hooks/useResourceExplorer';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Resource } from '../../../types/index.ts';
+import { useResourceExplorer } from '../../../hooks/useResourceExplorer.ts';
 
 interface D1ExplorerTabProps {
   resource: Resource;

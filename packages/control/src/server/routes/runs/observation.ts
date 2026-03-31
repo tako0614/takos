@@ -1,18 +1,18 @@
-import { getDb } from '../../../infra/db';
-import { runEvents } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { runEvents } from '../../../infra/db/schema.ts';
 import { eq, and, gt, asc } from 'drizzle-orm';
-import type { Env, RunStatus } from '../../../shared/types';
-import type { PersistedRunEvent } from '../../../application/services/offload/run-events';
-import { getRunEventsAfterFromR2 } from '../../../application/services/offload/run-events';
+import type { Env, RunStatus } from '../../../shared/types/index.ts';
+import type { PersistedRunEvent } from '../../../application/services/offload/run-events.ts';
+import { getRunEventsAfterFromR2 } from '../../../application/services/offload/run-events.ts';
 import {
   deriveTerminalStatusFromRunEvent,
-} from '../../../application/services/run-notifier';
+} from '../../../application/services/run-notifier/index.ts';
 
 import {
   fetchWithTimeout,
-} from '../../../application/services/execution/run-events';
-import { MAX_EVENTS_PER_RESPONSE } from '../../../shared/config/limits';
-import { textDate } from '../../../shared/utils/db-guards';
+} from '../../../application/services/execution/run-events.ts';
+import { MAX_EVENTS_PER_RESPONSE } from '../../../shared/config/limits.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type RunNotifierNamespace = {
   idFromName(name: string): unknown;

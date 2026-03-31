@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { Icons } from '../../../lib/Icons';
-import type { EnvVar } from '../worker-models';
+import { useI18n } from '../../../store/i18n.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { EnvVar } from '../worker-models.ts';
 
 export interface EnvironmentTabProps {
   envVars: EnvVar[];

@@ -11,17 +11,17 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types';
-import { getDb, sessions } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, sessions } from '../../../infra/db/index.ts';
 import { and, eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime-request-handler';
-import { logError } from '../../../shared/utils/logger';
-import { extractResponseError, buildRepoFiles, syncSnapshotToRepo } from './git-sync';
-import type { SessionFileEntry, SyncResult, SessionSnapshot } from './git-sync-types';
+import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
+import { logError } from '../../../shared/utils/logger.ts';
+import { extractResponseError, buildRepoFiles, syncSnapshotToRepo } from './git-sync.ts';
+import type { SessionFileEntry, SyncResult, SessionSnapshot } from './git-sync-types.ts';
 
 // Re-export types that were originally exported from this file
-export type { SyncResult, SessionSnapshot, SessionFileEntry } from './git-sync-types';
-export type { SessionRepoMount } from './git-sync-types';
+export type { SyncResult, SessionSnapshot, SessionFileEntry } from './git-sync-types.ts';
+export type { SessionRepoMount } from './git-sync-types.ts';
 
 export interface SessionInitResult {
   success: boolean;

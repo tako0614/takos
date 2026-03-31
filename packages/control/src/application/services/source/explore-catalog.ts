@@ -1,14 +1,14 @@
-import type { Env } from '../../../shared/types';
-import { getDb, repositories, repoReleases, repoReleaseAssets, bundleDeployments } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, repositories, repoReleases, repoReleaseAssets, bundleDeployments } from '../../../infra/db/index.ts';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { toReleaseAssets } from './repo-release-assets';
+import { toReleaseAssets } from './repo-release-assets.ts';
 import type {
   CatalogSort,
   CatalogType,
   CatalogItemResponse,
   CatalogResult,
   ParsedTakopackRelease,
-} from './explore-types';
+} from './explore-types.ts';
 import {
   buildBaseConditions,
   queryReposWithAccount,
@@ -16,8 +16,8 @@ import {
   resolveAccountOwner,
   parseCatalogTags,
   computeTrendingScore,
-} from './source-exploration';
-import { OFFICIAL_PACKAGES, type OfficialPackage } from './official-packages';
+} from './source-exploration.ts';
+import { OFFICIAL_PACKAGES, type OfficialPackage } from './official-packages.ts';
 
 function officialPackageToCatalogItem(pkg: OfficialPackage): CatalogItemResponse {
   return {

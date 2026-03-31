@@ -1,32 +1,32 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos.ts';
 import {
   scheduleActionsAutoTrigger,
   triggerPushWorkflows,
   type PullRequestWorkflowEvent,
-} from '../../../application/services/actions';
+} from '../../../application/services/actions/index.ts';
 import {
   resolveConflictsAndMerge,
   checkConflicts,
   ConflictCheckError,
   type Resolution,
-} from '../../../application/services/pull-requests/merge-resolution';
+} from '../../../application/services/pull-requests/merge-resolution.ts';
 
-import { buildPullRequestDtoFull } from './dto';
+import { buildPullRequestDtoFull } from './dto.ts';
 import {
   jsonErrorWithStatus,
   performPullRequestMerge,
   validateConflictResolutionPath,
-} from './merge';
-import { toGitBucket } from '../../../shared/utils/git-bucket';
-import { logError } from '../../../shared/utils/logger';
+} from './merge.ts';
+import { toGitBucket } from '../../../shared/utils/git-bucket.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { BadRequestError, NotFoundError, InternalError, AppError } from 'takos-common/errors';
-import { findPullRequest } from './read-model';
-import { triggerPrEvent } from './workflow-trigger';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { findPullRequest } from './read-model.ts';
+import { triggerPrEvent } from './workflow-trigger.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ---------------------------------------------------------------------------
 // Merge, Conflicts & Resolve routes

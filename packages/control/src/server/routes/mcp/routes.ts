@@ -9,20 +9,20 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import {
   consumeMcpOAuthPending, completeMcpOAuthFlow, registerExternalMcpServer,
   listMcpServers, deleteMcpServer, updateMcpServer, getMcpServerWithTokens,
   decryptAccessToken, refreshMcpToken,
-} from '../../../application/services/platform/mcp';
-import { McpClient } from '../../../application/tools/mcp-client';
-import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import { escapeHtml } from '../auth/html';
-import { logError, logWarn } from '../../../shared/utils/logger';
+} from '../../../application/services/platform/mcp.ts';
+import { McpClient } from '../../../application/tools/mcp-client.ts';
+import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import { escapeHtml } from '../auth/html.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { BadRequestError, NotFoundError, BadGatewayError, GatewayTimeoutError } from 'takos-common/errors';
-import { getSpaceOperationPolicy } from '../../../application/tools/tool-policy';
-import { ok } from '../response-utils';
+import { getSpaceOperationPolicy } from '../../../application/tools/tool-policy.ts';
+import { ok } from '../response-utils.ts';
 
 const createServerSchema = z.object({ name: z.string(), url: z.string(), scope: z.string().optional() });
 const updateServerSchema = z.object({ enabled: z.boolean().optional(), name: z.string().optional() });

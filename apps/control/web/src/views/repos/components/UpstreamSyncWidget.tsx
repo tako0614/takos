@@ -1,10 +1,10 @@
 import { createSignal, createEffect, on, Show } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../store/toast';
-import { Icons } from '../../../lib/Icons';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { Button } from '../../../components/ui/Button';
-import type { SyncStatus, SyncResult } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import { useToast } from '../../../store/toast.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { Button } from '../../../components/ui/Button.tsx';
+import type { SyncStatus, SyncResult } from '../../../types/index.ts';
 
 export interface UpstreamSyncWidgetProps {
   repoId: string;

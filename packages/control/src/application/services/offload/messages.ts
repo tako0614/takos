@@ -1,5 +1,5 @@
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import type { MessageRole } from '../../../shared/types';
+import type { MessageRole } from '../../../shared/types/index.ts';
 
 export type PersistedMessage = {
   id: string;

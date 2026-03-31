@@ -1,6 +1,6 @@
-import { useI18n } from '../../../store/i18n';
-import { useCreateSpaceForm } from '../../../hooks/useCreateSpaceForm';
-import { Icons } from '../../../lib/Icons';
+import { useI18n } from '../../../store/i18n.ts';
+import { useCreateSpaceForm } from '../../../hooks/useCreateSpaceForm.ts';
+import { Icons } from '../../../lib/Icons.tsx';
 
 interface CreateSpaceModalProps {
   onClose: () => void;

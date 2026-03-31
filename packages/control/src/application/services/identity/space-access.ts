@@ -1,10 +1,10 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceRole, Space, SpaceMembership } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { resolveUserPrincipalId } from './principals';
-import { getDb } from '../../../infra/db';
-import { accounts, accountMemberships } from '../../../infra/db/schema';
+import type { SpaceRole, Space, SpaceMembership } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { resolveUserPrincipalId } from './principals.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, accountMemberships } from '../../../infra/db/schema.ts';
 import { eq, and, or } from 'drizzle-orm';
 
 function toSpace(row: SelectOf<typeof accounts>): Space {

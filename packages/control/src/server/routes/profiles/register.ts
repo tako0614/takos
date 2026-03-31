@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import profiles from './index';
+import type { Env, User } from '../../../shared/types/index.ts';
+import profiles from './index.ts';
 
 type ProfileVariables = {
   user?: User;

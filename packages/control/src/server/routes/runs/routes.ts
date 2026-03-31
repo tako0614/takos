@@ -1,26 +1,26 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Artifact, ArtifactType, Env } from '../../../shared/types';
-import { getDb } from '../../../infra/db';
-import { runs, artifacts } from '../../../infra/db/schema';
+import type { Artifact, ArtifactType, Env } from '../../../shared/types/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { runs, artifacts } from '../../../infra/db/schema.ts';
 import { eq, asc } from 'drizzle-orm';
 import {
   RUN_TERMINAL_STATUSES,
   buildTerminalPayload,
-} from '../../../application/services/run-notifier';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
+} from '../../../application/services/run-notifier/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
 import { BadRequestError, NotFoundError, AppError, ErrorCodes } from 'takos-common/errors';
-import { checkRunAccess } from './access';
+import { checkRunAccess } from './access.ts';
 import {
   persistAndEmitEvent,
-} from '../../../application/services/execution/run-events';
+} from '../../../application/services/execution/run-events.ts';
 import {
   loadRunObservation,
-} from './observation';
-import { registerRunCreateRoutes } from './create';
-import { registerRunListRoutes } from './list';
-import type { BaseVariables } from '../route-auth';
+} from './observation.ts';
+import { registerRunCreateRoutes } from './create.ts';
+import { registerRunListRoutes } from './list.ts';
+import type { BaseVariables } from '../route-auth.ts';
 
 const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
 
@@ -38,8 +38,8 @@ function buildSanitizedDOHeaders(
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
-import { zValidator } from '../zod-validator';
-import { textDate } from '../../../shared/utils/db-guards';
+import { zValidator } from '../zod-validator.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type ArtifactRow = {
   id: string;

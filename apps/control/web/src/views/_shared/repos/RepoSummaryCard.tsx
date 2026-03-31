@@ -1,6 +1,6 @@
 import type { JSX } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { formatNumber } from '../../../lib/format';
+import { Icons } from '../../../lib/Icons.tsx';
+import { formatNumber } from '../../../lib/format.ts';
 
 interface RepoSummaryCardProps {
   id: string;

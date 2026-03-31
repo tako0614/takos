@@ -1,11 +1,11 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceRole } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { accountMemberships, accounts, getDb, services } from '../../../infra/db';
+import type { SpaceRole } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { accountMemberships, accounts, getDb, services } from '../../../infra/db/index.ts';
 import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../identity/principals';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
-import { textDate } from '../../../shared/utils/db-guards';
+import { resolveActorPrincipalId } from '../identity/principals.ts';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 const MAX_SERVICES = 100;
 

@@ -1,11 +1,11 @@
 import { createSignal, createEffect, onCleanup, type JSX } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useI18n } from '../../store/i18n';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { Icons } from '../../lib/Icons';
-import { Input } from '../../components/ui/Input';
-import { Modal } from '../../components/ui/Modal';
+import { useBreakpoint } from '../../hooks/useBreakpoint.ts';
+import { useI18n } from '../../store/i18n.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { Modal } from '../../components/ui/Modal.tsx';
 
 type SpaceSearchResult = {
   kind: 'keyword' | 'semantic';

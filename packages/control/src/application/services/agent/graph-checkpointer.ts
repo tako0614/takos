@@ -14,11 +14,11 @@ import {
 } from '@langchain/langgraph-checkpoint';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { BadRequestError, InternalError } from 'takos-common/errors';
-import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db';
+import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db/index.ts';
 import { eq, and, lt, desc } from 'drizzle-orm';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
+import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ── Internal helpers ─────────────────────────────────────────────────────
 

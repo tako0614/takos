@@ -1,8 +1,8 @@
 import { Show, For } from 'solid-js';
-import type { FileDiff } from '../../../types';
-import { Icons } from '../../../lib/Icons';
-import { Card } from '../../../components/ui/Card';
-import { useI18n } from '../../../store/i18n';
+import type { FileDiff } from '../../../types/index.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Card } from '../../../components/ui/Card.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface PRDiffViewProps {
   diffs: FileDiff[];

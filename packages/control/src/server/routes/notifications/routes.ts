@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Context } from 'hono';
-import type { Env } from '../../../shared/types';
-import { AppError, BadRequestError, InternalError, type BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { zValidator } from '../zod-validator';
+import type { Env } from '../../../shared/types/index.ts';
+import { AppError, BadRequestError, InternalError, type BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   getNotificationPreferences,
   getNotificationsMutedUntil,
@@ -13,7 +13,7 @@ import {
   markNotificationRead,
   setNotificationsMutedUntil,
   updateNotificationPreferences,
-} from '../../../application/services/notifications/service';
+} from '../../../application/services/notifications/service.ts';
 import {
   isNotificationChannel,
   isNotificationType,
@@ -21,7 +21,7 @@ import {
   NOTIFICATION_TYPES,
   type NotificationChannel,
   type NotificationType,
-} from '../../../application/services/notifications/notification-models';
+} from '../../../application/services/notifications/notification-models.ts';
 
 const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
 

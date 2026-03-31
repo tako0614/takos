@@ -4,8 +4,8 @@
 
 import { count, desc, eq, inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, repoPushActivities } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, repoPushActivities } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 
 /** Sentinel ref value used to mark repo deletion activities. */
 export const DELETE_REF = '__delete__';

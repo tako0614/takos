@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers';
-import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
-import { logError } from '../../../shared/utils/logger';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import { getServiceForUser, getServiceForUserWithRole } from '../../../application/services/platform/workers.ts';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
 const workerManagedMcpServerSchema = z.object({

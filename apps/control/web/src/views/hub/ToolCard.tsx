@@ -1,7 +1,7 @@
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import type { CustomTool } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import type { CustomTool } from '../../types/index.ts';
 
 export interface ToolCardProps {
   tool: CustomTool;

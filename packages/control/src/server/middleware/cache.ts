@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler, Next } from 'hono';
-import { computeSHA256 } from '../../shared/utils/hash';
-import { logError, logWarn } from '../../shared/utils/logger';
+import { computeSHA256 } from '../../shared/utils/hash.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
 
 declare global {
   interface CacheStorage {

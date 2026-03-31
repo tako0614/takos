@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { filterSafeEnv } from '../utils/sandbox-env.ts';
 import { createLogger } from 'takos-common/logger';
 import { gracefulKill } from '../utils/process-kill.ts';
+import { Buffer } from "node:buffer";
 
 const logger = createLogger({ service: 'takos-runtime' });
 
@@ -87,7 +88,7 @@ export async function runGitHttpBackend(
     });
 
     let isTimedOut = false;
-    let forceKillHandle: NodeJS.Timeout | undefined;
+    let forceKillHandle: ReturnType<typeof setTimeout> | undefined;
 
     const timeoutHandle = setTimeout(() => {
       isTimedOut = true;

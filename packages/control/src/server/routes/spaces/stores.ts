@@ -3,30 +3,30 @@ import { z } from 'zod';
 import {
   requireSpaceAccess,
   type AuthenticatedRouteEnv,
-} from '../route-auth';
+} from '../route-auth.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import {
   createActivityPubStore,
   deleteActivityPubStore,
   listActivityPubStoresForWorkspace,
   updateActivityPubStore,
-} from '../../../application/services/activitypub/stores';
+} from '../../../application/services/activitypub/stores.ts';
 import {
   addToInventory,
   removeFromInventory,
   listInventoryItems,
-} from '../../../application/services/activitypub/store-inventory';
+} from '../../../application/services/activitypub/store-inventory.ts';
 import {
   createGrant,
   listGrants,
   revokeGrant,
-} from '../../../application/services/activitypub/grants';
-import { getRepositoryById } from '../../../application/services/source/repos';
+} from '../../../application/services/activitypub/grants.ts';
+import { getRepositoryById } from '../../../application/services/source/repos.ts';
 import { InternalError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
-import { parsePagination } from '../../../shared/utils';
-import { deliverToFollowers } from '../../../application/services/activitypub/activity-delivery';
+import { logError } from '../../../shared/utils/logger.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { deliverToFollowers } from '../../../application/services/activitypub/activity-delivery.ts';
 
 const storeBodySchema = z.object({
   slug: z.string().optional(),

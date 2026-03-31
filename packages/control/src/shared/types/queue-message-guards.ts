@@ -3,13 +3,13 @@ import {
   INDEX_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
-} from './queue-messages';
+} from './queue-messages.ts';
 import type {
   RunQueueMessage,
   IndexJobQueueMessage,
   WorkflowJobQueueMessage,
   DeploymentQueueMessage,
-} from './queue-messages';
+} from './queue-messages.ts';
 
 export function isValidRunQueueMessage(msg: unknown): msg is RunQueueMessage {
   if (!msg || typeof msg !== 'object') return false;

@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import executionRoutes from './execution.ts';
 import jobLifecycleRoutes from './job-lifecycle.ts';
 import jobQueryRoutes from './job-queries.ts';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // Mount execution routes (checkout + step)
 app.route('/', executionRoutes);

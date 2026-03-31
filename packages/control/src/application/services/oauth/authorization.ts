@@ -1,31 +1,31 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { oauthAuthorizationCodes } from '../../../infra/db';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { oauthAuthorizationCodes } from '../../../infra/db/index.ts';
 import type {
   OAuthAuthorizationCode,
   OAuthClient,
   AuthorizationRequest,
   CodeChallengeMethod,
-} from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
+} from '../../../shared/types/oauth.ts';
+import { OAUTH_CONSTANTS } from '../../../shared/types/oauth.ts';
 import {
   generateRandomString,
   generateId,
   verifyCodeChallenge,
   isValidCodeChallenge,
-} from './pkce';
-import { computeSHA256 } from '../../../shared/utils/hash';
+} from './pkce.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
 import {
   getClientById,
   validateRedirectUri,
   supportsGrantType,
   getClientAllowedScopes,
-} from './client';
-import { parseScopes, areScopesAllowed, validateScopes } from './scopes';
-import { getDb } from '../../../infra/db';
+} from './client.ts';
+import { parseScopes, areScopesAllowed, validateScopes } from './scopes.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, lt } from 'drizzle-orm';
-import { revokeTokensByAuthorizationCode } from './token';
-import { textDate } from '../../../shared/utils/db-guards';
+import { revokeTokensByAuthorizationCode } from './token.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type OAuthAuthorizationCodeRow = SelectOf<typeof oauthAuthorizationCodes>;
 

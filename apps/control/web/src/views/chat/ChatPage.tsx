@@ -1,17 +1,17 @@
 import { createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import { Show } from 'solid-js';
-import { ChatView } from '../ChatView';
-import { ChatHeader } from './ChatHeader';
-import { ModelSwitcher } from './ModelSwitcher';
-import { ChatSearchModal } from './ChatSearchModal';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useMobileHeader } from '../../store/mobile-header';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { DEFAULT_MODEL_ID } from '../../lib/modelCatalog';
-import { getPersonalSpace, getSpaceIdentifier, findSpaceByIdentifier } from '../../lib/spaces';
-import type { Thread, Space } from '../../types';
-import { WelcomeView } from '../app/space/WelcomeView';
+import { ChatView } from '../ChatView.tsx';
+import { ChatHeader } from './ChatHeader.tsx';
+import { ModelSwitcher } from './ModelSwitcher.tsx';
+import { ChatSearchModal } from './ChatSearchModal.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useMobileHeader } from '../../store/mobile-header.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { DEFAULT_MODEL_ID } from '../../lib/modelCatalog.ts';
+import { getPersonalSpace, getSpaceIdentifier, findSpaceByIdentifier } from '../../lib/spaces.ts';
+import type { Thread, Space } from '../../types/index.ts';
+import { WelcomeView } from '../app/space/WelcomeView.tsx';
 
 interface ChatPageProps {
   spaces: Space[];

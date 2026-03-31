@@ -4,9 +4,9 @@
  * Endpoint URL validation and security checks for MCP server URLs.
  */
 
-import type { Env } from '../../../../shared/types';
+import type { Env } from '../../../../shared/types/index.ts';
 import { isLocalhost, isPrivateIP } from 'takos-common/validation';
-import type { McpEndpointUrlOptions } from './mcp-models';
+import type { McpEndpointUrlOptions } from './mcp-models.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

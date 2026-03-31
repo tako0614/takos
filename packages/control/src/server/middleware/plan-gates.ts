@@ -1,12 +1,12 @@
 import type { MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types';
+import type { Env, User } from '../../shared/types/index.ts';
 import {
   checkWeeklyRuntimeLimit,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
   WEEKLY_RUNTIME_WINDOW_DAYS,
-} from '../../application/services/billing/billing';
+} from '../../application/services/billing/billing.ts';
 import { PaymentRequiredError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger';
+import { logError } from '../../shared/utils/logger.ts';
 
 type PlanGateVariables = {
   user?: User;

@@ -1,9 +1,9 @@
-import type { ToolContext } from '../../tool-definitions';
+import type { ToolContext } from '../../tool-definitions.ts';
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import { getDb, sessions } from '../../../../infra/db';
+import { getDb, sessions } from '../../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler';
-import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../../shared/constants';
+import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler.ts';
+import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../../shared/constants/index.ts';
 
 export async function callSessionApi(
   context: ToolContext,

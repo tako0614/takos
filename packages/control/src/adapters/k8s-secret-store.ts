@@ -1,6 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { readFile } from 'node:fs/promises';
+import { Buffer } from "node:buffer";
 
 export type K8sSecretStoreConfig = {
   apiServer?: string;

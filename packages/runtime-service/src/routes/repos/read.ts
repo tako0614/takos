@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../../shared/config.ts';
 import { runGitCommand } from '../../runtime/git.ts';
 import {
@@ -19,7 +20,7 @@ import { ErrorCodes } from 'takos-common/errors';
 import branchRoutes from './branches.ts';
 import contentRoutes from './content.ts';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // base: init + clone

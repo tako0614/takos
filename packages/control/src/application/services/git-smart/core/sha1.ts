@@ -6,7 +6,7 @@
 import {
   bytesToHex,
   hexToBytes,
-} from '../../../../shared/utils/encoding-utils';
+} from '../../../../shared/utils/encoding-utils.ts';
 
 function toBufferSource(bytes: Uint8Array): ArrayBuffer {
   return bytes.slice().buffer as ArrayBuffer;

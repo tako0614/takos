@@ -1,8 +1,8 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId } from '../../../shared/utils';
-import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db/index.ts';
 import { eq, and, ne, desc } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 // Types
 export interface GitCommit {

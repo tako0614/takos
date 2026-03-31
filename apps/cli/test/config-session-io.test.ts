@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, symlinkSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { tmpdir, platform } from 'os';
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, symlinkSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir, platform } from 'node:os';
 import { findSessionFile, isWindows, setSecurePermissions } from '../src/lib/config-session-io.ts';
 
 import { assertEquals, assertNotEquals } from 'jsr:@std/assert';

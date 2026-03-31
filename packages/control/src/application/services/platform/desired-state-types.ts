@@ -1,9 +1,9 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { ReconcileUpdate } from '../common-env/repository';
+import type { ReconcileUpdate } from '../common-env/repository.ts';
 
 export type ServiceBindingSpec = WorkerBinding;
 
-export type DesiredStateEnv = Pick<import('../../../shared/types').Env, 'DB' | 'ENCRYPTION_KEY' | 'ADMIN_DOMAIN'>;
+export type DesiredStateEnv = Pick<import('../../../shared/types/index.ts').Env, 'DB' | 'ENCRYPTION_KEY' | 'ADMIN_DOMAIN'>;
 
 export type ServiceRuntimeLimits = {
   cpu_ms?: number;

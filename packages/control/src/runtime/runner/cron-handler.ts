@@ -1,12 +1,12 @@
 // Cron handler: re-enqueue stale running runs whose container crashed.
 import type { ScheduledEvent } from '../../shared/types/bindings.ts';
-import type { RunnerEnv as Env } from '../../shared/types';
-import { RUN_QUEUE_MESSAGE_VERSION } from '../../shared/types';
-import { getDb, runs } from '../../infra/db';
+import type { RunnerEnv as Env } from '../../shared/types/index.ts';
+import { RUN_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
+import { getDb, runs } from '../../infra/db/index.ts';
 import { eq, and, lt } from 'drizzle-orm';
 
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
+import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants.ts';
 
 export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise<void> {
   // Validate environment on first invocation (cached).
@@ -67,7 +67,7 @@ export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise
 
   // Clean up old tool_operations records (24h retention)
   try {
-    const { cleanupStaleOperations } = await import('../../application/tools/idempotency');
+    const { cleanupStaleOperations } = await import('../../application/tools/idempotency.ts');
     const cleaned = await cleanupStaleOperations(env.DB);
     if (cleaned > 0) {
       logInfo(`Cleaned ${cleaned} stale tool_operations records`, { module: 'runner_cron' });

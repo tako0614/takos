@@ -1,19 +1,19 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { Resource } from '../../../shared/types';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Resource } from '../../../shared/types/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, AuthorizationError, InternalError, NotFoundError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getPortableKvStore, isPortableResourceProvider } from './portable-runtime.ts';
-import { checkResourceAccess } from '../../../application/services/resources';
-import { getDb } from '../../../infra/db';
-import { resources } from '../../../infra/db/schema';
+import { checkResourceAccess } from '../../../application/services/resources/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { resources } from '../../../infra/db/schema.ts';
 import { and, eq, inArray } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
-import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities';
-import { textDate } from '../../../shared/utils/db-guards';
+import { logError } from '../../../shared/utils/logger.ts';
+import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 function toResource(data: {
   id: string;

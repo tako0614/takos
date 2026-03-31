@@ -2,23 +2,23 @@ import { Hono } from 'hono';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { z } from 'zod';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import type { SpaceRole } from '../../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
+import type { SpaceRole } from '../../../shared/types/index.ts';
+import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import {
   createSpaceMember,
   getUserByEmail,
   getSpaceMember,
   listSpaceMembers,
-} from '../../../application/services/identity/spaces';
-import { createNotification } from '../../../application/services/notifications/service';
-import { getDb } from '../../../infra/db';
-import { accounts, accountMemberships } from '../../../infra/db/schema';
+} from '../../../application/services/identity/spaces.ts';
+import { createNotification } from '../../../application/services/notifications/service.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, accountMemberships } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import { AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
-import { requireFound } from '../validation-utils';
+import { requireFound } from '../validation-utils.ts';
 
 interface MemberWithOwnership {
   id: string;

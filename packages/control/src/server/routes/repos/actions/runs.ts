@@ -1,21 +1,21 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../../route-auth';
-import { parsePagination } from '../../../../shared/utils';
+import type { AuthenticatedRouteEnv } from '../../route-auth.ts';
+import { parsePagination } from '../../../../shared/utils/index.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../../zod-validator';
-import { checkRepoAccess } from '../../../../application/services/source/repos';
+import { zValidator } from '../../zod-validator.ts';
+import { checkRepoAccess } from '../../../../application/services/source/repos.ts';
 import {
   getWorkflowRunDetail,
   getWorkflowRunJobs,
   listWorkflowRuns,
-} from '../../../../application/services/workflow-runs/read-model';
+} from '../../../../application/services/workflow-runs/read-model.ts';
 import {
   cancelWorkflowRun,
   dispatchWorkflowRun,
   rerunWorkflowRun,
-} from '../../../../application/services/workflow-runs/commands';
-import { connectWorkflowRunStream } from '../../../../application/services/workflow-runs/stream';
+} from '../../../../application/services/workflow-runs/commands.ts';
+import { connectWorkflowRunStream } from '../../../../application/services/workflow-runs/stream.ts';
 import { NotFoundError, AppError } from 'takos-common/errors';
 
 // ---------------------------------------------------------------------------

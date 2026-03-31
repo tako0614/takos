@@ -1,6 +1,7 @@
 import type { InArgs, ResultSet } from '@libsql/client';
 import type { QueryResult } from 'pg';
 import type { D1Database, D1Result } from '../shared/types/bindings.ts';
+import { Buffer } from "node:buffer";
 
 export type ServerD1Database = D1Database & {
   close(): void;
@@ -121,7 +122,7 @@ export function classifyTransactionSql(query: string): 'begin' | 'commit' | 'rol
 
 export function toPgRawRows(result: QueryResult<Record<string, unknown>>): [string[], ...unknown[]] | unknown[] {
   const columns = result.fields.map((field: { name: string }) => field.name);
-  const rows = result.rows.map((row: Record<string, unknown>) => columns.map((column) => row[column]));
+  const rows = result.rows.map((row: Record<string, unknown>) => columns.map((column: string) => row[column]));
   return [columns, ...rows];
 }
 

@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, MessageRole } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Env, MessageRole } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
-import { zValidator } from '../zod-validator';
+import { logError } from '../../../shared/utils/logger.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   checkThreadAccess,
   createMessage,
-} from '../../../application/services/threads/thread-service';
-import { searchThreadMessages } from '../../../application/services/threads/thread-search';
-import { getThreadTimeline } from '../../../application/services/threads/thread-timeline';
-import { getThreadHistory } from '../../../application/services/threads/thread-history';
+} from '../../../application/services/threads/thread-service.ts';
+import { searchThreadMessages } from '../../../application/services/threads/thread-search.ts';
+import { getThreadTimeline } from '../../../application/services/threads/thread-timeline.ts';
+import { getThreadHistory } from '../../../application/services/threads/thread-history.ts';
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 

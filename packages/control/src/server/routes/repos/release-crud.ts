@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId, parsePagination } from '../../../shared/utils';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { generateExploreInvalidationUrls, hasWriteRole } from './routes';
-import { getDb } from '../../../infra/db';
-import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema';
+import { generateId, parsePagination } from '../../../shared/utils/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { generateExploreInvalidationUrls, hasWriteRole } from './routes.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema.ts';
 import { eq, and, desc, asc } from 'drizzle-orm';
-import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { toReleaseAssets } from '../../../application/services/source/repo-release-assets';
+import { invalidateCacheOnMutation } from '../../middleware/cache.ts';
+import { toReleaseAssets } from '../../../application/services/source/repo-release-assets.ts';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError } from 'takos-common/errors';
-import { fetchReleaseWithDetails } from './release-shared';
-import { ok } from '../response-utils';
+import { fetchReleaseWithDetails } from './release-shared.ts';
+import { ok } from '../response-utils.ts';
 
 const releaseCrud = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/releases', async (c) => {

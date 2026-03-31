@@ -1,8 +1,8 @@
-import * as fs from 'fs/promises';
-import type { Dirent } from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { createHash } from 'crypto';
+import * as fs from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { createHash } from 'node:crypto';
 import { parse as parseYaml } from 'yaml';
 import type { ActionRuns, ActionOutputDefinition } from './composite-executor.ts';
 import { cloneAndCheckout } from '../git.ts';

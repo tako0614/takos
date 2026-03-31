@@ -4,8 +4,8 @@ import { assertEquals } from 'jsr:@std/assert';
 import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
 const hoisted = {
-  process.env.TAKOS_API_URL = 'https://takos.example.test';
-  process.env.PROXY_BASE_URL = 'https://runtime-host.example.test';
+  Deno.env.set('TAKOS_API_URL', 'https://takos.example.test');
+  Deno.env.set('PROXY_BASE_URL', 'https://runtime-host.example.test');
   return {
     getSession: ((..._args: any[]) => undefined) as any,
     fetch: ((..._args: any[]) => undefined) as any,

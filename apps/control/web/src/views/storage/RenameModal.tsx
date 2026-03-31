@@ -1,8 +1,8 @@
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Modal } from '../../components/ui/Modal';
-import type { StorageFile } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { Modal } from '../../components/ui/Modal.tsx';
+import type { StorageFile } from '../../types/index.ts';
 
 interface RenameModalProps {
   isOpen: boolean;

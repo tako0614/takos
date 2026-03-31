@@ -5,14 +5,14 @@
 
 import { and, eq, desc } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import {
   resolveStoreViaWebFinger,
   fetchRemoteStoreActor,
   type RemoteStoreActor,
-} from './remote-store-client';
+} from './remote-store-client.ts';
 
 export interface StoreRegistryEntry {
   id: string;

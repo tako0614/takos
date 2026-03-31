@@ -5,7 +5,7 @@ import type {
   SkillExecutionContract,
   SkillLocale,
   SkillOutputMode,
-} from './skill-contracts';
+} from './skill-contracts.ts';
 import {
   planningStructurerEnMarkdown,
   planningStructurerJaMarkdown,

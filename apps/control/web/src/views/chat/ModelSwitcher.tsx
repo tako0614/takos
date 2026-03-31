@@ -1,6 +1,6 @@
 import { Show, For } from 'solid-js';
-import { MODEL_OPTIONS, getModelLabel } from '../../lib/modelCatalog';
-import { Icons } from '../../lib/Icons';
+import { MODEL_OPTIONS, getModelLabel } from '../../lib/modelCatalog.ts';
+import { Icons } from '../../lib/Icons.tsx';
 
 interface ModelSwitcherProps {
   selectedModel: string;

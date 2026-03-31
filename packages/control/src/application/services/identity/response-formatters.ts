@@ -1,5 +1,5 @@
-import type { RepositoryVisibility, User } from '../../../shared/types';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import type { RepositoryVisibility, User } from '../../../shared/types/index.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ---------------------------------------------------------------------------
 // Repository response formatter

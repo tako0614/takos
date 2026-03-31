@@ -4,11 +4,11 @@
  * Extracted from runner.ts to separate skill concerns from the core run loop.
  */
 
-import type { AgentRunnerIo } from './runner-io';
-import type { AgentMessage, AgentEvent } from './agent-models';
-import type { ToolExecutorLike } from '../../tools/executor';
-import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills';
-import { emitSkillLoadOutcome } from './skills';
+import type { AgentRunnerIo } from './runner-io.ts';
+import type { AgentMessage, AgentEvent } from './agent-models.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills.ts';
+import { emitSkillLoadOutcome } from './skills.ts';
 
 export interface SkillPlanDeps {
   runIo: AgentRunnerIo;

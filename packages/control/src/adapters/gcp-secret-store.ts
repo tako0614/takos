@@ -1,4 +1,5 @@
 import type { GoogleAuth } from 'google-auth-library';
+import { Buffer } from "node:buffer";
 
 export type GcpSecretStoreConfig = {
   projectId?: string;

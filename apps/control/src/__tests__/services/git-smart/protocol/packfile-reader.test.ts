@@ -1,4 +1,4 @@
-import { MockR2Bucket } from '../../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../../test/integration/setup.ts';
 import { readPackfileAsync, applyDelta } from '@/services/git-smart/protocol/packfile-reader';
 import { putBlob, getObject } from '@/services/git-smart/core/object-store';
 import { sha1Bytes, concatBytes } from '@/services/git-smart/core/sha1';

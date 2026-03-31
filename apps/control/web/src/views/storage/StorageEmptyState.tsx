@@ -1,8 +1,8 @@
 import { Show } from 'solid-js';
-import { formatFileSize } from '../../lib/format';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui/Button';
-import type { StorageFile } from '../../types';
+import { formatFileSize } from '../../lib/format.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import type { StorageFile } from '../../types/index.ts';
 
 export function StorageEmptyState(props: {
   file: StorageFile;

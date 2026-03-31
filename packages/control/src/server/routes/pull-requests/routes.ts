@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { PullRequestStatus, AuthorType } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { zValidator } from '../zod-validator';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { getDb } from '../../../infra/db';
+import type { PullRequestStatus, AuthorType } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { zValidator } from '../zod-validator.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { pullRequests } from '../../../infra/db/schema';
+import { pullRequests } from '../../../infra/db/schema.ts';
 
 import {
   buildPullRequestDtoFull,
@@ -16,16 +16,16 @@ import {
   resolveActorLite,
   toPullRequestDto,
   toPullRequestRecord,
-} from './dto';
-import { buildDetailedRepoDiffPayload } from './diff';
+} from './dto.ts';
+import { buildDetailedRepoDiffPayload } from './diff.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import {
   buildPullRequestDetail,
   buildPullRequestList,
   findPullRequest,
   getNextPullRequestNumber,
-} from './read-model';
-import { triggerPrEvent } from './workflow-trigger';
+} from './read-model.ts';
+import { triggerPrEvent } from './workflow-trigger.ts';
 
 // ---------------------------------------------------------------------------
 // CRUD Routes (create, list, get, get-diff, update, close)

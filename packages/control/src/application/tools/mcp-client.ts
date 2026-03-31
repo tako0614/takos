@@ -8,8 +8,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Tool as McpTool } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolDefinition } from './tool-definitions';
-import { logWarn } from '../../shared/utils/logger';
+import type { ToolDefinition } from './tool-definitions.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 export type { McpTool };
 
@@ -79,7 +79,7 @@ export class McpClient {
   async listTools(): Promise<Array<{ sdkTool: McpTool; definition: ToolDefinition }>> {
     if (!this.client) throw new Error(`McpClient(${this.serverName}) not connected`);
     const { tools } = await this.client.listTools();
-    return tools.map(sdkTool => ({ sdkTool, definition: convertMcpSchema(sdkTool) }));
+    return tools.map((sdkTool: McpTool) => ({ sdkTool, definition: convertMcpSchema(sdkTool) }));
   }
 
   /** Call a tool on the MCP server and return the result as a string. */

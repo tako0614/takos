@@ -20,6 +20,7 @@ import {
   forbidden,
 } from 'takos-common/middleware/hono';
 import { createRateLimiter } from './middleware/rate-limit.ts';
+import type { RuntimeEnv } from './types/hono.d.ts';
 import execRoutes from './routes/runtime/exec.ts';
 import toolsRoutes from './routes/runtime/tools.ts';
 import sessionExecutionRoutes from './routes/sessions/execution.ts';
@@ -53,7 +54,7 @@ function isLoopbackAddress(addr: string): boolean {
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 }
 
-function isLocalCliProxyBypassRequest(c: import('hono').Context): boolean {
+function isLocalCliProxyBypassRequest(c: import('hono').Context<RuntimeEnv>): boolean {
   if (!c.req.path.startsWith('/cli-proxy/')) {
     return false;
   }
@@ -69,7 +70,7 @@ function isLocalCliProxyBypassRequest(c: import('hono').Context): boolean {
   return Boolean(sessionId) && isLoopbackAddress(addr);
 }
 
-export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Hono {
+export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Hono<RuntimeEnv> {
   const requireServiceToken = createServiceTokenMiddleware({
     jwtPublicKey: JWT_PUBLIC_KEY,
     expectedIssuer: 'takos-control',
@@ -81,7 +82,7 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
   const isProduction = options.isProduction ?? Deno.env.get('NODE_ENV') === 'production';
   const isContainerEnvironment = options.isContainerEnvironment ?? !!Deno.env.get('CF_CONTAINER');
   const logger = createLogger({ service: options.serviceName ?? 'takos-runtime' });
-  const app = new Hono();
+  const app = new Hono<RuntimeEnv>();
 
   app.use(async (c, next) => {
     const id = c.req.header('x-request-id') || randomUUID();

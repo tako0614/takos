@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
 import {
   listStorageFiles,
   readFileContent,
@@ -10,7 +10,7 @@ import {
   moveStorageItem,
   writeFileContent,
   createFileWithContent,
-} from '../../services/source/space-storage';
+} from '../../services/source/space-storage.ts';
 
 function normalizeWorkspacePath(path: string): string {
   const trimmed = path.trim();

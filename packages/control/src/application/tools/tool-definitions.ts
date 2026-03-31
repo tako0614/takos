@@ -1,13 +1,13 @@
 import type { D1Database, R2Bucket } from '../../shared/types/bindings.ts';
-import type { Env } from '../../shared/types';
-import type { SpaceRole } from '../../shared/types';
+import type { Env } from '../../shared/types/index.ts';
+import type { SpaceRole } from '../../shared/types/index.ts';
 import type {
   ToolClass,
   SpaceOperationId,
   SensitiveReadPolicy,
-} from './tool-policy-types';
-import type { CapabilityNamespace, RiskLevel } from './capability-types';
-import type { CapabilityRegistry } from './capability-registry';
+} from './tool-policy-types.ts';
+import type { CapabilityNamespace, RiskLevel } from './capability-types.ts';
+import type { CapabilityRegistry } from './capability-registry.ts';
 
 export interface ToolContext {
   spaceId: string;

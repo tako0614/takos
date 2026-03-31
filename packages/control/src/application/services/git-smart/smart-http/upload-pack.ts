@@ -8,10 +8,10 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import { parsePktLines, pktLineText, encodePktLine, encodeSideBandData, flushPkt } from '../protocol/pkt-line';
-import { collectReachableObjects } from '../core/commit-index';
-import { writePackfile } from '../protocol/packfile-writer';
-import { concatBytes } from '../core/sha1';
+import { parsePktLines, pktLineText, encodePktLine, encodeSideBandData, flushPkt } from '../protocol/pkt-line.ts';
+import { collectReachableObjects } from '../core/commit-index.ts';
+import { writePackfile } from '../protocol/packfile-writer.ts';
+import { concatBytes } from '../core/sha1.ts';
 
 export async function handleUploadPack(
   db: D1Database,

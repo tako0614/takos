@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { profileCrudRoutes } from './profile-crud';
-import { followRoutes } from './follow';
-import { blockMuteRoutes } from './block-mute';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { profileCrudRoutes } from './profile-crud.ts';
+import { followRoutes } from './follow.ts';
+import { blockMuteRoutes } from './block-mute.ts';
 
-export type { UserProfileResponse, ProfileRepoResponse, FollowUserResponse, FollowRequestResponse } from './dto';
+export type { UserProfileResponse, ProfileRepoResponse, FollowUserResponse, FollowRequestResponse } from './dto.ts';
 
 const profilesApi = new Hono<OptionalAuthRouteEnv>()
   .route('/', profileCrudRoutes)

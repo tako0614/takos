@@ -1,5 +1,5 @@
 import { atom } from 'jotai/vanilla';
-import type { Space } from '../types';
+import type { Space } from '../types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Sidebar atoms

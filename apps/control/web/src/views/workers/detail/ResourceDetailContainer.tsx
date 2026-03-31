@@ -1,11 +1,11 @@
-import type { Resource } from '../../../types';
-import { ResourceDetail } from '../ResourceDetail';
-import type { ResourceDetailTab } from '../worker-models';
+import type { Resource } from '../../../types/index.ts';
+import { ResourceDetail } from '../ResourceDetail.tsx';
+import type { ResourceDetailTab } from '../worker-models.ts';
 import {
   getResourceStatusBgClass,
   getResourceTypeIcon,
   getResourceTypeName,
-} from '../utils/resourceUtils';
+} from '../utils/resourceUtils.tsx';
 
 export interface ResourceDetailContainerProps {
   resource: Resource;

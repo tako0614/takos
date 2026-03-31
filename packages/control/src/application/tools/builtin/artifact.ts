@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import type { ArtifactType } from '../../../shared/types';
-import { getDb, artifacts, files } from '../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import type { ArtifactType } from '../../../shared/types/index.ts';
+import { getDb, artifacts, files } from '../../../infra/db/index.ts';
 import { eq, and, ne, like, desc, asc } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils/index.ts';
 
 export const CREATE_ARTIFACT: ToolDefinition = {
   name: 'create_artifact',

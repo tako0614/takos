@@ -1,8 +1,8 @@
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 
-import { getDb, accountEnvVars, serviceCommonEnvLinks } from '../../../infra/db';
+import { getDb, accountEnvVars, serviceCommonEnvLinks } from '../../../infra/db/index.ts';
 import { eq, and, sql, desc } from 'drizzle-orm';
-import { getServiceRouteRecord } from '../platform/workers';
+import { getServiceRouteRecord } from '../platform/workers.ts';
 
 export type LinkSource = 'manual' | 'required';
 export type SyncState = 'pending' | 'managed' | 'overridden' | 'missing_common' | 'missing_builtin' | 'error';

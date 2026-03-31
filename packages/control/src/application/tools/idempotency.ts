@@ -1,7 +1,7 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
-import { getDb, toolOperations } from '../../infra/db';
+import { getDb, toolOperations } from '../../infra/db/index.ts';
 import { eq, and, lt, sql } from 'drizzle-orm';
-import { generateId } from '../../shared/utils';
+import { generateId } from '../../shared/utils/index.ts';
 
 const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 

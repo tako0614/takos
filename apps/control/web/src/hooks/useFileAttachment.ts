@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { type TranslationKey } from '../store/i18n';
+import { type TranslationKey } from '../store/i18n.ts';
 
 export interface UseFileAttachmentOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;

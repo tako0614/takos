@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { zValidator } from '../zod-validator';
-import * as gitStore from '../../../application/services/git-smart';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { zValidator } from '../zod-validator.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { readableCommitErrorResponse, encodeBase64, toGitBucket } from './routes.ts';
 import {
   commitFilesToDefaultBranch,
   importFilesToDefaultBranch,
   type FileEntry,
-} from './git-write-operations';
+} from './git-write-operations.ts';
 import { BadRequestError, NotFoundError, InternalError, isAppError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 import {
   WRITE_ROLES,
   requireBucket,
@@ -20,7 +20,7 @@ import {
   getCommitSha,
   getCommitParents,
   throwIfTreeFlattenLimit,
-} from './git-shared';
+} from './git-shared.ts';
 
 const gitCommits = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/commits', zValidator('query', z.object({

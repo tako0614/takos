@@ -1,12 +1,12 @@
 import { createMemo } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import type { Message, SessionDiff } from '../../types';
-import { Icons } from '../../lib/Icons';
-import type { ChatStreamingState } from './chat-types';
-import { MessageBubble } from './MessageBubble';
-import { MarkdownRenderer } from './MarkdownRenderer';
-import { SessionDiffPanel } from './SessionDiffPanel';
+import { useI18n } from '../../store/i18n.ts';
+import type { Message, SessionDiff } from '../../types/index.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import type { ChatStreamingState } from './chat-types.ts';
+import { MessageBubble } from './MessageBubble.tsx';
+import { MarkdownRenderer } from './MarkdownRenderer.tsx';
+import { SessionDiffPanel } from './SessionDiffPanel.tsx';
 
 type LiveToolCall = ChatStreamingState['toolCalls'][number];
 

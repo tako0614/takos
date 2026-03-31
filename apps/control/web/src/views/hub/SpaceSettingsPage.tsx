@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
-import { SpaceSettingsSection } from './SpaceSettingsSection';
-import type { Space } from '../../types';
+import { SpaceSettingsSection } from './SpaceSettingsSection.tsx';
+import type { Space } from '../../types/index.ts';
 
 interface SpaceSettingsPageProps {
   spaces: Space[];

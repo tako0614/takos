@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import type { Hono } from 'hono';
-import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
+import type { Env } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
 import { BadRequestError, AppError } from 'takos-common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
-import { zValidator } from '../zod-validator';
-import { createThreadRun } from '../../../application/services/execution/run-creation';
+import { zValidator } from '../zod-validator.ts';
+import { createThreadRun } from '../../../application/services/execution/run-creation.ts';
 
 export function registerRunCreateRoutes(app: RunRouteApp) {
   app.post('/threads/:threadId/runs',

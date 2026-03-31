@@ -9,7 +9,7 @@
  * Service bindings, and Durable Object namespaces.
  */
 
-import type { WorkerBinding, CloudflareBindingRecord } from './wfp-contracts';
+import type { WorkerBinding, CloudflareBindingRecord } from './wfp-contracts.ts';
 import { BadRequestError } from 'takos-common/errors';
 
 /**

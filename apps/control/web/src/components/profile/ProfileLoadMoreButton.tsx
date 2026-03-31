@@ -1,5 +1,5 @@
-import { Icons } from '../../lib/Icons';
-import { Button } from '../ui';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../ui/index.ts';
 
 interface ProfileLoadMoreButtonProps {
   onLoadMore: () => void;

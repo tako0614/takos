@@ -1,11 +1,11 @@
 import type { D1Database } from '../../shared/types/bindings.ts';
-import type { ToolDefinition, RegisteredTool, ToolCategory } from './tool-definitions';
-import type { Env } from '../../shared/types';
-import type { SpaceRole } from '../../shared/types';
-import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin';
-import { McpClient } from './mcp-client';
-import { loadMcpTools } from './mcp-tools';
-import { logWarn } from '../../shared/utils/logger';
+import type { ToolDefinition, RegisteredTool, ToolCategory } from './tool-definitions.ts';
+import type { Env } from '../../shared/types/index.ts';
+import type { SpaceRole } from '../../shared/types/index.ts';
+import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin/index.ts';
+import { McpClient } from './mcp-client.ts';
+import { loadMcpTools } from './mcp-tools.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 export interface ToolResolverOptions {
   disabledBuiltinTools?: string[];

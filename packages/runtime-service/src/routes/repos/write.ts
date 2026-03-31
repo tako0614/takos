@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import { runGitCommand } from '../../runtime/git.ts';
 import { validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.ts';
 import { mergeTempDirManager } from '../../utils/temp-dir.ts';
@@ -13,7 +14,7 @@ import { isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, internalError } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // commit + push

@@ -6,12 +6,12 @@ import type {
   ReminderStatus,
   ReminderTriggerType,
   ReminderPriority,
-} from '../../../shared/types';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { requireSpaceAccess, type BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+} from '../../../shared/types/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { requireSpaceAccess, type BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import {
   listMemories,
   bumpMemoryAccess,
@@ -26,7 +26,7 @@ import {
   updateReminder,
   deleteReminder,
   triggerReminder,
-} from '../../../application/services/memory';
+} from '../../../application/services/memory/index.ts';
 
 // ==================== Memories ====================
 

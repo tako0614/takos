@@ -7,7 +7,7 @@
  * Usage: apply to routes that access expensive resources (agent runs, code execution, etc.)
  */
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types';
+import type { Env, User } from '../../shared/types/index.ts';
 import { AuthenticationError, AuthorizationError } from 'takos-common/errors';
 
 type TrustTierVariables = { user?: User };

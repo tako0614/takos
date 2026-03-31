@@ -3,10 +3,10 @@ import { z } from 'zod';
 import {
   requireSpaceAccess,
   type AuthenticatedRouteEnv,
-} from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+} from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import {
   addRemoteStore,
   listRegisteredStores,
@@ -15,21 +15,21 @@ import {
   setActiveStore,
   refreshRemoteStore,
   setSubscription,
-} from '../../../application/services/activitypub/store-registry';
+} from '../../../application/services/activitypub/store-registry.ts';
 import {
   fetchRemoteRepositories,
   searchRemoteRepositories,
   RemoteStoreError,
-} from '../../../application/services/activitypub/remote-store-client';
-import { installFromRemoteStore } from '../../../application/services/activitypub/remote-install';
+} from '../../../application/services/activitypub/remote-store-client.ts';
+import { installFromRemoteStore } from '../../../application/services/activitypub/remote-install.ts';
 import {
   getStoreUpdates,
   markUpdatesSeen,
   markAllUpdatesSeen,
   pollSingleStore,
-} from '../../../application/services/activitypub/store-subscription';
+} from '../../../application/services/activitypub/store-subscription.ts';
 import { InternalError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 
 const addStoreSchema = z.object({
   identifier: z.string().min(1),

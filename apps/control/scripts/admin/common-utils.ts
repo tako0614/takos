@@ -2,8 +2,8 @@
  * General utilities: nowIso, randomId, appendAuditLog.
  */
 
-import { randomBytes } from 'crypto';
-import * as fs from 'fs';
+import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
 
 import type { AuditEntry } from './admin-types.ts';
 import { AUDIT_LOG_DIR, AUDIT_LOG_FILE } from './constants.ts';

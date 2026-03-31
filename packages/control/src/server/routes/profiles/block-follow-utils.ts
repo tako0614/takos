@@ -1,14 +1,14 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Database } from '../../../infra/db';
-import type { Env } from '../../../shared/types';
-import type { FollowUserResponse } from './dto';
-import { paginatedResponse } from '../../../shared/utils';
-import { createNotification } from '../../../application/services/notifications/service';
-import { isMutedBy } from './profile-queries';
+import type { Database } from '../../../infra/db/index.ts';
+import type { Env } from '../../../shared/types/index.ts';
+import type { FollowUserResponse } from './dto.ts';
+import { paginatedResponse } from '../../../shared/utils/index.ts';
+import { createNotification } from '../../../application/services/notifications/service.ts';
+import { isMutedBy } from './profile-queries.ts';
 import {
   accountBlocks, accountFollows, accountFollowRequests, accountMutes,
   accounts,
-} from '../../../infra/db/schema';
+} from '../../../infra/db/schema.ts';
 import { eq, and, count, inArray, asc, desc } from 'drizzle-orm';
 
 export async function getBlockFlags(

@@ -1,7 +1,7 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { getDb, sessionRepos, sessions, repositories } from '../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { getDb, sessionRepos, sessions, repositories } from '../../../infra/db/index.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { requireContainerSession } from './container/availability';
+import { requireContainerSession } from './container/availability.ts';
 
 export const REPO_LIST: ToolDefinition = {
   name: 'repo_list',

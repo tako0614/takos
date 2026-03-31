@@ -1,10 +1,10 @@
-import type { Env, SpaceRole } from '../../../../shared/types';
-import { getDb, accounts, accountMemberships } from '../../../../infra/db';
-import { services } from '../../../../infra/db/schema-services';
+import type { Env, SpaceRole } from '../../../../shared/types/index.ts';
+import { getDb, accounts, accountMemberships } from '../../../../infra/db/index.ts';
+import { services } from '../../../../infra/db/schema-services.ts';
 import { eq, and } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../../identity/principals';
-import { CUSTOM_DOMAIN_WRITE_ROLES, CustomDomainError } from './domain-models';
-import type { ServiceInfo } from './domain-models';
+import { resolveActorPrincipalId } from '../../identity/principals.ts';
+import { CUSTOM_DOMAIN_WRITE_ROLES, CustomDomainError } from './domain-models.ts';
+import type { ServiceInfo } from './domain-models.ts';
 
 export async function getServiceForUser(
   env: Env,

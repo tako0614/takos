@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { PullRequest } from '../../../types';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { PullRequest } from '../../../types/index.ts';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface PRHeaderProps {
   pr: PullRequest;

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { runGitCommand, cloneAndCheckout } from '../../runtime/git.ts';
 import { resolvePathWithin, resolveRepoGitPath, verifyPathWithinAfterAccess } from '../../runtime/paths.ts';
 import { writeFileWithinSpace } from '../../runtime/secure-fs.ts';
@@ -10,7 +11,7 @@ import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId 
 import { OwnerBindingError } from '../../shared/errors.ts';
 import { badRequest, forbidden, notFound, internalError } from 'takos-common/middleware/hono';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/sessions', async (c) => {
   try {

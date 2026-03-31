@@ -9,6 +9,7 @@
  */
 import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
 import { execCommand } from '../cloudflare-utils.ts';
+import { Buffer } from "node:buffer";
 
 export class K8sProvider implements ResourceProvider {
   readonly name = 'k8s';

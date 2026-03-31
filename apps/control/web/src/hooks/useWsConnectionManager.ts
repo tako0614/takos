@@ -3,7 +3,7 @@ import {
   type ConnectionManagerOptions,
   type ConnectionManagerResult,
   type TransportSetupContext,
-} from './useConnectionManagerBase';
+} from './useConnectionManagerBase.ts';
 
 type MutableRefObject<T> = { current: T };
 

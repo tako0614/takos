@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import type { Context, Handler } from 'hono';
-import * as gitStore from '../../../application/services/git-smart';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { findRepoByUsernameAndName } from './profile-queries';
-import { getDb } from '../../../infra/db';
-import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { findRepoByUsernameAndName } from './profile-queries.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema.ts';
 import { eq, and, sql } from 'drizzle-orm';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 const profilesRepo = new Hono<OptionalAuthRouteEnv>();
 type ProfileRepoContext = Context<OptionalAuthRouteEnv>;

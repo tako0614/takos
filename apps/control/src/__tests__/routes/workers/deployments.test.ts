@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
-import { createMockEnv } from '../../../../test/integration/setup';
+import { createMockEnv } from '../../../../test/integration/setup.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
 import { assertSpyCallArgs } from 'jsr:@std/testing/mock';

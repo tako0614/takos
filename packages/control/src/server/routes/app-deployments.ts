@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth';
+import type { Env } from '../../shared/types/index.ts';
+import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth.ts';
 import { NotFoundError, InternalError, GoneError, isAppError } from 'takos-common/errors';
-import { AppDeploymentService, APP_DEPLOYMENTS_REMOVED_MESSAGE } from '../../application/services/platform/app-deployments';
-import { zValidator } from './zod-validator';
-import { logError } from '../../shared/utils/logger';
-import { getSpaceOperationPolicy } from '../../application/tools/tool-policy';
+import { AppDeploymentService, APP_DEPLOYMENTS_REMOVED_MESSAGE } from '../../application/services/platform/app-deployments.ts';
+import { zValidator } from './zod-validator.ts';
+import { logError } from '../../shared/utils/logger.ts';
+import { getSpaceOperationPolicy } from '../../application/tools/tool-policy.ts';
 
 function handleRouteError(error: unknown, context: string): never {
   if (isAppError(error)) throw error;

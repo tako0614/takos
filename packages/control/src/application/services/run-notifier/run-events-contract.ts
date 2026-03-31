@@ -1,4 +1,4 @@
-import type { RunStatus } from '../../../shared/types';
+import type { RunStatus } from '../../../shared/types/index.ts';
 
 export type RunTerminalEventType = 'completed' | 'error' | 'cancelled' | 'run.failed';
 export type RunTerminalStatus = 'completed' | 'failed' | 'cancelled';

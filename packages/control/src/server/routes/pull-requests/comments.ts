@@ -1,20 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { generateId } from '../../../shared/utils';
-import { type AuthenticatedRouteEnv } from '../route-auth';
+import { generateId } from '../../../shared/utils/index.ts';
+import { type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { getDb } from '../../../infra/db';
+import { zValidator } from '../zod-validator.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { pullRequests, prComments } from '../../../infra/db/schema';
-import { createNotification } from '../../../application/services/notifications/service';
+import { pullRequests, prComments } from '../../../infra/db/schema.ts';
+import { createNotification } from '../../../application/services/notifications/service.ts';
 
-import type { PullRequestCommentDto } from './dto';
-import { buildUserLiteMap, resolveActorLite } from './dto';
-import { logWarn } from '../../../shared/utils/logger';
+import type { PullRequestCommentDto } from './dto.ts';
+import { buildUserLiteMap, resolveActorLite } from './dto.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import { NotFoundError } from 'takos-common/errors';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 function toCommentDto(
   comment: {

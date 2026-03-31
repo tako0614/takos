@@ -1,5 +1,5 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { getDb, blobs, sessionFiles, sessions, snapshots } from '../../../infra/db';
+import { getDb, blobs, sessionFiles, sessions, snapshots } from '../../../infra/db/index.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 
 type OffloadEnv = {

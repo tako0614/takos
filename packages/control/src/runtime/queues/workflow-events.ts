@@ -1,7 +1,7 @@
-import { buildRunNotifierEmitRequest, getRunNotifierStub, buildRunNotifierEmitPayload } from '../../application/services/run-notifier';
-import { logWarn } from '../../shared/utils/logger';
-import type { WorkflowQueueEnv, WorkflowEventType, WorkflowEventData } from './workflow-types';
-import { asDurableObjectFetcher } from './workflow-types';
+import { buildRunNotifierEmitRequest, getRunNotifierStub, buildRunNotifierEmitPayload } from '../../application/services/run-notifier/index.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
+import type { WorkflowQueueEnv, WorkflowEventType, WorkflowEventData } from './workflow-types.ts';
+import { asDurableObjectFetcher } from './workflow-types.ts';
 
 const EVENT_FETCH_TIMEOUT_MS = 5_000;
 

@@ -13,7 +13,7 @@ export {
   accountStorageFiles,
   accounts,
   authIdentities,
-} from './schema-accounts';
+} from './schema-accounts.ts';
 
 // Auth
 export {
@@ -21,7 +21,7 @@ export {
   authSessions,
   personalAccessTokens,
   serviceTokens,
-} from './schema-auth';
+} from './schema-auth.ts';
 
 // Billing
 export {
@@ -33,7 +33,7 @@ export {
   billingTransactions,
   usageEvents,
   usageRollups,
-} from './schema-billing';
+} from './schema-billing.ts';
 
 // Repos
 export {
@@ -56,7 +56,7 @@ export {
   repositories,
   snapshots,
   tags,
-} from './schema-repos';
+} from './schema-repos.ts';
 
 // Agents
 export {
@@ -74,7 +74,7 @@ export {
   threadShares,
   threads,
   toolOperations,
-} from './schema-agents';
+} from './schema-agents.ts';
 
 // Services
 export {
@@ -84,7 +84,7 @@ export {
   physicalServices,
   physicalServiceBindings,
   physicalServiceCommonEnvLinks,
-} from './schema-services';
+} from './schema-services.ts';
 
 // OAuth
 export {
@@ -97,7 +97,7 @@ export {
   oauthDeviceCodes,
   oauthStates,
   oauthTokens,
-} from './schema-oauth';
+} from './schema-oauth.ts';
 
 // Platform
 export {
@@ -132,7 +132,7 @@ export {
   storeRegistry,
   storeRegistryUpdates,
   uiExtensions,
-} from './schema-platform';
+} from './schema-platform.ts';
 
 // Workflows
 export {
@@ -142,12 +142,12 @@ export {
   workflowSecrets,
   workflowSteps,
   workflows,
-} from './schema-workflows';
+} from './schema-workflows.ts';
 
 // Groups
 export {
   groups,
-} from './schema-groups';
+} from './schema-groups.ts';
 
 // Workers
 export {

@@ -1,19 +1,19 @@
 import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useRouter } from '../../hooks/useRouter';
-import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson, rpcPath } from '../../lib/rpc';
-import { getErrorMessage } from '../../lib/errors';
-import { Icons } from '../../lib/Icons';
-import { DEFAULT_MODEL_ID, FALLBACK_MODELS } from '../../lib/modelCatalog';
-import { SkeletonList } from '../../components/Skeleton';
-import type { AgentTask, AgentTaskPriority, AgentTaskStatus, Run, Thread } from '../../types';
-import { TaskForm } from './work/TaskForm';
-import { TaskCard } from './work/TaskCard';
-import { TaskFilters } from './work/TaskFilters';
-import type { ModelSettings, TaskFilter } from './work/task-work-types';
-import { ensureModelOption, getModelsForProvider } from './work/task-work-utils';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useRouter } from '../../hooks/useRouter.ts';
+import { useConfirmDialog } from '../../store/confirm-dialog.ts';
+import { rpc, rpcJson, rpcPath } from '../../lib/rpc.ts';
+import { getErrorMessage } from '../../lib/errors.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { DEFAULT_MODEL_ID, FALLBACK_MODELS } from '../../lib/modelCatalog.ts';
+import { SkeletonList } from '../../components/Skeleton.tsx';
+import type { AgentTask, AgentTaskPriority, AgentTaskStatus, Run, Thread } from '../../types/index.ts';
+import { TaskForm } from './work/TaskForm.tsx';
+import { TaskCard } from './work/TaskCard.tsx';
+import { TaskFilters } from './work/TaskFilters.tsx';
+import type { ModelSettings, TaskFilter } from './work/task-work-types.ts';
+import { ensureModelOption, getModelsForProvider } from './work/task-work-utils.ts';
 
 interface TaskFormState {
   title: string;

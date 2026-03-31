@@ -1,5 +1,5 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../services/common-env';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../services/common-env/index.ts';
 
 export const WORKSPACE_ENV_LIST: ToolDefinition = {
   name: 'workspace_env_list',

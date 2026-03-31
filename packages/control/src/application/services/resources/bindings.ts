@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, serviceBindings, services } from '../../../infra/db';
+import { getDb, serviceBindings, services } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { toApiServiceBinding } from './format';
-import { getResourceById } from './store';
-import { textDate } from '../../../shared/utils/db-guards';
+import { toApiServiceBinding } from './format.ts';
+import { getResourceById } from './store.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 import { getPortableSecretValue } from './portable-runtime.ts';
 
 function sanitizePortableName(name: string): string {

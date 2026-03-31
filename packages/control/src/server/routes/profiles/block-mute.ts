@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 
-import type { OptionalAuthRouteEnv } from '../route-auth';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
 import { NotFoundError, AuthenticationError, BadRequestError } from 'takos-common/errors';
-import { getUserByUsername } from './profile-queries';
-import { getDb } from '../../../infra/db';
-import { accountBlocks, accountFollows, accountFollowRequests, accountMutes } from '../../../infra/db/schema';
+import { getUserByUsername } from './profile-queries.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accountBlocks, accountFollows, accountFollowRequests, accountMutes } from '../../../infra/db/schema.ts';
 import { eq, and, or } from 'drizzle-orm';
 
 export const blockMuteRoutes = new Hono<OptionalAuthRouteEnv>()

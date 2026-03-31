@@ -1,4 +1,4 @@
-import type { Claim, ClaimPath, ActivationBundle, ActivationResult } from './graph-models';
+import type { Claim, ClaimPath, ActivationBundle, ActivationResult } from './graph-models.ts';
 
 const MAX_SEGMENT_CHARS = 2000;
 const RELATION_RESERVE = 200;

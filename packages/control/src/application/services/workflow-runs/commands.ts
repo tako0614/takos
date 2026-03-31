@@ -5,18 +5,18 @@ import {
   type Workflow,
   type WorkflowDiagnostic,
 } from 'takos-actions-engine';
-import { generateId } from '../../../shared/utils';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows } from '../../../infra/db/index.ts';
 import { eq, and, inArray, max } from 'drizzle-orm';
 
-import { createWorkflowJobs, enqueueFirstPhaseJobs } from '../actions';
-import { callRuntimeRequest } from '../execution/runtime-request-handler';
-import type { Env, WorkflowJobQueueMessage } from '../../../shared/types';
-import * as gitStore from '../git-smart';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { createWorkflowJobs, enqueueFirstPhaseJobs } from '../actions/index.ts';
+import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
+import type { Env, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 
-import { toGitBucket } from '../../../shared/utils/git-bucket';
-import type { GitBucket } from '../../../shared/utils/git-bucket';
+import { toGitBucket } from '../../../shared/utils/git-bucket.ts';
+import type { GitBucket } from '../../../shared/utils/git-bucket.ts';
 
 type WorkflowLoadResult =
   | { ok: true; workflow: Workflow }

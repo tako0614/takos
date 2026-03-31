@@ -10,7 +10,7 @@
  */
 
 // helpers (public subset)
-export { buildAuthorizationCodeTokenFamily } from './token-helpers';
+export { buildAuthorizationCodeTokenFamily } from './token-helpers.ts';
 
 // grants / issuance
 export {
@@ -20,13 +20,13 @@ export {
   storeAccessToken,
   storeRefreshToken,
   generateTokenResponse,
-} from './token-grants';
+} from './token-grants.ts';
 
 // introspection / validation
 export {
   getRefreshToken,
   isAccessTokenValid,
-} from './token-introspection';
+} from './token-introspection.ts';
 
 // revocation
 export {
@@ -38,7 +38,7 @@ export {
   revokeAllClientTokens,
   revokeTokenFamily,
   deleteExpiredTokens,
-} from './token-revocation';
+} from './token-revocation.ts';
 
 // refresh
 export {
@@ -46,4 +46,4 @@ export {
   markRefreshTokenAsUsed,
   getRefreshTokenWithReuseCheck,
   rotateRefreshToken,
-} from './token-refresh';
+} from './token-refresh.ts';

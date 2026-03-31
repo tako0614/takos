@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolParameter } from '../tool-definitions';
+import type { ToolDefinition, ToolHandler, ToolParameter } from '../tool-definitions.ts';
 import {
   createSkill,
   describeAgentSkill,
@@ -13,8 +13,8 @@ import {
   updateSkillEnabled,
   updateSkillByName,
   updateSkillEnabledByName,
-} from '../../services/source/skills';
-import { resolveSkillLocale } from '../../services/agent/official-skills';
+} from '../../services/source/skills.ts';
+import { resolveSkillLocale } from '../../services/agent/official-skills.ts';
 
 const SKILL_METADATA_SCHEMA: ToolParameter = {
   type: 'object',

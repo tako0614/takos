@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Modal } from '../../components/ui/Modal';
-import type { SourceFilter, SourceSort } from '../../hooks/useSourceData';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Modal } from '../../components/ui/Modal.tsx';
+import type { SourceFilter, SourceSort } from '../../hooks/useSourceData.ts';
 
 const FILTER_CHIPS: Array<{ value: SourceFilter; labelKey: string }> = [
   { value: 'all', labelKey: 'sourceFilterAll' },

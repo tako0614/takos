@@ -5,18 +5,18 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import { listAllRefs, getDefaultBranch } from '../core/refs';
+import { listAllRefs, getDefaultBranch } from '../core/refs.ts';
 import {
   encodePktLine,
   flushPkt,
   buildPktLineResponse,
-} from '../protocol/pkt-line';
-import { concatBytes } from '../core/sha1';
+} from '../protocol/pkt-line.ts';
+import { concatBytes } from '../core/sha1.ts';
 import {
   UPLOAD_PACK_CAPABILITIES,
   RECEIVE_PACK_CAPABILITIES,
   formatCapabilities,
-} from '../protocol/capabilities';
+} from '../protocol/capabilities.ts';
 
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 

@@ -1,9 +1,9 @@
 import { createSignal } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Button, Card, Badge, Input, Textarea, Select, Modal, ModalFooter } from '../../components/ui';
-import type { Reminder } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button, Card, Badge, Input, Textarea, Select, Modal, ModalFooter } from '../../components/ui/index.ts';
+import type { Reminder } from '../../types/index.ts';
 
 function getTriggerIcon(type: Reminder['trigger_type']) {
   switch (type) {

@@ -1,4 +1,4 @@
-import { MockR2Bucket } from '../../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../../test/integration/setup.ts';
 import { mergeTrees3Way } from '@/services/git-smart/core/merge';
 import { buildTreeFromPaths, flattenTree, createEmptyTree } from '@/services/git-smart/core/tree-ops';
 import { putBlob } from '@/services/git-smart/core/object-store';

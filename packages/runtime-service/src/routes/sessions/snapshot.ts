@@ -1,7 +1,8 @@
-import * as fs from 'fs/promises';
-import { constants as fsConstants } from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import * as path from 'node:path';
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import {
   resolvePathWithin,
   verifyPathWithinAfterAccess,
@@ -10,8 +11,9 @@ import { isProbablyBinary } from '../../runtime/validation.ts';
 import { resolveSessionWorkDir } from './session-utils.ts';
 import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { forbidden, internalError } from 'takos-common/middleware/hono';
+import { Buffer } from "node:buffer";
 
-function handleRouteError(c: import('hono').Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
+function handleRouteError(c: import('hono').Context<RuntimeEnv>, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);
   if (opts?.checkSymlink && isBoundaryViolationError(err)) {
     return forbidden(c, err instanceof SymlinkWriteError ? 'Cannot write to symlinks' : 'Path escapes workspace boundary');
@@ -74,7 +76,7 @@ type SnapshotFile = {
 // Snapshot route
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/session/snapshot', async (c) => {
   try {

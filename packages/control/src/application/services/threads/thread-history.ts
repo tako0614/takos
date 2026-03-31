@@ -1,4 +1,4 @@
-import { getDb, sessions, runs, artifacts, runEvents, agentTasks } from '../../../infra/db';
+import { getDb, sessions, runs, artifacts, runEvents, agentTasks } from '../../../infra/db/index.ts';
 import { eq, desc, asc, inArray } from 'drizzle-orm';
 import type {
   AgentTask,
@@ -12,11 +12,11 @@ import type {
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { isValidOpaqueId, textDate, textDateNullable } from '../../../shared/utils/db-guards';
-import { listThreadMessages } from './thread-service';
-import { logError } from '../../../shared/utils/logger';
+} from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { isValidOpaqueId, textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
+import { listThreadMessages } from './thread-service.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 type PendingSessionDiffSummary = {
   sessionId: string;

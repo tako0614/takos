@@ -5,13 +5,13 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitCommit, GitSignature, CreateCommitParams } from '../git-objects';
-import { isValidSha } from '../git-objects';
-import { putCommit, getCommitData } from './object-store';
-import { getDb, commits } from '../../../../infra/db';
+import type { GitCommit, GitSignature, CreateCommitParams } from '../git-objects.ts';
+import { isValidSha } from '../git-objects.ts';
+import { putCommit, getCommitData } from './object-store.ts';
+import { getDb, commits } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils';
-import { textDateNullable } from '../../../../shared/utils/db-guards';
+import { generateId } from '../../../../shared/utils/index.ts';
+import { textDateNullable } from '../../../../shared/utils/db-guards.ts';
 
 interface CommitIndexRow {
   sha: string;
@@ -356,7 +356,7 @@ async function collectTreeObjects(
   visited.add(treeSha);
   result.push(treeSha);
 
-  const { getTreeEntries } = await import('./object-store');
+  const { getTreeEntries } = await import('./object-store.ts');
   const entries = await getTreeEntries(bucket, treeSha);
   if (!entries) return;
 
@@ -381,8 +381,8 @@ export async function collectReachableObjectShas(
   bucket: R2Bucket,
   repoId: string,
 ): Promise<Set<string>> {
-  const { listAllRefs } = await import('./refs');
-  const { getTreeEntries } = await import('./object-store');
+  const { listAllRefs } = await import('./refs.ts');
+  const { getTreeEntries } = await import('./object-store.ts');
 
   const refs = await listAllRefs(dbBinding, repoId);
 

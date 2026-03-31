@@ -3,7 +3,7 @@ import {
   FALLBACK_MODELS,
   MODEL_OPTIONS,
   getModelLabel,
-} from '../../lib/modelCatalog';
+} from '../../lib/modelCatalog.ts';
 
 
 import { assertEquals } from 'jsr:@std/assert';

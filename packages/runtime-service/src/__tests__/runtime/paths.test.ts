@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import path from 'path';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import path from 'node:path';
 // [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
 import {
   isPathWithinBase,

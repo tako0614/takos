@@ -1,12 +1,12 @@
 import { createSignal, createEffect, on, Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { PullRequest, PRReview, PRComment, FileDiff } from '../../../types';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../store/i18n';
-import { PRHeader } from './PRHeader';
-import { PRComments } from './PRComments';
-import { PRDiffView } from './PRDiffView';
-import { PRActions } from './PRActions';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { PullRequest, PRReview, PRComment, FileDiff } from '../../../types/index.ts';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { PRHeader } from './PRHeader.tsx';
+import { PRComments } from './PRComments.tsx';
+import { PRDiffView } from './PRDiffView.tsx';
+import { PRActions } from './PRActions.tsx';
 
 type ReviewAction = 'approve' | 'request_changes' | 'comment';
 type TabType = 'conversation' | 'files';

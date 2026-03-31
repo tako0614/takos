@@ -1,6 +1,6 @@
 import { gray, green, red, yellow } from '@std/fmt/colors';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
-import { URL } from 'url';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { URL } from 'node:url';
 import { getLoginTimeoutMs } from '../lib/config.ts';
 import {
   type CallbackParams,
@@ -118,7 +118,7 @@ async function parseCallbackParams(req: IncomingMessage): Promise<CallbackParams
 }
 
 interface CallbackServerState {
-  timeoutId: NodeJS.Timeout | null;
+  timeoutId: ReturnType<typeof setTimeout> | null;
   settled: boolean;
   resolve: (token: string | null) => void;
   reject: (error: unknown) => void;
@@ -204,7 +204,7 @@ function setupLoginTimeout(
   server: Server,
   state: CallbackServerState,
   onFailure: ((code: OAuthCallbackFailureCode) => void) | undefined,
-): NodeJS.Timeout {
+): ReturnType<typeof setTimeout> {
   return setTimeout(() => {
     void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.TIMEOUT,

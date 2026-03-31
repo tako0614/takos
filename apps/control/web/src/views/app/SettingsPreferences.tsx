@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui';
-import type { UserSettings } from '../../types';
-import { Section, Toggle } from './SettingsShared';
+import { useI18n } from '../../store/i18n.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/index.ts';
+import type { UserSettings } from '../../types/index.ts';
+import { Section, Toggle } from './SettingsShared.tsx';
 
 export function SettingsPreferences({
   userSettings,

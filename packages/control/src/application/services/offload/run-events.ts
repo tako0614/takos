@@ -1,5 +1,5 @@
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { gzipCompressString, gzipDecompressToString } from '../../../shared/utils/gzip';
+import { gzipCompressString, gzipDecompressToString } from '../../../shared/utils/gzip.ts';
 
 export interface PersistedRunEvent {
   event_id: number;

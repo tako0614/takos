@@ -1,22 +1,22 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { ReviewStatus, ReviewerType } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { type AuthenticatedRouteEnv } from '../route-auth';
+import type { ReviewStatus, ReviewerType } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { getDb } from '../../../infra/db';
+import { zValidator } from '../zod-validator.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { pullRequests, prReviews } from '../../../infra/db/schema';
-import { AiReviewError, runAiReview } from '../../../application/services/pull-requests/ai-review';
-import { createNotification } from '../../../application/services/notifications/service';
+import { pullRequests, prReviews } from '../../../infra/db/schema.ts';
+import { AiReviewError, runAiReview } from '../../../application/services/pull-requests/ai-review.ts';
+import { createNotification } from '../../../application/services/notifications/service.ts';
 
-import type { PullRequestCommentDto, PullRequestReviewDto } from './dto';
-import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import type { PullRequestCommentDto, PullRequestReviewDto } from './dto.ts';
+import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 function toReviewStatus(value: string): ReviewStatus {
   if (value === 'approved' || value === 'changes_requested' || value === 'commented') {

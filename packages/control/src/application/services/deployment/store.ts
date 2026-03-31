@@ -1,9 +1,9 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
-import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { deploymentEvents, deployments, getDb, serviceCustomDomains, serviceDeployments, services } from '../../../infra/db/index.ts';
 import { eq, and, lt, isNotNull, desc, asc, max, inArray } from 'drizzle-orm';
-import type { ArtifactKind, Deployment, DeploymentEvent } from './models';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import type { ArtifactKind, Deployment, DeploymentEvent } from './models.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 type DeploymentInsert = InsertOf<typeof deployments>;
 type DeploymentUpdate = Partial<InsertOf<typeof deployments>>;

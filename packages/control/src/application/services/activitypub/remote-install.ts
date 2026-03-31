@@ -4,8 +4,8 @@
  */
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { generateId, sanitizeRepoName } from '../../../shared/utils';
-import { getDb, repositories } from '../../../infra/db';
+import { generateId, sanitizeRepoName } from '../../../shared/utils/index.ts';
+import { getDb, repositories } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 import {
   apFetch,
@@ -13,8 +13,8 @@ import {
   extractTkgField,
   RemoteStoreError,
   type RemoteRepository,
-} from './remote-store-client';
-import { getRegistryEntry, type StoreRegistryEntry } from './store-registry';
+} from './remote-store-client.ts';
+import { getRegistryEntry, type StoreRegistryEntry } from './store-registry.ts';
 
 export interface RemoteInstallInput {
   /** Store registry entry ID */

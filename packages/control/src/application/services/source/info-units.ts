@@ -1,13 +1,13 @@
 import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types';
-import { getDb, runs, runEvents, infoUnits, nodes, edges, sessionRepos, repositories } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, runs, runEvents, infoUnits, nodes, edges, sessionRepos, repositories } from '../../../infra/db/index.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { getRunEventsAfterFromR2 } from '../offload/run-events';
-import { logWarn } from '../../../shared/utils/logger';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getRunEventsAfterFromR2 } from '../offload/run-events.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 const MAX_INFO_UNIT_TOKENS = 2048;
 const MAX_EVENT_TEXT_CHARS = 4000;
 const CHARS_PER_TOKEN = 4;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import { createSession, getSession, getSessionIdFromCookie, setSessionCookie } from '../../../application/services/identity/session';
+import { createSession, getSession, getSessionIdFromCookie, setSessionCookie } from '../../../application/services/identity/session.ts';
 import {
   storeOAuthState,
   validateOAuthState,
@@ -8,10 +8,10 @@ import {
   createAuthSession,
   cleanupUserSessions,
   isValidRedirectUri,
-} from '../../../application/services/identity/auth-utils';
-import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html';
+} from '../../../application/services/identity/auth-utils.ts';
+import { getDb, accounts, authIdentities } from '../../../infra/db/index.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { errorPage, externalLoginPage, externalTokenPostRedirectPage } from './html.ts';
 import { BadRequestError, AuthorizationError } from 'takos-common/errors';
 import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 

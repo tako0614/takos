@@ -2,17 +2,17 @@ import type {
   DurableObjectNamespace,
   R2Bucket,
 } from '../../shared/types/bindings.ts';
-import type { IndexJobQueueMessage } from '../../shared/types';
-import type { D1RawOptions } from './d1-raw';
-import { executeD1RawStatement } from './d1-raw';
-import { validateD1ProxySql } from '../../application/services/execution/sql-validation';
-import { buildSanitizedDOHeaders } from '../durable-objects/do-header-utils';
-import { getDb } from '../../infra/db';
-import { runs } from '../../infra/db/schema';
+import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
+import type { D1RawOptions } from './d1-raw.ts';
+import { executeD1RawStatement } from './d1-raw.ts';
+import { validateD1ProxySql } from '../../application/services/execution/sql-validation.ts';
+import { buildSanitizedDOHeaders } from '../durable-objects/do-header-utils.ts';
+import { getDb } from '../../infra/db/index.ts';
+import { runs } from '../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { logError } from '../../shared/utils/logger';
-import { ok, err, classifyProxyError, readRunServiceId, type AgentExecutorEnv } from './executor-utils';
-import { base64ToBytes } from '../../shared/utils/encoding-utils';
+import { logError } from '../../shared/utils/logger.ts';
+import { ok, err, classifyProxyError, readRunServiceId, type AgentExecutorEnv } from './executor-utils.ts';
+import { base64ToBytes } from '../../shared/utils/encoding-utils.ts';
 
 type Env = AgentExecutorEnv;
 

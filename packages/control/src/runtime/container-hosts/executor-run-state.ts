@@ -3,21 +3,21 @@
  * and run lifecycle handlers for the executor-host subsystem.
  */
 
-import { getDb } from '../../infra/db';
-import { accounts, runs, messages, threads } from '../../infra/db/schema';
+import { getDb } from '../../infra/db/index.ts';
+import { accounts, runs, messages, threads } from '../../infra/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { logError, logWarn } from '../../shared/utils/logger';
-import type { SelectOf } from '../../shared/types/drizzle-utils';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import type { SelectOf } from '../../shared/types/drizzle-utils.ts';
 import { AuthorizationError, NotFoundError } from 'takos-common/errors';
-import { persistMessage } from '../../application/services/agent/message-persistence';
+import { persistMessage } from '../../application/services/agent/message-persistence.ts';
 import {
   buildTerminalPayload,
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
-} from '../../application/services/run-notifier';
-import { ok, err, classifyProxyError, readRunServiceId } from './executor-utils';
-import type { Env } from './executor-utils';
+} from '../../application/services/run-notifier/index.ts';
+import { ok, err, classifyProxyError, readRunServiceId } from './executor-utils.ts';
+import type { Env } from './executor-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Types

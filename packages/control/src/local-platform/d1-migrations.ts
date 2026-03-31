@@ -379,7 +379,7 @@ async function getPostgresTableColumns(pool: Pool, tableName: string): Promise<S
         AND table_name = $1`,
     [tableName],
   );
-  return new Set(result.rows.map((row) => row.column_name));
+  return new Set(result.rows.map((row: { column_name: string }) => row.column_name));
 }
 
 export async function ensurePostgresServicesTableShape(pool: Pool): Promise<void> {

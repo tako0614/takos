@@ -1,13 +1,13 @@
 import { createSignal, createEffect, onMount, onCleanup, For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { Icons } from '../../../lib/Icons';
-import { Button } from '../../../components/ui/Button';
-import { rpc, rpcJson, rpcPath } from '../../../lib/rpc';
-import type { Resource } from '../../../types';
-import { formatFileSize, formatDateTime } from '../../../lib/format';
+import { useI18n } from '../../../store/i18n.ts';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { rpc, rpcJson, rpcPath } from '../../../lib/rpc.ts';
+import type { Resource } from '../../../types/index.ts';
+import { formatFileSize, formatDateTime } from '../../../lib/format.ts';
 
 interface R2Object {
   key: string;

@@ -6,14 +6,14 @@ import type {
   QueueBinding,
   SqlDatabaseBinding,
   VectorIndexBinding,
-} from './bindings';
+} from './bindings.ts';
 import type {
   RunQueueMessage,
   IndexJobQueueMessage,
   WorkflowJobQueueMessage,
   DeploymentQueueMessage,
-} from './queue-messages';
-import type { RoutingStore } from './routing';
+} from './queue-messages.ts';
+import type { RoutingStore } from './routing.ts';
 
 // ---------------------------------------------------------------------------
 // Env fragments — each groups related bindings by concern.

@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
-import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../route-auth';
+import { checkRepoAccess } from '../../../../application/services/source/repos.ts';
+import type { AuthenticatedRouteEnv } from '../../route-auth.ts';
 import { NotFoundError, InternalError, GoneError } from 'takos-common/errors';
-import { ok } from '../../response-utils';
+import { ok } from '../../response-utils.ts';
 import {
   deleteWorkflowArtifactById,
   getWorkflowArtifactById,
   listWorkflowArtifactsForRun,
-} from '../../../../application/services/platform/workflow-artifacts';
+} from '../../../../application/services/platform/workflow-artifacts.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/actions/runs/:runId/artifacts', async (c) => {

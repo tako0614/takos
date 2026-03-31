@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn } from './schema-utils';
+import { createdAtColumn } from './schema-utils.ts';
 
 // 114. DlqEntry
 export const dlqEntries = sqliteTable('dlq_entries', {

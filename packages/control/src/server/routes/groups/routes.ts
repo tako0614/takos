@@ -1,14 +1,14 @@
 import { Hono, type Context } from 'hono';
 import { eq, and, inArray, ne } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
-import { getDb, groups, resources, services, deployments } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
+import { getDb, groups, resources, services, deployments } from '../../../infra/db/index.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { getGroupState, planManifest, applyManifest } from '../../../application/services/deployment/apply-engine';
-import { parseAppManifestText, parseAppManifestYaml } from '../../../application/services/source/app-manifest-parser';
-import { getUpdateType } from '../../../application/services/deployment/store-install';
-import { safeJsonParseOrDefault } from '../../../shared/utils/logger';
-import type { AppManifest } from '../../../application/services/source/app-manifest-types';
+import { getGroupState, planManifest, applyManifest } from '../../../application/services/deployment/apply-engine.ts';
+import { parseAppManifestText, parseAppManifestYaml } from '../../../application/services/source/app-manifest-parser/index.ts';
+import { getUpdateType } from '../../../application/services/deployment/store-install.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
+import type { AppManifest } from '../../../application/services/source/app-manifest-types.ts';
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 type GroupRow = typeof groups.$inferSelect;

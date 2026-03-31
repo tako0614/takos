@@ -1,13 +1,13 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types';
-import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../identity/space-access';
-import { getDb, threads, messages, runs } from '../../../infra/db';
+import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types/index.ts';
+import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../identity/space-access.ts';
+import { getDb, threads, messages, runs } from '../../../infra/db/index.ts';
 import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { makeMessagePreview, readMessageFromR2, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages';
-import { logWarn } from '../../../shared/utils/logger';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { makeMessagePreview, readMessageFromR2, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export interface ThreadAccess {
   thread: Thread;

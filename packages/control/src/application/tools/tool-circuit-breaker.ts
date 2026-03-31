@@ -5,11 +5,11 @@
  * guard logic that the executor needs at call boundaries.
  */
 
-import type { ToolResult } from './tool-definitions';
-import { CircuitBreaker, type CircuitStats } from './circuit-breaker';
-import { classifyError } from './tool-error-classifier';
+import type { ToolResult } from './tool-definitions.ts';
+import { CircuitBreaker, type CircuitStats } from './circuit-breaker.ts';
+import { classifyError } from './tool-error-classifier.ts';
 
-export type { CircuitStats } from './circuit-breaker';
+export type { CircuitStats } from './circuit-breaker.ts';
 
 /**
  * ToolCircuitBreaker bridges the generic CircuitBreaker with the

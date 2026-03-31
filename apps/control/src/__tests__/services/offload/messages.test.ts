@@ -1,4 +1,4 @@
-import { MockR2Bucket } from '../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../test/integration/setup.ts';
 
 import {
   messageR2Key,

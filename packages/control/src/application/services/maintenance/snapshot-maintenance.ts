@@ -1,7 +1,7 @@
-import type { Env } from '../../../shared/types';
-import { getDb, sessions, blobs, snapshots } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, sessions, blobs, snapshots } from '../../../infra/db/index.ts';
 import { and, eq, inArray, lte, lt, asc } from 'drizzle-orm';
-import { SnapshotManager } from '../sync/snapshot';
+import { SnapshotManager } from '../sync/snapshot.ts';
 
 export interface SnapshotGcSpaceResult {
   spaceId: string;

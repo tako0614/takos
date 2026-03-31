@@ -203,68 +203,68 @@ import { resolveProvider } from '../src/lib/group-deploy/provisioner.ts';
   const baseOpts = { groupName: 'app', env: 'staging' };
   Deno.test('resolveProvider - returns CloudflareProvider when accountId and apiToken are provided', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
   const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
     assertEquals(provider.name, 'cloudflare');
     assert(provider instanceof CloudflareProvider);
 })
   Deno.test('resolveProvider - returns AWSProvider when AWS_ACCESS_KEY_ID is set', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
-  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
+  Deno.env.set('AWS_ACCESS_KEY_ID', 'AKID123');
     const provider = resolveProvider(baseOpts);
     assertEquals(provider.name, 'aws');
     assert(provider instanceof AWSProvider);
 })
   Deno.test('resolveProvider - returns GCPProvider when GOOGLE_APPLICATION_CREDENTIALS is set', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
+  Deno.env.set('GOOGLE_APPLICATION_CREDENTIALS', '/path/to/creds.json');
     const provider = resolveProvider(baseOpts);
     assertEquals(provider.name, 'gcp');
     assert(provider instanceof GCPProvider);
 })
   Deno.test('resolveProvider - returns K8sProvider when KUBECONFIG is set', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
-  process.env.KUBECONFIG = '/path/to/kubeconfig';
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
+  Deno.env.set('KUBECONFIG', '/path/to/kubeconfig');
     const provider = resolveProvider(baseOpts);
     assertEquals(provider.name, 'k8s');
     assert(provider instanceof K8sProvider);
 })
   Deno.test('resolveProvider - falls back to DockerProvider when no cloud env is detected', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
   const provider = resolveProvider(baseOpts);
     assertEquals(provider.name, 'docker');
     assert(provider instanceof DockerProvider);
 })
   Deno.test('resolveProvider - prefers Cloudflare over AWS when both are available', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
-  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
+  Deno.env.set('AWS_ACCESS_KEY_ID', 'AKID123');
     const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
     assertEquals(provider.name, 'cloudflare');
 })
   Deno.test('resolveProvider - prefers AWS over GCP when both env vars are set', () => {
   // Clean up env vars that influence provider detection
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.KUBECONFIG;
-  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('KUBECONFIG');
+  Deno.env.set('AWS_ACCESS_KEY_ID', 'AKID123');
+    Deno.env.set('GOOGLE_APPLICATION_CREDENTIALS', '/path/to/creds.json');
     const provider = resolveProvider(baseOpts);
     assertEquals(provider.name, 'aws');
 })

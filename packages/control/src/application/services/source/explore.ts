@@ -8,13 +8,13 @@ export type {
   CatalogInstallationResponse,
   CatalogItemResponse,
   CatalogResult,
-} from './explore-types';
+} from './explore-types.ts';
 
 export {
   listExploreRepos,
   listTrendingRepos,
   listNewRepos,
   listRecentRepos,
-} from './explore-repos';
+} from './explore-repos.ts';
 
-export { listCatalogItems } from './explore-catalog';
+export { listCatalogItems } from './explore-catalog.ts';

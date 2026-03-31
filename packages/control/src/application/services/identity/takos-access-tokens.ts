@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { ALL_SCOPES } from '../../../shared/types/oauth';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { base64UrlEncode } from '../../../shared/utils/encoding-utils';
-import { getDb, personalAccessTokens, serviceManagedTakosTokens } from '../../../infra/db';
+import { ALL_SCOPES } from '../../../shared/types/oauth.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { base64UrlEncode } from '../../../shared/utils/encoding-utils.ts';
+import { getDb, personalAccessTokens, serviceManagedTakosTokens } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 
 export type TakosAccessTokenValidation = {

@@ -1,4 +1,4 @@
-import * as fs from 'fs/promises';
+import * as fs from 'node:fs/promises';
 import { type ActionContext } from '../executor.ts';
 import { pushLog } from '../../logging.ts';
 import { runGitCommand, cloneAndCheckout } from '../../git.ts';

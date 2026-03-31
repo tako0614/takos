@@ -1,12 +1,12 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useMcpServers } from '../../hooks/useMcpServers';
-import { Button } from '../../components/ui/Button';
-import type { Space, McpServerRecord } from '../../types';
-import { ServerCard } from './ServerCard';
-import { CreateMcpServerModal } from './CreateMcpServerModal';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useMcpServers } from '../../hooks/useMcpServers.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import type { Space, McpServerRecord } from '../../types/index.ts';
+import { ServerCard } from './ServerCard.tsx';
+import { CreateMcpServerModal } from './CreateMcpServerModal.tsx';
 
 interface McpServersSectionProps {
   spaces: Space[];

@@ -1,16 +1,16 @@
 import { createSignal, createEffect, onCleanup, lazy, Suspense, Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useFileContent } from '../../hooks/useFileContent';
-import { detectLanguage } from '../../lib/languageMap';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui/Button';
-import type { StorageFile } from '../../types';
-import type { ResolvedHandler } from './storageUtils';
-import { StorageViewerShell } from './StorageViewerShell';
-import { StorageEmptyState } from './StorageEmptyState';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useFileContent } from '../../hooks/useFileContent.ts';
+import { detectLanguage } from '../../lib/languageMap.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import type { StorageFile } from '../../types/index.ts';
+import type { ResolvedHandler } from './storageUtils.tsx';
+import { StorageViewerShell } from './StorageViewerShell.tsx';
+import { StorageEmptyState } from './StorageEmptyState.tsx';
 
-const MonacoEditor = lazy(() => import('../../lib/MonacoEditor'));
+const MonacoEditor = lazy(() => import('../../lib/MonacoEditor.tsx'));
 
 export function StorageTextEditor(props: {
   spaceId: string;

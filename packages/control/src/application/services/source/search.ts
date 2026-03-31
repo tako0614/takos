@@ -1,10 +1,10 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, SpaceFile, FileKind, FileOrigin } from '../../../shared/types';
-import { createEmbeddingsService, isEmbeddingsAvailable } from '../execution/embeddings';
-import { getDb, files } from '../../../infra/db';
+import type { Env, SpaceFile, FileKind, FileOrigin } from '../../../shared/types/index.ts';
+import { createEmbeddingsService, isEmbeddingsAvailable } from '../execution/embeddings.ts';
+import { getDb, files } from '../../../infra/db/index.ts';
 import { eq, and, ne, like, desc, sql } from 'drizzle-orm';
-import { logError, logWarn } from '../../../shared/utils/logger';
-import { textDate } from '../../../shared/utils/db-guards';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export type SearchType = 'filename' | 'content' | 'semantic' | 'all';
 

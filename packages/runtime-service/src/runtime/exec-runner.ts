@@ -1,6 +1,6 @@
-import * as crypto from 'crypto';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import {
   ALLOWED_COMMANDS_SET,
   MAX_EXEC_OUTPUT_BYTES,
@@ -294,9 +294,10 @@ export async function runExec(
     }
   }
 
-  setTimeout(() => {
+  const cleanupTimer = setTimeout(() => {
     runtimeProcesses.delete(processId);
-  }, COMPLETED_PROCESS_TTL_MS).unref();
+  }, COMPLETED_PROCESS_TTL_MS);
+  Deno.unrefTimer(cleanupTimer);
 
   return {
     runtime_id: processId,

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
-import path from 'path';
-import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'child_process';
-import { EventEmitter } from 'events';
-import { PassThrough } from 'stream';
+import * as fs from 'node:fs/promises';
+import path from 'node:path';
+import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
 
 const hoisted = ({
@@ -13,7 +13,7 @@ const hoisted = ({
 });
 
 // [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
-// [Deno] vi.mock removed - manually stub imports from 'child_process'
+// [Deno] vi.mock removed - manually stub imports from 'node:child_process'
 // [Deno] vi.mock removed - manually stub imports from '../../utils/process-kill.ts'
 import gitHttpRoutes from '../../routes/git/http.ts';
 

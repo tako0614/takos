@@ -1,9 +1,9 @@
-import * as gitStore from '../../../application/services/git-smart';
-import { decodeBlobContent } from '../../../shared/utils/unified-diff';
-import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket';
-import { GIT_DIFF_MAX_FILE_BYTES, GIT_DIFF_MAX_LINES, GIT_DIFF_MAX_FILES } from '../../../shared/config/limits';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { decodeBlobContent } from '../../../shared/utils/unified-diff.ts';
+import { diffLinesLcs } from '../../../shared/utils/lcs-diff.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket.ts';
+import { GIT_DIFF_MAX_FILE_BYTES, GIT_DIFF_MAX_LINES, GIT_DIFF_MAX_FILES } from '../../../shared/config/limits.ts';
 
 export type FileStatus = 'added' | 'modified' | 'deleted';
 

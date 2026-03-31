@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
-import { CacheTTL, withCache } from '../../middleware/cache';
-import type { PublicRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import { CacheTTL, withCache } from '../../middleware/cache.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import {
   findCanonicalRepo,
   findCanonicalRepoIncludingPrivate,
@@ -11,12 +11,12 @@ import {
   searchStoreRepositories,
   type StoreRecord,
   type StoreRepositoryRecord,
-} from './activitypub-queries';
-import { listPushActivities, listPushActivitiesForRepoIds, DELETE_REF } from '../../../application/services/activitypub/push-activities';
-import { hasExplicitInventory, listInventoryActivities, listInventoryItems } from '../../../application/services/activitypub/store-inventory';
-import { addFollower, removeFollower, listFollowers } from '../../../application/services/activitypub/followers';
-import { checkGrant } from '../../../application/services/activitypub/grants';
-import { verifyHttpSignature, HttpSignatureError } from '../../middleware/http-signature';
+} from './activitypub-queries.ts';
+import { listPushActivities, listPushActivitiesForRepoIds, DELETE_REF } from '../../../application/services/activitypub/push-activities.ts';
+import { hasExplicitInventory, listInventoryActivities, listInventoryItems } from '../../../application/services/activitypub/store-inventory.ts';
+import { addFollower, removeFollower, listFollowers } from '../../../application/services/activitypub/followers.ts';
+import { checkGrant } from '../../../application/services/activitypub/grants.ts';
+import { verifyHttpSignature, HttpSignatureError } from '../../middleware/http-signature.ts';
 
 const activitypubStore = new Hono<PublicRouteEnv>();
 

@@ -6,37 +6,37 @@
  * run status updates, and run event emission.
  */
 
-import { getDb } from '../../infra/db';
-import { runs, runEvents } from '../../infra/db/schema';
+import { getDb } from '../../infra/db/index.ts';
+import { runs, runEvents } from '../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { logError, logWarn } from '../../shared/utils/logger';
-import { persistMessage } from '../../application/services/agent/message-persistence';
-import type { AgentMessage } from '../../application/services/agent/agent-models';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import { persistMessage } from '../../application/services/agent/message-persistence.ts';
+import type { AgentMessage } from '../../application/services/agent/agent-models.ts';
 import {
   buildConversationHistory,
   updateRunStatusImpl,
-} from '../../application/services/agent/runner';
-import { resolveSkillPlanForRun } from '../../application/services/agent/skills';
-import { createToolExecutor, type ToolExecutorLike } from '../../application/tools/executor';
-import { AGENT_DISABLED_BUILTIN_TOOLS } from '../../application/tools/tool-policy';
-import type { ToolCall } from '../../application/tools/tool-definitions';
+} from '../../application/services/agent/runner.ts';
+import { resolveSkillPlanForRun } from '../../application/services/agent/skills.ts';
+import { createToolExecutor, type ToolExecutorLike } from '../../application/tools/executor.ts';
+import { AGENT_DISABLED_BUILTIN_TOOLS } from '../../application/tools/tool-policy.ts';
+import type { ToolCall } from '../../application/tools/tool-definitions.ts';
 import {
   getActiveClaims,
   countEvidenceForClaims,
   getPathsForClaim,
   upsertClaim,
   insertEvidence,
-} from '../../application/services/memory-graph/claim-store';
-import { buildActivationBundles, renderActivationSegment } from '../../application/services/memory-graph/activation';
+} from '../../application/services/memory-graph/claim-store.ts';
+import { buildActivationBundles, renderActivationSegment } from '../../application/services/memory-graph/activation.ts';
 import {
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
-} from '../../application/services/run-notifier';
-import type { IndexJobQueueMessage } from '../../shared/types';
-import { ok, err, classifyProxyError } from './executor-utils';
-import type { Env } from './executor-utils';
-import { getRunBootstrap } from './executor-run-state';
+} from '../../application/services/run-notifier/index.ts';
+import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
+import { ok, err, classifyProxyError } from './executor-utils.ts';
+import type { Env } from './executor-utils.ts';
+import { getRunBootstrap } from './executor-run-state.ts';
 
 // ---------------------------------------------------------------------------
 // Remote tool executor cache

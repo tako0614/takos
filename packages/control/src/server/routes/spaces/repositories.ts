@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { getRepositoryById } from '../../../application/services/identity/spaces';
-import { getDb } from '../../../infra/db';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { getRepositoryById } from '../../../application/services/identity/spaces.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, desc } from 'drizzle-orm';
-import { repositories } from '../../../infra/db/schema';
-import { generateId } from '../../../shared/utils';
-import { logError } from '../../../shared/utils/logger';
+import { repositories } from '../../../infra/db/schema.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { InternalError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()

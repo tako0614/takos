@@ -1,13 +1,13 @@
-import type { Env } from '../../../shared/types';
-import { getDb, serviceCustomDomains } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, serviceCustomDomains } from '../../../infra/db/index.ts';
 import { and, asc, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
 
-import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
-import type { RoutingTarget } from '../routing/routing-models';
-import { ServiceDesiredStateService } from '../platform/worker-desired-state';
-import { listServiceRouteRecordsByIds } from '../platform/workers';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains.ts';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service.ts';
+import type { RoutingTarget } from '../routing/routing-models.ts';
+import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
+import { listServiceRouteRecordsByIds } from '../platform/workers.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
 
 const SSL_PENDING_STATES = new Set(['pending', 'pending_validation', 'pending_issuance', 'pending_deployment']);

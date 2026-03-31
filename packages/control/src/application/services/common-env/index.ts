@@ -1,6 +1,6 @@
-export { createCommonEnvDeps, type CommonEnvDeps } from './deps';
-export { TAKOS_ACCESS_TOKEN_ENV_NAME } from './takos-builtins';
-export { runCommonEnvScheduledMaintenance } from './maintenance';
+export { createCommonEnvDeps, type CommonEnvDeps } from './deps.ts';
+export { TAKOS_ACCESS_TOKEN_ENV_NAME } from './takos-builtins.ts';
+export { runCommonEnvScheduledMaintenance } from './maintenance.ts';
 
 // Space env operations
 export {
@@ -8,7 +8,7 @@ export {
   upsertSpaceCommonEnv,
   ensureSystemCommonEnv,
   deleteSpaceCommonEnv,
-} from './space-env-ops';
+} from './space-env-ops.ts';
 
 // Service link operations
 export {
@@ -16,7 +16,7 @@ export {
   listServiceCommonEnvLinks,
   listServiceManualLinkNames,
   listServiceBuiltins,
-} from './service-link-ops';
+} from './service-link-ops.ts';
 
 // Manual link operations
 export {
@@ -26,4 +26,4 @@ export {
   setServiceManualLinks,
   patchServiceManualLinks,
   markRequiredKeysLocallyOverriddenForService,
-} from './manual-link-ops';
+} from './manual-link-ops.ts';

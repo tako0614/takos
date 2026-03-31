@@ -1,8 +1,8 @@
-import type { Env, DbEnv } from '../../../shared/types';
-import { parseServiceResponse, ServiceCallError } from '../../../shared/utils/service-client';
-import { getOrCreateBillingAccount, recordUsage } from '../billing/billing';
-import { withTimeout } from '../../../shared/utils/with-timeout';
-import { logWarn, logError } from '../../../shared/utils/logger';
+import type { Env, DbEnv } from '../../../shared/types/index.ts';
+import { parseServiceResponse, ServiceCallError } from '../../../shared/utils/service-client.ts';
+import { getOrCreateBillingAccount, recordUsage } from '../billing/billing.ts';
+import { withTimeout } from '../../../shared/utils/with-timeout.ts';
+import { logWarn, logError } from '../../../shared/utils/logger.ts';
 
 type RuntimeEnv = DbEnv & {
   RUNTIME_HOST?: { fetch(request: Request): Promise<Response> };
@@ -110,7 +110,7 @@ async function recordRuntimeUsage(
   endpoint: string
 ): Promise<void> {
   const doRecord = async () => {
-    const { getDb, accounts } = await import('../../../infra/db');
+    const { getDb, accounts } = await import('../../../infra/db/index.ts');
     const { eq } = await import('drizzle-orm');
     const drizzle = getDb(env.DB);
     const workspace = await drizzle.select({ ownerAccountId: accounts.ownerAccountId }).from(accounts).where(eq(accounts.id, spaceId)).get();

@@ -9,25 +9,25 @@
  * from scoring and resolution logic.
  */
 
-import type { AgentConfig, AgentMessage, AgentEvent } from './agent-models';
-import type { ToolExecutorLike } from '../../tools/executor';
-import { getDb, runs, threads } from '../../../infra/db';
+import type { AgentConfig, AgentMessage, AgentEvent } from './agent-models.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import { getDb, runs, threads } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { listLocalizedOfficialSkills, resolveSkillLocale } from './official-skills';
-import { listEnabledCustomSkillContext } from '../source/skills';
-import { listMcpServers } from '../platform/mcp';
-import { getSpaceLocale } from '../identity/locale';
-import { getDelegationPacketFromRunInput, isDelegationLocale } from './delegation';
-import { listSkillTemplates } from './skill-templates';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { listLocalizedOfficialSkills, resolveSkillLocale } from './official-skills.ts';
+import { listEnabledCustomSkillContext } from '../source/skills.ts';
+import { listMcpServers } from '../platform/mcp.ts';
+import { getSpaceLocale } from '../identity/locale.ts';
+import { getDelegationPacketFromRunInput, isDelegationLocale } from './delegation.ts';
+import { listSkillTemplates } from './skill-templates.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import type {
   SkillCatalogEntry,
   SkillContext,
   SkillResolutionContext,
   SkillSelection,
-} from './skill-resolution';
-import { resolveSkillPlan } from './skill-resolution';
+} from './skill-resolution.ts';
+import { resolveSkillPlan } from './skill-resolution.ts';
 
 // ── Constants ───────────────────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
-import { getDb } from '../../../infra/db';
-import { edges, nodes, files } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { edges, nodes, files } from '../../../infra/db/schema.ts';
 import { eq, and, or, inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceFile } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import type { IndexContext } from './index-context';
-import { resolvePath } from './index-context';
+import type { SpaceFile } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import type { IndexContext } from './index-context.ts';
+import { resolvePath } from './index-context.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 
 export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {

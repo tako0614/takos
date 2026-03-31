@@ -1,20 +1,20 @@
 import { createSignal, createEffect, createMemo, onCleanup, onMount, type JSX } from 'solid-js';
 import { Show } from 'solid-js';
-import { useI18n } from '../store/i18n';
-import type { Thread } from '../types';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from '../store/toast';
-import { Icons } from '../lib/Icons';
-import { ChatErrorBanner } from './chat/ChatErrorBanner';
-import { ChatHeader } from './chat/ChatHeader';
-import { ModelSwitcher } from './chat/ModelSwitcher';
-import { ChatInputBar } from './chat/ChatInputBar';
-import { ChatMessageFeed } from './chat/ChatMessageFeed';
-import { ChatShareModal } from './chat/ChatShareModal';
-import { ChatExportModal } from './chat/ChatExportModal';
-import { useChatSession } from '../hooks/useChatSession';
-import { useChatSharing } from '../hooks/useChatSharing';
-import { useMobileHeader } from '../store/mobile-header';
+import { useI18n } from '../store/i18n.ts';
+import type { Thread } from '../types/index.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useToast } from '../store/toast.ts';
+import { Icons } from '../lib/Icons.tsx';
+import { ChatErrorBanner } from './chat/ChatErrorBanner.tsx';
+import { ChatHeader } from './chat/ChatHeader.tsx';
+import { ModelSwitcher } from './chat/ModelSwitcher.tsx';
+import { ChatInputBar } from './chat/ChatInputBar.tsx';
+import { ChatMessageFeed } from './chat/ChatMessageFeed.tsx';
+import { ChatShareModal } from './chat/ChatShareModal.tsx';
+import { ChatExportModal } from './chat/ChatExportModal.tsx';
+import { useChatSession } from '../hooks/useChatSession.ts';
+import { useChatSharing } from '../hooks/useChatSharing.ts';
+import { useMobileHeader } from '../store/mobile-header.ts';
 
 export interface ChatViewProps {
   thread: Thread;

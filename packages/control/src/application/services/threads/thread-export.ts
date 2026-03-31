@@ -1,4 +1,4 @@
-import { getDb, threads, messages } from '../../../infra/db';
+import { getDb, threads, messages } from '../../../infra/db/index.ts';
 import { eq, asc } from 'drizzle-orm';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 function escapeHtml(value: string): string {
@@ -9,8 +9,8 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-import { logError } from '../../../shared/utils/logger';
-import { errorJsonResponse } from '../../../shared/utils/http-response';
+import { logError } from '../../../shared/utils/logger.ts';
+import { errorJsonResponse } from '../../../shared/utils/http-response.ts';
 
 function buildSafeTitle(value: string | null | undefined): string {
   return (value || 'thread')

@@ -6,20 +6,20 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { InsertOf } from '../../../../shared/types/drizzle-utils';
-import { getDb, mcpServers, mcpOauthPending } from '../../../../infra/db';
+import type { InsertOf } from '../../../../shared/types/drizzle-utils.ts';
+import { getDb, mcpServers, mcpOauthPending } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils';
-import type { Env } from '../../../../shared/types';
-import { logError } from '../../../../shared/utils/logger';
+import { generateId } from '../../../../shared/utils/index.ts';
+import type { Env } from '../../../../shared/types/index.ts';
+import { logError } from '../../../../shared/utils/logger.ts';
 import type {
   OAuthMetadata,
   McpOAuthPendingParams,
   McpEndpointUrlOptions,
   TokenResponse,
-} from './mcp-models';
-import { STRICT_MCP_ENDPOINT_URL_OPTIONS } from './mcp-models';
-import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation';
+} from './mcp-models.ts';
+import { STRICT_MCP_ENDPOINT_URL_OPTIONS } from './mcp-models.ts';
+import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation.ts';
 import {
   generateCodeVerifier,
   deriveCodeChallenge,
@@ -27,7 +27,7 @@ import {
   saltFor,
   encryptToken,
   decryptToken,
-} from './crypto';
+} from './crypto.ts';
 
 // ---------------------------------------------------------------------------
 // OAuth Metadata Discovery

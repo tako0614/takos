@@ -1,8 +1,8 @@
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { Badge } from '../ui';
-import type { ProfileTab, UserProfile } from '../../types/profile';
+import { Icons } from '../../lib/Icons.tsx';
+import { Badge } from '../ui/index.ts';
+import type { ProfileTab, UserProfile } from '../../types/profile.ts';
 
 interface ProfileTabsProps {
   activeTab: ProfileTab;

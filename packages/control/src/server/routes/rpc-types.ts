@@ -9,37 +9,37 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../../shared/types';
-import type { ApiVariables } from './api';
+import type { Env } from '../../shared/types/index.ts';
+import type { ApiVariables } from './api.ts';
 
 // Re-export individual route types for RPC client type inference
-import me from './me';
-import spacesBase from './spaces/routes';
-import spacesMembers from './spaces/members';
-import spacesRepos from './spaces/repositories';
-import spacesStorage from './spaces/storage';
-import spacesCommonEnv from './spaces/common-env';
-import spacesStores from './spaces/stores';
-import spacesStoreRegistry from './spaces/store-registry';
-import services from './workers';
-import resources from './resources';
-import threads from './threads';
-import runs from './runs/routes';
-import memories from './memories';
-import skills from './skills';
-import repos from './repos';
-import explore from './explore';
-import shortcuts from './shortcuts';
-import setup from './setup';
-import sessions from './sessions';
-import agentTasks from './agent-tasks';
-import { profilesApi } from './profiles';
-import billing from './billing/routes';
-import notifications from './notifications';
-import publicShare from './public-share';
-import customDomains from './custom-domains';
-import pullRequests from './pull-requests';
-import appDeployments from './app-deployments';
+import me from './me.ts';
+import spacesBase from './spaces/routes.ts';
+import spacesMembers from './spaces/members.ts';
+import spacesRepos from './spaces/repositories.ts';
+import spacesStorage from './spaces/storage.ts';
+import spacesCommonEnv from './spaces/common-env.ts';
+import spacesStores from './spaces/stores.ts';
+import spacesStoreRegistry from './spaces/store-registry.ts';
+import services from './workers/index.ts';
+import resources from './resources/index.ts';
+import threads from './threads.ts';
+import runs from './runs/routes.ts';
+import memories from './memories.ts';
+import skills from './skills.ts';
+import repos from './repos/index.ts';
+import explore from './explore/index.ts';
+import shortcuts from './shortcuts.ts';
+import setup from './setup.ts';
+import sessions from './sessions/index.ts';
+import agentTasks from './agent-tasks.ts';
+import { profilesApi } from './profiles/index.ts';
+import billing from './billing/routes.ts';
+import notifications from './notifications.ts';
+import publicShare from './public-share.ts';
+import customDomains from './custom-domains.ts';
+import pullRequests from './pull-requests/index.ts';
+import appDeployments from './app-deployments.ts';
 
 export type { ApiVariables };
 

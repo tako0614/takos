@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { Modal } from '../../components/ui/Modal.tsx';
 
 const MCP_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 

@@ -4,10 +4,10 @@
  * Handles PR creation and merge operations against the D1 database.
  */
 
-import type { WorkflowContext } from './workflow-types';
-import { getDb, pullRequests, sessions, accounts, runs, branches } from '../../../infra/db';
+import type { WorkflowContext } from './workflow-types.ts';
+import { getDb, pullRequests, sessions, accounts, runs, branches } from '../../../infra/db/index.ts';
 import { eq, and, sql } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils/index.ts';
 
 // ── PR creation ─────────────────────────────────────────────────────────
 

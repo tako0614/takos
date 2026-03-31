@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb } from '../../../infra/db';
+import { getDb } from '../../../infra/db/index.ts';
 import type {
   PackageWithTakopack,
   PackageDto,
@@ -12,11 +12,11 @@ import type {
   SuggestPackageDto,
   SuggestPackagesParams,
   TakopackRatingStats,
-} from './explore-package-types';
-import { queryReleasesWithRepo, loadAssetsForReleases, buildPackagesFromRows } from './explore-search';
-import { SORT_ALIASES, filterPackages, sortPackages } from './explore-package-filters';
-import { getTakopackRatingStats, getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+} from './explore-package-types.ts';
+import { queryReleasesWithRepo, loadAssetsForReleases, buildPackagesFromRows } from './explore-search.ts';
+import { SORT_ALIASES, filterPackages, sortPackages } from './explore-package-filters.ts';
+import { getTakopackRatingStats, getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ---------------------------------------------------------------------------
 // Re-export types and functions so existing importers continue to work
@@ -29,9 +29,9 @@ export type {
   SuggestPackageDto,
   SuggestPackagesParams,
   TakopackRatingStats,
-} from './explore-package-types';
+} from './explore-package-types.ts';
 
-export { getTakopackRatingStats, getTakopackRatingSummary } from './explore-stats';
+export { getTakopackRatingStats, getTakopackRatingSummary } from './explore-stats.ts';
 
 // ---------------------------------------------------------------------------
 // Internal helpers

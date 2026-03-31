@@ -1,9 +1,9 @@
-import type { ToolDefinition, ToolHandler, ToolContext, RuntimeExecResponse } from '../tool-definitions';
-import { getDb, sessionRepos, sessions } from '../../../infra/db';
+import type { ToolDefinition, ToolHandler, ToolContext, RuntimeExecResponse } from '../tool-definitions.ts';
+import { getDb, sessionRepos, sessions } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { emitRunUsageEvent } from '../../services/offload/usage-client';
-import { callRuntimeRequest } from '../../services/execution/runtime-request-handler';
-import { buildContainerUnavailableMessage } from './container/availability';
+import { emitRunUsageEvent } from '../../services/offload/usage-client.ts';
+import { callRuntimeRequest } from '../../services/execution/runtime-request-handler.ts';
+import { buildContainerUnavailableMessage } from './container/availability.ts';
 
 const DEFAULT_TOOL_TIMEOUT_SECONDS = 300;
 const MAX_TOOL_TIMEOUT_SECONDS = 1800;

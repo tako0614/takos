@@ -3,7 +3,7 @@ import { createTestApp, testRequest } from '../setup.ts';
 import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
 
 {
-  process.env.TAKOS_API_URL = 'https://takos.example.test';
+  Deno.env.set('TAKOS_API_URL', 'https://takos.example.test');
 };
 
 import actionsRoutes from '../../routes/actions/index.ts';

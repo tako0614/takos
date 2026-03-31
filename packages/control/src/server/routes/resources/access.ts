@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
-import type { ResourcePermission } from '../../../shared/types';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
+import type { ResourcePermission } from '../../../shared/types/index.ts';
+import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
 import {
   deleteResourceAccess,
   getResourceById,
   listResourceAccess,
   upsertResourceAccess,
-} from '../../../application/services/resources';
-import { getDb } from '../../../infra/db';
-import { accounts } from '../../../infra/db/schema';
+} from '../../../application/services/resources/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { NotFoundError, AuthorizationError } from 'takos-common/errors';
 

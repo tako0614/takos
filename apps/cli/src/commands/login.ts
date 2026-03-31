@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { blue, bold, green, red, yellow } from '@std/fmt/colors';
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 async function openUrl(url: string): Promise<void> {
   const cmd = Deno.build.os === 'darwin' ? 'open'

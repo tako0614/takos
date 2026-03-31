@@ -1,15 +1,15 @@
-import { getDb } from '../../../infra/db';
-import { files, chunks, nodes, edges, indexJobs } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { files, chunks, nodes, edges, indexJobs } from '../../../infra/db/schema.ts';
 import { eq, and, ne, inArray, desc, count } from 'drizzle-orm';
-import { createEmbeddingsService, isEmbeddingsAvailable } from '../../../application/services/execution/embeddings';
-import type { IndexJobQueueMessage } from '../../../shared/types';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { logError, logInfo } from '../../../shared/utils/logger';
-import { indexFile, runIndexJob } from './jobs';
-import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './index-context';
-import { scheduleBackground } from './index-context';
+import { createEmbeddingsService, isEmbeddingsAvailable } from '../../../application/services/execution/embeddings.ts';
+import type { IndexJobQueueMessage } from '../../../shared/types/index.ts';
+import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { logError, logInfo } from '../../../shared/utils/logger.ts';
+import { indexFile, runIndexJob } from './jobs.ts';
+import type { IndexContext, IndexFileBody, VectorizeIndexBody } from './index-context.ts';
+import { scheduleBackground } from './index-context.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {

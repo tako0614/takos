@@ -1,11 +1,11 @@
 import type { MiddlewareHandler } from 'hono';
 import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import type { OAuthContext } from '../../middleware/oauth-auth';
-import { StorageError } from '../../../application/services/source/space-storage';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import type { OAuthContext } from '../../middleware/oauth-auth.ts';
+import { StorageError } from '../../../application/services/source/space-storage.ts';
 import { BadRequestError, NotFoundError, ConflictError, InternalError, BadGatewayError, PayloadTooLargeError } from 'takos-common/errors';
-import { RateLimiters } from '../../../shared/utils/rate-limiter';
-import { MAX_BULK_OPERATION_ITEMS } from '../../../shared/config/limits';
+import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
+import { MAX_BULK_OPERATION_ITEMS } from '../../../shared/config/limits.ts';
 export { MAX_BULK_OPERATION_ITEMS };
 
 export const storageBulkLimiter = RateLimiters.sensitive();

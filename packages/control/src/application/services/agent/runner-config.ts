@@ -1,15 +1,15 @@
-import type { AgentConfig } from './agent-models';
-import type { Env } from '../../../shared/types';
-import { BUILTIN_TOOLS } from '../../tools/builtin';
-import { SYSTEM_PROMPTS } from './prompt-builder';
-import { logWarn } from '../../../shared/utils/logger';
+import type { AgentConfig } from './agent-models.ts';
+import type { Env } from '../../../shared/types/index.ts';
+import { BUILTIN_TOOLS } from '../../tools/builtin/index.ts';
+import { SYSTEM_PROMPTS } from './prompt-builder.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import { parseIntValue, parseFloatValue } from 'takos-common/env-parse';
 import {
   AGENT_ITERATION_TIMEOUT_MS,
   AGENT_TOTAL_TIMEOUT_MS,
   AGENT_TOOL_EXECUTION_TIMEOUT_MS,
   AGENT_LANGGRAPH_TIMEOUT_MS,
-} from '../../../shared/config/timeouts';
+} from '../../../shared/config/timeouts.ts';
 
 const DEFAULT_MAX_ITERATIONS = 10000;
 const DEFAULT_TEMPERATURE = 0.5;

@@ -6,14 +6,14 @@
  * ロールバックでエラー時の復旧を行う。
  */
 
-import type { Env } from '../../../shared/types';
-import type { AgentContext, AgentEvent } from './agent-models';
-import { SnapshotManager } from '../sync/snapshot';
-import { generateId } from '../../../shared/utils';
-import { getDb, sessions, accounts, accountMetadata, files, runs } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import type { AgentContext, AgentEvent } from './agent-models.ts';
+import { SnapshotManager } from '../sync/snapshot.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, sessions, accounts, accountMetadata, files, runs } from '../../../infra/db/index.ts';
 import { and, eq, inArray } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime-request-handler';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 
 const AUTO_CLOSE_SNAPSHOT_TIMEOUT_MS = 10000;

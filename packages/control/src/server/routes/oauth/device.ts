@@ -1,31 +1,31 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { DeviceAuthorizationResponse } from '../../../shared/types/oauth';
-import { DEVICE_CODE_GRANT_TYPE } from '../../../shared/types/oauth';
-import { parseScopes, validateScopes, areScopesAllowed, getScopeSummary } from '../../../application/services/oauth/scopes';
-import { validateClientCredentials, supportsGrantType, getClientAllowedScopes, getClientById } from '../../../application/services/oauth/client';
+import type { DeviceAuthorizationResponse } from '../../../shared/types/oauth.ts';
+import { DEVICE_CODE_GRANT_TYPE } from '../../../shared/types/oauth.ts';
+import { parseScopes, validateScopes, areScopesAllowed, getScopeSummary } from '../../../application/services/oauth/scopes.ts';
+import { validateClientCredentials, supportsGrantType, getClientAllowedScopes, getClientById } from '../../../application/services/oauth/client.ts';
 import {
   createDeviceAuthorization,
   getDeviceAuthorizationByUserCode,
   approveDeviceAuthorization,
   denyDeviceAuthorization,
   normalizeUserCode,
-} from '../../../application/services/oauth/device';
-import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent';
-import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session';
-import { getDb } from '../../../infra/db';
-import { accounts } from '../../../infra/db/schema';
+} from '../../../application/services/oauth/device.ts';
+import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent.ts';
+import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
-import type { PublicRouteEnv } from '../route-auth';
-import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser, type FormBody } from './request-utils';
-import { RateLimiters } from '../../../shared/utils/rate-limiter';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { escapeHtml, isValidLogoUrl, tryLogOAuthEvent, getBodyValue, mapDbUser, type FormBody } from './request-utils.ts';
+import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
 import {
   isDeviceUserCodeLimited,
   recordDeviceUserCodeAttempt,
   clearDeviceUserCodeAttempts,
-} from '../../../application/services/oauth/device-auth-rate-limit';
-import { deviceCodeEntryPage, deviceConsentPage, deviceResultPage, errorPage } from '../auth/html';
-import { serveSpaFallback } from '../../../shared/utils/spa-fallback';
+} from '../../../application/services/oauth/device-auth-rate-limit.ts';
+import { deviceCodeEntryPage, deviceConsentPage, deviceResultPage, errorPage } from '../auth/html.ts';
+import { serveSpaFallback } from '../../../shared/utils/spa-fallback.ts';
 import { getPlatformServices } from '../../../platform/accessors.ts';
 
 const oauthDevice = new Hono<PublicRouteEnv>();

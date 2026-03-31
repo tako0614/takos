@@ -1,8 +1,8 @@
-import { getDb } from '../../../infra/db';
-import { bundleDeployments, deployments } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { bundleDeployments, deployments } from '../../../infra/db/schema.ts';
 import { eq, and, ne } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import { getErrorRate } from './rollout-health';
+import type { Env } from '../../../shared/types/index.ts';
+import { getErrorRate } from './rollout-health.ts';
 
 export interface RolloutSpec {
   strategy: 'staged' | 'immediate';
@@ -27,7 +27,7 @@ export interface RolloutState {
   deploymentId: string;
   serviceId: string;
 }
-import { upsertHostnameRouting } from '../routing/service';
+import { upsertHostnameRouting } from '../routing/service.ts';
 
 const DEFAULT_STAGES = [
   { weight: 1, pauseMinutes: 5 },

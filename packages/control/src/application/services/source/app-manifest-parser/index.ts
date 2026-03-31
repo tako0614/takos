@@ -1,16 +1,16 @@
 import YAML from 'yaml';
-import type { AppManifest, AppMetadata } from '../app-manifest-types';
-import { asRecord, asString, asRequiredString, asStringArray, asStringMap } from '../app-manifest-utils';
-import { parseResources, validateResourceBindings } from '../app-manifest-validation';
-import { validateTemplateReferences } from '../app-manifest-template';
+import type { AppManifest, AppMetadata } from '../app-manifest-types.ts';
+import { asRecord, asString, asRequiredString, asStringArray, asStringMap } from '../app-manifest-utils.ts';
+import { parseResources, validateResourceBindings } from '../app-manifest-validation.ts';
+import { validateTemplateReferences } from '../app-manifest-template.ts';
 
-import { validateSemver, parseLifecycle, parseUpdateStrategy, validateDependsOn } from './parse-common';
-import { parseContainers } from './parse-containers';
-import { parseWorkers, buildSyntheticServicesFromWorkers } from './parse-workers';
-import { parseServices, parseMcpServers, parseFileHandlers } from './parse-services';
-import { parseRoutes } from './parse-routes';
-import { parseEnvConfig } from './parse-env';
-import { parseOverrides } from './parse-overrides';
+import { validateSemver, parseLifecycle, parseUpdateStrategy, validateDependsOn } from './parse-common.ts';
+import { parseContainers } from './parse-containers.ts';
+import { parseWorkers, buildSyntheticServicesFromWorkers } from './parse-workers.ts';
+import { parseServices, parseMcpServers, parseFileHandlers } from './parse-services.ts';
+import { parseRoutes } from './parse-routes.ts';
+import { parseEnvConfig } from './parse-env.ts';
+import { parseOverrides } from './parse-overrides.ts';
 
 function validateMcpServers(
   mcpServers: NonNullable<AppManifest['spec']['mcpServers']> | undefined,
@@ -159,7 +159,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
 export const parseAppManifestText = parseAppManifestYaml;
 
 // Re-export sub-module functions for any consumers that import them directly
-export { parseContainers } from './parse-containers';
-export { parseServices } from './parse-services';
-export { parseWorkers } from './parse-workers';
-export { parseEnvConfig } from './parse-env';
+export { parseContainers } from './parse-containers.ts';
+export { parseServices } from './parse-services.ts';
+export { parseWorkers } from './parse-workers.ts';
+export { parseEnvConfig } from './parse-env.ts';

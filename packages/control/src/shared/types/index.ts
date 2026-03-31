@@ -1,11 +1,11 @@
-export type { SelectOf, InsertOf } from './drizzle-utils';
+export type { SelectOf, InsertOf } from './drizzle-utils.ts';
 
 export {
   RUN_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_QUEUE_MESSAGE_VERSION,
-} from './queue-messages';
+} from './queue-messages.ts';
 export type {
   WorkflowShell,
   WorkflowStep,
@@ -14,14 +14,14 @@ export type {
   WorkflowJobDefinition,
   WorkflowJobQueueMessage,
   DeploymentQueueMessage,
-} from './queue-messages';
+} from './queue-messages.ts';
 
 export {
   isValidRunQueueMessage,
   isValidIndexJobQueueMessage,
   isValidWorkflowJobQueueMessage,
   isValidDeploymentQueueMessage,
-} from './queue-message-guards';
+} from './queue-message-guards.ts';
 
 export type {
   SqlDatabaseBinding,
@@ -55,7 +55,7 @@ export type {
   ScheduledEvent,
   VectorizeIndex,
   Ai,
-} from './bindings';
+} from './bindings.ts';
 
 export type {
   FetchBinding,
@@ -67,7 +67,7 @@ export type {
   RunnerEnv,
   IndexerEnv,
   Env,
-} from './env';
+} from './env.ts';
 
 export type {
   RoutingStore,
@@ -76,7 +76,7 @@ export type {
   WeightedDeploymentTarget,
   HttpRoute,
   StoredHttpEndpoint,
-} from './routing';
+} from './routing.ts';
 
 export type {
   PrincipalKind,
@@ -146,7 +146,7 @@ export type {
   PullRequestComment,
   SpaceStorageFileType,
   SpaceStorageFile,
-} from './models';
+} from './models.ts';
 
 export {
   DEVICE_CODE_GRANT_TYPE,
@@ -154,7 +154,7 @@ export {
   ALL_SCOPES,
   OAUTH_CONSTANTS,
   parseJsonStringArray,
-} from './oauth';
+} from './oauth.ts';
 export type {
   OAuthClientType,
   OAuthClientStatus,
@@ -176,4 +176,4 @@ export type {
   ClientRegistrationResponse,
   OAuthServerMetadata,
   OAuthScope,
-} from './oauth';
+} from './oauth.ts';

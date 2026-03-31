@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { Env } from '../../shared/types';
-import { parseJsonBody, requireTenantSource, requireSpaceAccess, type BaseVariables } from './route-auth';
-import { parsePagination } from '../../shared/utils';
-import { GitService } from '../../application/services/source/git';
+import type { Env } from '../../shared/types/index.ts';
+import { parseJsonBody, requireTenantSource, requireSpaceAccess, type BaseVariables } from './route-auth.ts';
+import { parsePagination } from '../../shared/utils/index.ts';
+import { GitService } from '../../application/services/source/git.ts';
 import type { R2Bucket } from '../../shared/types/bindings.ts';
 import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger';
+import { logError } from '../../shared/utils/logger.ts';
 
 const git = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 

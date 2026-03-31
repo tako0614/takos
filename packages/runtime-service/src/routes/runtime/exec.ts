@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import {
   MAX_EXEC_COMMANDS,
   MAX_EXEC_FILE_BYTES,
@@ -13,6 +14,7 @@ import { createLogger } from 'takos-common/logger';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
 import { validateRuntimeExecEnv } from '../../utils/sandbox-env.ts';
 
+import { Buffer } from "node:buffer";
 import {
   type ExecInput,
   getProcess,
@@ -68,7 +70,7 @@ function validateExecBody(body: ExecInput): string | null {
 // Router
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/exec', async (c) => {
   const execStartTime = Date.now();

@@ -1,5 +1,5 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface ConflictFile {
   path: string;

@@ -4,8 +4,8 @@
 
 import { and, count, desc, eq } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, apFollowers } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, apFollowers } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 
 export interface FollowerRecord {
   id: string;

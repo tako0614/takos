@@ -3,7 +3,7 @@ export {
   AiReviewError,
   buildPRDiffText,
   runAiReview,
-} from './ai-review';
+} from './ai-review.ts';
 
 export {
   type Resolution,
@@ -16,10 +16,10 @@ export {
   type ConflictCheckResult,
   checkConflicts,
   ConflictCheckError,
-} from './merge-resolution';
+} from './merge-resolution.ts';
 
 export {
   type PullRequestEventDeps,
   createPullRequestEventTask,
   createPullRequestEventTaskFromAccess,
-} from './event-tasks';
+} from './event-tasks.ts';

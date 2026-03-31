@@ -72,7 +72,9 @@
     "redis": "npm:redis@^5.11.0",
     "yaml": "npm:yaml@^2.8.2",
     "zod": "npm:zod@^3.25.32",
-    "miniflare": "npm:miniflare@^4.20260124.0"
+    "fflate": "npm:fflate@^0.8.2",
+    "miniflare": "npm:miniflare@^4.20260124.0",
+    "nanoid": "npm:nanoid@^5.0.0"
   },
   "tasks": {
     "test": "deno test --allow-all src/",

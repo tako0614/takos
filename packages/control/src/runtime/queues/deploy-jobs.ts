@@ -1,7 +1,7 @@
-import { DeploymentService, type DeploymentEnv } from '../../application/services/deployment/index';
-import { getDb, deployments } from '../../infra/db';
+import { DeploymentService, type DeploymentEnv } from '../../application/services/deployment/index.ts';
+import { getDb, deployments } from '../../infra/db/index.ts';
 import { eq, and, notInArray } from 'drizzle-orm';
-import { logError, logInfo } from '../../shared/utils/logger';
+import { logError, logInfo } from '../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Message types

@@ -2,11 +2,11 @@
 // Database query helpers for package exploration
 // ---------------------------------------------------------------------------
 
-import { repoReleases, repoReleaseAssets, repositories, accounts } from '../../../infra/db';
+import { repoReleases, repoReleaseAssets, repositories, accounts } from '../../../infra/db/index.ts';
 import { eq, and, desc, asc, like, sql } from 'drizzle-orm';
-import { toReleaseAssets } from './repo-release-assets';
-import type { Database } from '../../../infra/db';
-import type { ReleaseRow, PackageWithTakopack } from './explore-package-types';
+import { toReleaseAssets } from './repo-release-assets.ts';
+import type { Database } from '../../../infra/db/index.ts';
+import type { ReleaseRow, PackageWithTakopack } from './explore-package-types.ts';
 
 export async function queryReleasesWithRepo(
   db: Database,

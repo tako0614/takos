@@ -1,9 +1,9 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../../../lib/Icons';
-import { formatDetailedRelativeDate } from '../../../../lib/format';
-import { useI18n } from '../../../../store/i18n';
-import type { WorkflowJob, JobLogState } from './actions-types';
-import { statusBadge } from './actions-types';
+import { Icons } from '../../../../lib/Icons.tsx';
+import { formatDetailedRelativeDate } from '../../../../lib/format.ts';
+import { useI18n } from '../../../../store/i18n.ts';
+import type { WorkflowJob, JobLogState } from './actions-types.ts';
+import { statusBadge } from './actions-types.ts';
 
 interface JobCardProps {
   job: WorkflowJob;

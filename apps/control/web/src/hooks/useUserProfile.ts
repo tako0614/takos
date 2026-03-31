@@ -1,12 +1,12 @@
 import { createSignal, createEffect, on, onMount } from 'solid-js';
-import type { FollowUser, ProfileRepo, ProfileTab, UserProfile } from '../types/profile';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useUserRepos } from './useUserRepos';
-import { useUserStars } from './useUserStars';
-import { useUserFollowers } from './useUserFollowers';
-import { useUserFollowing } from './useUserFollowing';
-import { useUserActivity } from './useUserActivity';
-import { useUserFollowRequests } from './useUserFollowRequests';
+import type { FollowUser, ProfileRepo, ProfileTab, UserProfile } from '../types/profile.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useUserRepos } from './useUserRepos.ts';
+import { useUserStars } from './useUserStars.ts';
+import { useUserFollowers } from './useUserFollowers.ts';
+import { useUserFollowing } from './useUserFollowing.ts';
+import { useUserActivity } from './useUserActivity.ts';
+import { useUserFollowRequests } from './useUserFollowRequests.ts';
 
 // API Response types kept here for profile-level actions
 interface UserProfileResponse {

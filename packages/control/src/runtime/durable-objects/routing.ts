@@ -1,6 +1,6 @@
-import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/routing-models';
+import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/routing-models.ts';
 
-import { jsonResponse } from './do-header-utils';
+import { jsonResponse } from './do-header-utils.ts';
 
 type StoredRoutingRecord = Omit<RoutingRecord, 'hostname'>;
 

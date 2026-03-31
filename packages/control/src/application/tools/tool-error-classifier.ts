@@ -46,7 +46,7 @@ export class ToolError extends Error {
   constructor(
     message: string,
     public readonly code: ErrorCode,
-    public readonly cause?: Error
+    public override readonly cause?: Error
   ) {
     super(message);
     this.name = 'ToolError';

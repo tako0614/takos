@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import { sessionStore } from './storage.ts';
 import { badRequest } from 'takos-common/middleware/hono';
 
@@ -13,7 +14,7 @@ export function getOwnerSubFromServiceContext(payload: Record<string, unknown> |
   return payload.sub;
 }
 
-export function getSessionOwnerSub(c: Context): string | undefined {
+export function getSessionOwnerSub(c: Context<RuntimeEnv>): string | undefined {
   const payload = c.get('serviceToken');
   return getOwnerSubFromServiceContext(payload);
 }
@@ -74,7 +75,7 @@ export interface ResolvedSession {
  * Returns null and sends 400 if IDs are missing (returns a Response that should be returned by the handler).
  */
 export async function resolveSessionWorkDir(
-  c: Context,
+  c: Context<RuntimeEnv>,
   body: unknown
 ): Promise<ResolvedSession | { error: Response }> {
   const ids = parseRequiredSessionSpaceIds(body);

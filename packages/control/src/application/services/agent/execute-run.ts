@@ -4,11 +4,11 @@
  * Queue consumer entry point using the canonical runIo + remote tool path.
  */
 
-import type { Env } from '../../../shared/types';
-import type { AgentContext } from './agent-models';
-import { AgentRunner } from './runner';
-import type { AgentRunnerIo } from './runner-io';
-import { DEFAULT_MODEL_ID } from './model-catalog';
+import type { Env } from '../../../shared/types/index.ts';
+import type { AgentContext } from './agent-models.ts';
+import { AgentRunner } from './runner.ts';
+import type { AgentRunnerIo } from './runner-io.ts';
+import { DEFAULT_MODEL_ID } from './model-catalog.ts';
 
 /**
  * Execute a run (entry point for queue consumer).

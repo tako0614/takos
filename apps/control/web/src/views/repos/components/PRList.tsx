@@ -1,12 +1,12 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { PullRequest } from '../../../types';
-import { PRDetail } from './PRDetail';
-import { formatDetailedRelativeDate } from '../../../lib/format';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { PullRequest } from '../../../types/index.ts';
+import { PRDetail } from './PRDetail.tsx';
+import { formatDetailedRelativeDate } from '../../../lib/format.ts';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Badge } from '../../../components/ui/Badge.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useI18n } from '../../../store/i18n.ts';
 
 type PRStatus = 'open' | 'merged' | 'closed' | 'all';
 

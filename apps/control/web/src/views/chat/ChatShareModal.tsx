@@ -1,11 +1,11 @@
 import { Show, For } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { Modal } from '../../components/ui/Modal';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Icons } from '../../lib/Icons';
-import type { ThreadShare } from '../../hooks/useChatSharing';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { Modal } from '../../components/ui/Modal.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { Icons } from '../../lib/Icons.tsx';
+import type { ThreadShare } from '../../hooks/useChatSharing.ts';
 
 export interface ChatShareModalProps {
   isOpen: boolean;

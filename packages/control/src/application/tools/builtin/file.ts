@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../tool-definitions';
+import type { ToolHandler } from '../tool-definitions.ts';
 import {
   FILE_READ,
   FILE_WRITE,
@@ -9,15 +9,15 @@ import {
   FILE_RENAME,
   FILE_COPY,
   FILE_TOOLS,
-} from './file/definitions';
-import { fileReadHandler, fileListHandler } from './file/read-handlers';
+} from './file/definitions.ts';
+import { fileReadHandler, fileListHandler } from './file/read-handlers.ts';
 import {
   fileWriteHandler,
   fileWriteBinaryHandler,
   fileCopyHandler,
   fileMkdirHandler,
-} from './file/write-handlers';
-import { fileDeleteHandler, fileRenameHandler } from './file/manage-handlers';
+} from './file/write-handlers.ts';
+import { fileDeleteHandler, fileRenameHandler } from './file/manage-handlers.ts';
 
 export {
   FILE_READ,

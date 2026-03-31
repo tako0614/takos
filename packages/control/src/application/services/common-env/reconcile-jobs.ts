@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { getDb, serviceCommonEnvReconcileJobs } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, serviceCommonEnvReconcileJobs } from '../../../infra/db/index.ts';
 import { eq, and, or, inArray, isNull, isNotNull, lte } from 'drizzle-orm';
 
 export type CommonEnvReconcileTrigger =

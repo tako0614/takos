@@ -1,4 +1,4 @@
-import { parseResources } from '../app-manifest-validation';
+import { parseResources } from '../app-manifest-validation.ts';
 
 
 import { assertEquals, assertThrows } from 'jsr:@std/assert';

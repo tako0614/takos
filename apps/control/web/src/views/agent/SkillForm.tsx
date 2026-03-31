@@ -1,8 +1,8 @@
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { rpcJson } from '../../lib/rpc';
-import { Button, Input, Textarea } from '../../components/ui';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { rpcJson } from '../../lib/rpc.ts';
+import { Button, Input, Textarea } from '../../components/ui/index.ts';
 
 export interface SkillFormData {
   name: string;

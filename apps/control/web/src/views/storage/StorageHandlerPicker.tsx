@@ -1,10 +1,10 @@
 import { onMount, onCleanup, For, Show } from 'solid-js';
-import { formatFileSize, formatDateTime } from '../../lib/format';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui/Button';
-import type { StorageFile } from '../../types';
-import type { ResolvedHandler } from './storageUtils';
-import { handlerDisplayName } from './storageUtils';
+import { formatFileSize, formatDateTime } from '../../lib/format.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import type { StorageFile } from '../../types/index.ts';
+import type { ResolvedHandler } from './storageUtils.tsx';
+import { handlerDisplayName } from './storageUtils.tsx';
 
 // ── Handler picker (shown when no default and multiple handlers) ──
 

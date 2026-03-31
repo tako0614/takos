@@ -1,6 +1,6 @@
 /**
  * Cloudflare platform providers barrel.
  */
-export * from './pdf-render';
-export * from './resources';
-export * from './wfp';
+export * from './pdf-render.ts';
+export * from './resources.ts';
+export * from './wfp.ts';

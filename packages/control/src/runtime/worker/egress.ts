@@ -12,9 +12,9 @@ function normalizeHostname(hostname: string): string {
 }
 import { isPrivateIP } from 'takos-common/validation';
 import { DOH_ENDPOINT } from '../../shared/constants/dns.ts';
-import { validateEgressEnv, createEnvGuard } from '../../shared/utils/validate-env';
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
+import { validateEgressEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
 
 interface Env {
   RATE_LIMITER_DO?: DurableObjectNamespace;

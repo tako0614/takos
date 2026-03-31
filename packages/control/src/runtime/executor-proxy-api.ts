@@ -11,8 +11,8 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../shared/types';
-import { logError } from '../shared/utils/logger';
+import type { Env } from '../shared/types/index.ts';
+import { logError } from '../shared/utils/logger.ts';
 
 // Handler imports from the existing executor subsystem — these contain the
 // actual business logic (DB queries, tool execution, memory graph, billing, etc.)
@@ -27,7 +27,7 @@ import {
   handleNoLlmComplete,
   handleCurrentSession,
   handleIsCancelled,
-} from './container-hosts/executor-run-state';
+} from './container-hosts/executor-run-state.ts';
 
 import {
   handleConversationHistory,
@@ -40,10 +40,10 @@ import {
   handleToolExecute,
   handleToolCleanup,
   handleRunEvent,
-} from './container-hosts/executor-control-rpc';
+} from './container-hosts/executor-control-rpc.ts';
 
-import { recordRunUsageBatch } from '../application/services/billing/billing';
-import { ok, err } from './container-hosts/executor-utils';
+import { recordRunUsageBatch } from '../application/services/billing/billing.ts';
+import { ok, err } from './container-hosts/executor-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Auth middleware: validate internal service binding token

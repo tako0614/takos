@@ -1,4 +1,4 @@
-import type { ResourceCapability, ResourcePublicType } from '../../../shared/types';
+import type { ResourceCapability, ResourcePublicType } from '../../../shared/types/index.ts';
 
 export type ResourceImplementation =
   | 'd1'

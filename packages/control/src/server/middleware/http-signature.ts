@@ -8,7 +8,7 @@
  * @see https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12
  */
 
-import { apFetch } from '../../application/services/activitypub/remote-store-client';
+import { apFetch } from '../../application/services/activitypub/remote-store-client.ts';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */

@@ -1,13 +1,13 @@
 import YAML from 'yaml';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
 import {
   BUILD_SOURCE_LABELS,
   type AppManifest,
   type AppDeploymentBuildSource,
   type BundleDoc,
-} from './app-manifest-types';
-import { normalizeRepoPath } from './app-manifest-utils';
+} from './app-manifest-types.ts';
+import { normalizeRepoPath } from './app-manifest-utils.ts';
 
 function buildSourceLabels(source: AppDeploymentBuildSource): Record<string, string> {
   return {

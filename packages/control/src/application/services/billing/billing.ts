@@ -10,7 +10,7 @@ export {
   METER_TYPES,
   WEEKLY_RUNTIME_WINDOW_DAYS,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
-} from './billing-types';
+} from './billing-types.ts';
 
 export type {
   MeterType,
@@ -21,7 +21,7 @@ export type {
   RollingUsageSnapshot,
   WeeklyRuntimeLimitCheck,
   BillingAccountWithPlan,
-} from './billing-types';
+} from './billing-types.ts';
 
 // Plan definitions and resolution
 export {
@@ -37,12 +37,12 @@ export {
   isCanonicalBillingPlanId,
   DEFAULT_BILLING_QUOTAS,
   DEFAULT_BILLING_RATES,
-} from './billing-plans';
+} from './billing-plans.ts';
 export type {
   BillingPlanId,
   BillingPlanTier,
   BillingMode,
-} from './billing-plans';
+} from './billing-plans.ts';
 
 // Account management
 export {
@@ -50,7 +50,7 @@ export {
   assignPlanToUser,
   addCredits,
   checkFeatureAccess,
-} from './billing-accounts';
+} from './billing-accounts.ts';
 
 // Usage tracking
 export {
@@ -58,7 +58,7 @@ export {
   recordUsage,
   getRollingUsage,
   checkWeeklyRuntimeLimit,
-} from './billing-usage';
+} from './billing-usage.ts';
 
 // Run-level batch usage recording
-export { recordRunUsageBatch } from './billing-run-usage';
+export { recordRunUsageBatch } from './billing-run-usage.ts';

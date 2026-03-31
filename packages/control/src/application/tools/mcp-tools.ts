@@ -1,12 +1,12 @@
-import type { ToolDefinition, RegisteredTool } from './tool-definitions';
-import type { Env, SpaceRole } from '../../shared/types';
-import { getDb, mcpServers } from '../../infra/db';
+import type { ToolDefinition, RegisteredTool } from './tool-definitions.ts';
+import type { Env, SpaceRole } from '../../shared/types/index.ts';
+import { getDb, mcpServers } from '../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { McpClient } from './mcp-client';
-import { refreshMcpToken, decryptAccessToken, assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from '../services/platform/mcp';
+import { McpClient } from './mcp-client.ts';
+import { refreshMcpToken, decryptAccessToken, assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from '../services/platform/mcp.ts';
 import type { D1Database } from '../../shared/types/bindings.ts';
-import type { Database } from '../../infra/db';
-import { logError } from '../../shared/utils/logger';
+import type { Database } from '../../infra/db/index.ts';
+import { logError } from '../../shared/utils/logger.ts';
 
 export interface McpLoadResult {
   tools: Map<string, RegisteredTool>;

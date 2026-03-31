@@ -1,9 +1,9 @@
 import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { Icons } from '../../lib/Icons';
-import { MODEL_OPTIONS, type ModelSelectOption } from '../../lib/modelCatalog';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { MODEL_OPTIONS, type ModelSelectOption } from '../../lib/modelCatalog.ts';
 
 export function ModelTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();

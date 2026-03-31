@@ -1,8 +1,8 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
-import { useToast } from '../store/toast';
-import { useI18n } from '../store/i18n';
-import type { Resource } from '../types';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import { useToast } from '../store/toast.ts';
+import { useI18n } from '../store/i18n.ts';
+import type { Resource } from '../types/index.ts';
 
 type ApiServiceBinding = {
   service_id: string;

@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-utils';
+import { createdAtColumn, timestamps } from './schema-utils.ts';
 
 // 24. Blob
 export const blobs = sqliteTable('blobs', {

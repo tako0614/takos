@@ -1,24 +1,24 @@
 // ---------------------------------------------------------------------------
 // Barrel module – re-exports from focused sub-modules.
 //
-// All existing imports from '../queues/workflow-jobs' continue to work.
+// All existing imports from '../queues/workflow-jobs.ts' continue to work.
 // ---------------------------------------------------------------------------
 
-import { isValidWorkflowJobQueueMessage } from '../../shared/types';
-import { logError } from '../../shared/utils/logger';
-import type { QueueBatchMessage } from './workflow-types';
-import { handleWorkflowJob } from './workflow-job-handler';
+import { isValidWorkflowJobQueueMessage } from '../../shared/types/index.ts';
+import { logError } from '../../shared/utils/logger.ts';
+import type { QueueBatchMessage } from './workflow-types.ts';
+import { handleWorkflowJob } from './workflow-job-handler.ts';
 
 // Re-export public API used by external consumers
-export type { WorkflowQueueEnv } from './workflow-types';
-export { handleWorkflowJob } from './workflow-job-handler';
-export { handleWorkflowJobDlq } from './workflow-dlq';
+export type { WorkflowQueueEnv } from './workflow-types.ts';
+export { handleWorkflowJob } from './workflow-job-handler.ts';
+export { handleWorkflowJobDlq } from './workflow-dlq.ts';
 
 // ---------------------------------------------------------------------------
 // Queue consumer
 // ---------------------------------------------------------------------------
 
-export function createWorkflowQueueConsumer(env: import('./workflow-types').WorkflowQueueEnv) {
+export function createWorkflowQueueConsumer(env: import('./workflow-types.ts').WorkflowQueueEnv) {
   return {
     async queue(batch: { messages: ReadonlyArray<QueueBatchMessage> }) {
       for (const message of batch.messages) {

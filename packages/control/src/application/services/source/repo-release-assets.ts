@@ -1,5 +1,5 @@
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import { textDate } from '../../../shared/utils/db-guards';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export interface ReleaseAsset {
   id: string;

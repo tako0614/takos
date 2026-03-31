@@ -1,11 +1,12 @@
 import { green, red } from '@std/fmt/colors';
-import { writeFileSync } from 'fs';
+import { writeFileSync } from 'node:fs';
 import { cliExit } from '../lib/command-exit.ts';
 import { getApiRequestTimeoutMs, getConfig } from '../lib/config.ts';
 import { createAuthHeaders } from '../lib/api.ts';
 import { parseKeyValue } from './api-request-body.ts';
 import { prepareBody } from './api-request-body.ts';
 import { parseBodyByContentType, printSuccess } from './api-request-output.ts';
+import { Buffer } from "node:buffer";
 
 // Re-export everything from sub-modules for backward compatibility
 export { parseKeyValue, prepareBody } from './api-request-body.ts';

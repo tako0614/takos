@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import type { MemoryType, ReminderTriggerType, ReminderPriority } from '../../../shared/types';
-import { getDb, memories, reminders } from '../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import type { MemoryType, ReminderTriggerType, ReminderPriority } from '../../../shared/types/index.ts';
+import { getDb, memories, reminders } from '../../../infra/db/index.ts';
 import { eq, and, like, desc, sql } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils/index.ts';
 
 export const REMEMBER: ToolDefinition = {
   name: 'remember',
