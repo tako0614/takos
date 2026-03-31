@@ -237,9 +237,26 @@ pub fn local_memory_tool_definitions() -> Vec<ToolDefinition> {
 fn truncate_summary(output: &str) -> String {
     const LIMIT: usize = 280;
     let trimmed = output.trim();
-    if trimmed.len() <= LIMIT {
+    if trimmed.chars().count() <= LIMIT {
         trimmed.to_string()
     } else {
-        format!("{}...", &trimmed[..LIMIT.saturating_sub(3)])
+        let head = trimmed
+            .chars()
+            .take(LIMIT.saturating_sub(3))
+            .collect::<String>();
+        format!("{head}...")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_summary;
+
+    #[test]
+    fn truncate_summary_preserves_utf8_boundaries() {
+        let source = "ソフトウェア資産を repo と app として取得・作成・変更・公開する。".repeat(20);
+        let truncated = truncate_summary(&source);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.chars().count() <= 280);
     }
 }

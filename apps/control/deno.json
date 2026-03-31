@@ -1,6 +1,18 @@
 {
   "version": "1.0.0",
   "imports": {
+    "@/": "../../packages/control/src/",
+    "@/types": "../../packages/control/src/types.ts",
+    "@/tools/types": "../../packages/control/src/tools/types.ts",
+    "@/tools/builtin/web": "../../packages/control/src/tools/builtin/web.ts",
+    "@/tools/builtin/browser": "../../packages/control/src/tools/builtin/browser.ts",
+    "@/tools/builtin/mcp": "../../packages/control/src/tools/builtin/mcp.ts",
+    "@/middleware/cache": "../../packages/control/src/middleware/cache.ts",
+    "@/services/identity/session": "../../packages/control/src/services/identity/session.ts",
+    "@/services/platform/mcp": "../../packages/control/src/services/platform/mcp.ts",
+    "@/services/oauth/client": "../../packages/control/src/services/oauth/client.ts",
+    "@/queues/workflow-jobs": "../../packages/control/src/queues/workflow-jobs.ts",
+    "@/services/runs/create-thread-run-store": "../../packages/control/src/services/runs/create-thread-run-store.ts",
     "@cloudflare/puppeteer": "npm:@cloudflare/puppeteer@^1.0.4",
     "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260118.0",
     "@langchain/core": "npm:@langchain/core@^1.1.8",

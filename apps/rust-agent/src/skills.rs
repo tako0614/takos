@@ -248,22 +248,7 @@ pub fn execute_local_skill_tool(
                 .or_else(|| string_arg(arguments, "skill_id"))
                 .or_else(|| string_arg(arguments, "skill_name"))?;
             let source_hint = string_arg(arguments, "source");
-            let localized_catalog = if locale == catalog.locale {
-                catalog.clone()
-            } else {
-                let runtime_context = SkillRuntimeContextResponse {
-                    custom_skills: catalog
-                        .skills
-                        .iter()
-                        .filter(|skill| skill.source == "custom")
-                        .cloned()
-                        .collect(),
-                    resolution_context: catalog.resolution_context.clone(),
-                    available_mcp_server_names: Vec::new(),
-                    available_template_ids: Vec::new(),
-                };
-                build_skill_catalog(&runtime_context, &[])
-            };
+            let localized_catalog = localized_catalog_for_locale(catalog, &locale);
             let skill = describe_skill(&localized_catalog, &skill_ref, source_hint.as_deref())?;
             Some(json!({ "skill": format_skill(skill) }).to_string())
         }
@@ -844,29 +829,53 @@ struct CatalogSummary {
 }
 
 fn summarize_catalog(catalog: &SkillCatalogResponse, locale: &str) -> CatalogSummary {
-    let entries = if locale == catalog.locale {
-        catalog
-            .skills
-            .iter()
-            .map(summarize_skill)
-            .collect::<Vec<_>>()
-    } else {
-        localized_official_skills(locale)
-            .into_iter()
-            .chain(
-                catalog
-                    .skills
-                    .iter()
-                    .filter(|skill| skill.source == "custom")
-                    .cloned(),
-            )
-            .map(|skill| summarize_skill(&skill))
-            .collect::<Vec<_>>()
-    };
+    let localized_catalog = localized_catalog_for_locale(catalog, locale);
+    let entries = localized_catalog
+        .skills
+        .iter()
+        .map(summarize_skill)
+        .collect::<Vec<_>>();
     CatalogSummary {
-        locale: locale.to_string(),
+        locale: localized_catalog.locale,
         count: entries.len(),
         entries,
+    }
+}
+
+fn localized_catalog_for_locale(
+    catalog: &SkillCatalogResponse,
+    locale: &str,
+) -> SkillCatalogResponse {
+    if locale == catalog.locale {
+        return catalog.clone();
+    }
+
+    let skills = localized_official_skills(locale)
+        .into_iter()
+        .map(|mut skill| {
+            if let Some(existing) = catalog
+                .skills
+                .iter()
+                .find(|existing| existing.source == "official" && existing.id == skill.id)
+            {
+                skill.availability = existing.availability.clone();
+                skill.availability_reasons = existing.availability_reasons.clone();
+            }
+            skill
+        })
+        .chain(
+            catalog
+                .skills
+                .iter()
+                .filter(|skill| skill.source == "custom")
+                .cloned(),
+        )
+        .collect::<Vec<_>>();
+
+    SkillCatalogResponse {
+        locale: locale.to_string(),
+        skills,
+        resolution_context: catalog.resolution_context.clone(),
     }
 }
 
@@ -941,4 +950,260 @@ fn string_arg(arguments: &Value, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::control_rpc::SkillExecutionContract;
+    use serde_json::json;
+
+    #[allow(clippy::too_many_arguments)]
+    fn custom_skill(
+        id: &str,
+        name: &str,
+        category: &str,
+        instructions: &str,
+        triggers: &[&str],
+        preferred_tools: &[&str],
+        required_mcp_servers: &[&str],
+        template_ids: &[&str],
+    ) -> ActivatedSkill {
+        ActivatedSkill {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: format!("{name} description"),
+            source: "custom".to_string(),
+            category: Some(category.to_string()),
+            locale: Some("en".to_string()),
+            version: None,
+            triggers: triggers.iter().map(|value| (*value).to_string()).collect(),
+            activation_tags: vec![category.to_string()],
+            instructions: instructions.to_string(),
+            execution_contract: SkillExecutionContract {
+                preferred_tools: preferred_tools
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+                durable_output_hints: vec![],
+                output_modes: vec!["chat".to_string()],
+                required_mcp_servers: required_mcp_servers
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+                template_ids: template_ids
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+            },
+            availability: "available".to_string(),
+            availability_reasons: vec![],
+            priority: Some(50),
+        }
+    }
+
+    fn runtime_context(
+        conversation: &[&str],
+        run_input: Value,
+        custom_skills: Vec<ActivatedSkill>,
+    ) -> SkillRuntimeContextResponse {
+        SkillRuntimeContextResponse {
+            custom_skills,
+            resolution_context: SkillResolutionContext {
+                conversation: conversation
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+                thread_title: Some("Deploy repository app".to_string()),
+                run_input,
+                agent_type: Some("implementer".to_string()),
+                ..SkillResolutionContext::default()
+            },
+            available_mcp_server_names: vec!["github".to_string()],
+            available_template_ids: vec![
+                "custom-template".to_string(),
+                "repo-app-bootstrap".to_string(),
+                "api-worker".to_string(),
+            ],
+        }
+    }
+
+    fn tool_names(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn build_skill_catalog_merges_official_and_custom_skills() {
+        let context = runtime_context(
+            &["このAPIをリポジトリからデプロイしたい"],
+            json!({}),
+            vec![
+                custom_skill(
+                    "custom-plan",
+                    "Workspace Planner",
+                    "planning",
+                    "Create workspace-specific plans.",
+                    &["workspace", "plan"],
+                    &["create_artifact"],
+                    &[],
+                    &[],
+                ),
+                custom_skill(
+                    "custom-secure",
+                    "Secure MCP Skill",
+                    "software",
+                    "Requires a private MCP server.",
+                    &["secure"],
+                    &["runtime_exec"],
+                    &["private-server"],
+                    &["missing-template"],
+                ),
+            ],
+        );
+
+        let catalog = build_skill_catalog(
+            &context,
+            &tool_names(&[
+                "create_artifact",
+                "runtime_exec",
+                "store_search",
+                "repo_fork",
+                "create_repository",
+                "container_start",
+                "container_commit",
+                "app_deployment_deploy_from_repo",
+            ]),
+        );
+
+        assert_eq!(catalog.locale, "ja");
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.id == "research-brief"));
+        let planner = catalog
+            .skills
+            .iter()
+            .find(|skill| skill.id == "custom-plan")
+            .expect("custom skill should be present");
+        assert_eq!(planner.availability, "available");
+
+        let secure = catalog
+            .skills
+            .iter()
+            .find(|skill| skill.id == "custom-secure")
+            .expect("restricted custom skill should be present");
+        assert_eq!(secure.availability, "unavailable");
+        assert!(secure
+            .availability_reasons
+            .iter()
+            .any(|reason| reason.contains("missing required MCP servers")));
+        assert!(secure
+            .availability_reasons
+            .iter()
+            .any(|reason| reason.contains("missing required templates")));
+    }
+
+    #[test]
+    fn resolve_skill_plan_prefers_repo_operator_for_software_work() {
+        let context = runtime_context(
+            &["Deploy this repository as an API app and wire the endpoint with automation."],
+            json!({
+                "task": "Create a deployable Worker API from the current repo",
+                "goal": "ship a repo-backed app",
+            }),
+            vec![custom_skill(
+                "custom-notes",
+                "Workspace Notes",
+                "writing",
+                "Write notes.",
+                &["notes"],
+                &["create_artifact"],
+                &[],
+                &[],
+            )],
+        );
+        let catalog = build_skill_catalog(
+            &context,
+            &tool_names(&[
+                "store_search",
+                "repo_fork",
+                "create_repository",
+                "container_start",
+                "runtime_exec",
+                "container_commit",
+                "app_deployment_deploy_from_repo",
+                "create_artifact",
+            ]),
+        );
+        let repo_skill = catalog
+            .skills
+            .iter()
+            .find(|skill| skill.id == "repo-app-operator")
+            .expect("repo skill should be present");
+        assert_ne!(repo_skill.availability, "unavailable");
+        assert!(
+            score_skill(repo_skill, &catalog.resolution_context).is_some(),
+            "repo skill should receive a positive score for software-oriented context"
+        );
+
+        let plan = resolve_skill_plan(&catalog);
+
+        assert!(!plan.activated_skills.is_empty());
+        assert!(plan
+            .activated_skills
+            .iter()
+            .any(|skill| skill.id == "repo-app-operator"));
+    }
+
+    #[test]
+    fn local_skill_tools_expose_only_custom_entries_for_list_and_get() {
+        let context = runtime_context(
+            &["Need a workspace plan"],
+            json!({}),
+            vec![custom_skill(
+                "custom-plan",
+                "Workspace Planner",
+                "planning",
+                "Create workspace-specific plans.",
+                &["workspace", "plan"],
+                &["create_artifact"],
+                &[],
+                &[],
+            )],
+        );
+        let catalog = build_skill_catalog(&context, &tool_names(&["create_artifact"]));
+
+        let list_payload = execute_local_skill_tool("skill_list", &json!({}), &catalog)
+            .expect("skill_list should return a payload");
+        let list_value: Value = serde_json::from_str(&list_payload).expect("valid JSON payload");
+        assert_eq!(list_value["count"].as_u64(), Some(1));
+
+        let get_payload =
+            execute_local_skill_tool("skill_get", &json!({ "skill_id": "custom-plan" }), &catalog)
+                .expect("skill_get should return a payload");
+        let get_value: Value = serde_json::from_str(&get_payload).expect("valid JSON payload");
+        assert_eq!(get_value["skill"]["id"].as_str(), Some("custom-plan"));
+        assert_eq!(get_value["skill"]["source"].as_str(), Some("custom"));
+    }
+
+    #[test]
+    fn skill_describe_supports_locale_override_for_official_skills() {
+        let context = runtime_context(&["Need research"], json!({}), vec![]);
+        let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
+
+        let payload = execute_local_skill_tool(
+            "skill_describe",
+            &json!({
+                "skill_ref": "research-brief",
+                "source": "official",
+                "locale": "ja",
+            }),
+            &catalog,
+        )
+        .expect("skill_describe should return a payload");
+        let value: Value = serde_json::from_str(&payload).expect("valid JSON payload");
+        assert_eq!(value["skill"]["id"].as_str(), Some("research-brief"));
+        assert_eq!(value["skill"]["name"].as_str(), Some("調査ブリーフ"));
+        assert_eq!(value["skill"]["source"].as_str(), Some("official"));
+    }
 }
