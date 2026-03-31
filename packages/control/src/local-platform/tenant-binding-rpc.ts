@@ -34,6 +34,11 @@ interface WorkflowAdapter {
   get(id: string): Promise<{ id: string; pause(): Promise<void>; resume(): Promise<void>; terminate(): Promise<void>; restart(): Promise<void>; status(): Promise<unknown> }>;
 }
 
+interface QueueAdapter {
+  send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>): Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -208,6 +213,33 @@ export function createWorkflowServiceHandler(
         }
         default:
           return errorResponse(`Unknown Workflow method: ${method}`, 404);
+      }
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+    }
+  };
+}
+
+export function createQueueServiceHandler(
+  queue: QueueAdapter,
+): (request: Request) => Promise<Response> {
+  return async (request: Request): Promise<Response> => {
+    try {
+      const method = getMethod(request);
+
+      switch (method) {
+        case 'send': {
+          const { message, options } = await parseBody<{ message: unknown; options?: { delaySeconds?: number } }>(request);
+          await queue.send(message, options);
+          return jsonResponse({ ok: true });
+        }
+        case 'sendBatch': {
+          const { messages } = await parseBody<{ messages: Array<{ body: unknown; delaySeconds?: number }> }>(request);
+          await queue.sendBatch(messages ?? []);
+          return jsonResponse({ ok: true });
+        }
+        default:
+          return errorResponse(`Unknown Queue method: ${method}`, 404);
       }
     } catch (error) {
       return errorResponse(error instanceof Error ? error.message : String(error), 500);

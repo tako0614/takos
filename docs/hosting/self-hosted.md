@@ -247,9 +247,15 @@ services:
 
 - **コマンド**: `pnpm local:oci-orchestrator`
 - **ポート**: `TAKOS_OCI_ORCHESTRATOR_PORT`（デフォルト `9002`）
-- **役割**: Docker コンテナのライフサイクル管理。CF Containers のローカル代替
-- **特殊設定**: `/var/run/docker.sock` をマウントしてホストの Docker を操作
+- **役割**: provider-aware な container runtime。CF Containers のローカル代替で、既定では Docker を使い、`k8s` / `cloud-run` / `ecs` provider は native backend を使う
+- **特殊設定**: Docker fallback を使う場合は `/var/run/docker.sock` をマウントしてホストの Docker を操作
 - **ネットワーク**: `default` + `takos-containers`（コンテナ間通信用）
+
+provider-native backend を使う場合の追加 env:
+
+- `k8s`: `K8S_NAMESPACE`, `K8S_DEPLOYMENT_NAME`, `K8S_IMAGE_REGISTRY`
+- `cloud-run`: `GCP_PROJECT_ID`, `GCP_CLOUD_RUN_REGION`, `GCP_CLOUD_RUN_SERVICE_ID`, `GCP_CLOUD_RUN_SERVICE_ACCOUNT`, `GCP_CLOUD_RUN_INGRESS`, `GCP_CLOUD_RUN_ALLOW_UNAUTHENTICATED`
+- `ecs`: `AWS_ECS_CLUSTER_ARN`, `AWS_ECS_TASK_DEFINITION_FAMILY`, `AWS_ECS_SERVICE_ARN` or `AWS_ECS_SERVICE_NAME`, `AWS_ECS_SUBNET_IDS`, `AWS_ECS_SECURITY_GROUP_IDS`, `AWS_ECS_BASE_URL`
 
 ### ネットワーク構成
 

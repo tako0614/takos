@@ -824,6 +824,101 @@ describe('DeploymentService.executeDeployment', () => {
     );
   });
 
+  it('passes env-derived provider registry into deployment execution', async () => {
+    const dep = createBaseDeployment({
+      artifact_kind: 'container-image',
+      provider_name: 'ecs',
+      target_json: JSON.stringify({
+        route_ref: 'takos-worker',
+        artifact: {
+          image_ref: 'ghcr.io/takos/worker:latest',
+        },
+      }),
+    });
+    const completedDep = createBaseDeployment({
+      artifact_kind: 'container-image',
+      provider_name: 'ecs',
+      status: 'success',
+      deploy_state: 'completed',
+    });
+
+    mocks.getDeploymentById
+      .mockResolvedValueOnce(dep)
+      .mockResolvedValueOnce(completedDep);
+    mocks.getDeploymentEvents.mockResolvedValue([]);
+    mocks.getServiceDeploymentBasics.mockResolvedValue({
+      exists: true,
+      hostname: 'test.example.com',
+      activeDeploymentId: null,
+    });
+    mocks.parseDeploymentTargetConfig.mockReturnValue({
+      route_ref: 'takos-worker',
+      artifact: {
+        image_ref: 'ghcr.io/takos/worker:latest',
+      },
+    });
+    mocks.createDeploymentProvider.mockReturnValue({
+      name: 'ecs',
+      deploy: vi.fn(),
+      assertRollbackTarget: vi.fn(),
+    });
+    mocks.executeDeploymentStep.mockImplementation(async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
+      await action();
+    });
+    mocks.fetchServiceWithDomains.mockResolvedValue({
+      id: 'w-1',
+      hostname: 'test.example.com',
+      activeDeploymentId: null,
+      customDomains: [],
+    });
+    mocks.collectHostnames.mockReturnValue(['test.example.com']);
+    mocks.snapshotRouting.mockResolvedValue([]);
+    mocks.buildRoutingTarget.mockReturnValue({
+      target: { type: 'deployments', deployments: [] },
+      auditDetails: {},
+    });
+    mocks.applyRoutingToHostnames.mockResolvedValue(undefined);
+    mocks.applyRoutingDbUpdates.mockResolvedValue(undefined);
+
+    const dbChain = makeDbUpdateChain();
+    mocks.getDb.mockReturnValue({
+      select: vi.fn(() => ({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(null),
+      })),
+      update: vi.fn(() => dbChain),
+    });
+
+    const env = makeEnv({
+      OCI_ORCHESTRATOR_URL: 'http://orchestrator.internal',
+      AWS_ECS_REGION: 'us-east-1',
+      AWS_ECS_CLUSTER_ARN: 'arn:aws:ecs:us-east-1:123456789012:cluster/takos',
+      AWS_ECS_TASK_DEFINITION_FAMILY: 'takos-worker',
+    });
+    const service = new DeploymentService(env, 'test-key');
+    await service.executeDeployment('dep-1');
+
+    expect(mocks.createDeploymentProvider).toHaveBeenCalledWith(
+      dep,
+      expect.objectContaining({
+        orchestratorUrl: 'http://orchestrator.internal',
+        providerRegistry: expect.objectContaining({
+          defaultName: 'workers-dispatch',
+        }),
+      }),
+    );
+    const createDeploymentProviderCall = mocks.createDeploymentProvider.mock.calls[0]?.[1];
+    expect(createDeploymentProviderCall.providerRegistry.get('ecs')).toEqual({
+      name: 'ecs',
+      config: {
+        region: 'us-east-1',
+        clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/takos',
+        taskDefinitionFamily: 'takos-worker',
+      },
+    });
+  });
+
   it('handles deployment failure — rolls back steps and marks as failed', async () => {
     const dep = createBaseDeployment({ worker_id: 'w-1', service_id: 'w-1' });
     mocks.getDeploymentById.mockResolvedValue(dep);
@@ -1068,6 +1163,84 @@ describe('DeploymentService.rollback', () => {
       expect.any(String),
       expect.any(Object),
     );
+  });
+
+  it('passes env-derived provider registry into rollback execution', async () => {
+    const targetDep = createBaseDeployment({
+      id: 'dep-1',
+      worker_id: 'w-1',
+      artifact_kind: 'container-image',
+      provider_name: 'k8s',
+      target_json: JSON.stringify({
+        route_ref: 'takos-worker',
+        artifact: {
+          image_ref: 'ghcr.io/takos/worker:latest',
+        },
+      }),
+    });
+
+    mocks.getServiceRollbackInfo.mockResolvedValue({
+      exists: true,
+      id: 'w-1',
+      activeDeploymentId: 'dep-2',
+      fallbackDeploymentId: 'dep-1',
+      activeDeploymentVersion: 2,
+    });
+    mocks.getDeploymentById
+      .mockResolvedValueOnce(targetDep)
+      .mockResolvedValueOnce(targetDep);
+    mocks.createDeploymentProvider.mockReturnValue({
+      name: 'k8s',
+      deploy: vi.fn().mockResolvedValue(undefined),
+      assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
+    });
+    mocks.fetchServiceWithDomains.mockResolvedValue({
+      id: 'w-1',
+      hostname: 'test.example.com',
+      activeDeploymentId: 'dep-2',
+      customDomains: [],
+    });
+    mocks.collectHostnames.mockReturnValue([]);
+    mocks.snapshotRouting.mockResolvedValue([]);
+    mocks.buildRoutingTarget.mockReturnValue({
+      target: { type: 'deployments', deployments: [] },
+      auditDetails: {},
+    });
+    mocks.parseDeploymentTargetConfig.mockReturnValue({
+      route_ref: 'takos-worker',
+      artifact: {
+        image_ref: 'ghcr.io/takos/worker:latest',
+      },
+    });
+
+    const dbChain = makeDbUpdateChain();
+    mocks.getDb.mockReturnValue({
+      update: vi.fn(() => dbChain),
+    });
+
+    const env = makeEnv({
+      OCI_ORCHESTRATOR_URL: 'http://orchestrator.internal',
+      K8S_NAMESPACE: 'takos',
+      K8S_DEPLOYMENT_NAME: 'takos-worker',
+    });
+    const service = new DeploymentService(env, 'test-key');
+    await service.rollback({ serviceId: 'w-1', userId: 'user-1' });
+
+    expect(mocks.createDeploymentProvider).toHaveBeenCalledWith(
+      targetDep,
+      expect.objectContaining({
+        orchestratorUrl: 'http://orchestrator.internal',
+        providerRegistry: expect.any(Object),
+      }),
+    );
+    const rollbackCreateCall = mocks.createDeploymentProvider.mock.calls[0]?.[1];
+    expect(rollbackCreateCall.providerRegistry.get('k8s')).toEqual({
+      name: 'k8s',
+      config: {
+        namespace: 'takos',
+        deploymentName: 'takos-worker',
+      },
+    });
   });
 
   it('rolls back to specific target version', async () => {

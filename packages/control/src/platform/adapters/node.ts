@@ -16,6 +16,10 @@ import type {
   PlatformServices,
   PlatformSource,
 } from '../platform-config.ts';
+import {
+  createDeploymentProviderRegistry,
+  resolveDeploymentProviderConfigsFromEnv,
+} from '../deployment-providers.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
 
 // ---------------------------------------------------------------------------
@@ -129,6 +133,9 @@ async function buildNodePlatformFromEnv<TBindings extends object>(env: TBindings
     documents,
     serviceRegistry: getServiceRegistry(env),
     sseNotifier: (env as Record<string, unknown>).SSE_NOTIFIER as PlatformServices['sseNotifier'],
+    deploymentProviders: createDeploymentProviderRegistry(
+      resolveDeploymentProviderConfigsFromEnv(env),
+    ),
   });
 
   return buildPlatform(source, env, config, services);

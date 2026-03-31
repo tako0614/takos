@@ -2,8 +2,8 @@
  * ContainerBackend — abstraction over container runtimes (Docker, Kubernetes, etc.)
  *
  * The OCI orchestrator delegates all container lifecycle operations to an
- * implementation of this interface, allowing different backends to be swapped
- * at startup via the `OCI_BACKEND` environment variable.
+ * implementation of this interface. The active backend may be fixed for the
+ * whole process or resolved per deployment provider.
  */
 
 export interface ContainerCreateOpts {
@@ -24,6 +24,20 @@ export interface ContainerCreateOpts {
 
   /** Optional labels / annotations for the container / pod. */
   labels?: Record<string, string>;
+
+  /** Optional health path used by provider-native runtimes. */
+  healthPath?: string;
+
+  /** Original endpoint request from the deployment target, when available. */
+  requestedEndpoint?:
+    | {
+        kind: 'service-ref';
+        ref: string;
+      }
+    | {
+        kind: 'http-url';
+        base_url: string;
+      };
 }
 
 export interface ContainerCreateResult {
@@ -35,6 +49,12 @@ export interface ContainerCreateResult {
    * May be `undefined` when the backend uses internal DNS (e.g. k8s pod IP).
    */
   hostPort?: number;
+
+  /** Resolved runtime endpoint when the provider exposes a stable URL. */
+  resolvedEndpoint?: { kind: 'http-url'; base_url: string };
+
+  /** Explicit health-check URL for providers without direct pod/container IP access. */
+  healthCheckUrl?: string;
 }
 
 export interface ContainerBackend {

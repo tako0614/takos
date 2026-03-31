@@ -35,6 +35,10 @@ export interface WorkerBinding {
   bucket_name?: string;
   namespace_id?: string;
   queue_name?: string;
+  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_url?: string;
+  subscription_name?: string;
+  provider_name?: string;
   delivery_delay?: number;
   dataset?: string;
   workflow_name?: string;
@@ -55,6 +59,10 @@ export interface CloudflareBindingRecord {
   bucket_name?: string;
   namespace_id?: string;
   queue_name?: string;
+  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_url?: string;
+  subscription_name?: string;
+  provider_name?: string;
   delivery_delay?: number;
   dataset?: string;
   workflow_name?: string;

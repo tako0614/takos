@@ -314,6 +314,95 @@ describe('resources base routes', () => {
       expect(json.error).toContain('Invalid resource type');
     });
 
+    it('accepts explicit provider to provision resource', async () => {
+      mocks.provisionManagedResource.mockResolvedValue({
+        id: 'res-provider',
+        providerResourceId: 'provider-id',
+        providerResourceName: 'provider-name',
+      });
+      mocks.getResourceById.mockResolvedValue({
+        id: 'res-provider',
+        name: 'new-db',
+        type: 'sql',
+        implementation: 'd1',
+        status: 'ready',
+      });
+
+      const res = await app.fetch(
+        new Request('http://localhost/api/resources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'new-db', type: 'sql', provider: 'aws' }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(201);
+      expect(mocks.provisionManagedResource).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({ providerName: 'aws' }),
+      );
+    });
+
+    it('passes analytics config through provisioning and respects dataset resource names', async () => {
+      mocks.provisionManagedResource.mockResolvedValue({
+        id: 'res-events',
+        providerResourceId: 'provider-id',
+        providerResourceName: 'tenant-events',
+      });
+      mocks.getResourceById.mockResolvedValue({
+        id: 'res-events',
+        name: 'events',
+        type: 'analyticsEngine',
+        implementation: 'analytics_engine',
+        status: 'ready',
+      });
+
+      const res = await app.fetch(
+        new Request('http://localhost/api/resources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'events',
+            type: 'analyticsEngine',
+            provider: 'local',
+            config: {
+              analyticsEngine: { dataset: 'tenant-events' },
+            },
+          }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(201);
+      expect(mocks.provisionManagedResource).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({
+          providerName: 'local',
+          providerResourceName: 'tenant-events',
+          analyticsStore: { dataset: 'tenant-events' },
+        }),
+      );
+    });
+
+    it('rejects invalid provider value', async () => {
+      const res = await app.fetch(
+        new Request('http://localhost/api/resources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'new-db', type: 'sql', provider: 'bad-provider' }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(400);
+      const json = await res.json() as { error: string };
+      expect(json.error).toContain('Invalid provider');
+    });
+
     it('validates that unsupported capability types are rejected', async () => {
       const res = await app.fetch(
         new Request('http://localhost/api/resources', {
@@ -330,15 +419,19 @@ describe('resources base routes', () => {
   });
 
   describe('PATCH /api/resources/:id', () => {
-    it('updates resource metadata for the owner', async () => {
+    it('updates resource metadata for the owner and syncs grouped desired state', async () => {
       mocks.getResourceById.mockResolvedValue({
         id: 'res-1',
         name: 'my-db',
         owner_id: TEST_USER_ID,
+        group_id: 'group-1',
+        type: 'sql',
+        config: JSON.stringify({ sql: { mode: 'rw' } }),
       });
       mocks.updateResourceMetadata.mockResolvedValue({
         id: 'res-1',
         name: 'renamed-db',
+        config: JSON.stringify({ sql: { mode: 'ro' } }),
       });
 
       const res = await app.fetch(
@@ -352,6 +445,17 @@ describe('resources base routes', () => {
       );
 
       expect(res.status).toBe(200);
+      expect(mocks.removeGroupDesiredResource).toHaveBeenCalledWith(env, {
+        groupId: 'group-1',
+        name: 'my-db',
+      });
+      expect(mocks.upsertGroupDesiredResource).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({
+          groupId: 'group-1',
+          name: 'renamed-db',
+        }),
+      );
     });
 
     it('returns 403 when non-owner tries to update', async () => {

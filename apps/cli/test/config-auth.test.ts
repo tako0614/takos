@@ -24,8 +24,8 @@ import {
   getConfig,
   isContainerMode,
   isAuthenticated,
-  logWarning,
 } from '../src/lib/config-auth.js';
+import { logWarning } from '../src/lib/cli-log.js';
 
 const MANAGED_ENV_VARS = [
   'TAKOS_SESSION_ID',

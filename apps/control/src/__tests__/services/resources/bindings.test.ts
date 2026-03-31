@@ -4,6 +4,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
   getResourceById: vi.fn(),
+  getPortableSecretValue: vi.fn(),
 }));
 
 vi.mock('@/db', async (importOriginal) => ({
@@ -15,11 +16,16 @@ vi.mock('@/services/resources/store', () => ({
   getResourceById: mocks.getResourceById,
 }));
 
+vi.mock('@/services/resources/portable-runtime', () => ({
+  getPortableSecretValue: mocks.getPortableSecretValue,
+}));
+
 import { buildBindingFromResource } from '@/services/resources/bindings';
 
 describe('buildBindingFromResource', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getPortableSecretValue.mockResolvedValue('portable-secret-value');
   });
 
   it('returns null when resource not found', async () => {
@@ -132,6 +138,28 @@ describe('buildBindingFromResource', () => {
     });
   });
 
+  it('builds provider-backed Queue binding metadata', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'queue',
+      status: 'active',
+      provider_name: 'aws',
+      provider_resource_id: 'https://sqs.us-east-1.amazonaws.com/123/my-queue',
+      provider_resource_name: 'my-queue',
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_QUEUE');
+
+    expect(result).toEqual({
+      type: 'queue',
+      name: 'MY_QUEUE',
+      queue_name: 'my-queue',
+      queue_backend: 'sqs',
+      queue_url: 'https://sqs.us-east-1.amazonaws.com/123/my-queue',
+      provider_name: 'aws',
+    });
+  });
+
   it('builds Analytics Engine binding', async () => {
     mocks.getResourceById.mockResolvedValue({
       id: 'res-1',
@@ -147,6 +175,74 @@ describe('buildBindingFromResource', () => {
       type: 'analytics_engine',
       name: 'ANALYTICS',
       dataset: 'events-dataset',
+    });
+  });
+
+  it('builds Secret binding', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'secretRef',
+      status: 'active',
+      provider_resource_id: 'secret-value',
+      provider_resource_name: 'my-secret',
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'AUTH_SECRET');
+
+    expect(result).toEqual({
+      type: 'secret_text',
+      name: 'AUTH_SECRET',
+      text: 'secret-value',
+    });
+  });
+
+  it('resolves provider-backed Secret binding values on demand', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'secretRef',
+      status: 'active',
+      provider_name: 'aws',
+      provider_resource_id: 'secret-ref',
+      provider_resource_name: 'my-secret',
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'AUTH_SECRET');
+
+    expect(mocks.getPortableSecretValue).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'res-1',
+      provider_name: 'aws',
+      provider_resource_id: 'secret-ref',
+      provider_resource_name: 'my-secret',
+    }));
+    expect(result).toEqual({
+      type: 'secret_text',
+      name: 'AUTH_SECRET',
+      text: 'portable-secret-value',
+    });
+  });
+
+  it('builds Durable Object binding from nested config', async () => {
+    mocks.getResourceById.mockResolvedValue({
+      id: 'res-1',
+      type: 'durableObject',
+      status: 'active',
+      provider_resource_id: null,
+      provider_resource_name: 'counter-resource',
+      config: JSON.stringify({
+        durableObject: {
+          className: 'Counter',
+          scriptName: 'edge-worker',
+        },
+      }),
+    });
+
+    const result = await buildBindingFromResource({} as D1Database, 'res-1', 'COUNTER');
+
+    expect(result).toEqual({
+      type: 'durable_object_namespace',
+      name: 'COUNTER',
+      class_name: 'Counter',
+      script_name: 'edge-worker',
     });
   });
 

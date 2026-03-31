@@ -346,18 +346,33 @@ export type BundleDoc = {
   spec: Record<string, unknown>;
 };
 
-// Legacy resource-type aliases that map older manifest names to current ones.
+// Resource-type aliases that map portable/legacy manifest names to Cloudflare-native
+// resource types used by the current application spec.
 export type LegacyAppResourceTypeAlias =
   | 'secret_ref'
   | 'analytics_engine'
   | 'workflow_binding'
-  | 'durable_object_namespace';
+  | 'durable_object_namespace'
+  | 'secret'
+  | 'sql'
+  | 'object_store'
+  | 'vector_index'
+  | 'analytics_store'
+  | 'workflow_runtime'
+  | 'durable_namespace';
 
 export const APP_RESOURCE_TYPE_ALIASES: Record<LegacyAppResourceTypeAlias, AppResource['type']> = {
   secret_ref: 'secretRef',
   analytics_engine: 'analyticsEngine',
   workflow_binding: 'workflow',
   durable_object_namespace: 'durableObject',
+  secret: 'secretRef',
+  sql: 'd1',
+  object_store: 'r2',
+  vector_index: 'vectorize',
+  analytics_store: 'analyticsEngine',
+  workflow_runtime: 'workflow',
+  durable_namespace: 'durableObject',
 };
 
 export const BUILD_SOURCE_LABELS = {

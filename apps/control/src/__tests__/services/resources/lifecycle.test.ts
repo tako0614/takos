@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   insertResource: vi.fn(),
   insertFailedResource: vi.fn(),
   createResource: vi.fn(),
+  deleteResource: vi.fn(),
+  ensurePortableManagedResource: vi.fn(),
+  deletePortableManagedResource: vi.fn(),
+  resolvePortableResourceReferenceId: vi.fn(),
   generateId: vi.fn(),
   now: vi.fn(),
 }));
@@ -17,7 +21,14 @@ vi.mock('@/services/resources/store', () => ({
 vi.mock('@/services/cloudflare/resources', () => ({
   CloudflareResourceService: vi.fn().mockImplementation(() => ({
     createResource: mocks.createResource,
+    deleteResource: mocks.deleteResource,
   })),
+}));
+
+vi.mock('@/services/resources/portable-runtime', () => ({
+  ensurePortableManagedResource: mocks.ensurePortableManagedResource,
+  deletePortableManagedResource: mocks.deletePortableManagedResource,
+  resolvePortableResourceReferenceId: mocks.resolvePortableResourceReferenceId,
 }));
 
 vi.mock('@/shared/utils', async (importOriginal) => ({
@@ -26,7 +37,10 @@ vi.mock('@/shared/utils', async (importOriginal) => ({
   now: mocks.now,
 }));
 
-import { provisionCloudflareResource } from '@/services/resources/lifecycle';
+import {
+  deleteManagedResource,
+  provisionCloudflareResource,
+} from '@/services/resources/lifecycle';
 
 describe('provisionCloudflareResource', () => {
   const mockEnv = {
@@ -39,6 +53,9 @@ describe('provisionCloudflareResource', () => {
     vi.clearAllMocks();
     mocks.generateId.mockReturnValue('generated-id');
     mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
+    mocks.ensurePortableManagedResource.mockResolvedValue(undefined);
+    mocks.deletePortableManagedResource.mockResolvedValue(undefined);
+    mocks.resolvePortableResourceReferenceId.mockResolvedValue('portable-resource-ref');
   });
 
   it('provisions a resource and inserts it into the database', async () => {
@@ -260,5 +277,119 @@ describe('provisionCloudflareResource', () => {
         }),
       })
     );
+  });
+
+  it('records a portable sql resource without Cloudflare API calls', async () => {
+    mocks.insertResource.mockResolvedValue(undefined);
+
+    const result = await provisionCloudflareResource({
+      DB: mockEnv.DB,
+      CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
+      CF_API_TOKEN: mockEnv.CF_API_TOKEN,
+    } as unknown as Env, {
+      ownerId: 'user-1',
+      name: 'Portable DB',
+      type: 'sql',
+      providerName: 'aws',
+      providerResourceName: 'portable-db',
+      persist: true,
+    });
+
+    expect(mocks.createResource).not.toHaveBeenCalled();
+    expect(mocks.ensurePortableManagedResource).toHaveBeenCalledWith({
+      id: 'generated-id',
+      provider_name: 'aws',
+      provider_resource_name: 'portable-db',
+    }, 'sql');
+    expect(result).toEqual({
+      id: 'generated-id',
+      providerResourceId: 'portable-db-generated-id',
+      providerResourceName: 'portable-db',
+    });
+    expect(mocks.insertResource).toHaveBeenCalledWith(
+      mockEnv.DB,
+      expect.objectContaining({
+        provider_name: 'aws',
+        provider_resource_id: 'portable-db-generated-id',
+        provider_resource_name: 'portable-db',
+      }),
+    );
+  });
+
+  it('supports dry-run portable resources without persistence', async () => {
+    const result = await provisionCloudflareResource({
+      DB: mockEnv.DB,
+      CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
+      CF_API_TOKEN: mockEnv.CF_API_TOKEN,
+    } as unknown as Env, {
+      ownerId: 'user-1',
+      name: 'Dry-run DB',
+      type: 'sql',
+      providerName: 'gcp',
+      providerResourceName: 'dryrun-db',
+      persist: false,
+    });
+
+    expect(result).toEqual({
+      id: 'generated-id',
+      providerResourceId: 'dryrun-db-generated-id',
+      providerResourceName: 'dryrun-db',
+    });
+    expect(mocks.createResource).not.toHaveBeenCalled();
+    expect(mocks.insertResource).not.toHaveBeenCalled();
+    expect(mocks.ensurePortableManagedResource).toHaveBeenCalledWith({
+      id: 'generated-id',
+      provider_name: 'gcp',
+      provider_resource_name: 'dryrun-db',
+    }, 'sql');
+  });
+
+  it('stores a portable secret reference as provider resource id', async () => {
+    mocks.insertResource.mockResolvedValue(undefined);
+    mocks.ensurePortableManagedResource.mockResolvedValue(undefined);
+
+    const result = await provisionCloudflareResource({
+      DB: mockEnv.DB,
+      CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
+      CF_API_TOKEN: mockEnv.CF_API_TOKEN,
+    } as unknown as Env, {
+      ownerId: 'user-1',
+      name: 'Portable Secret',
+      type: 'secret',
+      providerName: 'local',
+      providerResourceName: 'portable-secret',
+      persist: true,
+    });
+
+    expect(result.providerResourceName).toBe('portable-secret');
+    expect(result.providerResourceId).toBe('portable-resource-ref');
+    expect(mocks.insertResource).toHaveBeenCalledWith(
+      mockEnv.DB,
+      expect.objectContaining({
+        provider_name: 'local',
+        provider_resource_name: 'portable-secret',
+        provider_resource_id: 'portable-resource-ref',
+      }),
+    );
+  });
+
+  it('does not call Cloudflare delete API for non-cloudflare provider', async () => {
+    await deleteManagedResource({
+      DB: mockEnv.DB,
+      CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
+      CF_API_TOKEN: mockEnv.CF_API_TOKEN,
+    } as unknown as Env, {
+      type: 'sql',
+      providerName: 'k8s',
+      providerResourceId: 'remote-id',
+      providerResourceName: 'portable-db',
+    });
+
+    expect(mocks.deleteResource).not.toHaveBeenCalled();
+    expect(mocks.deletePortableManagedResource).toHaveBeenCalledWith({
+      id: 'remote-id',
+      provider_name: 'k8s',
+      provider_resource_name: 'portable-db',
+    }, 'sql');
   });
 });

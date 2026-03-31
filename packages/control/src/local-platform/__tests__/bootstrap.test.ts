@@ -1,9 +1,6 @@
-import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { promisify } from 'node:util';
-import { pathToFileURL } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,50 +12,33 @@ import {
   createLocalWebFetchForTests,
 } from '../bootstrap';
 import {
+  LOCAL_DEV_DEFAULTS,
   clearNodePlatformDataForTests,
   createNodeWebEnv,
   resetNodePlatformStateForTests,
-  LOCAL_DEV_DEFAULTS,
 } from '../../node-platform/env-builder';
 import { createLocalTenantWorkerRuntimeRegistry } from '../tenant-worker-runtime';
 import type { WorkerBinding } from '../../application/services/wfp/index.ts';
 import { RUN_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
-import { accounts, getDb, deployments } from '../../infra/db/index.ts';
+import { accounts, deployments, getDb } from '../../infra/db/index.ts';
 import { services } from '../../infra/db/schema-services';
 import { encrypt } from '../../shared/utils/crypto.ts';
+import { MockMiniflare } from './mock-miniflare.ts';
 
-const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(import.meta.dirname, '../../../../..');
-const localAdapterModuleUrl = pathToFileURL(path.join(
-  repoRoot,
-  'packages/control/src/node-platform/env-builder.ts',
-)).href;
-const runtimeModuleUrl = pathToFileURL(path.join(
-  repoRoot,
-  'packages/control/src/local-platform/runtime.ts',
-)).href;
-const dbIndexModuleUrl = pathToFileURL(path.join(
-  repoRoot,
-  'packages/control/src/infra/db/index.ts',
-)).href;
-const servicesSchemaModuleUrl = pathToFileURL(path.join(
-  repoRoot,
-  'packages/control/src/infra/db/schema-services.ts',
-)).href;
+const queueMocks = vi.hoisted(() => ({
+  sqsSend: vi.fn().mockResolvedValue(undefined),
+  sqsSendBatch: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('miniflare', () => ({ Miniflare: MockMiniflare }));
+vi.mock('../../adapters/sqs-queue.ts', () => ({
+  createSqsQueue: vi.fn(() => ({
+    send: queueMocks.sqsSend,
+    sendBatch: queueMocks.sqsSendBatch,
+  })),
+}));
 
 async function runMiniflareDispatchSmoke(): Promise<{ status: number; body: unknown }> {
-  const scriptDir = await mkdtemp(path.join(os.tmpdir(), 'takos-miniflare-smoke-'));
-  const scriptPath = path.join(scriptDir, 'dispatch-smoke.mjs');
-  const script = `
-import { mkdtemp, rm } from 'node:fs/promises';
-import path from 'node:path';
-import os from 'node:os';
-import { createNodeWebEnv, clearNodePlatformDataForTests, resetNodePlatformStateForTests } from ${JSON.stringify(localAdapterModuleUrl)};
-import { createLocalDispatchFetchForTests } from ${JSON.stringify(runtimeModuleUrl)};
-import { accounts, deployments, getDb } from ${JSON.stringify(dbIndexModuleUrl)};
-import { services } from ${JSON.stringify(servicesSchemaModuleUrl)};
-
-async function main() {
   process.env.ADMIN_DOMAIN = 'admin.local';
   process.env.TENANT_BASE_DOMAIN = 'tenant.local';
   process.env.TAKOS_LOCAL_ROUTING_JSON = JSON.stringify({
@@ -68,102 +48,41 @@ async function main() {
     },
   });
 
-  const tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-child-'));
+  const tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-dispatch-smoke-'));
   process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
   await clearNodePlatformDataForTests();
   await resetNodePlatformStateForTests();
 
+  const env = await createNodeWebEnv();
+
   try {
-    const env = await createNodeWebEnv();
-    const db = getDb(env.DB);
-    await db.insert(accounts).values({
-      id: 'space-demo',
-      type: 'workspace',
-      status: 'active',
-      name: 'Space Demo',
-      slug: 'space-demo',
-    }).run();
-    await db.insert(services).values({
-      id: 'worker-demo',
-      accountId: 'space-demo',
-      serviceType: 'app',
-      status: 'active',
-      routeRef: 'worker-demo',
-    }).run();
-    await db.insert(deployments).values({
-      id: 'deployment-demo-v1',
-      serviceId: 'worker-demo',
-      accountId: 'space-demo',
-      version: 1,
-      artifactRef: 'worker-demo-v1',
-      bundleR2Key: 'deployments/worker-demo/1/bundle.js',
-      runtimeConfigSnapshotJson: '{}',
-      status: 'active',
-      routingStatus: 'active',
-      routingWeight: 100,
-    }).run();
-    await env.WORKER_BUNDLES?.put('deployments/worker-demo/1/bundle.js', \`
-      export default {
-        async fetch(request) {
-          return new Response(JSON.stringify({
-            ok: true,
-            worker: 'worker-demo-v1',
-            path: new URL(request.url).pathname
-          }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      };
-    \`);
+    await seedTenantWorkerBundle({
+      env,
+      bundleContent: `
+        export default {
+          async fetch(request) {
+            return new Response(JSON.stringify({
+              ok: true,
+              worker: 'worker-demo-v1',
+              path: new URL(request.url).pathname
+            }), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        };
+      `,
+    });
 
     const fetch = await createLocalDispatchFetchForTests();
     const response = await fetch(new Request('http://hello.local/api/demo'));
-    console.log(JSON.stringify({
+
+    return {
       status: response.status,
       body: await response.json(),
-    }));
+    };
   } finally {
     await resetNodePlatformStateForTests();
     await rm(tempDataDir, { recursive: true, force: true });
-  }
-}
-
-main()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-`;
-
-  await writeFile(scriptPath, script, 'utf8');
-
-  try {
-    const env = { ...process.env };
-    delete env.VITEST;
-    delete env.VITEST_POOL_ID;
-    delete env.VITEST_WORKER_ID;
-
-    const { stdout } = await execFileAsync(
-      process.execPath,
-      ['--import', 'tsx/esm', scriptPath],
-      {
-        cwd: repoRoot,
-        env,
-        timeout: 60000,
-        maxBuffer: 1024 * 1024,
-      },
-    );
-
-    const output = stdout.trim().split('\n').at(-1);
-    if (!output) {
-      throw new Error('Miniflare smoke child process produced no output');
-    }
-    return JSON.parse(output) as { status: number; body: unknown };
-  } finally {
-    await rm(scriptDir, { recursive: true, force: true });
   }
 }
 
@@ -256,8 +175,11 @@ describe('local bootstrap', () => {
     delete process.env.TAKOS_LOCAL_BROWSER_URL;
     tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'takos-local-test-'));
     process.env.TAKOS_LOCAL_DATA_DIR = tempDataDir;
+    delete process.env.AWS_REGION;
     await clearNodePlatformDataForTests();
     await resetNodePlatformStateForTests();
+    queueMocks.sqsSend.mockClear();
+    queueMocks.sqsSendBatch.mockClear();
   });
 
   afterEach(async () => {
@@ -734,10 +656,11 @@ describe('local bootstrap', () => {
     }
   });
 
-  it('fails fast when local tenant workflow invocation is requested', async () => {
+  it('creates a workflow instance when local tenant workflow invocation is requested', async () => {
     const env = await createNodeWebEnv();
     await seedTenantWorkerBundle({
       env,
+      bindingsSnapshot: [{ type: 'workflow', name: 'RUN_WORKFLOW', workflow_name: 'runWorkflow', class_name: 'RunWorkflow' }],
       bundleContent: `
         export default {
           async fetch() {
@@ -755,9 +678,10 @@ describe('local bootstrap', () => {
     });
 
     try {
-      await expect(
-        registry.invokeWorkflow('worker-demo', { exportName: 'runWorkflow', payload: { job: 'demo' } }),
-      ).rejects.toThrow(/workflow runtime is not implemented yet/i);
+      const result = await registry.invokeWorkflow('worker-demo', { exportName: 'runWorkflow', payload: { job: 'demo' } });
+      expect(result.workflowName).toBe('runWorkflow');
+      expect(result.status).toBe('queued');
+      expect(result.id).toEqual(expect.any(String));
     } finally {
       await registry.dispose();
     }
@@ -833,6 +757,49 @@ describe('local bootstrap', () => {
     }
   });
 
+  it('materializes provider-backed tenant queue producer bindings', async () => {
+    const env = await createNodeWebEnv();
+    await seedTenantWorkerBundle({
+      env,
+      bindingsSnapshot: [{
+        type: 'queue',
+        name: 'JOBS',
+        queue_name: 'tenant-jobs',
+        queue_backend: 'sqs',
+        queue_url: 'https://sqs.ap-northeast-1.amazonaws.com/123456789012/tenant-jobs',
+      }],
+      bundleContent: `
+        export default {
+          async fetch(_request, env) {
+            await env.JOBS.send({ value: 'beta' });
+            return Response.json({
+              ok: true,
+              hasSend: typeof env.JOBS?.send === 'function',
+            });
+          }
+        };
+      `,
+    });
+
+    const registry = await createLocalTenantWorkerRuntimeRegistry({
+      dataDir: tempDataDir,
+      db: env.DB,
+      workerBundles: env.WORKER_BUNDLES,
+      encryptionKey: env.ENCRYPTION_KEY,
+    });
+
+    try {
+      const response = await registry.get('worker-demo').fetch('http://worker-demo/internal/state');
+      await expect(response.json()).resolves.toEqual({
+        ok: true,
+        hasSend: true,
+      });
+      expect(queueMocks.sqsSend).toHaveBeenCalledWith({ value: 'beta' }, undefined);
+    } finally {
+      await registry.dispose();
+    }
+  });
+
   it('materializes local tenant durable object bindings', async () => {
     const env = await createNodeWebEnv();
     await seedTenantWorkerBundle({
@@ -875,15 +842,23 @@ describe('local bootstrap', () => {
     }
   });
 
-  it('fails fast when local tenant analytics engine bindings are present', async () => {
+  it('materializes local tenant analytics engine bindings', async () => {
     const env = await createNodeWebEnv();
     await seedTenantWorkerBundle({
       env,
       bindingsSnapshot: [{ type: 'analytics_engine', name: 'EVENTS', dataset: 'tenant_events' }],
       bundleContent: `
         export default {
-          async fetch() {
-            return new Response('ok');
+          async fetch(_request, env) {
+            env.EVENTS.writeDataPoint({
+              blobs: ['signup'],
+              doubles: [1],
+              indexes: ['tenant_events'],
+            });
+            return Response.json({
+              ok: true,
+              hasWriteDataPoint: typeof env.EVENTS?.writeDataPoint === 'function',
+            });
           }
         };
       `,
@@ -897,23 +872,31 @@ describe('local bootstrap', () => {
     });
 
     try {
-      await expect(
-        registry.get('worker-demo').fetch('http://worker-demo/internal/state'),
-      ).rejects.toThrow(/does not support analytics engine bindings yet/i);
+      const response = await registry.get('worker-demo').fetch('http://worker-demo/internal/state');
+      await expect(response.json()).resolves.toEqual({
+        ok: true,
+        hasWriteDataPoint: true,
+      });
     } finally {
       await registry.dispose();
     }
   });
 
-  it('fails fast when local tenant workflow bindings are present', async () => {
+  it('materializes local tenant workflow bindings', async () => {
     const env = await createNodeWebEnv();
     await seedTenantWorkerBundle({
       env,
       bindingsSnapshot: [{ type: 'workflow', name: 'ONBOARDING', workflow_name: 'onboarding', class_name: 'OnboardingWorkflow' }],
       bundleContent: `
         export default {
-          async fetch() {
-            return new Response('ok');
+          async fetch(_request, env) {
+            const instance = await env.ONBOARDING.create({ params: { plan: 'starter' } });
+            const status = await instance.status();
+            return Response.json({
+              ok: true,
+              instanceId: instance.id,
+              status: status.status,
+            });
           }
         };
       `,
@@ -927,9 +910,11 @@ describe('local bootstrap', () => {
     });
 
     try {
-      await expect(
-        registry.get('worker-demo').fetch('http://worker-demo/internal/state'),
-      ).rejects.toThrow(/does not support workflow bindings yet/i);
+      const response = await registry.get('worker-demo').fetch('http://worker-demo/internal/state');
+      const json = await response.json() as { ok: boolean; instanceId: string; status: string };
+      expect(json.ok).toBe(true);
+      expect(json.instanceId).toEqual(expect.any(String));
+      expect(json.status).toBe('queued');
     } finally {
       await registry.dispose();
     }

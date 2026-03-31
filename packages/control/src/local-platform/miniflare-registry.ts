@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { writeFile } from 'node:fs/promises';
-import type { Fetcher } from '../shared/types/bindings.ts';
 import type { WorkerBinding } from '../application/services/wfp/index.ts';
 import { CF_COMPATIBILITY_DATE } from '../shared/constants/app.ts';
 import { createForwardingFetcher } from './url-registry.ts';
@@ -12,27 +11,29 @@ import type {
   TenantWorkerScheduledOptions,
   TenantWorkerScheduledResult,
   TenantWorkflowInvocation,
+  TenantWorkflowInvocationResult,
 } from './tenant-worker-runtime.ts';
 import {
-  createVectorizeServiceHandler,
   createAiServiceHandler,
   createAnalyticsServiceHandler,
+  createQueueServiceHandler,
+  createVectorizeServiceHandler,
   createWorkflowServiceHandler,
 } from './tenant-binding-rpc.ts';
-import { generateWrapperScript, type PolyfillBindingEntry } from './tenant-binding-polyfills.ts';
+import { type PolyfillBindingEntry, generateWrapperScript } from './tenant-binding-polyfills.ts';
 import { parseTenantResourceLimits } from './tenant-resource-limits.ts';
 import {
   type FetcherLike,
   type LocalTenantWorkerRegistryOptions,
-  resolveRoot,
-  sanitizeWorkerRef,
-  parseRuntimeConfig,
+  createMissingBindingFetcher,
   decryptBindingsSnapshot,
   decryptEnvVarSnapshot,
-  resolveDeploymentRuntime,
   loadBundleContent,
-  createMissingBindingFetcher,
   normalizeFetcherInput,
+  parseRuntimeConfig,
+  resolveDeploymentRuntime,
+  resolveRoot,
+  sanitizeWorkerRef,
 } from './miniflare-bindings.ts';
 
 type MiniflareInstance = {
@@ -48,7 +49,109 @@ type MiniflareModule = {
 type ResolvedTenantWorker = {
   fetcher: TenantWorkerFetcher;
   runtime: MiniflareInstance;
+  dispose(): Promise<void>;
 };
+
+function resolveMiniflareHost(): string {
+  const explicit = process.env.TAKOS_MINIFLARE_HOST?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  return '0.0.0.0';
+}
+
+function resolveMiniflarePort(): number | undefined {
+  const parsed = Number.parseInt(process.env.TAKOS_MINIFLARE_PORT?.trim() ?? '', 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return undefined;
+}
+
+function resolveWorkflowBindingName(
+  bindingsSnapshot: WorkerBinding[],
+  exportName: string,
+): string {
+  const workflowBinding = bindingsSnapshot.find((binding) => {
+    const candidate = binding as WorkerBinding & {
+      type?: string;
+      name?: string;
+      workflow_name?: string;
+      class_name?: string;
+    };
+    if (candidate.type !== 'workflow') return false;
+    return (
+      candidate.class_name === exportName
+      || candidate.workflow_name === exportName
+      || candidate.name === exportName
+    );
+  });
+
+  if (!workflowBinding) {
+    return exportName;
+  }
+
+  const candidate = workflowBinding as WorkerBinding & {
+    workflow_name?: string;
+    name?: string;
+  };
+  return candidate.workflow_name ?? candidate.name ?? exportName;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type ProviderQueueBinding = WorkerBinding & {
+  type: 'queue';
+  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_name?: string;
+  queue_url?: string;
+  subscription_name?: string;
+};
+
+async function createProviderQueueAdapter(
+  binding: ProviderQueueBinding,
+): Promise<null | {
+  send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>): Promise<void>;
+  receive?(): Promise<{ body: unknown; attempts?: number } | null>;
+}> {
+  switch (binding.queue_backend) {
+    case 'sqs': {
+      if (!binding.queue_url) {
+        throw new Error(`Queue binding "${binding.name}" requires queue_url for SQS`);
+      }
+      const { createSqsQueue } = await import('../adapters/sqs-queue.ts');
+      return createSqsQueue({
+        region: process.env.AWS_REGION?.trim() || 'us-east-1',
+        queueUrl: binding.queue_url,
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID?.trim(),
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY?.trim(),
+      });
+    }
+    case 'pubsub': {
+      const { createPubSubQueue } = await import('../adapters/pubsub-queue.ts');
+      return createPubSubQueue({
+        projectId: process.env.GCP_PROJECT_ID?.trim(),
+        keyFilePath: process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim(),
+        topicName: binding.queue_name || binding.name,
+        subscriptionName: binding.subscription_name,
+      });
+    }
+    case 'redis': {
+      const redisUrl = process.env.REDIS_URL?.trim();
+      if (!redisUrl) {
+        throw new Error(`Queue binding "${binding.name}" requires REDIS_URL for Redis-backed delivery`);
+      }
+      const { createRedisQueue } = await import('./redis-bindings.ts');
+      return createRedisQueue(redisUrl, binding.queue_name || binding.name);
+    }
+    case 'persistent':
+    default:
+      return null;
+  }
+}
 
 export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorkerRegistryOptions): Promise<{
   get(name: string, registryOptions?: { deploymentId?: string }): TenantWorkerFetcher;
@@ -67,7 +170,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
     name: string,
     invocation: TenantWorkflowInvocation,
     registryOptions?: { deploymentId?: string },
-  ): Promise<never>;
+  ): Promise<TenantWorkflowInvocationResult>;
   dispose(): Promise<void>;
 }> {
   const miniflareModule = await import('miniflare');
@@ -134,21 +237,36 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
       name: string,
       invocation: TenantWorkflowInvocation,
       registryOptions?: { deploymentId?: string },
-    ): Promise<never> {
-      void name;
-      void invocation;
-      void registryOptions;
-      throw new Error(
-        'Local tenant workflow runtime is not implemented yet. ' +
-        'Takos currently supports tenant fetch/queue/scheduled handlers in local mode, ' +
-        'but workflow export invocation still requires a dedicated Takos-managed runner.',
-      );
+    ): Promise<TenantWorkflowInvocationResult> {
+      const deployment = await resolveDeploymentRuntime(options.db, name, registryOptions);
+      if (!deployment) {
+        throw new Error(`Worker not found: ${name}${registryOptions?.deploymentId ? ` (${registryOptions.deploymentId})` : ''}`);
+      }
+
+      const bindingsSnapshot = await decryptBindingsSnapshot(deployment, options.encryptionKey);
+      const workflowName = resolveWorkflowBindingName(bindingsSnapshot, invocation.exportName);
+      const { createWorkflowBinding } = await import('../adapters/workflow-binding.ts');
+      const workflowBinding = createWorkflowBinding({
+        db: options.db,
+        serviceId: deployment.serviceId,
+        workflowName,
+      });
+      const instance = await workflowBinding.create({ params: invocation.payload });
+      const status = await instance.status();
+
+      return {
+        id: instance.id,
+        workflowName,
+        status: status.status,
+        serviceId: deployment.serviceId,
+        exportName: invocation.exportName,
+      };
     },
     async dispose(): Promise<void> {
       const resolved = await Promise.allSettled(deploymentRuntimeCache.values());
       await Promise.all(resolved.map(async (result) => {
         if (result.status === 'fulfilled') {
-          await result.value.runtime.dispose();
+          await result.value.dispose();
         }
       }));
       deploymentRuntimeCache.clear();
@@ -192,6 +310,11 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
       const queueProducers: Record<string, string | { queueName: string; deliveryDelay?: number }> = {};
       const durableObjects: Record<string, string | { className: string; scriptName?: string; useSQLite?: boolean }> = {};
       const serviceBindings: Record<string, string | ((request: Request) => Promise<Response>)> = {};
+      const queueConsumers: Array<{
+        bindingName: string;
+        queueName: string;
+        adapter: Awaited<ReturnType<typeof createProviderQueueAdapter>>;
+      }> = [];
 
       for (const binding of bindingsSnapshot) {
         const bindingType = (binding as WorkerBinding & { type: string }).type;
@@ -226,7 +349,21 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
             polyfillBindings.push({ name: binding.name, type: 'vectorize', rpcBindingName: rpcName });
             break;
           }
-          case 'queue':
+          case 'queue': {
+            const providerQueue = await createProviderQueueAdapter(binding as ProviderQueueBinding);
+            if (providerQueue) {
+              const queueRpcName = `__TAKOS_QUEUE_${binding.name}`;
+              serviceBindings[queueRpcName] = createQueueServiceHandler(providerQueue);
+              polyfillBindings.push({ name: binding.name, type: 'queue', rpcBindingName: queueRpcName });
+              if (typeof providerQueue.receive === 'function') {
+                queueConsumers.push({
+                  bindingName: binding.name,
+                  queueName: binding.queue_name || binding.name,
+                  adapter: providerQueue,
+                });
+              }
+              break;
+            }
             queueProducers[binding.name] = typeof binding.delivery_delay === 'number'
               ? {
                   queueName: binding.queue_name || binding.name,
@@ -234,6 +371,7 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
                 }
               : (binding.queue_name || binding.name);
             break;
+          }
           case 'analytics_engine': {
             const { createAnalyticsEngineBinding } = await import('../adapters/analytics-engine-binding.ts');
             const analyticsBinding = createAnalyticsEngineBinding({
@@ -331,11 +469,50 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
         kvPersist: workerPersistRoot ? path.join(workerPersistRoot, 'kv') : false,
         r2Persist: workerPersistRoot ? path.join(workerPersistRoot, 'r2') : false,
         d1Persist: workerPersistRoot ? path.join(workerPersistRoot, 'd1') : false,
+        host: resolveMiniflareHost(),
+        ...(resolveMiniflarePort() === undefined ? {} : { port: resolveMiniflarePort() }),
       });
       await mf.ready;
-      const fetcher = await mf.getWorker();
+      const fetcher = await mf.getWorker() as unknown as TenantWorkerFetcher;
+      let disposed = false;
+      const consumerLoops = queueConsumers.map(({ queueName, adapter }) => (async () => {
+        while (!disposed) {
+          try {
+            if (typeof adapter?.receive !== 'function') {
+              return;
+            }
+            const record = await adapter.receive();
+            if (!record) {
+              await sleep(250);
+              continue;
+            }
+            const result = await fetcher.queue(queueName, [{
+              id: crypto.randomUUID(),
+              timestamp: new Date(),
+              attempts: Math.max(1, record.attempts ?? 1),
+              body: record.body,
+            }]);
+            if (result.retryBatch || (Array.isArray(result.retryMessages) && result.retryMessages.length > 0) || result.ackAll === false) {
+              await adapter.send(record.body, { delaySeconds: 0 });
+            }
+          } catch {
+            if (disposed) {
+              return;
+            }
+            await sleep(500);
+          }
+        }
+      })());
 
-      return { fetcher: fetcher as unknown as TenantWorkerFetcher, runtime: mf };
+      return {
+        fetcher,
+        runtime: mf,
+        async dispose(): Promise<void> {
+          disposed = true;
+          await Promise.allSettled(consumerLoops);
+          await mf.dispose();
+        },
+      };
     })();
 
     deploymentRuntimeCache.set(cacheKey, created);

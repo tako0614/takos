@@ -40,7 +40,7 @@ export interface RemoteInstallResult {
  *
  * Creates a local repository record pointing to the remote clone URL.
  * The actual git data is fetched lazily on first access via the remote's
- * git smart HTTP endpoint (tkg:cloneUrl).
+ * git smart HTTP endpoint (cloneUri).
  */
 export async function installFromRemoteStore(
   dbBinding: D1Database,

@@ -7,6 +7,7 @@ import type { RoutingStore, RoutingTarget } from '../../application/services/rou
 import type {
   ControlPlatform,
   PlatformConfig,
+  PlatformDeployProviderRegistry,
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
@@ -50,6 +51,7 @@ type PlatformServiceInputs = {
   sqlBinding?: NonNullable<PlatformServices['sql']>['binding'];
   routingStore?: RoutingStore;
   hostnameRouting?: PlatformServices['hostnameRouting'];
+  deploymentProviders?: PlatformDeployProviderRegistry;
   queues?: PlatformServices['queues'];
   objects?: PlatformServices['objects'];
   notifications?: PlatformServices['notifications'];
@@ -110,6 +112,7 @@ export function createPlatformServices(input: PlatformServiceInputs): PlatformSe
     routing: input.routing,
     routingStore: input.routingStore,
     hostnameRouting: input.hostnameRouting,
+    deploymentProviders: input.deploymentProviders,
     queues: input.queues ?? {},
     objects: input.objects ?? {},
     notifications: input.notifications ?? {},

@@ -335,7 +335,9 @@ spec:
 `,
     });
 
-    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(/build(\.fromWorkflow)? is required/);
+    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(
+      /build\.fromWorkflow or artifact\.kind=bundle/i,
+    );
   });
 
   it('rejects missing workflow files during validation', async () => {

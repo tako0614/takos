@@ -32,8 +32,19 @@ vi.mock('@/services/actions/actions-triggers', () => ({
   triggerPushWorkflows: mocks.triggerPushWorkflows,
 }));
 
+vi.mock('@/services/identity/space-access', () => ({
+  checkSpaceAccess: mocks.checkWorkspaceAccess,
+}));
+
 vi.mock('@/db', () => ({
   getDb: mocks.getDb,
+  accounts: {
+    id: 'id',
+    type: 'type',
+    name: 'name',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  },
 }));
 
 vi.mock('@/db/schema', () => ({

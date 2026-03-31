@@ -1,13 +1,15 @@
 /**
  * Service entity operations for the control plane.
  *
- * Manages long-running services (e.g. background processes,
- * external service endpoints) and records state in the canonical services table.
+ * Manages long-running service records in the canonical services table.
  *
- * Runs inside Cloudflare Workers -- delegates to external providers
- * via fetch.
+ * The actual deployment-provider selection lives in the deployment pipeline;
+ * this wrapper only persists lifecycle intent and optional OCI-orchestrator
+ * side effects when configured.
  *
- * TODO: Add AWS ECS / GCP Cloud Run / Kubernetes provider implementations.
+ * Runs inside Cloudflare Workers -- delegates to external runtimes/providers
+ * via fetch. Provider-native execution is handled by the deployment pipeline
+ * and the OCI orchestrator backends.
  */
 
 import type { Env } from '../../../shared/types/env.ts';
@@ -54,13 +56,10 @@ interface ServiceConfig {
 // ---------------------------------------------------------------------------
 
 /**
- * Deploy a service via the OCI orchestrator endpoint.
+ * Deploy a service via the optional OCI orchestrator endpoint.
  *
  * Similar to container-ops but for long-running services that expose
  * a persistent endpoint (e.g. a database proxy, a queue consumer).
- *
- * TODO: Implement CF Workers for Platforms service binding.
- * TODO: Add AWS ECS / GCP Cloud Run providers.
  */
 async function deployServiceImage(
   env: Env,

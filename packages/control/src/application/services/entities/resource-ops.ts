@@ -14,6 +14,7 @@ import { resources } from '../../../infra/db/schema-platform-resources.ts';
 import type { Env } from '../../../shared/types/env.ts';
 import { resolveResourceDriver } from '../resources/capabilities.ts';
 import { inferCanonicalResourceDescriptor } from '../deployment/canonical-model.ts';
+import type { AppResource } from '../source/app-manifest-types.ts';
 import { deleteManagedResource, provisionManagedResource } from '../resources/lifecycle.ts';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ interface ResourceConfig {
   providerResourceId?: string;
   providerResourceName?: string;
   specFingerprint?: string;
+  [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +68,129 @@ function resourceProviderName(groupName: string, envName: string, resourceName: 
 
 function generateResourceId(): string {
   return crypto.randomUUID();
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function sanitizeBindingName(name: string): string {
+  return name.toUpperCase().replace(/-/g, '_');
+}
+
+function pickResourceSpecDetails(spec?: AppResource): Record<string, unknown> {
+  if (!spec) return {};
+
+  const details: Record<string, unknown> = {};
+  const specRecord = spec as unknown as Record<string, unknown>;
+
+  for (const key of [
+    'generate',
+    'limits',
+    'migrations',
+    'queue',
+    'vectorize',
+    'vectorIndex',
+    'analyticsEngine',
+    'analyticsStore',
+    'workflow',
+    'workflowRuntime',
+    'durableObject',
+    'durableNamespace',
+  ] as const) {
+    if (key in specRecord && specRecord[key] !== undefined) {
+      details[key] = specRecord[key];
+    }
+  }
+
+  return details;
+}
+
+function resolveManagedProviderResourceName(defaultName: string, spec?: AppResource): string {
+  const specRecord = asRecord(spec);
+  const analyticsConfig = asRecord(specRecord?.analyticsEngine) ?? asRecord(specRecord?.analyticsStore);
+  const dataset = typeof analyticsConfig?.dataset === 'string'
+    ? analyticsConfig.dataset.trim()
+    : '';
+  return dataset || defaultName;
+}
+
+function buildProvisioningOptions(spec?: AppResource): Record<string, unknown> {
+  if (!spec) return {};
+
+  const specRecord = spec as unknown as Record<string, unknown>;
+  const queueConfig = asRecord(specRecord.queue);
+  const vectorConfig = asRecord(specRecord.vectorize) ?? asRecord(specRecord.vectorIndex);
+  const analyticsConfig = asRecord(specRecord.analyticsEngine) ?? asRecord(specRecord.analyticsStore);
+  const workflowConfig = asRecord(specRecord.workflow) ?? asRecord(specRecord.workflowRuntime);
+  const durableConfig = asRecord(specRecord.durableObject) ?? asRecord(specRecord.durableNamespace);
+
+  const out: Record<string, unknown> = {};
+
+  if (typeof queueConfig?.deliveryDelaySeconds === 'number') {
+    out.queue = { deliveryDelaySeconds: queueConfig.deliveryDelaySeconds };
+  }
+
+  if (
+    typeof vectorConfig?.dimensions === 'number'
+    && typeof vectorConfig?.metric === 'string'
+  ) {
+    out.vectorIndex = {
+      dimensions: vectorConfig.dimensions,
+      metric: vectorConfig.metric,
+    };
+  }
+
+  if (typeof analyticsConfig?.dataset === 'string' && analyticsConfig.dataset.trim().length > 0) {
+    out.analyticsStore = { dataset: analyticsConfig.dataset.trim() };
+  }
+
+  if (
+    typeof workflowConfig?.service === 'string'
+    && typeof workflowConfig?.export === 'string'
+  ) {
+    out.workflowRuntime = {
+      service: workflowConfig.service,
+      export: workflowConfig.export,
+      ...(typeof workflowConfig.timeoutMs === 'number' ? { timeoutMs: workflowConfig.timeoutMs } : {}),
+      ...(typeof workflowConfig.maxRetries === 'number' ? { maxRetries: workflowConfig.maxRetries } : {}),
+    };
+  }
+
+  if (typeof durableConfig?.className === 'string') {
+    out.durableNamespace = {
+      className: durableConfig.className,
+      ...(typeof durableConfig.scriptName === 'string' ? { scriptName: durableConfig.scriptName } : {}),
+    };
+  }
+
+  return out;
+}
+
+function buildResourceConfig(params: {
+  type: string;
+  descriptor: NonNullable<ReturnType<typeof inferCanonicalResourceDescriptor>>;
+  binding: string;
+  providerResourceId?: string | null;
+  providerResourceName?: string | null;
+  specFingerprint?: string;
+  spec?: AppResource;
+}): ResourceConfig {
+  return {
+    type: params.type,
+    manifestType: params.spec?.type ?? params.type,
+    resourceClass: params.descriptor.resourceClass,
+    backing: params.descriptor.backing,
+    binding: params.binding,
+    bindingName: params.binding,
+    bindingType: params.descriptor.bindingType,
+    ...(params.providerResourceId ? { providerResourceId: params.providerResourceId } : {}),
+    ...(params.providerResourceName ? { providerResourceName: params.providerResourceName } : {}),
+    ...(params.specFingerprint ? { specFingerprint: params.specFingerprint } : {}),
+    ...pickResourceSpecDetails(params.spec),
+  };
 }
 
 async function resolveSpaceId(
@@ -100,14 +225,18 @@ export async function createResource(
     spaceId?: string;
     providerName?: string;
     specFingerprint?: string;
+    spec?: AppResource;
   },
 ): Promise<EntityResult> {
   const descriptor = inferCanonicalResourceDescriptor(opts.type);
   if (!descriptor) {
     throw new Error(`Unsupported resource type: ${opts.type}`);
   }
-  const binding = opts.binding || name.toUpperCase().replace(/-/g, '_');
-  const providerResourceName = resourceProviderName(opts.groupName ?? groupId, opts.envName ?? 'default', name);
+  const binding = opts.binding || sanitizeBindingName(name);
+  const providerResourceName = resolveManagedProviderResourceName(
+    resourceProviderName(opts.groupName ?? groupId, opts.envName ?? 'default', name),
+    opts.spec,
+  );
   const spaceId = await resolveSpaceId(env, groupId, opts.spaceId);
   const providerName = opts.providerName ?? 'cloudflare';
   const provisioned = await provisionManagedResource(env, {
@@ -121,21 +250,19 @@ export async function createResource(
     providerName,
     persist: false,
     providerResourceName,
-    config: {},
+    config: pickResourceSpecDetails(opts.spec),
+    ...buildProvisioningOptions(opts.spec),
   });
 
-  const config: ResourceConfig = {
+  const config = buildResourceConfig({
     type: opts.type,
-    manifestType: opts.type,
-    resourceClass: descriptor.resourceClass,
-    backing: descriptor.backing,
+    descriptor,
     binding,
-    bindingName: binding,
-    bindingType: descriptor.bindingType,
-    providerResourceId: provisioned.providerResourceId ?? undefined,
+    providerResourceId: provisioned.providerResourceId,
     providerResourceName: provisioned.providerResourceName,
-    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
-  };
+    specFingerprint: opts.specFingerprint,
+    spec: opts.spec,
+  });
 
   const db = getDb(env.DB);
   const existing = await db.select()
@@ -203,6 +330,7 @@ export async function updateManagedResource(
   updates: {
     binding?: string;
     specFingerprint?: string;
+    spec?: AppResource;
   },
 ): Promise<void> {
   const db = getDb(env.DB);
@@ -220,14 +348,29 @@ export async function updateManagedResource(
   }
 
   const current = JSON.parse(row.config) as ResourceConfig;
-  const next: ResourceConfig = {
-    ...current,
-    ...(updates.binding ? { binding: updates.binding } : {}),
-    ...(updates.specFingerprint ? { specFingerprint: updates.specFingerprint } : {}),
-  };
+  const descriptor = inferCanonicalResourceDescriptor(current.manifestType ?? current.type ?? row.type);
+  if (!descriptor) {
+    throw new Error(`Unsupported resource type: ${current.manifestType ?? current.type ?? row.type}`);
+  }
+
+  const binding = updates.binding ?? current.bindingName ?? current.binding ?? sanitizeBindingName(name);
+  const providerResourceName = resolveManagedProviderResourceName(
+    row.providerResourceName ?? current.providerResourceName ?? resourceProviderName(groupId, 'default', name),
+    updates.spec,
+  );
+  const next = buildResourceConfig({
+    type: current.type ?? row.type,
+    descriptor,
+    binding,
+    providerResourceId: row.providerResourceId ?? current.providerResourceId ?? undefined,
+    providerResourceName,
+    specFingerprint: updates.specFingerprint ?? current.specFingerprint,
+    spec: updates.spec,
+  });
 
   await db.update(resources)
     .set({
+      providerResourceName,
       config: JSON.stringify(next),
       updatedAt: new Date().toISOString(),
     })

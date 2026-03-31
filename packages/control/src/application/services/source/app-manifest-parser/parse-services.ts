@@ -1,17 +1,24 @@
 import type {
-  AppService,
-  AppMcpServer,
   AppFileHandler,
+  AppMcpServer,
+  AppService,
   ServiceBinding,
 } from '../app-manifest-types';
 import {
   asRecord,
-  asString,
   asRequiredString,
+  asString,
   asStringArray,
   asStringMap,
   normalizeRepoPath,
 } from '../app-manifest-utils';
+type ServiceProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+
+function parseServiceProvider(value: unknown): ServiceProvider | undefined {
+  return value === 'oci' || value === 'ecs' || value === 'cloud-run' || value === 'k8s'
+    ? value
+    : undefined;
+}
 import { parseHealthCheck, parseVolumes } from './parse-containers';
 
 // ============================================================
@@ -98,8 +105,8 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       ? {
           kind: 'image' as const,
           imageRef: asRequiredString(artifactRecord.imageRef, `spec.services.${name}.artifact.imageRef`),
-          ...(artifactRecord.provider === 'oci' || artifactRecord.provider === 'ecs' || artifactRecord.provider === 'cloud-run' || artifactRecord.provider === 'k8s'
-            ? { provider: artifactRecord.provider }
+          ...(parseServiceProvider(artifactRecord.provider)
+            ? { provider: parseServiceProvider(artifactRecord.provider) }
             : {}),
         }
       : undefined;
@@ -112,8 +119,8 @@ export function parseServices(specRecord: Record<string, unknown>): Record<strin
       ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
       ...(imageRef ? { imageRef } : {}),
       ...(artifact ? { artifact } : {}),
-      ...(s.provider === 'oci' || s.provider === 'ecs' || s.provider === 'cloud-run' || s.provider === 'k8s'
-        ? { provider: s.provider }
+      ...(parseServiceProvider(s.provider)
+        ? { provider: parseServiceProvider(s.provider) }
         : {}),
       ...(s.instanceType ? { instanceType: String(s.instanceType) } : {}),
       ...(s.maxInstances ? { maxInstances: Number(s.maxInstances) } : {}),

@@ -14,6 +14,8 @@ import { handleInfoRefs } from '../../../application/services/git-smart/smart-ht
 import { handleUploadPack } from '../../../application/services/git-smart/smart-http/upload-pack';
 import { handleReceivePack, handleReceivePackFromStream } from '../../../application/services/git-smart/smart-http/receive-pack';
 import { triggerPushWorkflows } from '../../../application/services/actions/actions-triggers';
+import { recordPushActivity, type CommitMeta } from '../../../application/services/activitypub/push-activities';
+import { getCommitLog } from '../../../application/services/git-smart/core/commit-index';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -341,30 +343,61 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
     }
     const { response, updatedRefs } = receivePack;
 
-    if (updatedRefs.length > 0 && c.env.WORKFLOW_QUEUE) {
+    if (updatedRefs.length > 0) {
       c.executionCtx.waitUntil((async () => {
         for (const ref of updatedRefs) {
           if (!ref.refName.startsWith('refs/heads/') || ref.newSha === ZERO_SHA) {
             continue;
           }
 
+          // Record ForgeFed Push activity for ActivityPub outbox
           try {
-            await triggerPushWorkflows({
-              db: c.env.DB,
-              bucket,
-              queue: c.env.WORKFLOW_QUEUE,
-              encryptionKey: c.env.ENCRYPTION_KEY,
-            }, {
+            // Fetch recent commits for metadata sharing
+            const commitLog = await getCommitLog(c.env.DB, bucket, result.repo.id, ref.newSha, 20);
+            const commits: CommitMeta[] = commitLog
+              .filter((c) => ref.oldSha === ZERO_SHA || c.sha !== ref.oldSha)
+              .map((c) => ({
+                hash: c.sha,
+                message: c.message,
+                authorName: c.author.name,
+                authorEmail: c.author.email,
+                committed: new Date(c.committer.timestamp * 1000).toISOString(),
+              }));
+
+            await recordPushActivity(c.env.DB, {
               repoId: result.repo.id,
-              branch: ref.refName.slice('refs/heads/'.length),
-              before: ref.oldSha === ZERO_SHA ? null : ref.oldSha,
-              after: ref.newSha,
-              actorId: user.id,
-              actorName: user.name || null,
-              actorEmail: user.email || null,
+              accountId: result.repo.space_id,
+              ref: ref.refName,
+              beforeSha: ref.oldSha === ZERO_SHA ? null : ref.oldSha,
+              afterSha: ref.newSha,
+              pusherName: user.name || null,
+              commitCount: commits.length,
+              commits,
             });
           } catch (err) {
-            logError('Failed to trigger push workflows', err, { action: 'trigger_push_workflows', repoId: result.repo.id, refName: ref.refName });
+            logError('Failed to record push activity', err, { action: 'record_push_activity', repoId: result.repo.id, refName: ref.refName });
+          }
+
+          // Trigger CI workflows
+          if (c.env.WORKFLOW_QUEUE) {
+            try {
+              await triggerPushWorkflows({
+                db: c.env.DB,
+                bucket,
+                queue: c.env.WORKFLOW_QUEUE,
+                encryptionKey: c.env.ENCRYPTION_KEY,
+              }, {
+                repoId: result.repo.id,
+                branch: ref.refName.slice('refs/heads/'.length),
+                before: ref.oldSha === ZERO_SHA ? null : ref.oldSha,
+                after: ref.newSha,
+                actorId: user.id,
+                actorName: user.name || null,
+                actorEmail: user.email || null,
+              });
+            } catch (err) {
+              logError('Failed to trigger push workflows', err, { action: 'trigger_push_workflows', repoId: result.repo.id, refName: ref.refName });
+            }
           }
         }
       })());

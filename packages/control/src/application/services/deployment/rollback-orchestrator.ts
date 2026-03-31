@@ -14,6 +14,10 @@ import {
   parseDeploymentTargetConfig,
 } from './provider';
 import {
+  createDeploymentProviderRegistry,
+  resolveDeploymentProviderConfigsFromEnv,
+} from '../../../platform/deployment-providers.ts';
+import {
   getDeploymentById,
   getDeploymentServiceId,
   getServiceRollbackInfo,
@@ -81,6 +85,9 @@ export async function executeRollback(
     cloudflareEnv: env,
     orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
     orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
+    providerRegistry: createDeploymentProviderRegistry(
+      resolveDeploymentProviderConfigsFromEnv(env as unknown as Record<string, unknown>),
+    ),
   });
 
   const isContainerRollback = targetDeployment.artifact_kind === 'container-image';

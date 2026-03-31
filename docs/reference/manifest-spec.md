@@ -1,6 +1,6 @@
 # マニフェストリファレンス
 
-このページは `.takos/app.yml` の current surface を要約します。resource と binding は Cloudflare-native の syntax が正本です。
+このページは `.takos/app.yml` の current surface を要約します。`.takos/app.yml` は group desired state を author する主要 source で、resource と binding は Cloudflare-native の syntax が正本です。Takos runtime はこの spec を Cloudflare backend と互換 backend の両方で実現します。
 
 ## トップレベル
 
@@ -110,6 +110,8 @@
 | `ingress` | no | ingress workload |
 | `timeoutMs` | no | route timeout |
 | `methods` | no | 許可 HTTP method |
+
+custom domain / hostname routing はこの manifest の canonical desired state には含めません。これらは routing / observed surface として別 API で扱います。
 
 ## mcpServers[]
 

@@ -10,20 +10,20 @@ import { getDb } from '../../../infra/db/client.ts';
 import { groups } from '../../../infra/db/schema-groups.ts';
 import type { AppContainer, AppManifest, AppService, AppWorker } from '../source/app-manifest-types.ts';
 import {
+  type GroupDesiredState,
   compileGroupDesiredState,
   materializeRoutes,
-  type GroupDesiredState,
 } from './group-state.ts';
 import {
-  computeDiff,
   type DiffEntry,
   type DiffResult,
   type GroupState,
+  computeDiff,
 } from './diff.ts';
 import {
+  type TranslationReport,
   assertTranslationSupported,
   buildTranslationReport,
-  type TranslationReport,
 } from './translation-report.ts';
 import {
   createResource,
@@ -41,10 +41,10 @@ import {
   deleteService,
 } from '../entities/service-ops.ts';
 import {
-  listGroupManagedServices,
-  upsertGroupManagedService,
   type ManagedServiceComponentKind,
   type ManagedServiceRecord,
+  listGroupManagedServices,
+  upsertGroupManagedService,
 } from '../entities/group-managed-services.ts';
 import { DeploymentService } from './service.ts';
 import { getDeploymentById } from './store.ts';
@@ -605,11 +605,12 @@ async function executeEntry(
         await createResource(env, groupId, entry.name, {
           type: resource.type,
           binding: resource.binding,
-          groupName,
+          groupName: group.name,
           envName,
           spaceId,
           providerName: desiredState.provider,
           specFingerprint: resource.specFingerprint,
+          spec: resource.spec,
         });
       }
       if (entry.action === 'update') {
@@ -617,6 +618,7 @@ async function executeEntry(
         await updateManagedResource(env, groupId, entry.name, {
           binding: resource.binding,
           specFingerprint: resource.specFingerprint,
+          spec: resource.spec,
         });
       }
       if (entry.action === 'delete') {
@@ -786,8 +788,9 @@ export async function applyManifest(
   });
   const currentState = await getGroupState(env, groupId);
   const diff = computeDiff(desiredState, currentState);
-  const translationReport = buildTranslationReport(desiredState);
-  assertTranslationSupported(translationReport);
+  const translationContext = { ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL };
+  const translationReport = buildTranslationReport(desiredState, translationContext);
+  assertTranslationSupported(translationReport, translationContext);
 
   let entries = diff.entries;
   if (opts.target && opts.target.length > 0) {
@@ -886,8 +889,9 @@ export async function planManifest(
     envName: opts.envName ?? group.env ?? 'default',
   });
   const currentState = await getGroupState(env, groupId);
-  const translationReport = buildTranslationReport(desiredState);
-  assertTranslationSupported(translationReport);
+  const translationContext = { ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL };
+  const translationReport = buildTranslationReport(desiredState, translationContext);
+  assertTranslationSupported(translationReport, translationContext);
   return {
     diff: computeDiff(desiredState, currentState),
     translationReport,

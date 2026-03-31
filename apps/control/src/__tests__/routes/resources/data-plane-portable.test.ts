@@ -97,6 +97,8 @@ describe('portable resource data-plane routes', () => {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
+    delete process.env.POSTGRES_URL;
+    delete process.env.DATABASE_URL;
     mocks.checkResourceAccess.mockResolvedValue(true);
     mocks.isPortableResourceProvider.mockImplementation((providerName?: string | null) => providerName != null && providerName !== 'cloudflare');
     mocks.createOptionalCloudflareWfpProvider.mockReset();
@@ -143,6 +145,55 @@ describe('portable resource data-plane routes', () => {
     const json = await res.json() as { tables: Array<{ name: string; row_count: number }> };
     expect(json.tables).toEqual([
       expect.objectContaining({ name: 'users', row_count: 2 }),
+    ]);
+  });
+
+  it('serves sql tables through the portable postgres backend on /sql/tables', async () => {
+    process.env.POSTGRES_URL = 'postgresql://takos:takos@postgres:5432/takos';
+    mocks.resourceRow = {
+      id: 'res-sql-pg',
+      ownerAccountId: TEST_USER_ID,
+      accountId: 'space-1',
+      providerName: 'aws',
+      name: 'db',
+      type: 'd1',
+      status: 'active',
+      providerResourceId: 'db-res-sql-pg',
+      providerResourceName: 'db-res-sql-pg',
+      config: '{}',
+      metadata: '{}',
+      createdAt: TEST_TIMESTAMP,
+      updatedAt: TEST_TIMESTAMP,
+    };
+    mocks.getPortableSqlDatabase.mockResolvedValue({
+      prepare(sql: string) {
+        if (sql.includes('information_schema.tables')) {
+          return { all: vi.fn().mockResolvedValue({ results: [{ table_name: 'users' }] }) };
+        }
+        if (sql.includes('information_schema.columns')) {
+          return {
+            bind: vi.fn(() => ({
+              all: vi.fn().mockResolvedValue({ results: [{ name: 'id', type: 'integer', nullable: 'NO' }] }),
+            })),
+          };
+        }
+        if (sql.startsWith('SELECT COUNT(*)')) {
+          return { first: vi.fn().mockResolvedValue(3) };
+        }
+        throw new Error(`Unexpected SQL in postgres test: ${sql}`);
+      },
+    });
+
+    const res = await app.fetch(
+      new Request('http://localhost/api/resources/res-sql-pg/sql/tables'),
+      env,
+      {} as ExecutionContext,
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { tables: Array<{ name: string; row_count: number }> };
+    expect(json.tables).toEqual([
+      expect.objectContaining({ name: 'users', row_count: 3 }),
     ]);
   });
 

@@ -180,6 +180,27 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     config: body.config || null,
     platformDomain,
   });
+  if (!result.service) {
+    throw new InternalError('Failed to create service');
+  }
+
+  if (groupId) {
+    if (serviceType === 'app') {
+      await upsertGroupDesiredWorkload(c.env, {
+        groupId,
+        category: 'worker',
+        name: result.service.slug ?? result.service.id,
+        workload: buildProjectedWorkerSpec({}),
+      });
+    } else {
+      await upsertGroupDesiredWorkload(c.env, {
+        groupId,
+        category: 'service',
+        name: result.service.slug ?? result.service.id,
+        workload: buildProjectedServiceSpec(parseServiceConfig(body.config ?? null)) as never,
+      });
+    }
+  }
 
   return c.json({ service: result.service }, 201);
 })

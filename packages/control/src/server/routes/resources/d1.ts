@@ -1,19 +1,20 @@
-import { Hono, type Context } from 'hono';
+import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 import type { Resource, ResourcePermission } from '../../../shared/types';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth';
+import { type AuthenticatedRouteEnv, parseJsonBody } from '../route-auth';
 import { parsePagination } from '../../../shared/utils';
-import { BadRequestError, NotFoundError, AuthorizationError, InternalError, isAppError } from 'takos-common/errors';
+import { AuthorizationError, BadRequestError, InternalError, NotFoundError, isAppError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator';
 import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
 import { getPortableSqlDatabase, isPortableResourceProvider } from './portable-runtime.ts';
 import { checkResourceAccess } from '../../../application/services/resources';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
 import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities';
 import { textDate } from '../../../shared/utils/db-guards';
+import { resolvePostgresUrl } from '../../../node-platform/resolvers/env-utils.ts';
 
 type D1ResourceData = {
   id: string;
@@ -123,6 +124,48 @@ async function loadD1ResourceWithAccess(
 
 async function listPortableTables(resource: Resource) {
   const db = await getPortableSqlDatabase(resource);
+  const usePortablePostgres =
+    !!resolvePostgresUrl()
+    && !!resource.provider_name
+    && resource.provider_name !== 'cloudflare'
+    && resource.provider_name !== 'local';
+
+  if (usePortablePostgres) {
+    const tablesResult = await db
+      .prepare(
+        `SELECT table_name
+         FROM information_schema.tables
+         WHERE table_schema = current_schema()
+           AND table_type = 'BASE TABLE'
+         ORDER BY table_name`,
+      )
+      .all<{ table_name: string }>();
+    const tables = tablesResult.results ?? [];
+
+    return Promise.all(
+      tables.map(async ({ table_name: name }) => {
+        const [columnsResult, countResult] = await Promise.all([
+          db.prepare(
+            `SELECT
+               column_name as name,
+               data_type as type,
+               is_nullable as nullable
+             FROM information_schema.columns
+             WHERE table_schema = current_schema()
+               AND table_name = ?
+             ORDER BY ordinal_position`,
+          ).bind(name).all<Record<string, unknown>>(),
+          db.prepare(`SELECT COUNT(*) as count FROM "${name}"`).first<{ count?: number }>('count'),
+        ]);
+        return {
+          name,
+          columns: columnsResult.results ?? [],
+          row_count: Number(countResult ?? 0),
+        };
+      }),
+    );
+  }
+
   const tablesResult = await db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
     .all<{ name: string }>();
@@ -147,6 +190,9 @@ async function listPortableTables(resource: Resource) {
 async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
+  if (!resourceId) {
+    throw new BadRequestError('Resource ID is required');
+  }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
   if (isPortableResourceProvider(resource.provider_name)) {
@@ -202,6 +248,12 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const tableName = c.req.param('tableName');
+  if (!resourceId) {
+    throw new BadRequestError('Resource ID is required');
+  }
+  if (!tableName) {
+    throw new BadRequestError('Table name is required');
+  }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
   const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 1000 });
   const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
@@ -212,6 +264,38 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
   if (isPortableResourceProvider(resource.provider_name)) {
     try {
       const db = await getPortableSqlDatabase(resource);
+      const usePortablePostgres =
+        !!resolvePostgresUrl()
+        && !!resource.provider_name
+        && resource.provider_name !== 'cloudflare'
+        && resource.provider_name !== 'local';
+
+      if (usePortablePostgres) {
+        const [columnsResult, countValue, rowsResult] = await Promise.all([
+          db.prepare(
+            `SELECT
+               column_name as name,
+               data_type as type,
+               is_nullable as nullable
+             FROM information_schema.columns
+             WHERE table_schema = current_schema()
+               AND table_name = ?
+             ORDER BY ordinal_position`,
+          ).bind(safeName).all<Record<string, unknown>>(),
+          db.prepare(`SELECT COUNT(*) as count FROM "${safeName}"`).first<number>('count'),
+          db.prepare(`SELECT * FROM "${safeName}" LIMIT ${limit} OFFSET ${offset}`).all<Record<string, unknown>>(),
+        ]);
+
+        return c.json({
+          table: safeName,
+          columns: columnsResult.results ?? [],
+          rows: rowsResult.results ?? [],
+          total_count: Number(countValue ?? 0),
+          limit,
+          offset,
+        });
+      }
+
       const [columnsResult, countValue, rowsResult] = await Promise.all([
         db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
         db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<number>('count'),
@@ -272,9 +356,12 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
 async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const body = c.req.valid('json');
+  if (!resourceId) {
+    throw new BadRequestError('Resource ID is required');
+  }
+  const body = await parseJsonBody<{ sql?: string }>(c);
 
-  if (!body.sql?.trim()) {
+  if (!body?.sql?.trim()) {
     throw new BadRequestError('SQL query is required');
   }
 
@@ -320,6 +407,9 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
 async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');
   const resourceId = c.req.param('id');
+  if (!resourceId) {
+    throw new BadRequestError('Resource ID is required');
+  }
   const body = await parseJsonBody<{ tables?: string[] }>(c);
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 

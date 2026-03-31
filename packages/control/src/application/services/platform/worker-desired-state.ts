@@ -214,8 +214,10 @@ export class ServiceDesiredStateService {
         resourceName: row.resourceName,
         resourceType: '',
         resourceStatus: 'active',
+        resourceProviderName: null,
         resourceProviderResourceId: null,
         resourceProviderResourceName: row.resourceName,
+        resourceConfig: '{}',
       })?.type ?? 'service',
       resource_id: row.resourceId,
       resource_name: row.resourceName,
@@ -280,8 +282,10 @@ export class ServiceDesiredStateService {
         resourceName: resources.name,
         resourceType: resources.type,
         resourceStatus: resources.status,
+        resourceProviderName: resources.providerName,
         resourceProviderResourceId: resources.providerResourceId,
         resourceProviderResourceName: resources.providerResourceName,
+        resourceConfig: resources.config,
       })
         .from(serviceBindings)
         .innerJoin(resources, eq(resources.id, serviceBindings.resourceId))

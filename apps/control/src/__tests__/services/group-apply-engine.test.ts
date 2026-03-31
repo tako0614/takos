@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   groupGet: vi.fn(),
   listResources: vi.fn(),
+  createResource: vi.fn(),
+  updateManagedResource: vi.fn(),
   listGroupManagedServices: vi.fn(),
   upsertGroupManagedService: vi.fn(),
   createDeployment: vi.fn(),
@@ -33,10 +35,10 @@ vi.mock('@/infra/db/client', () => ({
 }));
 
 vi.mock('@/services/entities/resource-ops', () => ({
-  createResource: vi.fn(),
+  createResource: mocks.createResource,
   deleteResource: vi.fn(),
   listResources: mocks.listResources,
-  updateManagedResource: vi.fn(),
+  updateManagedResource: mocks.updateManagedResource,
 }));
 
 vi.mock('@/services/entities/group-managed-services', () => ({
@@ -112,6 +114,8 @@ describe('group apply engine', () => {
     vi.clearAllMocks();
     mocks.reconcileGroupRouting.mockResolvedValue({ routes: {}, failedRoutes: [] });
     mocks.groupUpdateRun.mockResolvedValue(undefined);
+    mocks.createResource.mockResolvedValue(undefined);
+    mocks.updateManagedResource.mockResolvedValue(undefined);
   });
 
   it('plans against canonical group resources/services state', async () => {
@@ -448,5 +452,54 @@ describe('group apply engine', () => {
     expect(mocks.createDeployment).toHaveBeenCalledWith(expect.objectContaining({
       bundleContent: expect.stringContaining('export default'),
     }));
+  });
+
+  it('passes canonical resource specs into resource creation', async () => {
+    const manifest = {
+      apiVersion: 'takos.dev/v1alpha1',
+      kind: 'App',
+      metadata: { name: 'demo-app' },
+      spec: {
+        version: '1.0.0',
+        resources: {
+          events: {
+            type: 'analyticsEngine',
+            binding: 'EVENTS',
+            analyticsEngine: {
+              dataset: 'tenant-events',
+            },
+          },
+        },
+      },
+    };
+
+    mocks.groupGet.mockResolvedValue({
+      id: 'group-1',
+      spaceId: 'ws-1',
+      name: 'demo-app',
+      provider: 'cloudflare',
+      env: 'production',
+      appVersion: '1.0.0',
+      desiredSpecJson: JSON.stringify(manifest),
+      providerStateJson: '{}',
+      reconcileStatus: 'ready',
+      lastAppliedAt: '2026-03-29T00:00:00.000Z',
+      createdAt: '2026-03-29T00:00:00.000Z',
+      updatedAt: '2026-03-29T00:00:00.000Z',
+    });
+    mocks.listResources.mockResolvedValue([]);
+    mocks.listGroupManagedServices.mockResolvedValue([]);
+
+    await applyManifest({ DB: {} as never } as never, 'group-1', manifest as never);
+
+    expect(mocks.createResource).toHaveBeenCalledWith(
+      expect.anything(),
+      'group-1',
+      'events',
+      expect.objectContaining({
+        type: 'analyticsEngine',
+        spec: manifest.spec.resources.events,
+      }),
+    );
   });
 });

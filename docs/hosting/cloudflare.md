@@ -1,9 +1,9 @@
 # Cloudflare
 
-Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。
+Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。Cloudflare backend は Takos runtime の基準 backend で、Cloudflare-native public spec の参照実装です。
 
 ::: info アプリ開発者へ
-アプリ開発者向けの current surface は Cloudflare-backed `takos apply` です。`app.yml` を書いて `takos apply --env staging` するのが今の正しい使い方です。
+アプリ開発者向けの current surface は Cloudflare-native spec を書く `takos apply` です。Cloudflare backend はその spec を直接実現する基準 backend で、他環境でも同じ spec を使います。
 :::
 
 ## 必要なもの

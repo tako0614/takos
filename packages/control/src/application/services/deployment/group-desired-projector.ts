@@ -108,6 +108,24 @@ export async function removeGroupDesiredResource(
   });
 }
 
+export async function renameGroupDesiredResource(
+  env: Env,
+  input: {
+    groupId: string;
+    fromName: string;
+    toName: string;
+  },
+): Promise<AppManifest> {
+  return mutateGroupManifest(env, input.groupId, (manifest) => {
+    if (!manifest.spec.resources?.[input.fromName] || input.fromName === input.toName) return;
+    manifest.spec.resources = {
+      ...manifest.spec.resources,
+      [input.toName]: manifest.spec.resources[input.fromName],
+    };
+    delete manifest.spec.resources[input.fromName];
+  });
+}
+
 function upsertWorkloadRecord(
   manifest: AppManifest,
   category: WorkloadCategory,
@@ -189,5 +207,46 @@ export async function removeGroupDesiredWorkload(
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
     removeWorkloadRecord(manifest, input.category, input.name);
+  });
+}
+
+export async function renameGroupDesiredWorkload(
+  env: Env,
+  input: {
+    groupId: string;
+    category: WorkloadCategory;
+    fromName: string;
+    toName: string;
+  },
+): Promise<AppManifest> {
+  return mutateGroupManifest(env, input.groupId, (manifest) => {
+    if (input.fromName === input.toName) return;
+
+    if (input.category === 'worker') {
+      if (!manifest.spec.workers?.[input.fromName]) return;
+      manifest.spec.workers = {
+        ...manifest.spec.workers,
+        [input.toName]: manifest.spec.workers[input.fromName],
+      };
+      delete manifest.spec.workers[input.fromName];
+      return;
+    }
+
+    if (input.category === 'container') {
+      if (!manifest.spec.containers?.[input.fromName]) return;
+      manifest.spec.containers = {
+        ...manifest.spec.containers,
+        [input.toName]: manifest.spec.containers[input.fromName],
+      };
+      delete manifest.spec.containers[input.fromName];
+      return;
+    }
+
+    if (!manifest.spec.services?.[input.fromName]) return;
+    manifest.spec.services = {
+      ...manifest.spec.services,
+      [input.toName]: manifest.spec.services[input.fromName],
+    };
+    delete manifest.spec.services[input.fromName];
   });
 }

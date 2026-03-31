@@ -32,6 +32,7 @@ import { NotFoundError, AuthorizationError, InternalError } from 'takos-common/e
 import { getPlatformServices } from '../../../platform/accessors.ts';
 import { getStoredResourceImplementation, toPublicResourceType, toResourceCapability } from '../../../application/services/resources/capabilities';
 import { removeGroupDesiredResource, upsertGroupDesiredResource } from '../../../application/services/deployment/group-desired-projector.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils';
 
 const resourcesBase = new Hono<AuthenticatedRouteEnv>();
 
@@ -47,6 +48,23 @@ function inferResourceProvider(env: AuthenticatedRouteEnv['Bindings']): 'cloudfl
   return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? 'cloudflare' : 'local';
 }
 
+const RESOURCE_PROVIDER_VALUES = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
+type ResourceProviderName = (typeof RESOURCE_PROVIDER_VALUES)[number];
+
+function normalizeResourceProvider(provider: unknown): ResourceProviderName | undefined {
+  if (provider === undefined || provider === null) {
+    return undefined;
+  }
+
+  const providerName = typeof provider === 'string'
+    ? provider.trim().toLowerCase()
+    : '';
+
+  return RESOURCE_PROVIDER_VALUES.includes(providerName as ResourceProviderName)
+    ? (providerName as ResourceProviderName)
+    : undefined;
+}
+
 function buildProjectedResourceSpec(
   name: string,
   body: {
@@ -55,6 +73,7 @@ function buildProjectedResourceSpec(
   },
 ) {
   const config = body.config ?? {};
+  const canonicalType = toPublicResourceType(body.type, config) ?? body.type;
   const workflowConfig = config.workflow && typeof config.workflow === 'object'
     ? config.workflow as Record<string, unknown>
     : {};
@@ -64,7 +83,7 @@ function buildProjectedResourceSpec(
   const binding = typeof config.binding === 'string' && config.binding.trim().length > 0
     ? config.binding.trim()
     : name.toUpperCase().replace(/-/g, '_');
-  switch (body.type) {
+  switch (canonicalType) {
     case 'd1':
       return {
         type: 'd1' as const,
@@ -125,10 +144,85 @@ function buildProjectedResourceSpec(
       };
     default:
       return {
-        type: body.type,
+        type: canonicalType as ResourceType,
         binding,
       };
   }
+}
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function resolveRequestedProviderResourceName(
+  type: string,
+  fallbackName: string,
+  config?: Record<string, unknown>,
+): string {
+  const capability = toResourceCapability(type);
+  if (capability === 'analytics_store') {
+    const analyticsConfig = asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
+    const dataset = typeof analyticsConfig?.dataset === 'string'
+      ? analyticsConfig.dataset.trim()
+      : '';
+    if (dataset) return dataset;
+  }
+  return fallbackName;
+}
+
+function buildProvisioningRequest(
+  capability: ResourceCapability,
+  config?: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const queueConfig = asObject(config?.queue);
+  const vectorConfig = asObject(config?.vectorize) ?? asObject(config?.vectorIndex);
+  const analyticsConfig = asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
+  const workflowConfig = asObject(config?.workflow) ?? asObject(config?.workflowRuntime);
+  const durableConfig = asObject(config?.durableObject) ?? asObject(config?.durableNamespace);
+
+  if (capability === 'vector_index') {
+    out.vectorIndex = {
+      dimensions: typeof vectorConfig?.dimensions === 'number'
+        ? vectorConfig.dimensions
+        : VECTORIZE_DEFAULT_DIMENSIONS,
+      metric: typeof vectorConfig?.metric === 'string'
+        ? vectorConfig.metric
+        : 'cosine',
+    };
+  }
+
+  if (capability === 'queue' && typeof queueConfig?.deliveryDelaySeconds === 'number') {
+    out.queue = { deliveryDelaySeconds: queueConfig.deliveryDelaySeconds };
+  }
+
+  if (capability === 'analytics_store' && typeof analyticsConfig?.dataset === 'string' && analyticsConfig.dataset.trim()) {
+    out.analyticsStore = { dataset: analyticsConfig.dataset.trim() };
+  }
+
+  if (
+    capability === 'workflow_runtime'
+    && typeof workflowConfig?.service === 'string'
+    && typeof workflowConfig?.export === 'string'
+  ) {
+    out.workflowRuntime = {
+      service: workflowConfig.service,
+      export: workflowConfig.export,
+      ...(typeof workflowConfig.timeoutMs === 'number' ? { timeoutMs: workflowConfig.timeoutMs } : {}),
+      ...(typeof workflowConfig.maxRetries === 'number' ? { maxRetries: workflowConfig.maxRetries } : {}),
+    };
+  }
+
+  if (capability === 'durable_namespace' && typeof durableConfig?.className === 'string') {
+    out.durableNamespace = {
+      className: durableConfig.className,
+      ...(typeof durableConfig.scriptName === 'string' ? { scriptName: durableConfig.scriptName } : {}),
+    };
+  }
+
+  return out;
 }
 
 resourcesBase
@@ -279,6 +373,7 @@ resourcesBase
     name: z.string(),
     type: z.string(),
     config: z.record(z.unknown()).optional(),
+    provider: z.string().optional(),
     space_id: z.string().optional(),
     group_id: z.string().optional(),
   })),
@@ -289,6 +384,7 @@ resourcesBase
     name: string;
     type: ResourceType;
     config?: Record<string, unknown>;
+    provider?: string;
     space_id?: string;
     group_id?: string;
   };
@@ -298,6 +394,11 @@ resourcesBase
 
   if (!body.name?.trim()) {
     throw new BadRequestError( 'name is required');
+  }
+
+  const providerName = normalizeResourceProvider(body.provider) ?? inferResourceProvider(c.env);
+  if (body.provider && !normalizeResourceProvider(body.provider)) {
+    throw new BadRequestError(`Invalid provider: ${body.provider}`);
   }
 
   const resourceCapability = toResourceCapability(body.type);
@@ -339,8 +440,11 @@ resourcesBase
   const id = generateId();
   const timestamp = new Date().toISOString();
   const name = body.name.trim();
-  const providerResourceName = `takos-${body.type}-${id}`;
-  const providerName = inferResourceProvider(c.env);
+  const providerResourceName = resolveRequestedProviderResourceName(
+    body.type,
+    `takos-${body.type}-${id}`,
+    body.config,
+  );
 
   try {
     await provisionManagedResource(c.env, {
@@ -357,17 +461,7 @@ resourcesBase
       providerResourceName,
       config: body.config || {},
       recordFailure: true,
-      ...(resourceCapability === 'vector_index'
-        ? { vectorIndex: { dimensions: VECTORIZE_DEFAULT_DIMENSIONS, metric: 'cosine' as const } }
-        : {}),
-      ...(resourceCapability === 'workflow_runtime'
-        && typeof body.config?.service === 'string'
-        && typeof body.config?.export === 'string'
-        ? { workflowRuntime: { service: body.config.service as string, export: body.config.export as string } }
-        : {}),
-      ...(resourceCapability === 'durable_namespace' && typeof body.config?.className === 'string'
-        ? { durableNamespace: { className: body.config.className as string, ...(typeof body.config?.scriptName === 'string' ? { scriptName: body.config.scriptName as string } : {}) } }
-        : {}),
+      ...buildProvisioningRequest(resourceCapability, body.config),
     });
     if (groupId) {
       await upsertGroupDesiredResource(c.env, {
@@ -424,6 +518,34 @@ resourcesBase
 
   if (!updated) {
     throw new BadRequestError( 'No valid updates provided');
+  }
+
+  if (resource.group_id) {
+    const nextName = typeof updated.name === 'string' && updated.name.trim().length > 0
+      ? updated.name.trim()
+      : resource.name;
+    const nextConfig = body.config
+      ?? (typeof updated.config === 'string'
+        ? safeJsonParseOrDefault<Record<string, unknown>>(updated.config, {})
+        : (typeof resource.config === 'string'
+          ? safeJsonParseOrDefault<Record<string, unknown>>(resource.config, {})
+          : {}));
+
+    if (nextName !== resource.name) {
+      await removeGroupDesiredResource(c.env, {
+        groupId: resource.group_id,
+        name: resource.name,
+      });
+    }
+
+    await upsertGroupDesiredResource(c.env, {
+      groupId: resource.group_id,
+      name: nextName,
+      resource: buildProjectedResourceSpec(nextName, {
+        type: resource.type as ResourceType,
+        config: nextConfig,
+      }) as never,
+    });
   }
 
   return c.json({ resource: updated });

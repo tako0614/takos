@@ -51,6 +51,7 @@ type ManifestService = NonNullable<AppManifest['spec']['services']>[string];
 type ApplyCommandOptions = {
   manifest?: string;
   env: string;
+  provider?: string;
   autoApprove?: boolean;
   target?: string[];
   accountId?: string;
@@ -62,6 +63,19 @@ type ApplyCommandOptions = {
   space?: string;
   offline?: boolean;
 };
+
+const VALID_GROUP_PROVIDERS = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
+type GroupProviderName = (typeof VALID_GROUP_PROVIDERS)[number];
+
+function parseGroupProvider(raw?: string): GroupProviderName | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if ((VALID_GROUP_PROVIDERS as readonly string[]).includes(normalized)) {
+    return normalized as GroupProviderName;
+  }
+  throw new Error(`Invalid provider: ${raw}`);
+}
 
 function targetIncludes(targets: string[], prefixes: string[], name: string): boolean {
   if (targets.length === 0) return true;
@@ -234,6 +248,7 @@ export function registerApplyCommand(program: Command): void {
     .description('Apply changes from app.yml to the target environment')
     .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
     .option('--env <env>', 'Target environment', 'staging')
+    .option('--provider <provider>', 'Deployment target provider (cloudflare|local|aws|gcp|k8s)')
     .option('--auto-approve', 'Skip interactive confirmation prompt')
     .option('--target <key...>', 'Apply only specific resources/services (e.g. resources.db, workers.web)')
     .option('--namespace <name>', 'Dispatch namespace')
@@ -265,6 +280,14 @@ export function registerApplyCommand(program: Command): void {
         cliExit(1);
       }
 
+      let provider: GroupProviderName | undefined;
+      try {
+        provider = parseGroupProvider(options.provider);
+      } catch (error) {
+        console.log(chalk.red(error instanceof Error ? error.message : 'Invalid provider'));
+        cliExit(1);
+      }
+
       // Offline mode: delegate to local coordinator
       if (options.offline) {
         return handleApplyOffline(manifest, manifestPath, options);
@@ -281,6 +304,7 @@ export function registerApplyCommand(program: Command): void {
         body: {
           group_name: group,
           env: options.env,
+          ...(provider ? { provider } : {}),
           manifest,
         },
       });
@@ -353,6 +377,7 @@ export function registerApplyCommand(program: Command): void {
         body: {
           group_name: group,
           env: options.env,
+          ...(provider ? { provider } : {}),
           manifest,
           artifacts,
           target: targets.length > 0 ? targets : undefined,

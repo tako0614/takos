@@ -206,7 +206,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     if (!entry.repositoriesUrl) {
-      throw new BadRequestError( 'Remote store does not expose a repositories endpoint');
+      throw new BadRequestError('Remote store does not expose an inventory endpoint');
     }
 
     try {

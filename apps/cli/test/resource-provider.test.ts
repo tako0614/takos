@@ -235,6 +235,8 @@ describe('resolveProvider', () => {
 describe('provisionResources (with CloudflareProvider)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.cfApi.mockReset();
+    mocks.execCommand.mockReset();
   });
 
   it('provisions mixed resource types through the provider', async () => {
@@ -279,6 +281,46 @@ describe('provisionResources (with CloudflareProvider)', () => {
     // DurableObject (auto-configured)
     const doResult = results.find(r => r.name === 'my-do');
     expect(doResult?.status).toBe('skipped');
+  });
+
+  it('canonicalizes portable-style resource aliases before provisioning', async () => {
+    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
+
+    mocks.cfApi
+      .mockResolvedValueOnce({ uuid: 'sql-id' })         // sql -> d1
+      .mockResolvedValueOnce({})                          // object_store -> r2
+      .mockResolvedValueOnce({ id: 'kv-id' })             // kv
+      .mockResolvedValueOnce({ id: 'vector-id' })         // vector_index -> vectorize
+
+    mocks.execCommand.mockResolvedValueOnce({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+    });
+
+    const resources = {
+      'main-db': { type: 'sql', binding: 'DB' },
+      assets: { type: 'object_store' },
+      cache: { type: 'kv' },
+      embeddings: { type: 'vector_index', vectorize: { dimensions: 1536, metric: 'cosine' } },
+      'api-secret': { type: 'secret' },
+    };
+
+    const { provisioned, results } = await provisionResources(resources, {
+      accountId: 'acct',
+      apiToken: 'tok',
+      groupName: 'app',
+      env: 'staging',
+    });
+
+    expect(provisioned.size).toBe(5);
+    expect(results).toHaveLength(5);
+
+    expect(provisioned.get('main-db')?.type).toBe('d1');
+    expect(provisioned.get('assets')?.type).toBe('r2');
+    expect(provisioned.get('embeddings')?.type).toBe('vectorize');
+    expect(results.find((result) => result.name === 'api-secret')?.type).toBe('secretRef');
+    expect(mocks.cfApi).toHaveBeenCalledTimes(3);
   });
 
   it('dry-run mode skips actual provisioning', async () => {

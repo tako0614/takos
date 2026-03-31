@@ -12,6 +12,7 @@ import type { RoutingTarget } from '../../../application/services/routing/routin
 import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
 import { logError } from '../../../shared/utils/logger';
 import { NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
+import { renameGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
 
 const workersSlug = new Hono<AuthenticatedRouteEnv>()
 
@@ -116,6 +117,15 @@ const workersSlug = new Hono<AuthenticatedRouteEnv>()
         }
         throw kvError;
       }
+    }
+
+    if (worker.group_id) {
+      await renameGroupDesiredWorkload(c.env, {
+        groupId: worker.group_id,
+        category: worker.service_type === 'app' ? 'worker' : 'service',
+        fromName: worker.slug ?? worker.id,
+        toName: newSlug,
+      });
     }
 
     return c.json({

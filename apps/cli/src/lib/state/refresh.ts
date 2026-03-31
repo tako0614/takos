@@ -47,7 +47,16 @@ export interface RefreshableProvider {
   checkResourceExists(type: string, id: string, name: string): Promise<boolean | null>;
 }
 
-const refreshableResourceTypes = new Set(['sql', 'object_store', 'kv', 'queue', 'vector_index']);
+const refreshableResourceTypes = new Set([
+  'sql',
+  'd1',
+  'object_store',
+  'r2',
+  'kv',
+  'queue',
+  'vector_index',
+  'vectorize',
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
