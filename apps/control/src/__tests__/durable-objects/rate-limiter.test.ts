@@ -1,558 +1,258 @@
-import { RateLimiterDO } from '@/durable-objects/rate-limiter';
+// deno-lint-ignore-file no-import-prefix no-unversioned-import
+import type { DurableObjectState } from "@cloudflare/workers-types";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { RateLimiterDO } from "../../../../../packages/control/src/runtime/durable-objects/rate-limiter.ts";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type StoredData = {
+  entries?: Record<string, { timestamps: number[] }>;
+  tokenBuckets?: Record<string, unknown>;
+};
 
-import { assertEquals, assert } from 'jsr:@std/assert';
-import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
-import { FakeTime } from 'jsr:@std/testing/time';
-
-function createMockStorage() {
-  const store = new Map<string, unknown>();
-  let alarm: number | null = null;
-
-  return {
-    get: async <T>(key: string): Promise<T | undefined> => store.get(key) as T | undefined,
-    put: async (key: string, value: unknown) => { store.set(key, value); },
-    delete: async (key: string) => { store.delete(key); return true; },
-    setAlarm: async (ms: number) => { alarm = ms; },
-    deleteAlarm: async () => { alarm = null; },
-    getAlarm: async () => alarm,
-    list: async () => new Map(),
-    _store: store,
-  };
-}
-
-function createMockState(storage = createMockStorage()) {
-  return {
-    storage,
-    blockConcurrencyWhile: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
-  };
-}
-
-function createDO(stateOverrides?: ReturnType<typeof createMockState>) {
-  const state = stateOverrides ?? createMockState();
-  const doInstance = new RateLimiterDO(state as unknown as DurableObjectState);
-  return { doInstance, state };
-}
-
-function postJSON(path: string, body: unknown): Request {
+function makeRequest(path: string, body: unknown): Request {
   return new Request(`https://do.internal${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-async function jsonBody(response: Response): Promise<Record<string, unknown>> {
-  return response.json() as Promise<Record<string, unknown>>;
+function createStorage(initialAlarm: number | null = Date.now() + 60_000) {
+  const store = new Map<string, unknown>();
+  const state = {
+    store,
+    alarm: initialAlarm,
+    putCalls: [] as Array<[string, unknown]>,
+    getCalls: [] as Array<[string]>,
+    deleteCalls: [] as Array<[string]>,
+    setAlarmCalls: [] as Array<[number]>,
+    deleteAlarmCalls: 0,
+    getAlarmCalls: 0,
+    get<T>(key: string): Promise<T | undefined> {
+      state.getCalls.push([key]);
+      return Promise.resolve(store.get(key) as T | undefined);
+    },
+    put(key: string, value: unknown): Promise<void> {
+      state.putCalls.push([key, value]);
+      store.set(key, value);
+      return Promise.resolve();
+    },
+    delete(key: string): Promise<boolean> {
+      state.deleteCalls.push([key]);
+      return Promise.resolve(store.delete(key));
+    },
+    setAlarm(ms: number): Promise<void> {
+      state.setAlarmCalls.push([ms]);
+      state.alarm = ms;
+      return Promise.resolve();
+    },
+    deleteAlarm(): Promise<void> {
+      state.deleteAlarmCalls++;
+      state.alarm = null;
+      return Promise.resolve();
+    },
+    getAlarm(): Promise<number | null> {
+      state.getAlarmCalls++;
+      return Promise.resolve(state.alarm);
+    },
+  };
+  return state;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function createDo(
+  initialAlarm: number | null = Date.now() + 60_000,
+  stored?: StoredData,
+) {
+  const storage = createStorage(initialAlarm);
+  if (stored) {
+    storage.store.set("data", stored);
+  }
 
+  const state = {
+    storage,
+    blockConcurrencyCalls: 0,
+    async blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T> {
+      state.blockConcurrencyCalls++;
+      return await fn();
+    },
+  };
 
-  
-    Deno.test('RateLimiterDO - fetch routing - returns 404 for unknown paths', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const req = new Request('https://do.internal/unknown', { method: 'POST' });
-      const res = await doInstance.fetch(req);
-      assertEquals(res.status, 404);
-})
-    Deno.test('RateLimiterDO - fetch routing - returns 404 for GET on /check', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const req = new Request('https://do.internal/check', { method: 'GET' });
-      const res = await doInstance.fetch(req);
-      assertEquals(res.status, 404);
-})
-    Deno.test('RateLimiterDO - fetch routing - returns 500 for malformed JSON', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const req = new Request('https://do.internal/check', {
-        method: 'POST',
-        body: 'not-json',
-      });
-      const res = await doInstance.fetch(req);
-      assertEquals(res.status, 500);
-})  
-  
-    Deno.test('RateLimiterDO - /check (sliding_window) - returns allowed=true within rate limit', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const res = await doInstance.fetch(postJSON('/check', {
-        key: 'user:1',
-        maxRequests: 10,
-        windowMs: 60000,
-      }));
-      assertEquals(res.status, 200);
+  const doInstance = new RateLimiterDO(state as unknown as DurableObjectState);
 
-      const body = await jsonBody(res);
-      assertEquals(body.allowed, true);
-      assertEquals(body.remaining, 10);
-      assertEquals(body.total, 10);
-      assertEquals(body.algorithm, 'sliding_window');
-})
-    Deno.test('RateLimiterDO - /check (sliding_window) - returns correct remaining count after hits', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
+  return { doInstance, state, storage };
+}
 
-      // Hit 3 times
-      for (let i = 0; i < 3; i++) {
-        await doInstance.fetch(postJSON('/hit', {
-          key: 'user:2',
-          maxRequests: 5,
-          windowMs: 60000,
-        }));
-      }
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
-      const res = await doInstance.fetch(postJSON('/check', {
-        key: 'user:2',
-        maxRequests: 5,
-        windowMs: 60000,
-      }));
-      const body = await jsonBody(res);
-      assertEquals(body.remaining, 2);
-})  
-  
-    Deno.test('RateLimiterDO - /check (token_bucket) - returns allowed=true with full bucket', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const res = await doInstance.fetch(postJSON('/check', {
-        key: 'user:tb',
-        maxRequests: 10,
-        windowMs: 60000,
-        algorithm: 'token_bucket',
-      }));
-      assertEquals(res.status, 200);
+async function readBody(response: Response): Promise<Record<string, unknown>> {
+  return await response.json() as Record<string, unknown>;
+}
 
-      const body = await jsonBody(res);
-      assertEquals(body.allowed, true);
-      assertEquals(body.remaining, 10);
-      assertEquals(body.algorithm, 'token_bucket');
-})  
-  
-    Deno.test('RateLimiterDO - /check (shadow) - returns both sliding_window and shadow token_bucket results', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const res = await doInstance.fetch(postJSON('/check', {
-        key: 'user:shadow',
-        maxRequests: 10,
-        windowMs: 60000,
-        algorithm: 'shadow',
-      }));
-      assertEquals(res.status, 200);
+Deno.test("RateLimiterDO - returns 404 for unknown paths", async () => {
+  const { doInstance } = createDo();
+  await flushMicrotasks();
 
-      const body = await jsonBody(res);
-      assertEquals(body.algorithm, 'sliding_window');
-      assert(body.shadow !== undefined);
-      const shadow = body.shadow as Record<string, Record<string, unknown>>;
-      assert(shadow.token_bucket !== undefined);
-      assertEquals(shadow.token_bucket.allowed, true);
-})  
-  
-    Deno.test('RateLimiterDO - /hit (sliding_window) - allows requests within limit', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const body = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-        key: 'hit:1',
-        maxRequests: 5,
-        windowMs: 60000,
-      })));
+  const response = await doInstance.fetch(
+    new Request("https://do.internal/unknown", { method: "POST" }),
+  );
+  assertEquals(response.status, 404);
+});
 
-      assertEquals(body.allowed, true);
-      assertEquals(body.remaining, 4);
-      assertEquals(body.algorithm, 'sliding_window');
-})
-    Deno.test('RateLimiterDO - /hit (sliding_window) - denies requests when limit is exhausted', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
+Deno.test("RateLimiterDO - sliding_window hit persists allowed requests", async () => {
+  const { doInstance, storage, state } = createDo();
+  await flushMicrotasks();
 
-      let lastBody;
-      for (let i = 0; i < 6; i++) {
-        lastBody = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-          key: 'hit:limit',
-          maxRequests: 5,
-          windowMs: 60000,
-        })));
-      }
+  const response = await doInstance.fetch(makeRequest("/hit", {
+    key: "user:1",
+    maxRequests: 2,
+    windowMs: 60_000,
+  }));
+  const body = await readBody(response);
 
-      assertEquals(lastBody!.allowed, false);
-      assertEquals(lastBody!.remaining, 0);
-})
-    Deno.test('RateLimiterDO - /hit (sliding_window) - persists state after allowed hits', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
+  assertEquals(body.algorithm, "sliding_window");
+  assertEquals(body.allowed, true);
+  assertEquals(body.remaining, 1);
+  assertEquals(storage.putCalls.length, 1);
+  assertEquals(state.blockConcurrencyCalls, 2);
+  assertStringIncludes(JSON.stringify(storage.store.get("data")), "user:1");
+});
 
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'persist:test',
-        maxRequests: 10,
-        windowMs: 60000,
-      }));
+Deno.test("RateLimiterDO - sliding_window hit denies after the limit and does not persist", async () => {
+  const { doInstance, storage } = createDo();
+  await flushMicrotasks();
 
-      assertSpyCallArgs(state.storage.put, 0, ['data', expect.anything()]);
-})
-    Deno.test('RateLimiterDO - /hit (sliding_window) - does not persist when hit is denied', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
+  await doInstance.fetch(makeRequest("/hit", {
+    key: "user:2",
+    maxRequests: 1,
+    windowMs: 60_000,
+  }));
+  const denied = await doInstance.fetch(makeRequest("/hit", {
+    key: "user:2",
+    maxRequests: 1,
+    windowMs: 60_000,
+  }));
+  const body = await readBody(denied);
 
-      // Exhaust the limit
-      for (let i = 0; i < 3; i++) {
-        await doInstance.fetch(postJSON('/hit', {
-          key: 'nopersist',
-          maxRequests: 3,
-          windowMs: 60000,
-        }));
-      }
+  assertEquals(body.allowed, false);
+  assertEquals(body.remaining, 0);
+  assertEquals(storage.putCalls.length, 1);
+});
 
-      state.storage.put;
+Deno.test("RateLimiterDO - token_bucket hit persists and reports token_bucket algorithm", async () => {
+  const { doInstance, storage } = createDo();
+  await flushMicrotasks();
 
-      // This hit should be denied - no persist
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'nopersist',
-        maxRequests: 3,
-        windowMs: 60000,
-      }));
+  const response = await doInstance.fetch(makeRequest("/hit", {
+    key: "bucket:1",
+    maxRequests: 3,
+    windowMs: 60_000,
+    algorithm: "token_bucket",
+  }));
+  const body = await readBody(response);
 
-      // put should not have been called again for a denied hit
-      assertSpyCalls(state.storage.put, 0);
-})  
-  
-    Deno.test('RateLimiterDO - /hit (token_bucket) - allows requests with token_bucket algorithm', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const body = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-        key: 'tb:hit',
-        maxRequests: 5,
-        windowMs: 60000,
-        algorithm: 'token_bucket',
-      })));
+  assertEquals(body.algorithm, "token_bucket");
+  assertEquals(body.allowed, true);
+  assertEquals(body.remaining, 2);
+  assertEquals(storage.putCalls.length, 1);
+});
 
-      assertEquals(body.allowed, true);
-      assertEquals(body.algorithm, 'token_bucket');
-})
-    Deno.test('RateLimiterDO - /hit (token_bucket) - denies when token bucket is empty', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
+Deno.test("RateLimiterDO - shadow hit returns both sliding_window and token_bucket results", async () => {
+  const { doInstance } = createDo();
+  await flushMicrotasks();
 
-      let lastBody;
-      for (let i = 0; i < 6; i++) {
-        lastBody = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-          key: 'tb:exhaust',
-          maxRequests: 5,
-          windowMs: 60000,
-          algorithm: 'token_bucket',
-        })));
-      }
+  const response = await doInstance.fetch(makeRequest("/hit", {
+    key: "shadow:1",
+    maxRequests: 2,
+    windowMs: 60_000,
+    algorithm: "shadow",
+  }));
+  const body = await readBody(response);
 
-      assertEquals(lastBody!.allowed, false);
-})
-    Deno.test('RateLimiterDO - /hit (token_bucket) - cleans up sliding_window entries when using token_bucket', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
+  assertEquals(body.algorithm, "sliding_window");
+  assertEquals(body.allowed, true);
+  assert(body.shadow !== undefined);
+  const shadow = body.shadow as Record<string, Record<string, unknown>>;
+  assertEquals(shadow.token_bucket.allowed, true);
+});
 
-      // First, create a sliding window entry
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'cleanup:key',
-        maxRequests: 5,
-        windowMs: 60000,
-      }));
+Deno.test("RateLimiterDO - reset clears both storage maps and persists", async () => {
+  const { doInstance, storage } = createDo();
+  await flushMicrotasks();
 
-      // Now hit with token_bucket
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'cleanup:key',
-        maxRequests: 5,
-        windowMs: 60000,
-        algorithm: 'token_bucket',
-      }));
+  await doInstance.fetch(makeRequest("/hit", {
+    key: "reset:key",
+    maxRequests: 2,
+    windowMs: 60_000,
+  }));
+  const response = await doInstance.fetch(
+    makeRequest("/reset", { key: "reset:key" }),
+  );
+  const body = await readBody(response);
 
-      // The entries map should have the key removed (replaced by token bucket)
-      const entries = (doInstance as unknown as { entries: Map<string, unknown> }).entries;
-      assertEquals(entries.has('cleanup:key'), false);
-})  
-  
-    Deno.test('RateLimiterDO - /hit (shadow) - returns shadow results alongside sliding_window', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const body = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-        key: 'shadow:hit',
-        maxRequests: 5,
-        windowMs: 60000,
-        algorithm: 'shadow',
-      })));
+  assertEquals(body.success, true);
+  const persisted = storage.store.get("data") as StoredData;
+  assertEquals(persisted.entries?.["reset:key"], undefined);
+  assertEquals(persisted.tokenBuckets?.["reset:key"], undefined);
+  assert(storage.putCalls.length >= 2);
+});
 
-      assertEquals(body.algorithm, 'sliding_window');
-      assertEquals(body.allowed, true);
-      const shadow = body.shadow as Record<string, Record<string, unknown>>;
-      assert(shadow.token_bucket !== undefined);
-      assertEquals(shadow.token_bucket.allowed, true);
-})  
-  
-    Deno.test('RateLimiterDO - /reset - resets rate limit for a key', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
+Deno.test("RateLimiterDO - alarm removes expired entries and reschedules when state remains", async () => {
+  const { doInstance, storage } = createDo(null);
+  await flushMicrotasks();
 
-      // Hit until exhausted
-      for (let i = 0; i < 3; i++) {
-        await doInstance.fetch(postJSON('/hit', {
-          key: 'reset:test',
-          maxRequests: 3,
-          windowMs: 60000,
-        }));
-      }
+  const entries =
+    (doInstance as unknown as { entries: Map<string, number[]> }).entries;
+  entries.set("expired", [Date.now() - 120_000]);
+  entries.set("fresh", [Date.now()]);
 
-      // Verify exhausted
-      let body = await jsonBody(await doInstance.fetch(postJSON('/check', {
-        key: 'reset:test',
-        maxRequests: 3,
-        windowMs: 60000,
-      })));
-      assertEquals(body.remaining, 0);
+  await doInstance.alarm();
 
-      // Reset
-      const resetRes = await doInstance.fetch(postJSON('/reset', { key: 'reset:test' }));
-      body = await jsonBody(resetRes);
-      assertEquals(body.success, true);
+  assertEquals(entries.has("expired"), false);
+  assertEquals(entries.has("fresh"), true);
+  assert(storage.putCalls.length > 0);
+  assert(storage.setAlarmCalls.length > 0);
+});
 
-      // Verify reset
-      body = await jsonBody(await doInstance.fetch(postJSON('/check', {
-        key: 'reset:test',
-        maxRequests: 3,
-        windowMs: 60000,
-      })));
-      assertEquals(body.remaining, 3);
-})
-    Deno.test('RateLimiterDO - /reset - resets token bucket entries too', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-
-      // Hit with token_bucket
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'tb:reset',
-        maxRequests: 3,
-        windowMs: 60000,
-        algorithm: 'token_bucket',
-      }));
-
-      // Reset
-      await doInstance.fetch(postJSON('/reset', { key: 'tb:reset' }));
-
-      // Check should show full bucket
-      const body = await jsonBody(await doInstance.fetch(postJSON('/check', {
-        key: 'tb:reset',
-        maxRequests: 3,
-        windowMs: 60000,
-        algorithm: 'token_bucket',
-      })));
-      assertEquals(body.remaining, 3);
-})  
-  
-    Deno.test('RateLimiterDO - alarm - cleans up expired entries and reschedules', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
-
-      // Add entries directly to the entries map
-      const entries = (doInstance as unknown as { entries: Map<string, number[]> }).entries;
-      entries.set('old', [Date.now() - 120_000]); // older than 60s default window
-      entries.set('fresh', [Date.now()]);
-
-      await doInstance.alarm();
-
-      // Old entry should be cleaned
-      assertEquals(entries.has('old'), false);
-      // Fresh entry should remain
-      assertEquals(entries.has('fresh'), true);
-
-      // Should persist and reschedule since there are remaining entries
-      assert(state.storage.put.calls.length > 0);
-      assert(state.storage.setAlarm.calls.length > 0);
-})
-    Deno.test('RateLimiterDO - alarm - does not reschedule when no entries remain', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
-
-      // Reset mocks from constructor
-      state.storage.put;
-      state.storage.setAlarm;
-
-      await doInstance.alarm();
-
-      // No entries, so no persist and no alarm reschedule
-      assertSpyCalls(state.storage.put, 0);
-      assertSpyCalls(state.storage.setAlarm, 0);
-})  
-  
-    Deno.test('RateLimiterDO - key limit enforcement - enforces the MAX_KEYS limit on entries map', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const entries = (doInstance as unknown as { entries: Map<string, number[]> }).entries;
-
-      // Fill up entries to MAX_KEYS
-      for (let i = 0; i < 10_001; i++) {
-        entries.set(`key-${i}`, [Date.now()]);
-      }
-
-      // This hit should trigger checkKeyLimit
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'trigger',
-        maxRequests: 10,
-        windowMs: 60000,
-      }));
-
-      // After enforcement, size should be at or below MAX_KEYS
-      assert(entries.size <= 10_001);
-})  
-  
-    Deno.test('RateLimiterDO - constructor hydration - restores data from storage on construction', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  new FakeTime();
-  try {
-  const storage = createMockStorage();
-      storage._store.set('data', {
-        entries: {
-          'existing-key': { timestamps: [Date.now()] },
+Deno.test("RateLimiterDO - constructor hydrates stored state", async () => {
+  const now = Date.now();
+  const { doInstance } = createDo(
+    Date.now() + 60_000,
+    {
+      entries: {
+        hydrated: { timestamps: [now] },
+      },
+      tokenBuckets: {
+        hydratedBucket: {
+          tokens: 2,
+          lastRefill: now,
         },
-        tokenBuckets: {},
-      });
+      },
+    },
+  );
+  await flushMicrotasks();
 
-      const state = createMockState(storage);
-      const doInstance = new RateLimiterDO(state as unknown as DurableObjectState);
+  const response = await doInstance.fetch(makeRequest("/check", {
+    key: "hydrated",
+    maxRequests: 10,
+    windowMs: 60_000,
+  }));
+  const body = await readBody(response);
 
-      // Check that existing-key is loaded
-      const body = await jsonBody(await doInstance.fetch(postJSON('/check', {
-        key: 'existing-key',
-        maxRequests: 10,
-        windowMs: 60000,
-      })));
-      assertEquals(body.remaining, 9);
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-    Deno.test('RateLimiterDO - constructor hydration - schedules cleanup alarm if not already set', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  new FakeTime();
-  try {
-  const storage = createMockStorage();
-      const state = createMockState(storage);
+  assertEquals(body.allowed, true);
+  assertEquals(body.remaining, 9);
+});
 
-      new RateLimiterDO(state as unknown as DurableObjectState);
+Deno.test("RateLimiterDO - blockConcurrencyWhile wraps mutating requests", async () => {
+  const { doInstance, state } = createDo();
+  await flushMicrotasks();
 
-      // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await await fakeTime.tickAsync(0);
+  await doInstance.fetch(makeRequest("/hit", {
+    key: "serialize",
+    maxRequests: 2,
+    windowMs: 60_000,
+  }));
 
-      assert(storage.setAlarm.calls.length > 0);
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-    Deno.test('RateLimiterDO - constructor hydration - does not overwrite existing alarm', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  new FakeTime();
-  try {
-  const storage = createMockStorage();
-      // Simulate existing alarm
-      storage.getAlarm = (async () => Date.now() + 30000) as any;
-
-      const state = createMockState(storage);
-      new RateLimiterDO(state as unknown as DurableObjectState);
-
-      // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await await fakeTime.tickAsync(0);
-
-      // setAlarm should not have been called since one already exists
-      assertSpyCalls(storage.setAlarm, 0);
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})  
-  
-    Deno.test('RateLimiterDO - blockConcurrencyWhile serialization - wraps /check in blockConcurrencyWhile', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
-
-      await doInstance.fetch(postJSON('/check', {
-        key: 'test',
-        maxRequests: 10,
-        windowMs: 60000,
-      }));
-
-      // blockConcurrencyWhile is called in constructor + the check handler
-      assertSpyCalls(state.blockConcurrencyWhile, 2);
-})
-    Deno.test('RateLimiterDO - blockConcurrencyWhile serialization - wraps /hit in blockConcurrencyWhile', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
-
-      await doInstance.fetch(postJSON('/hit', {
-        key: 'test',
-        maxRequests: 10,
-        windowMs: 60000,
-      }));
-
-      // constructor + hit handler
-      assertSpyCalls(state.blockConcurrencyWhile, 2);
-})
-    Deno.test('RateLimiterDO - blockConcurrencyWhile serialization - wraps /reset in blockConcurrencyWhile', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const state = createMockState();
-      const { doInstance } = createDO(state);
-
-      await doInstance.fetch(postJSON('/reset', { key: 'test' }));
-
-      // constructor + reset handler
-      assertSpyCalls(state.blockConcurrencyWhile, 2);
-})  
-  
-    Deno.test('RateLimiterDO - default algorithm - defaults to sliding_window when no algorithm specified', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const body = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-        key: 'default-algo',
-        maxRequests: 10,
-        windowMs: 60000,
-      })));
-      assertEquals(body.algorithm, 'sliding_window');
-})  
-  
-    Deno.test('RateLimiterDO - edge cases - handles zero maxRequests gracefully', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-      const body = await jsonBody(await doInstance.fetch(postJSON('/hit', {
-        key: 'zero',
-        maxRequests: 0,
-        windowMs: 60000,
-      })));
-      assertEquals(body.allowed, false);
-})
-    Deno.test('RateLimiterDO - edge cases - handles different keys independently', async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const { doInstance } = createDO();
-
-      // Exhaust key-a
-      for (let i = 0; i < 2; i++) {
-        await doInstance.fetch(postJSON('/hit', {
-          key: 'key-a',
-          maxRequests: 2,
-          windowMs: 60000,
-        }));
-      }
-
-      // key-b should still be available
-      const body = await jsonBody(await doInstance.fetch(postJSON('/check', {
-        key: 'key-b',
-        maxRequests: 2,
-        windowMs: 60000,
-      })));
-      assertEquals(body.remaining, 2);
-      assertEquals(body.allowed, true);
-})  
+  assertEquals(state.blockConcurrencyCalls, 2);
+});

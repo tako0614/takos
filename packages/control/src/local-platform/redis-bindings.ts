@@ -7,6 +7,7 @@ import { logWarn } from '../shared/utils/logger.ts';
 type QueueRecord<T = unknown> = LocalQueueRecord<T>;
 
 type RedisClient = ReturnType<typeof createClient>;
+type RedisClientFactory = typeof createClient;
 
 const REDIS_KEY_PREFIX = 'takos:local';
 
@@ -16,6 +17,7 @@ type RedisClientState = {
 };
 
 let redisClientState: RedisClientState | null = null;
+let redisClientFactory: RedisClientFactory = createClient;
 
 function normalizeHostname(hostname: string): string {
   return hostname.trim().toLowerCase();
@@ -56,7 +58,7 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
 
     redisClientState = {
       url: redisUrl,
-      clientPromise: createClient({ url: redisUrl }).connect(),
+      clientPromise: redisClientFactory({ url: redisUrl }).connect(),
     };
   }
 
@@ -74,6 +76,11 @@ export async function disposeRedisClient(): Promise<void> {
 
 export function resetRedisClientForTests(): void {
   void disposeRedisClient();
+}
+
+export function setRedisClientFactoryForTests(factory: RedisClientFactory | null): void {
+  void disposeRedisClient();
+  redisClientFactory = factory ?? createClient;
 }
 
 function queueKey(queueName: string): string {

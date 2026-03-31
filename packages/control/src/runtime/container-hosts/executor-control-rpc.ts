@@ -16,7 +16,8 @@ import {
   buildConversationHistory,
   updateRunStatusImpl,
 } from '../../application/services/agent/runner.ts';
-import { resolveSkillPlanForRun } from '../../application/services/agent/skills.ts';
+import { buildSkillResolutionContext, resolveSkillPlanForRun } from '../../application/services/agent/skills.ts';
+import { listDetailedSkillContext, listEnabledCustomSkillContext } from '../../application/services/source/skills.ts';
 import { createToolExecutor, type ToolExecutorLike } from '../../application/tools/executor.ts';
 import { AGENT_DISABLED_BUILTIN_TOOLS } from '../../application/tools/tool-policy.ts';
 import type { ToolCall } from '../../application/tools/tool-definitions.ts';
@@ -28,6 +29,8 @@ import {
   insertEvidence,
 } from '../../application/services/memory-graph/claim-store.ts';
 import { buildActivationBundles, renderActivationSegment } from '../../application/services/memory-graph/activation.ts';
+import { listSkillTemplates } from '../../application/services/agent/skill-templates.ts';
+import { listMcpServers } from '../../application/services/platform/mcp.ts';
 import {
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
@@ -166,6 +169,127 @@ export async function handleSkillPlan(body: Record<string, unknown>, env: Env): 
     return ok(result);
   } catch (e: unknown) {
     logError('Skill plan RPC error', e, { module: 'executor-host' });
+    const classified = classifyProxyError(e);
+    return err(classified.message, classified.status);
+  }
+}
+
+export async function handleSkillCatalog(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const {
+    runId,
+    threadId,
+    spaceId,
+    agentType,
+    history,
+    availableToolNames,
+  } = body as {
+    runId?: string;
+    threadId?: string;
+    spaceId?: string;
+    agentType?: string;
+    history?: AgentMessage[];
+    availableToolNames?: string[];
+  };
+  if (!runId || !threadId || !spaceId || !agentType || !Array.isArray(history) || !Array.isArray(availableToolNames)) {
+    return err('Missing runId, threadId, spaceId, agentType, history, or availableToolNames', 400);
+  }
+
+  try {
+    const resolutionContext = await buildSkillResolutionContext(
+      env.DB,
+      {
+        threadId,
+        runId,
+        spaceId,
+      },
+      {
+        type: agentType,
+        systemPrompt: '',
+        tools: [],
+      },
+      history,
+    );
+    const localeSamples = [
+      ...(resolutionContext.conversation ?? []),
+      resolutionContext.threadTitle ?? '',
+      resolutionContext.threadSummary ?? '',
+      ...((resolutionContext.threadKeyPoints ?? []).slice(0, 8)),
+    ].filter(Boolean);
+    const preferredLocale =
+      typeof resolutionContext.runInput?.skill_locale === 'string' ? resolutionContext.runInput.skill_locale
+        : typeof resolutionContext.runInput?.locale === 'string' ? resolutionContext.runInput.locale
+          : resolutionContext.preferredLocale
+            ?? resolutionContext.spaceLocale
+            ?? (typeof resolutionContext.runInput?.accept_language === 'string' ? resolutionContext.runInput.accept_language : null);
+
+    const catalog = await listDetailedSkillContext(
+      env.DB,
+      spaceId,
+      {
+        preferredLocale,
+        acceptLanguage: resolutionContext.acceptLanguage,
+        textSamples: localeSamples,
+      },
+      availableToolNames,
+    );
+    return ok({
+      locale: catalog.locale,
+      skills: catalog.skills,
+      resolutionContext,
+    });
+  } catch (e: unknown) {
+    logError('Skill catalog RPC error', e, { module: 'executor-host' });
+    const classified = classifyProxyError(e);
+    return err(classified.message, classified.status);
+  }
+}
+
+export async function handleSkillRuntimeContext(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const {
+    runId,
+    threadId,
+    spaceId,
+    agentType,
+    history,
+  } = body as {
+    runId?: string;
+    threadId?: string;
+    spaceId?: string;
+    agentType?: string;
+    history?: AgentMessage[];
+  };
+  if (!runId || !threadId || !spaceId || !agentType || !Array.isArray(history)) {
+    return err('Missing runId, threadId, spaceId, agentType, or history', 400);
+  }
+
+  try {
+    const [resolutionContext, customSkills, mcpServers] = await Promise.all([
+      buildSkillResolutionContext(
+        env.DB,
+        {
+          threadId,
+          runId,
+          spaceId,
+        },
+        {
+          type: agentType,
+          systemPrompt: '',
+          tools: [],
+        },
+        history,
+      ),
+      listEnabledCustomSkillContext(env.DB, spaceId),
+      listMcpServers(env.DB, spaceId),
+    ]);
+
+    return ok({
+      resolutionContext,
+      customSkills,
+      availableMcpServerNames: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+      availableTemplateIds: listSkillTemplates().map((template) => template.id),
+    });
+  } catch (e: unknown) {
+    logError('Skill runtime context RPC error', e, { module: 'executor-host' });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
   }

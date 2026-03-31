@@ -228,6 +228,7 @@ services:
 - **イメージ**: `apps/rust-agent/Dockerfile` からビルド
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
 - **役割**: Rust 製のエージェント実行コンテナ
+- **構成**: `packages/rust-agent-engine` を core とし、`apps/rust-agent` が Takos control RPC / remote tools / skill prompt bridge を提供
 - **データ**: `takos-rust-agent-data` volume に object memory を保持
 
 ### Browser サービス

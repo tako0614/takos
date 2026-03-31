@@ -31,6 +31,8 @@ import {
 
 import {
   handleConversationHistory,
+  handleSkillCatalog,
+  handleSkillRuntimeContext,
   handleSkillPlan,
   handleMemoryActivation,
   handleMemoryFinalize,
@@ -135,6 +137,16 @@ export function createExecutorProxyRouter() {
   router.post('/conversation-history', async (c) => {
     const body = await c.req.json();
     return handleConversationHistory(body, c.env as never);
+  });
+
+  router.post('/skill-runtime-context', async (c) => {
+    const body = await c.req.json();
+    return handleSkillRuntimeContext(body, c.env as never);
+  });
+
+  router.post('/skill-catalog', async (c) => {
+    const body = await c.req.json();
+    return handleSkillCatalog(body, c.env as never);
   });
 
   router.post('/skill-plan', async (c) => {

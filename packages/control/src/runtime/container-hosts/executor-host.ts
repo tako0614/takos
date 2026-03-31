@@ -86,6 +86,8 @@ import {
 } from './executor-run-state.ts';
 import {
   handleConversationHistory,
+  handleSkillCatalog,
+  handleSkillRuntimeContext,
   handleSkillPlan,
   handleMemoryActivation,
   handleMemoryFinalize,
@@ -449,6 +451,14 @@ export default {
 
       if (path === '/rpc/control/conversation-history') {
         return handleConversationHistory(body, env);
+      }
+
+      if (path === '/rpc/control/skill-runtime-context') {
+        return handleSkillRuntimeContext(body, env);
+      }
+
+      if (path === '/rpc/control/skill-catalog') {
+        return handleSkillCatalog(body, env);
       }
 
       if (path === '/rpc/control/skill-plan') {

@@ -17,6 +17,8 @@ import {
   handleMemoryActivation,
   handleMemoryFinalize,
   handleRunEvent,
+  handleSkillCatalog,
+  handleSkillRuntimeContext,
   handleSkillPlan,
   handleToolCatalog,
   handleToolCleanup,
@@ -44,6 +46,10 @@ function recordLocalExecutorProxyUsage(path: string): void {
     ? 'tool-catalog'
     : path === '/rpc/control/conversation-history'
       ? 'conversation-history'
+      : path === '/rpc/control/skill-runtime-context'
+        ? 'skill-runtime-context'
+      : path === '/rpc/control/skill-catalog'
+        ? 'skill-catalog'
       : path === '/rpc/control/skill-plan'
         ? 'skill-plan'
         : path === '/rpc/control/memory-activation'
@@ -336,6 +342,28 @@ async function localHandleSkillPlanCompat(body: Record<string, unknown>, env: Lo
   );
 }
 
+async function localHandleSkillCatalogCompat(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
+  return localAugmentJsonSuccessResponse(
+    await handleSkillCatalog(body, env as never),
+    (payload) => {
+      const locale = typeof payload.locale === 'string' ? payload.locale : 'en';
+      return {
+        ...payload,
+        locale,
+      };
+    },
+  );
+}
+
+async function localHandleSkillRuntimeContextCompat(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
+  return localAugmentJsonSuccessResponse(
+    await handleSkillRuntimeContext(body, env as never),
+    (payload) => ({
+      ...payload,
+    }),
+  );
+}
+
 async function localHandleNoLlmComplete(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
   const serviceId = readRunServiceId(body);
@@ -448,6 +476,10 @@ async function localHandleExecutorControlRpc(request: Request, env: LocalExecuto
       return localHandleRunContext(body as Record<string, unknown>, env);
     case '/rpc/control/conversation-history':
       return handleConversationHistory(body as Record<string, unknown>, env as never);
+    case '/rpc/control/skill-runtime-context':
+      return localHandleSkillRuntimeContextCompat(body as Record<string, unknown>, env);
+    case '/rpc/control/skill-catalog':
+      return localHandleSkillCatalogCompat(body as Record<string, unknown>, env);
     case '/rpc/control/skill-plan':
       return localHandleSkillPlanCompat(body as Record<string, unknown>, env);
     case '/rpc/control/memory-activation':

@@ -1,30 +1,44 @@
-import { assertEquals, assert } from 'jsr:@std/assert';
+import { assert, assertEquals } from 'jsr:@std/assert';
+import {
+  createNodeWebEnv,
+  resetNodePlatformStateForTests,
+} from '../../node-platform/env-builder.ts';
+import {
+  resetRedisClientForTests,
+  setRedisClientFactoryForTests,
+} from '../redis-bindings.ts';
+import type { RoutingTarget } from '../../application/services/routing/routing-models.ts';
 
-const redisMock = {
-  type Store = {
-    strings: Map<string, string>;
-    lists: Map<string, string[]>;
-  };
+type Store = {
+  lists: Map<string, string[]>;
+  strings: Map<string, string>;
+};
 
-  const stores = new Map<string, Store>();
-  const calls: Array<{ url: string }> = [];
+const stores = new Map<string, Store>();
+const calls: Array<{ url: string }> = [];
 
-  function getStore(url: string): Store {
-    const existing = stores.get(url);
-    if (existing) return existing;
-    const next: Store = {
-      strings: new Map(),
-      lists: new Map(),
-    };
-    stores.set(url, next);
-    return next;
+function getStore(url: string): Store {
+  const existing = stores.get(url);
+  if (existing) {
+    return existing;
   }
 
-  function createMockClient(url: string) {
-    const store = getStore(url);
-    const client = {
+  const next: Store = {
+    lists: new Map(),
+    strings: new Map(),
+  };
+  stores.set(url, next);
+  return next;
+}
+
+function installRedisMock(): void {
+  setRedisClientFactoryForTests(((options: { url: string }) => {
+    calls.push({ url: options.url });
+    const store = getStore(options.url);
+
+    return {
       async connect() {
-        return client;
+        return this;
       },
       async get(key: string) {
         return store.strings.get(key) ?? null;
@@ -33,10 +47,16 @@ const redisMock = {
         store.strings.set(key, value);
         return 'OK';
       },
-      async del(key: string) {
-        store.strings.delete(key);
-        store.lists.delete(key);
-        return 1;
+      async lRange(key: string, start: number, end: number) {
+        const list = store.lists.get(key) ?? [];
+        const effectiveEnd = end < 0 ? list.length - 1 : end;
+        return list.slice(start, effectiveEnd + 1);
+      },
+      async lPop(key: string) {
+        const list = store.lists.get(key) ?? [];
+        const value = list.shift() ?? null;
+        store.lists.set(key, list);
+        return value;
       },
       async rPush(key: string, ...values: string[]) {
         const list = store.lists.get(key) ?? [];
@@ -44,46 +64,26 @@ const redisMock = {
         store.lists.set(key, list);
         return list.length;
       },
-      async lRange(key: string, start: number, end: number) {
-        const list = store.lists.get(key) ?? [];
-        const effectiveEnd = end < 0 ? list.length - 1 : end;
-        return list.slice(start, effectiveEnd + 1);
+      async close() {
+        return;
       },
       destroy() {
-        return Promise.resolve();
-      },
-      close() {
-        return Promise.resolve();
+        return;
       },
     };
-    return client;
-  }
+  }) as typeof import('redis').createClient);
+}
 
-  return {
-    calls,
-    stores,
-    createClient: (options: { url: string }) => {
-      calls.push({ url: options.url });
-      return createMockClient(options.url);
-    },
-  };
-};
-
-// [Deno] vi.mock removed - manually stub imports from 'redis'
-import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder.ts';
-import type { RoutingTarget } from '../../application/services/routing/routing-models.ts';
-
-
-  const originalEnv = {
-    REDIS_URL: Deno.env.get('REDIS_URL'),
-  };
-  Deno.test('local redis-backed bindings - uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
+Deno.test('local redis-backed bindings - uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
+  const originalRedisUrl = Deno.env.get('REDIS_URL');
   Deno.env.set('REDIS_URL', 'redis://localhost:6379');
-    redisMock.calls.length = 0;
-    redisMock.stores.clear();
-    await resetNodePlatformStateForTests();
+  calls.length = 0;
+  stores.clear();
+  installRedisMock();
+  await resetNodePlatformStateForTests();
+
   try {
-  const env = await createNodeWebEnv();
+    const env = await createNodeWebEnv();
     const target: RoutingTarget = {
       type: 'deployments',
       deployments: [{ routeRef: 'tenant-app', weight: 100, status: 'active' }],
@@ -97,12 +97,12 @@ import type { RoutingTarget } from '../../application/services/routing/routing-m
     });
     await env.ROUTING_STORE!.putRecord('Redis.Example', target, 1710000001234);
 
-    assert(redisMock.calls.length >= 1);
-    assert(redisMock.calls.some((item: any) => JSON.stringify(item) === JSON.stringify({ url: 'redis://localhost:6379' })));
+    assert(calls.length >= 1);
+    assertEquals(calls.some((item) => item.url === 'redis://localhost:6379'), true);
 
-    const store = redisMock.stores.get('redis://localhost:6379');
+    const store = stores.get('redis://localhost:6379');
     assert(store !== undefined);
-    assertEquals(store?.lists.get('takos:local:queue:takos-runs'), [
+    assertEquals(store.lists.get('takos:local:queue:takos-runs'), [
       JSON.stringify({
         body: {
           version: 2,
@@ -112,30 +112,30 @@ import type { RoutingTarget } from '../../application/services/routing/routing-m
         },
       }),
     ]);
+    assertEquals(
+      store.strings.get('takos:local:routing:redis.example'),
+      JSON.stringify({
+        hostname: 'redis.example',
+        target,
+        version: 1,
+        updatedAt: 1710000001234,
+      }),
+    );
 
-    assertEquals(store?.strings.get('takos:local:routing:redis.example'), JSON.stringify({
-      hostname: 'redis.example',
-      target,
-      version: 1,
-      updatedAt: 1710000001234,
-    }));
-
-    await assertEquals(await env.ROUTING_STORE!.getRecord('redis.example'), {
+    assertEquals(await env.ROUTING_STORE!.getRecord('redis.example'), {
       hostname: 'redis.example',
       target,
       version: 1,
       updatedAt: 1710000001234,
     });
   } finally {
-  const { REDIS_URL } = originalEnv;
-    if (REDIS_URL === undefined) {
+    if (originalRedisUrl === undefined) {
       Deno.env.delete('REDIS_URL');
     } else {
-      Deno.env.set('REDIS_URL', REDIS_URL);
+      Deno.env.set('REDIS_URL', originalRedisUrl);
     }
-    /* TODO: call fakeTime.restore() */ void 0;
+    setRedisClientFactoryForTests(null);
+    resetRedisClientForTests();
     await resetNodePlatformStateForTests();
-    /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
   }
-})
+});
