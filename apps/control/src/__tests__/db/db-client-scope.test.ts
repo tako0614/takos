@@ -1,42 +1,28 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database } from "@cloudflare/workers-types";
 
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assertEquals, assertNotEquals } from "jsr:@std/assert";
 
-const mocks = {
-  const drizzleInstances: unknown[] = [];
-  const mockDrizzle = (db: unknown, _opts?: unknown) => {
-    const instance = { _d1: db };
-    drizzleInstances.push(instance);
-    return instance;
-  };
-  return { drizzleInstances, mockDrizzle };
-};
+import { getDb } from "@/infra/db/client.ts";
 
-// [Deno] vi.mock removed - manually stub imports from 'drizzle-orm/d1'
+function createDbBinding(label: string): D1Database {
+  return { label } as unknown as D1Database;
+}
 
-  Deno.test('getDb - caches the client for the same D1 binding via WeakMap', async () => {
-  /* modules reset (no-op in Deno) */ void 0;
-    mocks.drizzleInstances.length = 0;
-    mocks.mockDrizzle;
-  const { getDb } = await import('@/db/index');
-    const db = { name: 'test' } as unknown as D1Database;
+Deno.test("getDb caches the client for the same D1 binding", () => {
+  const db = createDbBinding("same-binding");
 
-    const first = getDb(db);
-    const second = getDb(db);
+  const first = getDb(db);
+  const second = getDb(db);
 
-    assertEquals(first, second);
-    assertEquals(mocks.drizzleInstances.length, 1);
-    assertSpyCalls(mocks.mockDrizzle, 1);
-})
-  Deno.test('getDb - passes the provided D1 binding into drizzle', async () => {
-  /* modules reset (no-op in Deno) */ void 0;
-    mocks.drizzleInstances.length = 0;
-    mocks.mockDrizzle;
-  const { getDb } = await import('@/db/index');
-    const db = { id: 'db-1' } as unknown as D1Database;
+  assertEquals(first, second);
+});
 
-    getDb(db);
+Deno.test("getDb creates distinct clients for different D1 bindings", () => {
+  const firstDb = createDbBinding("first-binding");
+  const secondDb = createDbBinding("second-binding");
 
-    assertSpyCallArgs(mocks.mockDrizzle, 0, [db, ({ schema: expect.anything() })]);
-})
+  const first = getDb(firstDb);
+  const second = getDb(secondDb);
+
+  assertNotEquals(first, second);
+});

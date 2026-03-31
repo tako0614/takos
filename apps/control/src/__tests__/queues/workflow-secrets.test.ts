@@ -1,281 +1,213 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { assertSpyCallArgs, assertSpyCalls } from "jsr:@std/testing/mock";
 
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  decrypt: ((..._args: any[]) => undefined) as any,
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/utils'
+import { encrypt } from "../../../../../packages/control/src/shared/utils/crypto.ts";
 import {
   collectReferencedSecretNamesFromEnv,
   resolveSecretValues,
 } from "@/queues/workflow-secrets";
 
-// ---------------------------------------------------------------------------
-// Drizzle mock helper
-// ---------------------------------------------------------------------------
+type SecretRow = {
+  id: string;
+  name: string;
+  encryptedValue: string;
+};
 
-function createDrizzleMock(opts: { selectAll?: any }) {
-  const selectAll = opts.selectAll ?? (async () => []);
-
-  const chain = () => {
-    const c: Record<string, unknown> = {};
-    c.from = () => c;
-    c.where = () => c;
-    c.orderBy = () => c;
-    c.all = selectAll;
-    return c;
-  };
-
+function createFakeD1(secretRows: SecretRow[] = []) {
   return {
-    select: () => chain(),
+    prepare(_sql: string) {
+      return {
+        bind(..._args: unknown[]) {
+          return {
+            raw: async () =>
+              secretRows.map((row) => [
+                row.id,
+                row.name,
+                row.encryptedValue,
+              ]),
+            first: async () => null,
+            all: async () => ({ results: secretRows }),
+            run: async () => ({ success: true, meta: { changes: 1 } }),
+          };
+        },
+      };
+    },
   };
 }
-// ---------------------------------------------------------------------------
-// collectReferencedSecretNamesFromEnv
-// ---------------------------------------------------------------------------
 
-Deno.test("collectReferencedSecretNamesFromEnv - extracts secret names from ${{ secrets.X }} references", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
-    API_TOKEN: "${{ secrets.API_TOKEN }}",
-    OTHER: "static-value",
-    DB_PASS: "${{ secrets.DB_PASSWORD }}",
+async function createSecretRow(
+  id: string,
+  name: string,
+  value: string,
+  encryptionKey: string,
+  repoId = "repo-1",
+): Promise<SecretRow> {
+  const encrypted = await encrypt(
+    value,
+    encryptionKey,
+    `secret:${repoId}:${name}`,
+  );
+
+  return {
+    id,
+    name,
+    encryptedValue: JSON.stringify(encrypted),
   };
+}
 
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["API_TOKEN", "DB_PASSWORD"]);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - returns empty array when no secrets are referenced", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+Deno.test("collectReferencedSecretNamesFromEnv - extracts, deduplicates, and sorts names", () => {
   const env = {
-    CI: "true",
-    NODE_ENV: "production",
-  };
-
-  assertEquals(collectReferencedSecretNamesFromEnv(env), []);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - handles empty env", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  assertEquals(collectReferencedSecretNamesFromEnv({}), []);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - handles multiple secret references in same value", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
+    TOKEN: "${{ secrets.API_TOKEN }}",
     COMBINED: "${{ secrets.USER }}:${{ secrets.PASS }}",
+    DUPLICATE: "${{ secrets.API_TOKEN }}",
+    STATIC: "true",
   };
 
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["PASS", "USER"]);
+  assertEquals(collectReferencedSecretNamesFromEnv(env), [
+    "API_TOKEN",
+    "PASS",
+    "USER",
+  ]);
 });
-Deno.test("collectReferencedSecretNamesFromEnv - deduplicates secret names", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
-    A: "${{ secrets.TOKEN }}",
-    B: "${{ secrets.TOKEN }}",
-  };
 
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["TOKEN"]);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - returns sorted names", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
-    Z: "${{ secrets.ZEBRA }}",
-    A: "${{ secrets.ALPHA }}",
-    M: "${{ secrets.MIKE }}",
-  };
-
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["ALPHA", "MIKE", "ZEBRA"]);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - supports spaces inside expression", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
-    TOKEN: "${{  secrets.MY_TOKEN  }}",
-  };
-
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["MY_TOKEN"]);
-});
-Deno.test("collectReferencedSecretNamesFromEnv - supports underscores and numbers in secret names", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const env = {
-    KEY: "${{ secrets.API_KEY_V2 }}",
-  };
-
-  const names = collectReferencedSecretNamesFromEnv(env);
-  assertEquals(names, ["API_KEY_V2"]);
-});
-// ---------------------------------------------------------------------------
-// resolveSecretValues
-// ---------------------------------------------------------------------------
-
-Deno.test("resolveSecretValues - returns empty object when no encryption key", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const result = await resolveSecretValues(
-    {} as any,
-    "repo-1",
-    ["s1"],
-    undefined,
-    [],
+Deno.test("collectReferencedSecretNamesFromEnv - supports spacing and numeric suffixes", () => {
+  assertEquals(
+    collectReferencedSecretNamesFromEnv({
+      TOKEN: "${{  secrets.API_KEY_V2  }}",
+    }),
+    ["API_KEY_V2"],
   );
-  assertEquals(result, {});
 });
-Deno.test("resolveSecretValues - throws when required secrets exist but no encryption key", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  await assertRejects(async () => {
-    await resolveSecretValues({} as any, "repo-1", ["s1"], undefined, [
-      "SECRET_A",
-    ]);
-  }, "Encryption key is required to resolve referenced workflow secrets");
-});
-Deno.test("resolveSecretValues - returns empty object when secretIds is empty and no required names", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const result = await resolveSecretValues(
-    {} as any,
-    "repo-1",
-    [],
-    "enc-key",
-    [],
+
+Deno.test("resolveSecretValues - returns empty object when no encryption key is provided", async () => {
+  assertEquals(
+    await resolveSecretValues(
+      createFakeD1() as never,
+      "repo-1",
+      ["s1"],
+      undefined,
+      [],
+    ),
+    {},
   );
-  assertEquals(result, {});
 });
-Deno.test("resolveSecretValues - throws when secretIds is empty but required names exist", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  await assertRejects(async () => {
-    await resolveSecretValues({} as any, "repo-1", [], "enc-key", [
-      "NEEDED_SECRET",
-    ]);
-  }, "Missing referenced secrets: NEEDED_SECRET");
+
+Deno.test("resolveSecretValues - throws when required secrets need an encryption key", async () => {
+  await assertRejects(
+    () =>
+      resolveSecretValues(
+        createFakeD1() as never,
+        "repo-1",
+        ["s1"],
+        undefined,
+        ["SECRET_A"],
+      ),
+    Error,
+    "Encryption key is required",
+  );
 });
-Deno.test("resolveSecretValues - decrypts secrets from DB records", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [
-      {
-        id: "s1",
-        name: "API_TOKEN",
-        encryptedValue: '{"iv":"abc","ct":"xyz"}',
-      },
-      { id: "s2", name: "DB_PASS", encryptedValue: '{"iv":"def","ct":"uvw"}' },
-    ],
-  });
-  mocks.getDb = (() => dbMock) as any;
-  mocks.decrypt =
-    (async () => "token-value") as any =
-      (async () => "password-value") as any;
+
+Deno.test("resolveSecretValues - returns empty object when there are no secret IDs", async () => {
+  assertEquals(
+    await resolveSecretValues(
+      createFakeD1() as never,
+      "repo-1",
+      [],
+      "enc-key",
+      [],
+    ),
+    {},
+  );
+});
+
+Deno.test("resolveSecretValues - throws when required secrets are missing from the ID list", async () => {
+  await assertRejects(
+    () =>
+      resolveSecretValues(
+        createFakeD1() as never,
+        "repo-1",
+        [],
+        "enc-key",
+        ["MISSING_SECRET"],
+      ),
+    Error,
+    "Missing referenced secrets: MISSING_SECRET",
+  );
+});
+
+Deno.test("resolveSecretValues - decrypts database records with the matching salt", async () => {
+  const encryptionKey = "enc-key";
+  const db = createFakeD1([
+    await createSecretRow("s1", "API_TOKEN", "token-value", encryptionKey),
+    await createSecretRow("s2", "DB_PASS", "password-value", encryptionKey),
+  ]);
 
   const result = await resolveSecretValues(
-    {} as any,
+    db as never,
     "repo-1",
     ["s1", "s2"],
-    "enc-key",
+    encryptionKey,
   );
 
   assertEquals(result, {
     API_TOKEN: "token-value",
     DB_PASS: "password-value",
   });
-  assertSpyCalls(mocks.decrypt, 2);
-  assertSpyCallArgs(mocks.decrypt, 0, [
-    { iv: "abc", ct: "xyz" },
-    "enc-key",
-    "secret:repo-1:API_TOKEN",
-  ]);
 });
-Deno.test("resolveSecretValues - skips secrets that fail to decrypt (logs error)", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [
-      { id: "s1", name: "GOOD", encryptedValue: '{"iv":"a","ct":"b"}' },
-      { id: "s2", name: "BAD", encryptedValue: '{"iv":"c","ct":"d"}' },
-    ],
-  });
-  mocks.getDb = (() => dbMock) as any;
-  mocks.decrypt =
-    (async () => "good-value") as any =
-      (async () => {
-        throw new Error("decrypt failed");
-      }) as any;
+
+Deno.test("resolveSecretValues - skips secrets that fail to decrypt", async () => {
+  const encryptionKey = "enc-key";
+  const db = createFakeD1([
+    await createSecretRow("s1", "GOOD", "good-value", encryptionKey),
+    {
+      id: "s2",
+      name: "BAD",
+      encryptedValue: '{"not":"valid-encrypted-data"}',
+    },
+  ]);
 
   const result = await resolveSecretValues(
-    {} as any,
+    db as never,
     "repo-1",
     ["s1", "s2"],
-    "enc-key",
+    encryptionKey,
   );
 
   assertEquals(result, { GOOD: "good-value" });
 });
-Deno.test("resolveSecretValues - throws when required secrets are missing after decryption", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [
-      { id: "s1", name: "FOUND", encryptedValue: '{"iv":"a","ct":"b"}' },
-    ],
-  });
-  mocks.getDb = (() => dbMock) as any;
-  mocks.decrypt = (async () => "value") as any;
 
-  await assertRejects(async () => {
-    await resolveSecretValues({} as any, "repo-1", ["s1"], "enc-key", [
-      "FOUND",
-      "MISSING",
-    ]);
-  }, "Missing referenced secrets: MISSING");
+Deno.test("resolveSecretValues - throws when required secrets are still missing after resolution", async () => {
+  const encryptionKey = "enc-key";
+  const db = createFakeD1([
+    await createSecretRow("s1", "FOUND", "value", encryptionKey),
+  ]);
+
+  await assertRejects(
+    () =>
+      resolveSecretValues(
+        db as never,
+        "repo-1",
+        ["s1"],
+        encryptionKey,
+        ["FOUND", "MISSING"],
+      ),
+    Error,
+    "Missing referenced secrets: MISSING",
+  );
 });
-Deno.test("resolveSecretValues - throws when decrypt fails for a required secret", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [
-      { id: "s1", name: "REQUIRED", encryptedValue: '{"iv":"a","ct":"b"}' },
-    ],
-  });
-  mocks.getDb = (() => dbMock) as any;
-  mocks.decrypt = (async () => {
-    throw new Error("bad key");
-  }) as any;
 
-  await assertRejects(async () => {
-    await resolveSecretValues({} as any, "repo-1", ["s1"], "enc-key", [
-      "REQUIRED",
-    ]);
-  }, "Missing referenced secrets: REQUIRED");
-});
-Deno.test("resolveSecretValues - handles JSON parse errors in encryptedValue", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [
-      { id: "s1", name: "BROKEN", encryptedValue: "not-json" },
-    ],
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  // JSON.parse will throw before decrypt is called
+Deno.test("resolveSecretValues - ignores invalid encrypted JSON payloads", async () => {
   const result = await resolveSecretValues(
-    {} as any,
+    createFakeD1([
+      {
+        id: "s1",
+        name: "BROKEN",
+        encryptedValue: "not-json",
+      },
+    ]) as never,
     "repo-1",
     ["s1"],
     "enc-key",
   );
-  assertEquals(result, {});
-});
-Deno.test("resolveSecretValues - does not require secrets when requiredSecretNames is empty", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock({
-    selectAll: async () => [],
-  });
-  mocks.getDb = (() => dbMock) as any;
 
-  const result = await resolveSecretValues(
-    {} as any,
-    "repo-1",
-    ["s1"],
-    "enc-key",
-    [],
-  );
   assertEquals(result, {});
 });

@@ -6,32 +6,32 @@
  */
 
 import type {
-  User,
+  App,
+  AppType,
+  Memory,
+  MemoryType,
+  Message,
+  MessageRole,
+  PullRequest,
+  PullRequestStatus,
+  Repository,
+  RepositoryVisibility,
+  Resource,
+  ResourceStatus,
+  ResourceType,
+  Run,
+  RunStatus,
+  Service,
+  ServiceStatus,
+  ServiceType,
+  Session,
   Space,
   SpaceMembership,
-  Thread,
-  Message,
-  Run,
-  Session,
-  Memory,
-  Repository,
-  PullRequest,
-  Service,
-  Resource,
-  App,
   SpaceRole,
+  Thread,
   ThreadStatus,
-  MessageRole,
-  RunStatus,
-  MemoryType,
-  RepositoryVisibility,
-  PullRequestStatus,
-  ResourceType,
-  ResourceStatus,
-  AppType,
-  ServiceType,
-  ServiceStatus,
-} from '@/shared/types';
+  User,
+} from "@/types";
 
 // ============================================================================
 // Counter for generating unique IDs
@@ -39,8 +39,10 @@ import type {
 
 let idCounter = 0;
 
-function generateId(prefix: string = ''): string {
-  return `${prefix}${++idCounter}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+function generateId(prefix: string = ""): string {
+  return `${prefix}${++idCounter}-${Date.now()}-${
+    Math.random().toString(36).substring(7)
+  }`;
 }
 
 // Reset counter between test runs
@@ -67,8 +69,8 @@ export interface UserFactoryOptions {
 }
 
 export function createUser(options: UserFactoryOptions = {}): User {
-  const id = options.id || generateId('user-');
-  const principalId = options.principal_id || generateId('principal-');
+  const id = options.id || generateId("user-");
+  const principalId = options.principal_id || generateId("principal-");
   const now = new Date().toISOString();
 
   return {
@@ -76,11 +78,15 @@ export function createUser(options: UserFactoryOptions = {}): User {
     principal_id: principalId,
     email: options.email || `${id}@test.example.com`,
     name: options.name || `Test User ${id}`,
-    username: options.username !== undefined ? options.username : `testuser${idCounter}`,
+    username: options.username !== undefined
+      ? options.username
+      : `testuser${idCounter}`,
     bio: options.bio !== undefined ? options.bio : null,
     picture: options.picture !== undefined ? options.picture : null,
-    trust_tier: options.trust_tier || 'normal',
-    setup_completed: options.setup_completed !== undefined ? options.setup_completed : true,
+    trust_tier: options.trust_tier || "normal",
+    setup_completed: options.setup_completed !== undefined
+      ? options.setup_completed
+      : true,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
   };
@@ -92,7 +98,7 @@ export function createUser(options: UserFactoryOptions = {}): User {
 
 export interface WorkspaceFactoryOptions {
   id?: string;
-  kind?: Space['kind'];
+  kind?: Space["kind"];
   name?: string;
   slug?: string | null;
   principal_id?: string;
@@ -106,11 +112,11 @@ export interface WorkspaceFactoryOptions {
 }
 
 export function createWorkspace(options: WorkspaceFactoryOptions = {}): Space {
-  const id = options.id || generateId('ws-');
+  const id = options.id || generateId("ws-");
   const now = new Date().toISOString();
-  const kind = options.kind || 'team';
-  const principalId = options.principal_id || generateId('principal-');
-  const ownerUserId = options.owner_user_id || generateId('user-');
+  const kind = options.kind || "team";
+  const principalId = options.principal_id || generateId("principal-");
+  const ownerUserId = options.owner_user_id || generateId("user-");
   return {
     id,
     kind,
@@ -119,8 +125,12 @@ export function createWorkspace(options: WorkspaceFactoryOptions = {}): Space {
     principal_id: principalId,
     owner_user_id: ownerUserId,
     owner_principal_id: options.owner_principal_id || principalId,
-    automation_principal_id: options.automation_principal_id !== undefined ? options.automation_principal_id : null,
-    head_snapshot_id: options.head_snapshot_id !== undefined ? options.head_snapshot_id : null,
+    automation_principal_id: options.automation_principal_id !== undefined
+      ? options.automation_principal_id
+      : null,
+    head_snapshot_id: options.head_snapshot_id !== undefined
+      ? options.head_snapshot_id
+      : null,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
   };
@@ -134,15 +144,17 @@ export interface SpaceMemberFactoryOptions {
   created_at?: string;
 }
 
-export function createSpaceMember(options: SpaceMemberFactoryOptions = {}): SpaceMembership {
-  const id = options.id || generateId('wsm-');
+export function createSpaceMember(
+  options: SpaceMemberFactoryOptions = {},
+): SpaceMembership {
+  const id = options.id || generateId("wsm-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
-    principal_id: options.principal_id || generateId('principal-'),
-    role: options.role || 'editor',
+    space_id: options.space_id || generateId("ws-"),
+    principal_id: options.principal_id || generateId("principal-"),
+    role: options.role || "editor",
     created_at: options.created_at || now,
   };
 }
@@ -165,16 +177,16 @@ export interface ThreadFactoryOptions {
 }
 
 export function createThread(options: ThreadFactoryOptions = {}): Thread {
-  const id = options.id || generateId('thread-');
+  const id = options.id || generateId("thread-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
+    space_id: options.space_id || generateId("ws-"),
     title: options.title !== undefined ? options.title : `Test Thread ${id}`,
-    status: options.status || 'active',
+    status: options.status || "active",
     summary: options.summary !== undefined ? options.summary : null,
-    key_points: options.key_points || '[]',
+    key_points: options.key_points || "[]",
     retrieval_index: options.retrieval_index ?? -1,
     context_window: options.context_window ?? 50,
     created_at: options.created_at || now,
@@ -195,17 +207,19 @@ export interface MessageFactoryOptions {
 }
 
 export function createMessage(options: MessageFactoryOptions = {}): Message {
-  const id = options.id || generateId('msg-');
+  const id = options.id || generateId("msg-");
   const now = new Date().toISOString();
 
   return {
     id,
-    thread_id: options.thread_id || generateId('thread-'),
-    role: options.role || 'user',
-    content: options.content || 'Test message content',
+    thread_id: options.thread_id || generateId("thread-"),
+    role: options.role || "user",
+    content: options.content || "Test message content",
     tool_calls: options.tool_calls !== undefined ? options.tool_calls : null,
-    tool_call_id: options.tool_call_id !== undefined ? options.tool_call_id : null,
-    metadata: options.metadata || '{}',
+    tool_call_id: options.tool_call_id !== undefined
+      ? options.tool_call_id
+      : null,
+    metadata: options.metadata || "{}",
     sequence: options.sequence || 0,
     created_at: options.created_at || now,
   };
@@ -238,29 +252,37 @@ export interface RunFactoryOptions {
 }
 
 export function createRun(options: RunFactoryOptions = {}): Run {
-  const id = options.id || generateId('run-');
+  const id = options.id || generateId("run-");
   const now = new Date().toISOString();
-  const threadId = options.thread_id || generateId('thread-');
+  const threadId = options.thread_id || generateId("thread-");
 
   return {
     id,
     thread_id: threadId,
-    space_id: options.space_id || generateId('ws-'),
+    space_id: options.space_id || generateId("ws-"),
     session_id: options.session_id !== undefined ? options.session_id : null,
-    parent_run_id: options.parent_run_id !== undefined ? options.parent_run_id : null,
-    child_thread_id: options.child_thread_id !== undefined ? options.child_thread_id : null,
+    parent_run_id: options.parent_run_id !== undefined
+      ? options.parent_run_id
+      : null,
+    child_thread_id: options.child_thread_id !== undefined
+      ? options.child_thread_id
+      : null,
     root_thread_id: options.root_thread_id || threadId,
     root_run_id: options.root_run_id !== undefined ? options.root_run_id : id,
-    agent_type: options.agent_type || 'default',
-    status: options.status || 'queued',
-    input: options.input || '{}',
+    agent_type: options.agent_type || "default",
+    status: options.status || "queued",
+    input: options.input || "{}",
     output: options.output !== undefined ? options.output : null,
     error: options.error !== undefined ? options.error : null,
-    usage: options.usage || '{}',
+    usage: options.usage || "{}",
     worker_id: options.worker_id !== undefined ? options.worker_id : null,
-    worker_heartbeat: options.worker_heartbeat !== undefined ? options.worker_heartbeat : null,
+    worker_heartbeat: options.worker_heartbeat !== undefined
+      ? options.worker_heartbeat
+      : null,
     started_at: options.started_at !== undefined ? options.started_at : null,
-    completed_at: options.completed_at !== undefined ? options.completed_at : null,
+    completed_at: options.completed_at !== undefined
+      ? options.completed_at
+      : null,
     created_at: options.created_at || now,
   };
 }
@@ -289,23 +311,25 @@ export interface MemoryFactoryOptions {
 }
 
 export function createMemory(options: MemoryFactoryOptions = {}): Memory {
-  const id = options.id || generateId('mem-');
+  const id = options.id || generateId("mem-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
+    space_id: options.space_id || generateId("ws-"),
     user_id: options.user_id !== undefined ? options.user_id : null,
     thread_id: options.thread_id !== undefined ? options.thread_id : null,
-    type: options.type || 'episode',
+    type: options.type || "episode",
     category: options.category !== undefined ? options.category : null,
-    content: options.content || 'Test memory content',
+    content: options.content || "Test memory content",
     summary: options.summary !== undefined ? options.summary : null,
     importance: options.importance !== undefined ? options.importance : 0.5,
     tags: options.tags !== undefined ? options.tags : null,
     occurred_at: options.occurred_at !== undefined ? options.occurred_at : null,
     expires_at: options.expires_at !== undefined ? options.expires_at : null,
-    last_accessed_at: options.last_accessed_at !== undefined ? options.last_accessed_at : null,
+    last_accessed_at: options.last_accessed_at !== undefined
+      ? options.last_accessed_at
+      : null,
     access_count: options.access_count !== undefined ? options.access_count : 0,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
@@ -331,18 +355,22 @@ export interface RepositoryFactoryOptions {
   updated_at?: string;
 }
 
-export function createRepository(options: RepositoryFactoryOptions = {}): Repository {
-  const id = options.id || generateId('repo-');
+export function createRepository(
+  options: RepositoryFactoryOptions = {},
+): Repository {
+  const id = options.id || generateId("repo-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
+    space_id: options.space_id || generateId("ws-"),
     name: options.name || `test-repo-${idCounter}`,
     description: options.description !== undefined ? options.description : null,
-    visibility: options.visibility || 'private',
-    default_branch: options.default_branch || 'main',
-    forked_from_id: options.forked_from_id !== undefined ? options.forked_from_id : null,
+    visibility: options.visibility || "private",
+    default_branch: options.default_branch || "main",
+    forked_from_id: options.forked_from_id !== undefined
+      ? options.forked_from_id
+      : null,
     stars: options.stars || 0,
     forks: options.forks || 0,
     git_enabled: options.git_enabled !== undefined ? options.git_enabled : true,
@@ -364,7 +392,7 @@ export interface PullRequestFactoryOptions {
   head_branch?: string;
   base_branch?: string;
   status?: PullRequestStatus;
-  author_type?: 'user' | 'agent';
+  author_type?: "user" | "agent";
   author_id?: string | null;
   run_id?: string | null;
   merged_at?: string | null;
@@ -372,20 +400,22 @@ export interface PullRequestFactoryOptions {
   updated_at?: string;
 }
 
-export function createPullRequest(options: PullRequestFactoryOptions = {}): PullRequest {
-  const id = options.id || generateId('pr-');
+export function createPullRequest(
+  options: PullRequestFactoryOptions = {},
+): PullRequest {
+  const id = options.id || generateId("pr-");
   const now = new Date().toISOString();
 
   return {
     id,
-    repo_id: options.repo_id || generateId('repo-'),
+    repo_id: options.repo_id || generateId("repo-"),
     number: options.number || idCounter,
     title: options.title || `Test PR ${idCounter}`,
     description: options.description !== undefined ? options.description : null,
     head_branch: options.head_branch || `feature/test-${idCounter}`,
-    base_branch: options.base_branch || 'main',
-    status: options.status || 'open',
-    author_type: options.author_type || 'user',
+    base_branch: options.base_branch || "main",
+    status: options.status || "open",
+    author_type: options.author_type || "user",
     author_id: options.author_id !== undefined ? options.author_id : null,
     run_id: options.run_id !== undefined ? options.run_id : null,
     merged_at: options.merged_at !== undefined ? options.merged_at : null,
@@ -412,18 +442,20 @@ export interface WorkerFactoryOptions {
 }
 
 export function createWorker(options: WorkerFactoryOptions = {}): Service {
-  const id = options.id || generateId('worker-');
+  const id = options.id || generateId("worker-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
-    service_type: options.service_type || 'app',
+    space_id: options.space_id || generateId("ws-"),
+    service_type: options.service_type || "app",
     name_type: null,
-    status: options.status || 'pending',
+    status: options.status || "pending",
     config: options.config !== undefined ? options.config : null,
     hostname: options.hostname !== undefined ? options.hostname : null,
-    service_name: options.service_name !== undefined ? options.service_name : null,
+    service_name: options.service_name !== undefined
+      ? options.service_name
+      : null,
     slug: options.slug !== undefined ? options.slug : null,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
@@ -453,23 +485,25 @@ export interface ResourceFactoryOptions {
 }
 
 export function createResource(options: ResourceFactoryOptions = {}): Resource {
-  const id = options.id || generateId('res-');
+  const id = options.id || generateId("res-");
   const now = new Date().toISOString();
 
   return {
     id,
-    owner_id: options.owner_id || generateId('user-'),
+    owner_id: options.owner_id || generateId("user-"),
     space_id: options.space_id !== undefined ? options.space_id : null,
     name: options.name || `test-resource-${idCounter}`,
-    type: options.type || 'd1',
-    status: options.status || 'active',
+    type: options.type || "d1",
+    status: options.status || "active",
     cf_id: options.cf_id !== undefined ? options.cf_id : null,
     cf_name: options.cf_name !== undefined ? options.cf_name : null,
-    config: options.config || '{}',
-    metadata: options.metadata || '{}',
+    config: options.config || "{}",
+    metadata: options.metadata || "{}",
     size_bytes: options.size_bytes || 0,
     item_count: options.item_count || 0,
-    last_used_at: options.last_used_at !== undefined ? options.last_used_at : null,
+    last_used_at: options.last_used_at !== undefined
+      ? options.last_used_at
+      : null,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
   };
@@ -493,18 +527,20 @@ export interface AppFactoryOptions {
 }
 
 export function createApp(options: AppFactoryOptions = {}): App {
-  const id = options.id || generateId('app-');
+  const id = options.id || generateId("app-");
   const now = new Date().toISOString();
 
   return {
     id,
-    space_id: options.space_id || generateId('ws-'),
+    space_id: options.space_id || generateId("ws-"),
     worker_id: options.worker_id !== undefined ? options.worker_id : null,
     name: options.name || `Test App ${idCounter}`,
     description: options.description !== undefined ? options.description : null,
     icon: options.icon !== undefined ? options.icon : null,
-    app_type: options.app_type || 'custom',
-    takos_client_key: options.takos_client_key !== undefined ? options.takos_client_key : null,
+    app_type: options.app_type || "custom",
+    takos_client_key: options.takos_client_key !== undefined
+      ? options.takos_client_key
+      : null,
     created_at: options.created_at || now,
     updated_at: options.updated_at || now,
   };
@@ -525,20 +561,21 @@ export interface UserWithWorkspaceResult {
  */
 export function createUserWithWorkspace(
   userOptions: UserFactoryOptions = {},
-  workspaceOptions: WorkspaceFactoryOptions = {}
+  workspaceOptions: WorkspaceFactoryOptions = {},
 ): UserWithWorkspaceResult {
   const user = createUser(userOptions);
   const workspace = createWorkspace({
     ...workspaceOptions,
     owner_user_id: workspaceOptions.owner_user_id || user.id,
-    owner_principal_id: workspaceOptions.owner_principal_id || user.principal_id,
-    kind: workspaceOptions.kind || 'user',
+    owner_principal_id: workspaceOptions.owner_principal_id ||
+      user.principal_id,
+    kind: workspaceOptions.kind || "user",
     name: workspaceOptions.name || `${user.name}'s Workspace`,
   });
   const member = createSpaceMember({
     space_id: workspace.id,
     principal_id: user.principal_id,
-    role: 'owner',
+    role: "owner",
   });
 
   return { user, workspace, member };
@@ -554,7 +591,7 @@ export interface ThreadWithMessagesResult {
  */
 export function createThreadWithMessages(
   threadOptions: ThreadFactoryOptions = {},
-  messageContents: Array<{ role: MessageRole; content: string }> = []
+  messageContents: Array<{ role: MessageRole; content: string }> = [],
 ): ThreadWithMessagesResult {
   const thread = createThread(threadOptions);
   const messages = messageContents.map((msg, index) =>

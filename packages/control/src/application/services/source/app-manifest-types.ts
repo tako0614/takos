@@ -200,9 +200,7 @@ export type AppService = {
   ipv4?: boolean;
   env?: Record<string, string>;
   healthCheck?: HealthCheck;
-  bindings?: {
-    services?: ServiceBinding[];  // 他の service/worker を参照
-  };
+  bindings?: AppWorkloadBindings;
   triggers?: {
     schedules?: Array<{ cron: string; export: string }>;
   };
@@ -229,17 +227,7 @@ export type AppWorker = {
   build?: WorkflowArtifactBuild;
   artifact?: DirectWorkerArtifact;
   env?: Record<string, string>;
-  bindings?: {
-    d1?: string[];
-    r2?: string[];
-    kv?: string[];
-    vectorize?: string[];
-    queues?: string[];
-    analytics?: string[];
-    workflows?: string[];
-    durableObjects?: string[];
-    services?: ServiceBinding[];
-  };
+  bindings?: AppWorkloadBindings;
   triggers?: {
     schedules?: Array<{ cron: string; export: string }>;
     queues?: Array<{ queue: string; export: string }>;

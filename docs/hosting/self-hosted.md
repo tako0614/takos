@@ -231,6 +231,8 @@ services:
 - **構成**: `packages/rust-agent-engine` を core とし、`apps/rust-agent` が Takos control RPC / remote tools / skill prompt bridge を提供
 - **データ**: `takos-rust-agent-data` volume に object memory を保持
 
+このコンテナが Rust の正本です。Takos は platform 全体を Rust にするのではなく、agent container の inside loop を Rust に固定します。remote tool の実体、run queue、workspace state、custom skill persistence は control plane に残します。詳しくは [Agent Runtime](/architecture/agent-runtime) を参照。
+
 ### Browser サービス
 
 #### Browser Host

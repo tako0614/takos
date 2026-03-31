@@ -1,11 +1,22 @@
+import { spawnSync } from "node:child_process";
 import { defineConfig } from "vitepress";
+
+function canReadGitTimestamps(): boolean {
+  try {
+    return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
+  } catch {
+    return false;
+  }
+}
+
+const enableLastUpdated = canReadGitTimestamps();
 
 export default defineConfig({
   lang: "ja",
   title: "Takos Docs",
   description: "Takos の独自仕様、概念、アーキテクチャをまとめた product/spec docs",
   cleanUrls: true,
-  lastUpdated: true,
+  lastUpdated: enableLastUpdated,
   themeConfig: {
     siteTitle: "Takos Docs",
     search: {
@@ -65,6 +76,16 @@ export default defineConfig({
         ],
       },
       {
+        text: "アーキテクチャ",
+        items: [
+          { text: "概要", link: "/architecture/" },
+          { text: "Control Plane", link: "/architecture/control-plane" },
+          { text: "Agent Runtime", link: "/architecture/agent-runtime" },
+          { text: "Tenant Runtime", link: "/architecture/tenant-runtime" },
+          { text: "互換性と制限", link: "/architecture/compatibility" },
+        ],
+      },
+      {
         text: "プラットフォーム",
         items: [
           { text: "Store", link: "/platform/store" },
@@ -100,9 +121,11 @@ export default defineConfig({
       level: [2, 3],
       label: "このページの内容",
     },
-    lastUpdated: {
-      text: "最終更新",
-    },
+    lastUpdated: enableLastUpdated
+      ? {
+          text: "最終更新",
+        }
+      : false,
     returnToTopLabel: "トップへ戻る",
     sidebarMenuLabel: "メニュー",
     darkModeSwitchLabel: "テーマ切替",

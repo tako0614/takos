@@ -1,204 +1,275 @@
-import { assertEquals, assert } from 'jsr:@std/assert';
-import { stub } from 'jsr:@std/testing/mock';
+import { assert, assertEquals } from "jsr:@std/assert";
+import { stub } from "jsr:@std/testing/mock";
 
-const { getConfigMock, getApiRequestTimeoutMsMock } = ({
-  getConfigMock: ((..._args: any[]) => undefined) as any,
-  getApiRequestTimeoutMsMock: ((..._args: any[]) => undefined) as any,
+import { api } from "../src/lib/api.ts";
+
+type EnvMap = Record<string, string | undefined>;
+
+async function withEnv<T>(vars: EnvMap, fn: () => Promise<T> | T): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(vars)) {
+    previous.set(key, Deno.env.get(key));
+    if (value === undefined) {
+      Deno.env.delete(key);
+    } else {
+      Deno.env.set(key, value);
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        Deno.env.delete(key);
+      } else {
+        Deno.env.set(key, value);
+      }
+    }
+  }
+}
+
+function installFetchResponse(
+  body: BodyInit | null,
+  init?: ResponseInit,
+): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(body, init)) as typeof fetch;
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+Deno.test("api client - treats 204 responses as success", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse(null, { status: 204 });
+      try {
+        const result = await api<void>("/api/empty");
+
+        assertEquals(result.ok, true);
+        if (result.ok) {
+          assertEquals(result.data, undefined);
+        }
+      } finally {
+        restoreFetch();
+      }
+    },
+  );
 });
 
-// [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
-import { api } from '../src/lib/api.ts';
+Deno.test("api client - treats 2xx responses with empty body as success", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse("", { status: 200 });
+      try {
+        const result = await api<void>("/api/empty");
 
-function stubFetchResponse(
-  body: ConstructorParameters<typeof Response>[0],
-  init?: ResponseInit
-) {
-  const fetchMock = (async () => new Response(body, init));
-  (globalThis as any).fetch = fetchMock;
-  return fetchMock;
-}
+        assertEquals(result.ok, true);
+        if (result.ok) {
+          assertEquals(result.data, undefined);
+        }
+      } finally {
+        restoreFetch();
+      }
+    },
+  );
+});
 
-function stubFetchError(error: unknown) {
-  const fetchMock = (async () => { throw error; });
-  (globalThis as any).fetch = fetchMock;
-  return fetchMock;
-}
+Deno.test("api client - uses configured default timeout when request timeout is omitted", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "12345",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse("{}", { status: 200 });
+      const timeouts: Array<number | undefined> = [];
+      const setTimeoutStub = stub(
+        globalThis,
+        "setTimeout",
+        ((...args: unknown[]) => {
+          timeouts.push(args[1] as number | undefined);
+          return 0 as unknown as number;
+        }) as typeof setTimeout,
+      );
 
+      try {
+        await api("/api/timeout-default");
+        assertEquals(timeouts.includes(12345), true);
+      } finally {
+        setTimeoutStub.restore();
+        restoreFetch();
+      }
+    },
+  );
+});
 
-  Deno.test('api client - treats 204 responses as success', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse(null, { status: 204 });
+Deno.test("api client - prefers per-request timeout over configured default", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "12345",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse("{}", { status: 200 });
+      const timeouts: Array<number | undefined> = [];
+      const setTimeoutStub = stub(
+        globalThis,
+        "setTimeout",
+        ((...args: unknown[]) => {
+          timeouts.push(args[1] as number | undefined);
+          return 0 as unknown as number;
+        }) as typeof setTimeout,
+      );
 
-    const result = await api<void>('/api/empty');
+      try {
+        await api("/api/timeout-override", { timeout: 987 });
+        assertEquals(timeouts.includes(987), true);
+      } finally {
+        setTimeoutStub.restore();
+        restoreFetch();
+      }
+    },
+  );
+});
 
-    assertEquals(result.ok, true);
-    if (result.ok) {
-      assertEquals(result.data, undefined);
-    }
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - treats 2xx responses with empty body as success', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse('', { status: 200 });
+Deno.test("api client - returns error from non-2xx JSON payloads", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse(
+        JSON.stringify({ error: "Invalid API key" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      try {
+        const result = await api("/api/protected");
+        assertEquals(result, { ok: false, error: "Invalid API key" });
+      } finally {
+        restoreFetch();
+      }
+    },
+  );
+});
 
-    const result = await api<void>('/api/empty');
+Deno.test("api client - falls back to status text for non-2xx non-JSON payloads", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse("<html>failure</html>", {
+        status: 502,
+        statusText: "Bad Gateway",
+        headers: { "Content-Type": "text/html" },
+      });
+      try {
+        const result = await api("/api/protected");
+        assertEquals(result, { ok: false, error: "Bad Gateway" });
+      } finally {
+        restoreFetch();
+      }
+    },
+  );
+});
 
-    assertEquals(result.ok, true);
-    if (result.ok) {
-      assertEquals(result.data, undefined);
-    }
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - uses configured default timeout when request timeout is omitted', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse('{}', { status: 200 });
-    const setTimeoutSpy = stub(globalThis, 'setTimeout');
-    getApiRequestTimeoutMsMock = (() => 12_345) as any;
+Deno.test("api client - maps AbortError to timeout message", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async () => {
+        const abortError = new Error("The operation was aborted");
+        abortError.name = "AbortError";
+        throw abortError;
+      }) as typeof fetch;
 
-    await api('/api/timeout-default');
+      try {
+        const result = await api("/api/slow");
+        assertEquals(result, { ok: false, error: "Request timed out" });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+});
 
-    assertEquals(setTimeoutSpy.calls.some((call) => call[1] === 12_345), true);
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - prefers per-request timeout over configured default', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse('{}', { status: 200 });
-    const setTimeoutSpy = stub(globalThis, 'setTimeout');
-    getApiRequestTimeoutMsMock = (() => 12_345) as any;
+Deno.test("api client - sanitizes generic network errors", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async () => {
+        throw new Error("Error: connect ECONNREFUSED /home/alice/.ssh/id_rsa");
+      }) as typeof fetch;
 
-    await api('/api/timeout-override', { timeout: 987 });
+      try {
+        const result = await api("/api/network");
 
-    assertEquals(setTimeoutSpy.calls.some((call) => call[1] === 987), true);
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - returns error from non-2xx JSON payloads', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse(JSON.stringify({ error: 'Invalid API key' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+        assertEquals(result.ok, false);
+        if (!result.ok) {
+          assertEquals(
+            result.error,
+            "Network error: connect ECONNREFUSED [path]",
+          );
+          assert(!result.error.includes("/home/alice"));
+        }
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+});
 
-    const result = await api('/api/protected');
-
-    assertEquals(result, { ok: false, error: 'Invalid API key' });
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - falls back to status text for non-2xx non-JSON payloads', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse('<html>failure</html>', {
-      status: 502,
-      statusText: 'Bad Gateway',
-      headers: { 'Content-Type': 'text/html' },
-    });
-
-    const result = await api('/api/protected');
-
-    assertEquals(result, { ok: false, error: 'Bad Gateway' });
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - maps AbortError to timeout message', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  const abortError = new Error('The operation was aborted');
-    abortError.name = 'AbortError';
-    stubFetchError(abortError);
-
-    const result = await api('/api/slow');
-
-    assertEquals(result, { ok: false, error: 'Request timed out' });
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - sanitizes generic network errors', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  const networkError = new Error('Error: connect ECONNREFUSED /home/alice/.ssh/id_rsa');
-    stubFetchError(networkError);
-
-    const result = await api('/api/network');
-
-    assertEquals(result.ok, false);
-    if (!result.ok) {
-      assertEquals(result.error, 'Network error: connect ECONNREFUSED [path]');
-      assert(!(result.error).includes('/home/alice'));
-    }
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
-  Deno.test('api client - returns an error for invalid JSON in successful responses', async () => {
-  getConfigMock = (() => ({
-      apiUrl: 'https://takos.jp',
-      token: 'test-token',
-    })) as any;
-    getApiRequestTimeoutMsMock = (() => 30_000) as any;
-  try {
-  stubFetchResponse('{invalid json', { status: 200 });
-
-    const result = await api('/api/invalid-json');
-
-    assertEquals(result, { ok: false, error: 'Invalid response from server' });
-  } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
-    /* TODO: restore mocks manually */ void 0;
-  }
-})
+Deno.test("api client - returns an error for invalid JSON in successful responses", async () => {
+  await withEnv(
+    {
+      TAKOS_TOKEN: "test-token",
+      TAKOS_API_URL: "https://takos.jp",
+      TAKOS_API_TIMEOUT_MS: "30000",
+    },
+    async () => {
+      const restoreFetch = installFetchResponse("{invalid json", {
+        status: 200,
+      });
+      try {
+        const result = await api("/api/invalid-json");
+        assertEquals(result, {
+          ok: false,
+          error: "Invalid response from server",
+        });
+      } finally {
+        restoreFetch();
+      }
+    },
+  );
+});

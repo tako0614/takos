@@ -17,15 +17,27 @@ type AuthVariables = {
 type AuthContext = Context<{ Bindings: Env; Variables: AuthVariables }>;
 type AuthMiddleware = MiddlewareHandler<{ Bindings: Env; Variables: AuthVariables }>;
 
+export const authDeps = {
+  getSession,
+  getSessionIdFromCookie,
+  normalizeSessionId,
+  getCachedUser,
+  isValidUserId,
+  validateTakosPersonalAccessToken,
+  logError,
+  logWarn,
+  getPlatformServices,
+};
+
 async function validateContainerAuth(c: AuthContext): Promise<User | null> {
-  const services = getPlatformServices(c);
+  const services = authDeps.getPlatformServices(c);
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
   const rawTakosSessionId = c.req.header('X-Takos-Session-Id');
   if (!rawTakosSessionId) return null;
-  const takosSessionId = normalizeSessionId(rawTakosSessionId);
+  const takosSessionId = authDeps.normalizeSessionId(rawTakosSessionId);
   if (!takosSessionId) {
-    logWarn('Container auth attempted with invalid session ID format', { module: 'middleware/auth' });
+    authDeps.logWarn('Container auth attempted with invalid session ID format', { module: 'middleware/auth' });
     return null;
   }
 
@@ -47,15 +59,15 @@ async function validateContainerAuth(c: AuthContext): Promise<User | null> {
 
     if (!containerSession) return null;
     if (spaceId && spaceId !== containerSession.accountId) {
-      logWarn('Container auth failed: space_id header mismatch', { module: 'middleware/auth' });
+      authDeps.logWarn('Container auth failed: space_id header mismatch', { module: 'middleware/auth' });
       return null;
     }
     if (!containerSession.userAccountId) {
-      logWarn('Container auth failed: session has no bound user', { module: 'middleware/auth' });
+      authDeps.logWarn('Container auth failed: session has no bound user', { module: 'middleware/auth' });
       return null;
     }
 
-    return await getCachedUser(c, containerSession.userAccountId);
+    return await authDeps.getCachedUser(c, containerSession.userAccountId);
   }
 
   return null;
@@ -71,7 +83,7 @@ async function resolveRequestUser(
   c: AuthContext,
   options: ResolveAuthOptions
 ): Promise<{ user: User | null; errorResponse?: Response }> {
-  const services = getPlatformServices(c);
+  const services = authDeps.getPlatformServices(c);
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
   const containerUser = await validateContainerAuth(c);
@@ -79,7 +91,7 @@ async function resolveRequestUser(
     return { user: containerUser };
   }
 
-  let sessionId = getSessionIdFromCookie(c.req.header('Cookie'));
+  let sessionId = authDeps.getSessionIdFromCookie(c.req.header('Cookie'));
 
   if (!sessionId) {
     const authHeader = c.req.header('Authorization');
@@ -89,8 +101,8 @@ async function resolveRequestUser(
         if (!dbBinding) {
           return { user: null };
         }
-        const tokenResult = await validateTakosPersonalAccessToken(dbBinding, bearer);
-        if (!tokenResult || !isValidUserId(tokenResult.userId)) {
+        const tokenResult = await authDeps.validateTakosPersonalAccessToken(dbBinding, bearer);
+        if (!tokenResult || !authDeps.isValidUserId(tokenResult.userId)) {
           if (options.rejectInvalidPat) {
             return {
               user: null,
@@ -99,7 +111,7 @@ async function resolveRequestUser(
           }
           return { user: null };
         }
-        const patUser = await getCachedUser(c, tokenResult.userId);
+        const patUser = await authDeps.getCachedUser(c, tokenResult.userId);
         if (!patUser) {
           if (options.rejectInvalidPat) {
             return {
@@ -125,7 +137,7 @@ async function resolveRequestUser(
         return { user: null };
       }
 
-      sessionId = normalizeSessionId(bearer);
+      sessionId = authDeps.normalizeSessionId(bearer);
     }
   }
 
@@ -139,15 +151,15 @@ async function resolveRequestUser(
     }
     return { user: null };
   }
-  const session = await getSession(sessionStore, sessionId);
-  if (!session || !isValidUserId(session.user_id)) {
+  const session = await authDeps.getSession(sessionStore, sessionId);
+  if (!session || !authDeps.isValidUserId(session.user_id)) {
     if (options.rejectInvalidSession) {
       throw new AuthenticationError('Session expired');
     }
     return { user: null };
   }
 
-  const user = await getCachedUser(c, session.user_id);
+  const user = await authDeps.getCachedUser(c, session.user_id);
   if (!user) {
     if (options.rejectInvalidSession) {
       throw new AuthenticationError('User not found');
@@ -175,7 +187,7 @@ export const requireAuth: AuthMiddleware = async (c, next): Promise<Response | v
     });
   } catch (err) {
     if (err instanceof AppError) throw err;
-    logError('Failed to resolve request user', err, { module: 'auth' });
+    authDeps.logError('Failed to resolve request user', err, { module: 'auth' });
     throw new InternalError('Internal authentication error');
   }
   if (resolved.errorResponse) {
@@ -206,7 +218,7 @@ export const optionalAuth: AuthMiddleware = async (c, next) => {
       c.set('user', resolved.user);
     }
   } catch (err) {
-    logError('Failed to resolve optional auth', err, { module: 'auth' });
+    authDeps.logError('Failed to resolve optional auth', err, { module: 'auth' });
     // Continue without user on auth failure for optional auth
   }
   await next();

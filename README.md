@@ -1,41 +1,333 @@
-# Takos
+# takos
 
-**自分で持ち、運用し、改変も移行もできるソフトウェア基盤。**
+> AIエージェント、アプリケーション、Worker、ワークフローを、
+> ユーザー自身が所有・運用できる形で構築・実行・配布するためのプラットフォーム。
 
-Takos は、AI エージェント・アプリケーション・Worker・ワークフローを、ユーザー自身が所有・運用できる形で構築・実行・配布するためのプラットフォームです。コード管理、デプロイ、実行、ツール拡張、ワークフロー自動化を一つの基盤に統合し、その全てをユーザーが理解・追跡・改変できる状態に保ちます。
+**takos** は、コード管理、デプロイ、実行、ツール拡張、ワークフロー自動化をひとつの基盤に統合し、
+そのすべてをユーザーが理解・追跡・改変できる状態に保つことを目指すソフトウェア基盤です。
 
-既存の SaaS やプラットフォームが「便利だが中身が見えないもの」を提供するのに対し、Takos が提供するのは「自分で持ち、運用し、必要に応じて改変や移行もできるソフトウェア基盤」です。
+既存の SaaS やプラットフォームが「便利だが中身が見えないもの」を提供するのに対し、
+takos が提供するのは、**自分で持ち、運用し、必要に応じて改変や移行もできる基盤**です。
 
-## なぜ Takos が必要か
+> [!WARNING]
+> takos is under active development.
+> APIs, repository layout, and specifications may change.
 
-プラットフォームは便利であると同時に、支配の道具にもなり得ます。Twitter は突然 API を有料化し、Google Play はアルゴリズム変更でアプリの到達範囲を一夜で変え、SaaS は価格を倍にしても移行コストの壁がユーザーを引き留めます。これらは個別の問題ではなく、**ユーザーが基盤を所有していないから、基盤を持つ側の決定に従うしかない**という同じ構造から生まれています。
+---
 
-Takos はこの問題に対し、「基盤そのものをユーザーが所有できる形にする」というアプローチをとります。動いている内容を確認でき、変更を追跡でき、壊れたら自分で直せ、不要になれば別の環境に持ち出せる。それが Takos の言う「所有」です。
+## なぜ takos なのか
 
-### OSS としての Takos
+現代のソフトウェアプラットフォームは便利です。
+しかし同時に、強い支配力を持っています。
 
-Takos は AGPL v3 のオープンソースソフトウェアです。これは理念の表明ではなく、「所有」の帰結です。基盤のコードが非公開であれば、その約束を検証する手段がありません。OSS であることで、ユーザーは Takos の動作を自分で検証し、セルフホストにより特定のインフラへの依存を排し、フォークして独自の要件に合わせた基盤を構築できます。
+- API の突然の有料化
+- アルゴリズム変更による到達範囲の変化
+- 規約変更による既存ユースケースの切り捨て
+- 価格改定と移行コストによるロックイン
+- 中身が見えないブラックボックス化
 
-Takos は誰か一人が全てを設計し運用するものではありません。OSS であることは、みんなで作り、みんなで育て、みんなで使うための前提条件です。
+takos は、この構造に対して
+**「基盤そのものをユーザーが所有できる形にする」**
+という方向から取り組みます。
 
-### takos.jp との関係
+---
 
-[takos.jp](https://takos.jp) で提供されるサービスは Takos のホステッド版の一つに過ぎません。takos.jp の運営者はベンダーであり、プラットフォームの支配者ではありません。価格や条件が合わなくなったら、データとコードを持って離脱できます。企業が社内向けに運用する Takos、教育機関が学生向けに提供する Takos、コミュニティが共同運営する Takos——それぞれが独立したインスタンスでありながら、同じ OSS の上に成り立ちます。
+## takos が考える「所有」
 
-## 何ができるか
+takos における所有は、単なる利用権ではありません。
 
-### 宣言的デプロイ
+- 何が動いているかを理解できる
+- どのコードと設定から現状に至ったかを追跡できる
+- 壊れたら自分で修正できる
+- 以前の状態に戻せる
+- 他の人に引き継げる
+- 必要ならフォークして改変できる
+- 別の環境へ移行できる
 
-`.takos/app.yml` を書くだけで、Worker・Container・データベース・ストレージをまとめてデプロイできます。
+この条件が揃ってはじめて、ソフトウェアを「所有している」と言える。
+takos はその前提で設計されています。
+
+---
+
+## takos の特徴
+
+### 1. AI-native な実行基盤
+
+takos は、AI エージェント、アプリケーション、Worker、API サーバー、ワークフローを
+同じ所有権モデルの上で構築・実行・配布できるようにします。
+
+単なるホスティングではなく、以下を含む基盤です。
+
+- 認証
+- 環境変数 / シークレット管理
+- リソース接続
+- バージョン管理
+- ロールバック
+- デプロイ管理
+
+---
+
+### 2. Git-native なコード管理
+
+takos は標準の **Git Smart HTTP v2** を実装し、
+通常の Git クライアントから `clone / push / pull` できます。
+
+アプリ本体だけでなく、以下もリポジトリで管理します。
+
+- Worker
+- ツール
+- 設定ファイル
+- プロンプト
+- ワークフロー
+- AI が生成したコード
+
+これにより、変更追跡、フォーク、再利用、可視化が可能になります。
+
+---
+
+### 3. Store 的 UX と manifest ベースの導入
+
+リポジトリの root に `.takos/app.yml` を置くことで、
+アプリケーションの install / update を簡単に行える設計です。
+
+目指しているのは、
+**アプリストアのように導入できるのに、中身は閉じていない**
+という体験です。
+
+---
+
+### 4. ツール自己拡張ができる AI エージェント
+
+takos の AI エージェントは、チャットに返答するだけの存在ではありません。
+
+- リポジトリを読む
+- コードを書く
+- 必要なツールを探す
+- Worker を生成する
+- リポジトリにコミットする
+- デプロイする
+- 新しいツールとして登録する
+
+つまり、与えられた道具だけで働くのではなく、
+**必要なら道具そのものを作る** ことができます。
+
+---
+
+### 5. スキルシステム
+
+エージェントの振る舞いはスキルとして構成されます。
+
+- **Official Skills**
+  プラットフォームが提供する標準スキル
+- **Custom Skills**
+  ユーザーがスペース単位で定義するスキル
+
+ロケールや利用環境に応じて適切なスキルを有効化し、
+使えるツールや行動パターンを制御します。
+
+---
+
+### 6. Memory Activation Graph
+
+takos のエージェントは、独自の記憶機構
+**Memory Activation Graph** を備えます。
+
+特徴:
+
+- ツール実行や観察から得た事実を記憶として蓄積
+- 単なるベクトル近傍ではなく、意味的・文脈的な関係で構造化
+- 現在のコンテキストに近い記憶を活性化
+- 関連情報を連鎖的に参照
+- `remember` tool による探索的アクセス
+
+これにより、単発の検索ではなく、
+**文脈を持った記憶の束** を使って推論できます。
+
+---
+
+### 7. Hosted でも Self-host でも使える
+
+takos.jp は takos のホステッド版のひとつにすぎません。
+
+ユーザーは:
+
+- そのまま hosted 版を使う
+- 自前インフラで self-host する
+- 別の運営者のインスタンスを使う
+- フォークして独自要件に合わせる
+
+ことができます。
+
+takos の価値は「一つの正しい運営元」に依存せず、
+**選べることそのもの** にあります。
+
+---
+
+## ユースケース
+
+### 自分の SNS を自分で持つ
+ActivityPub や AT Protocol 系の分散型 SNS をホストし、
+SNS をプラットフォーム依存ではなく自分で管理する。
+
+### OSS ライブラリを AI tool 化する
+アプリになっていない便利な OSS ライブラリを Worker 化し、
+AI エージェントから使える tool にする。
+
+### 新しいアプリケーションをゼロから作る
+coding agent としての takos を使い、
+新規アプリケーションの実装、管理、公開まで繋げる。
+
+### コミュニティ専用ツールを運用する
+部活、サークル、小規模店舗、地域コミュニティ向けの
+専用アプリや予約・管理ツールをホストする。
+
+### MCP サーバーを構築する
+AI 時代のサービス提供形態として、
+Web UI だけでなく MCP ベースの機能提供を行う。
+
+---
+
+## アーキテクチャ概要
+
+```text
+Browser / CLI / Git Client
+           |
+      takos-dispatch
+           |
+   +-------+--------+
+   |                |
+takos-web      Tenant Workers
+   |
+   +--> Queues (run / index / workflow / deploy)
+   +--> Executor (AI agent)
+   +--> Runtime (Node.js sandbox / browser)
+   +--> Browser automation
+   |
+   +--> D1 / R2 / KV
+```
+
+### ざっくりした役割
+
+* **takos-dispatch**
+  ホスト名ルーティングを行うディスパッチ層
+* **takos-web**
+  コントロールプレーン、認証、管理 UI、API
+* **Tenant Workers**
+  ユーザーが構築・配布した実行単位
+* **Queues / Executor / Runtime**
+  エージェント実行、非同期処理、ワークフロー、デプロイ処理
+* **D1 / R2 / KV**
+  メタデータ、アーティファクト、キャッシュ、ルーティング補助
+
+---
+
+## 技術スタック
+
+### Language / Runtime
+
+* TypeScript / Deno 2.x
+* Rust (agent engine)
+
+### Backend
+
+* Hono
+* Drizzle ORM
+* Cloudflare D1 / PostgreSQL / SQLite
+* Cloudflare R2 / KV
+* jose
+* Zod
+
+### AI / Agent
+
+* OpenAI / Anthropic / Google / OpenAI-compatible providers
+* MCP (Model Context Protocol)
+* LangGraph
+* Playwright (ブラウザ自動化)
+
+### Frontend
+
+* React
+* Vite
+* Tailwind CSS
+* Jotai
+* React Router
+* Monaco Editor
+
+### Infrastructure
+
+* Cloudflare Workers / D1 / R2 / KV / Queues / Containers
+* Docker Compose / Miniflare (ローカル開発)
+* Terraform / Helm (セルフホスト)
+* GitHub Actions
+
+> [!NOTE]
+> 参照実装では Cloudflare 系技術を強く活用していますが、
+> Miniflare + Docker による抽象化で AWS / GCP / Kubernetes / セルフホスト環境でも動作する設計です。
+
+---
+
+## 現在の状態
+
+現時点で、takos では以下のような中核機能の試作が進んでいます。
+
+* 認証
+* スペース管理
+* デプロイ制御を担うコントロールプレーン
+* Web フロントエンド
+* CLI
+* Git Smart HTTP v2 ベースの Git ホスティング
+* 複数 LLM プロバイダ対応の AI エージェント
+* ツール実行機構
+* 記憶機構
+
+まだ OSS 公開に向けた整備途中ですが、
+構想だけでなく、基盤となる主要機能はすでに試作されています。
+
+---
+
+## OSS としての takos
+
+takos は、単にコードを公開するだけのプロジェクトではありません。
+本当に目指しているのは、
+**プラットフォームを一社が支配する構造そのものを超えること** です。
+
+ユーザーが作った Worker、アプリ、ツール、ワークフロー、プロンプト、設定は、
+特定運営者の囲い込み資産ではなく、
+ユーザー自身の資産として残り続けるべきだと考えています。
+
+---
+
+## 使い方
+
+> [!NOTE]
+> 公開向けのセットアップ手順やドキュメントは現在整備中です。
+> 以下は現時点で動作する開発フローの概要です。
+
+### CLI インストール
+
+```bash
+deno install -gA jsr:@takos/cli
+```
+
+### ログイン
+
+```bash
+takos login          # ブラウザで認証
+takos whoami         # 確認
+```
+
+### app.yml を書く
+
+プロジェクトルートに `.takos/app.yml` を配置します。
 
 ```yaml
-# .takos/app.yml
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
   name: my-app
 spec:
   version: 0.1.0
+
   workers:
     web:
       build:
@@ -47,6 +339,7 @@ spec:
       bindings:
         d1: [primary-db]
         r2: [assets]
+
   resources:
     primary-db:
       type: d1
@@ -57,74 +350,61 @@ spec:
     assets:
       type: r2
       binding: ASSETS
+
   routes:
     - name: app
       target: web
       path: /
 ```
 
+この例では Worker 1 つ、D1 データベース 1 つ、R2 バケット 1 つが宣言されています。
+リソース作成、binding 接続、ドメイン割り当て、マイグレーション適用はすべて `apply` 時に自動で行われます。
+
+### デプロイ
+
 ```bash
-takos apply --env staging    # これで完了
+takos apply --env staging       # ステージング
+takos apply --env production    # 本番
 ```
 
-リソース作成・binding 接続・ドメイン設定・環境変数の注入まで自動で行います。
+差分があれば更新、なければスキップ。ロールバックも可能です。
 
-### Workers + Containers + Services
+### その他の主要コマンド
 
-3 種類のワークロードを 1 つのマニフェストで組み合わせられます。
-
-- **Workers** — Cloudflare Workers 互換のサーバーレス HTTP ハンドラ。スケジュール実行やキュー消費もサポート
-- **Containers** — CF Containers (Durable Objects) 上で動く Docker コンテナ。ブラウザ自動化や ML 推論など重い処理向け
-- **Services** — 常時起動の独立コンテナ。オプションで IPv4 を割り当て可能
-
-```yaml
-containers:
-  browser:
-    dockerfile: Dockerfile
-    port: 8080
-    instanceType: standard-2
-    maxInstances: 25
-
-workers:
-  browser-host:
-    containers: [browser]     # env.BROWSER_CONTAINER で Durable Object として取得
-    build: ...
+```bash
+takos plan                      # apply せずに差分だけ確認
+takos endpoint use prod         # 接続先の切り替え
+takos endpoint show             # 現在の接続先を確認
+takos logout                    # ログアウト
 ```
 
-### リソース管理
+### マニフェストで宣言できるリソース
 
-データベース・ストレージ・キュー・ベクトルインデックスなどをマニフェストで宣言するだけで、デプロイ時に自動作成・Worker に自動 binding されます。
-
-| type | 用途 | 主な設定 |
+| type | 用途 | 特記 |
 | --- | --- | --- |
-| `d1` | SQL データベース | `migrations: {up, down}` |
-| `r2` | オブジェクトストレージ | — |
-| `kv` | Key-Value ストア | — |
-| `queue` | メッセージキュー | `maxRetries`, `deadLetterQueue` |
-| `vectorize` | ベクトルインデックス | `dimensions`, `metric` |
-| `analyticsEngine` | アナリティクス | `dataset` |
-| `durableObject` | Durable Object | `className`, `scriptName` |
-| `workflow` | Durable Workflow | `timeoutMs`, `maxRetries` |
+| `d1` | SQL データベース | マイグレーション管理つき |
+| `r2` | オブジェクトストレージ | |
+| `kv` | Key-Value ストア | |
+| `queue` | メッセージキュー | dead letter queue、リトライ制御 |
+| `vectorize` | ベクトル検索 | 次元数・距離関数を指定 |
+| `analyticsEngine` | アナリティクス | |
+| `durableObject` | ステートフルオブジェクト | |
+| `workflow` | ワークフロー | タイムアウト・リトライ制御 |
 | `secretRef` | シークレット | `generate: true` で自動生成 |
 
 ### テンプレート変数
 
-デプロイ後に確定する URL・IP・リソース ID を環境変数に自動注入できます。
+デプロイ後に確定する URL・IP・リソース ID を環境変数として自動注入できます。
 
 ```yaml
 env:
-  required:
-    - API_TOKEN                              # デプロイ前に設定が必要
   inject:
-    APP_URL: "{{routes.app.url}}"            # デプロイ後の URL
-    APP_DOMAIN: "{{routes.app.domain}}"      # ドメイン
-    API_IP: "{{services.api.ipv4}}"          # Service の IPv4
-    DB_ID: "{{resources.main-db.id}}"        # リソース ID
+    APP_URL: "{{routes.app.url}}"
+    API_IP: "{{services.api.ipv4}}"
+    DB_ID: "{{resources.main-db.id}}"
 ```
 
-### MCP Server
-
-アプリを MCP (Model Context Protocol) サーバーとしてワンライン宣言で自動公開できます。認証トークンも自動生成されるため、AI エージェントがアプリの機能を自動検出して利用できます。
+### MCP Server の公開
 
 ```yaml
 capabilities: [mcp]
@@ -140,165 +420,47 @@ resources:
     generate: true
 ```
 
-### AI Agent 実行基盤
-
-Thread / Run / Artifact モデルによるエージェント実行基盤を内蔵しています。
-
-- **Thread** — 会話コンテキスト。メッセージ履歴・要約・キーポイント・成果物を保持
-- **Run** — Thread 上の単一実行。`pending → queued → running → completed` のライフサイクル
-- **Artifact** — Run の出力。`code`, `config`, `doc`, `patch`, `report` などの型を持つ
-- **Memory** — `episode`, `semantic`, `procedural` の 3 種類の記憶
-- **Reminder** — 時間・条件・コンテキストトリガーによるリマインダー
-
-SSE と WebSocket によるリアルタイムストリーミングに対応。Coding agent としても機能し、アプリケーションをゼロから構築できます。
-
-### App Store
-
-アプリを Store に公開してワンクリックでインストール可能にできます。Store は ActivityPub + ForgeFed ベースの分散カタログで、Git データは各リポジトリに残したままメタデータだけを共有します。
-
-npm や crates.io のようなレジストリに近いですが、対象はライブラリに限りません。アプリケーション、Worker、ツール、ワークフロー、プロンプト、設定テンプレートまで、ソフトウェアに関わるあらゆるものが同じ流通の仕組みの上を流れます。特別な審査やゲートキーパーを前提としません。
+Web UI を作らなくても、AI エージェントから直接叩けるサービスを公開できます。
 
 ### OAuth クライアント自動登録
-
-マニフェストに宣言するだけでデプロイ時に自動登録され、`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` が Worker に注入されます。
 
 ```yaml
 oauth:
   clientName: My App
-  redirectUris:
-    - https://example.com/callback
+  redirectUris: [https://example.com/callback]
   scopes: [threads:read, runs:write]
-  autoEnv: true
+  autoEnv: true     # CLIENT_ID / CLIENT_SECRET が自動注入
 ```
 
 ### ファイルハンドラ
 
-アプリを特定の MIME タイプのハンドラとして登録できます。Space ストレージからファイルを開くとき、登録済みアプリが自動的に起動します。
-
 ```yaml
 fileHandlers:
-  - name: markdown
+  - name: markdown-editor
     mimeTypes: [text/markdown]
     extensions: [.md]
     openPath: /files/:id
 ```
 
-### マルチテナント
-
-Dispatch namespace でテナントごとに Worker を分離。Space (ワークスペース) 単位でメンバー・リポジトリ・リソース・ファイルを管理し、ロールベースのアクセス制御 (owner / admin / editor / viewer) を提供します。
-
-### インフラ非依存
-
-Cloudflare の技術をベースにしていますが、実行環境自体は特定のインフラに依存しない設計です。Miniflare と Docker による抽象化で、AWS・GCP・Kubernetes・セルフホスト環境でも動作します。
-
-## 利用例
-
-**自分の SNS を自分で管理する** — ActivityPub や AT Protocol 対応の分散型 SNS をホスト。Takos エコシステムで開発された一人用 ActivityPub SNS「[Yurucommu](../yurucommu)」との親和性が高い。
-
-**OSS ライブラリを AI tool 化する** — アプリケーションになっていない便利なライブラリを Worker にしてデプロイすることで、AI の tool として活用できる。
-
-**全く新しいアプリケーションをゼロから構築する** — Coding agent としても機能し、アプリケーションを構築。OSS にすればエコシステムに貢献できる。
-
-**コミュニティ専用ツールのホスト** — 部活の出欠管理アプリ、小規模店舗の予約問い合わせアプリなど。
-
-**MCP サーバーを作る** — AI 時代において Web の UI は縮小し、MCP サーバーでサービスを提供することが主流になると予想される。Takos は MCP サービスの構築に最適。
-
-## 3 分で始める
-
-### 1. CLI をインストール
-
-```bash
-deno install -gA jsr:@takos/cli
-```
-
-### 2. ログイン
-
-```bash
-takos login
-takos whoami
-```
-
-### 3. app.yml を書く
-
-プロジェクトルートに `.takos/app.yml` を作成します（上記の例を参照）。
-
-### 4. デプロイ
-
-```bash
-takos apply --env staging
-```
-
-URL がターミナルに表示されるのでブラウザで確認できます。詳しいチュートリアルは [docs サイト](https://docs.takos.jp) を参照してください。
-
-## アーキテクチャ
-
-Takos は **Control Plane** と **Tenant Runtime** の 2 層で構成されています。
-
-**Control Plane** — API、デプロイ管理、リソースライフサイクル、ルーティング:
-
-| Worker | 役割 |
-| --- | --- |
-| `takos` | Web / API / SPA、認証、課金、ルート登録 |
-| `takos-dispatch` | テナントホスト名ルーティング (WFP dispatch) |
-| `takos-worker` | バックグラウンド処理 (run queue, workflow, egress proxy) |
-| `takos-runtime-host` | tenant runtime のコンテナホスト |
-| `takos-executor-host` | agent executor のコンテナホスト |
-| `takos-browser-host` | ブラウザ自動化のコンテナホスト |
-
-**Tenant Runtime** — デプロイされたアーティファクトがリクエストを処理する層。canonical artifact は `worker-bundle` (Cloudflare Workers 互換) で、デプロイごとに config・bindings・env のスナップショットが保存されるため、ローカルと本番で同一の動作を再現でき、ロールバックも即座に行えます。
-
-**バックエンド抽象化** — Control Plane は adapter パターンで Cloudflare とローカルの差分を吸収します。ローカル環境は Node ベースの control-plane + Workers 互換アダプタで構成され、Cloudflare アカウントなしでマニフェスト契約を検証できます。
-
-## このリポジトリの開発
-
-このリポジトリは Takos の core monorepo です。`packages/` が実装の正本で、`apps/*` はそれらを組み合わせる薄い composition layer です。
-
-### リポジトリ構成
-
-| パス | 説明 |
-| --- | --- |
-| `packages/control/*` | control-plane、host、local-platform |
-| `packages/runtime-service` | tenant runtime サービス |
-| `packages/browser-service` | ブラウザ自動化サービス |
-| `packages/rust-agent-engine` | Rust agent engine (executor container 用) |
-| `packages/common` | 共通ユーティリティ |
-| `packages/actions-engine` | ワークフロー・マニフェスト処理 |
-| `packages/cloudflare-compat` | Cloudflare 互換レイヤー |
-| `apps/control` | Cloudflare Workers composition、frontend、deploy template |
-| `apps/runtime` | runtime-service の Node/container ラッパー |
-| `apps/rust-agent` | Rust executor container |
-| `apps/cli` | Takos CLI |
-| `docs/` | VitePress ドキュメントサイト |
-| `scripts/` | build・validation ツール |
-
-### 前提
-
-- Deno 2.x
-- Docker / Docker Compose (ローカルスタック利用時)
-
-### セットアップ
+### ローカル開発 (コントリビューター向け)
 
 ```bash
 deno install
-```
 
-### 主要コマンド
-
-```bash
 # テスト・品質
-deno task test:all          # 全テスト実行
-deno task lint              # lint
-deno task fmt               # format
+deno task test:all
+deno task lint
+deno task fmt
+
+# 個別サービス開発
+deno task dev:takos         # control-plane
+deno task dev:runtime       # runtime
+deno task dev:cli           # CLI
 
 # ドキュメント
-deno task docs:dev          # docs プレビュー
-deno task docs:build        # docs ビルド
-deno task docs:deploy       # docs デプロイ (Cloudflare Pages)
-
-# ローカル開発 (個別サービス)
-deno task dev:takos         # control-plane 開発サーバー
-deno task dev:runtime       # runtime 開発サーバー
-deno task dev:cli           # CLI 開発
+deno task docs:dev          # プレビュー (VitePress)
+deno task docs:build
+deno task docs:deploy       # Cloudflare Pages へデプロイ
 
 # ローカルスタック (Docker Compose)
 cp .env.local.example .env.local
@@ -306,47 +468,20 @@ deno task local:up          # 全サービス起動
 deno task local:down        # 停止
 ```
 
-### ローカルスタックのサービス
+---
 
-| サービス | 役割 | ポート |
-| --- | --- | --- |
-| `control-web` | Web / API | 8787 |
-| `control-dispatch` | テナント振り分け | 8788 |
-| `control-worker` | バックグラウンド処理 | — |
-| `runtime-host` / `runtime` | tenant runtime | 8789 |
-| `executor-host` / `rust-agent` | agent executor | 8790 |
-| `browser-host` / `browser` | ブラウザ自動化 | 8791 |
-| `postgres` / `redis` / `minio` | インフラ | 15432 / 16379 / 19000 |
+## ロードマップ
 
-### デプロイ
+* OSS 公開に向けたリポジトリ整備
+* セットアップ手順と運用ドキュメントの整備
+* CI / テスト / ライセンスの公開対応
+* 独自仕様の安定化
+* AI エージェントアーキテクチャの洗練
+* セルフホストを前提とした UX の強化
+* Store / manifest / tool distribution 体験の改善
 
-- Cloudflare: `apps/control/wrangler*.toml`
-- Helm / self-host: `deploy/helm/takos/`
-- Terraform: `deploy/terraform/`
+---
 
-本番デプロイは [`takos-private/`](../takos-private) で行います。
+## ライセンス
 
-## ドキュメント
-
-仕様・チュートリアル・サンプル集・アーキテクチャの詳細は `docs/` の VitePress サイトに集約しています。
-
-```bash
-deno task docs:dev    # http://localhost:5173 でプレビュー
-```
-
-主なセクション:
-
-- **はじめる** — 3 分 Quickstart、はじめてのアプリ、プロジェクト構成
-- **アプリ仕様** — マニフェスト、Workers、Containers、Routes、環境変数、MCP、OAuth、ファイルハンドラ
-- **デプロイ** — `takos apply`、ロールバック、namespace
-- **ホスティング** — Cloudflare、AWS、GCP、Kubernetes、セルフホスト、ローカル開発
-- **プラットフォーム** — Store、Threads/Runs、Spaces、ActivityPub
-- **サンプル集** — シンプル Worker、Worker+DB、Worker+Container、MCP Server、マルチサービス
-
-## License
-
-GNU AGPL v3。詳細は `LICENSE` を参照してください。
-
-## Contributing
-
-`CONTRIBUTING.md`、`SECURITY.md` を参照してください。
+**Planned:** AGPL-3.0-or-later

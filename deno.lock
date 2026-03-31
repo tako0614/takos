@@ -44,6 +44,7 @@
     "npm:vite@*": "6.4.1_yaml@2.8.3",
     "npm:vite@^6.4.1": "6.4.1_yaml@2.8.3",
     "npm:vitepress@1": "1.6.4_@algolia+client-search@5.50.0_search-insights@2.17.3",
+    "npm:vue@^3.5.0": "3.5.31",
     "npm:wrangler@^4.61.0": "4.79.0_@cloudflare+workers-types@4.20260331.1",
     "npm:ws@^8.19.0": "8.20.0",
     "npm:yaml@^2.8.2": "2.8.3",
@@ -5560,7 +5561,8 @@
       },
       "docs": {
         "dependencies": [
-          "npm:vitepress@1"
+          "npm:vitepress@1",
+          "npm:vue@^3.5.0"
         ]
       },
       "packages/actions-engine": {

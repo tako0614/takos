@@ -20,12 +20,16 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
     assertEquals(resolveTaskPath('/api', '/'), '/api');
 })
   Deno.test('api command helpers - rejects mixed body modes', () => {
-  assertThrows(() => { () => prepareBody({ body: '{}', rawBody: 'x' }); }, 
-      'Only one body mode can be used at a time (json, raw, or form)',
-    );
+  assertThrows(
+    () => prepareBody({ body: '{}', rawBody: 'x' }),
+    Error,
+    'Only one body mode can be used at a time',
+  );
 
-    assertThrows(() => { () => prepareBody({ body: '{}', form: ['a=b'] }); }, 
-      'Only one body mode can be used at a time (json, raw, or form)',
+    assertThrows(
+      () => prepareBody({ body: '{}', form: ['a=b'] }),
+      Error,
+      'Only one body mode can be used at a time',
     );
 })
   Deno.test('api command helpers - parses SSE event block', () => {

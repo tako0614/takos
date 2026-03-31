@@ -64,6 +64,8 @@ background worker です。役割:
 
 host worker は request の入口であると同時に、container から control plane へ戻る proxy contract の境界でもあります。
 
+`takos-executor-host` 自体は control plane コンポーネントであり、agent loop の正本ではありません。current canonical 方針では、agent の思考・memory・skill selection は executor container (`rust-agent`) 側を正本にし、host worker は control RPC と tool proxy の境界だけを持ちます。詳しくは [Agent Runtime](./agent-runtime.md) を参照してください。
+
 ## takos-agent の分離
 
 takos-agent は元々 takos control plane の一部（`takos-control-hosts` パッケージ）として browser-host と executor-host を提供していましたが、独立リポジトリに分離されました。

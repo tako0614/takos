@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import type { Env as TakosEnv } from '@/shared/types';
+import type { Env as TakosEnv } from '@/shared/types/index.ts';
 import { createMockEnv } from '../setup.ts';
 
 // ============================================================================

@@ -23,7 +23,7 @@ FROM denoland/deno:latest
 WORKDIR /workspace
 ENV DENO_DIR=/deno-dir
 
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl && \
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl git && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace /workspace
