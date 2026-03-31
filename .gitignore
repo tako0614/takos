@@ -1,12 +1,9 @@
-# Node / package managers
+# Deno
+.deno/
+deno.lock
+
+# Node (npm: specifier cache used by Deno)
 node_modules/
-.pnpm-store/
-.pnp/
-.pnp.js
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # Build outputs
 dist/
@@ -14,14 +11,7 @@ build/
 coverage/
 .vite/
 .cache/
-.eslintcache
 *.tsbuildinfo
-packages/control/src/**/*.d.ts
-packages/control/src/**/*.d.ts.map
-packages/common/src/**/*.d.ts
-packages/common/src/**/*.d.ts.map
-packages/actions-engine/src/**/*.d.ts
-packages/actions-engine/src/**/*.d.ts.map
 
 # Tooling / runtime state
 .wrangler/
