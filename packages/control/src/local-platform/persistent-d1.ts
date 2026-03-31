@@ -21,6 +21,7 @@ import { logWarn } from '../shared/utils/logger.ts';
 import {
   ensurePostgresAccountsTableShape,
   ensurePostgresDeploymentsTableShape,
+  ensurePostgresRunsTableShape,
   ensurePostgresServicesTableShape,
   ensureServerMigrations,
   ensureServerPostgresMigrations,
@@ -91,6 +92,7 @@ export async function createPostgresD1Database(connectionString: string): Promis
   await ensurePostgresServicesTableShape(pool);
   await ensurePostgresAccountsTableShape(pool);
   await ensurePostgresDeploymentsTableShape(pool);
+  await ensurePostgresRunsTableShape(pool);
   let transactionClient: PoolClient | null = null;
 
   async function getTransactionClient(): Promise<PoolClient> {

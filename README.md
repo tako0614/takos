@@ -71,6 +71,9 @@ Cloudflare deployment templates live under `apps/control/`.
 Local stack configuration lives in `.env.local.example`. Helm/self-host
 packaging lives in `deploy/helm/takos/`.
 
+The local executor path defaults to the Rust container service `rust-agent`,
+reached from `executor-host` through `TAKOS_LOCAL_EXECUTOR_URL`.
+
 ## Contributing
 
 See `CONTRIBUTING.md`, `docs/`, and `SECURITY.md` for

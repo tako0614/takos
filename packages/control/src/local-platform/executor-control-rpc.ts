@@ -11,6 +11,19 @@ import {
   buildTerminalPayload,
   getRunNotifierStub,
 } from '../application/services/run-notifier/index.ts';
+import {
+  handleAddMessage,
+  handleConversationHistory,
+  handleMemoryActivation,
+  handleMemoryFinalize,
+  handleRunEvent,
+  handleSkillPlan,
+  handleToolCatalog,
+  handleToolCleanup,
+  handleToolExecute,
+  handleUpdateRunStatus,
+} from '../runtime/container-hosts/executor-control-rpc.ts';
+import { getAgentConfig } from '../application/services/agent/runner-config.ts';
 import { recordRunUsageBatch } from '../application/services/billing/billing.ts';
 import { jsonResponse, readBearerToken } from './runtime-http.ts';
 import { logWarn } from '../shared/utils/logger.ts';
@@ -29,6 +42,20 @@ const localExecutorProxyUsageCounters = new Map<string, number>();
 function recordLocalExecutorProxyUsage(path: string): void {
   const bucket = path === '/rpc/control/tool-catalog'
     ? 'tool-catalog'
+    : path === '/rpc/control/conversation-history'
+      ? 'conversation-history'
+      : path === '/rpc/control/skill-plan'
+        ? 'skill-plan'
+        : path === '/rpc/control/memory-activation'
+          ? 'memory-activation'
+          : path === '/rpc/control/memory-finalize'
+            ? 'memory-finalize'
+            : path === '/rpc/control/add-message'
+              ? 'add-message'
+              : path === '/rpc/control/update-run-status'
+                ? 'update-run-status'
+                : path === '/rpc/control/run-config'
+                  ? 'run-config'
     : path === '/rpc/control/tool-execute'
       ? 'tool-execute'
       : path === '/rpc/control/tool-cleanup'
@@ -246,6 +273,69 @@ async function localHandleRunContext(body: Record<string, unknown>, env: LocalEx
   });
 }
 
+async function localHandleRunConfig(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
+  const runId = typeof body.runId === 'string' ? body.runId : null;
+  const explicitAgentType = typeof body.agentType === 'string' ? body.agentType : null;
+
+  let agentType = explicitAgentType;
+  if (!agentType && runId) {
+    const db = getDb(env.DB);
+    const run = await db.select({ agentType: runs.agentType }).from(runs).where(eq(runs.id, runId)).get();
+    agentType = run?.agentType ?? null;
+  }
+
+  const config = getAgentConfig(agentType ?? 'default', env as never);
+  return jsonResponse({
+    ...config,
+    agentType: config.type,
+    agent_type: config.type,
+    systemPrompt: config.systemPrompt,
+    system_prompt: config.systemPrompt,
+    maxIterations: config.maxIterations ?? null,
+    max_iterations: config.maxIterations ?? null,
+    max_graph_steps: config.maxIterations ?? null,
+    max_tool_rounds: config.maxIterations ?? null,
+    temperature: config.temperature ?? null,
+    rateLimit: config.rateLimit ?? null,
+    rate_limit: config.rateLimit ?? null,
+    tools: config.tools,
+  });
+}
+
+async function localAugmentJsonSuccessResponse(
+  response: Response,
+  augment: (body: Record<string, unknown>) => Record<string, unknown>,
+): Promise<Response> {
+  if (!response.ok) return response;
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) return response;
+
+  const payload = await response.json().catch(() => null);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return response;
+  }
+
+  return jsonResponse(augment(payload as Record<string, unknown>), response.status);
+}
+
+async function localHandleSkillPlanCompat(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
+  return localAugmentJsonSuccessResponse(
+    await handleSkillPlan(body, env as never),
+    (payload) => {
+      const locale = typeof payload.locale === 'string'
+        ? payload.locale
+        : typeof payload.skillLocale === 'string'
+          ? payload.skillLocale
+          : 'en';
+      return {
+        ...payload,
+        locale,
+        skillLocale: typeof payload.skillLocale === 'string' ? payload.skillLocale : locale,
+      };
+    },
+  );
+}
+
 async function localHandleNoLlmComplete(body: Record<string, unknown>, env: LocalExecutorHostEnv): Promise<Response> {
   const runId = typeof body.runId === 'string' ? body.runId : null;
   const serviceId = readRunServiceId(body);
@@ -338,6 +428,8 @@ async function localHandleExecutorControlRpc(request: Request, env: LocalExecuto
       return localHandleRunFail(body as Record<string, unknown>, env);
     case '/rpc/control/run-reset':
       return localHandleRunReset(body as Record<string, unknown>, env);
+    case '/rpc/control/run-config':
+      return localHandleRunConfig(body as Record<string, unknown>, env);
     case '/rpc/control/api-keys':
       return jsonResponse({
         openai: env.OPENAI_API_KEY ?? null,
@@ -354,6 +446,26 @@ async function localHandleExecutorControlRpc(request: Request, env: LocalExecuto
     }
     case '/rpc/control/run-context':
       return localHandleRunContext(body as Record<string, unknown>, env);
+    case '/rpc/control/conversation-history':
+      return handleConversationHistory(body as Record<string, unknown>, env as never);
+    case '/rpc/control/skill-plan':
+      return localHandleSkillPlanCompat(body as Record<string, unknown>, env);
+    case '/rpc/control/memory-activation':
+      return handleMemoryActivation(body as Record<string, unknown>, env as never);
+    case '/rpc/control/memory-finalize':
+      return handleMemoryFinalize(body as Record<string, unknown>, env as never);
+    case '/rpc/control/add-message':
+      return handleAddMessage(body as Record<string, unknown>, env as never);
+    case '/rpc/control/update-run-status':
+      return handleUpdateRunStatus(body as Record<string, unknown>, env as never);
+    case '/rpc/control/tool-catalog':
+      return handleToolCatalog(body as Record<string, unknown>, env as never);
+    case '/rpc/control/tool-execute':
+      return handleToolExecute(body as Record<string, unknown>, env as never);
+    case '/rpc/control/tool-cleanup':
+      return handleToolCleanup(body as Record<string, unknown>);
+    case '/rpc/control/run-event':
+      return handleRunEvent(body as Record<string, unknown>, env as never);
     case '/rpc/control/no-llm-complete':
       return localHandleNoLlmComplete(body as Record<string, unknown>, env);
     default:

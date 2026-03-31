@@ -1,29 +1,37 @@
-ARG PNPM_VERSION=9.15.4
-FROM node:20-slim
-
-ARG PNPM_VERSION
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-RUN npm install -g pnpm@${PNPM_VERSION}
-
-RUN groupadd -r takos && useradd -r -g takos -m takos
-
+FROM denoland/deno:latest AS builder
 WORKDIR /workspace
+ENV DENO_DIR=/deno-dir
 
-COPY --chown=takos:takos package.json ./
-COPY --chown=takos:takos .npmrc ./
-COPY --chown=takos:takos pnpm-workspace.yaml ./
-COPY --chown=takos:takos pnpm-lock.yaml ./
-COPY --chown=takos:takos tsconfig.base.json ./
-COPY --chown=takos:takos packages ./packages
-COPY --chown=takos:takos apps/control ./apps/control
-COPY --chown=takos:takos scripts ./scripts
+COPY deno.json deno.lock* ./
+COPY packages ./packages
+COPY apps/control ./apps/control
+COPY apps/runtime ./apps/runtime
+COPY apps/cli ./apps/cli
+COPY docs ./docs
+COPY scripts ./scripts
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm --filter takos-common build
-RUN pnpm --filter takos-actions-engine build
+RUN deno cache \
+  packages/control/local-platform/src/web.ts \
+  packages/control/local-platform/src/dispatch.ts \
+  packages/control/local-platform/src/runtime-host.ts \
+  packages/control/local-platform/src/executor-host.ts \
+  packages/control/local-platform/src/browser-host.ts \
+  packages/control/local-platform/src/worker.ts \
+  packages/control/local-platform/src/oci-orchestrator.ts
 
+FROM denoland/deno:latest
+WORKDIR /workspace
+ENV DENO_DIR=/deno-dir
+
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /workspace /workspace
+COPY --from=builder /deno-dir /deno-dir
+
+RUN useradd -r -m takos && chown -R takos:takos /workspace
 USER takos
+
 ENV NODE_ENV=production
 
 WORKDIR /workspace/apps/control

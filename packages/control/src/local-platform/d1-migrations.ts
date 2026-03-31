@@ -542,3 +542,86 @@ export async function ensurePostgresDeploymentsTableShape(pool: Pool): Promise<v
   await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`);
   await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`);
 }
+
+export async function ensurePostgresRunsTableShape(pool: Pool): Promise<void> {
+  if (!(await postgresTableExists(pool, 'runs'))) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "runs" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "thread_id" TEXT NOT NULL,
+        "account_id" TEXT NOT NULL,
+        "requester_account_id" TEXT,
+        "session_id" TEXT,
+        "parent_run_id" TEXT,
+        "child_thread_id" TEXT,
+        "root_thread_id" TEXT,
+        "root_run_id" TEXT,
+        "agent_type" TEXT NOT NULL DEFAULT 'default',
+        "status" TEXT NOT NULL DEFAULT 'queued',
+        "last_event_id" INTEGER NOT NULL DEFAULT 0,
+        "input" TEXT NOT NULL DEFAULT '{}',
+        "output" TEXT,
+        "error" TEXT,
+        "usage" TEXT NOT NULL DEFAULT '{}',
+        "service_id" TEXT,
+        "service_heartbeat" TIMESTAMPTZ,
+        "lease_version" INTEGER NOT NULL DEFAULT 0,
+        "started_at" TIMESTAMPTZ,
+        "completed_at" TIMESTAMPTZ,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  const columns = await getPostgresTableColumns(pool, 'runs');
+  const alterStatements: string[] = [];
+
+  if (columns.has('worker_id') && !columns.has('service_id')) {
+    alterStatements.push(`ALTER TABLE "runs" RENAME COLUMN "worker_id" TO "service_id";`);
+  }
+  if (columns.has('worker_heartbeat') && !columns.has('service_heartbeat')) {
+    alterStatements.push(`ALTER TABLE "runs" RENAME COLUMN "worker_heartbeat" TO "service_heartbeat";`);
+  }
+  if (!columns.has('requester_account_id')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "requester_account_id" TEXT;`);
+  }
+  if (!columns.has('child_thread_id')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "child_thread_id" TEXT;`);
+  }
+  if (!columns.has('root_thread_id')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "root_thread_id" TEXT;`);
+  }
+  if (!columns.has('root_run_id')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "root_run_id" TEXT;`);
+  }
+  if (!columns.has('service_id')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "service_id" TEXT;`);
+  }
+  if (!columns.has('service_heartbeat')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "service_heartbeat" TIMESTAMPTZ;`);
+  }
+  if (!columns.has('lease_version')) {
+    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "lease_version" INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  for (const statement of alterStatements) {
+    await pool.query(statement);
+  }
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_service_id" ON "runs"("service_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_service_heartbeat" ON "runs"("service_heartbeat");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_thread_id" ON "runs"("thread_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_thread_status" ON "runs"("thread_id", "status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_status" ON "runs"("status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_session_id" ON "runs"("session_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_requester_account_id" ON "runs"("requester_account_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_parent_run_id" ON "runs"("parent_run_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_child_thread_id" ON "runs"("child_thread_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_root_thread_id" ON "runs"("root_thread_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_root_run_id" ON "runs"("root_run_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_agent_type" ON "runs"("agent_type");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_status" ON "runs"("account_id", "status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_status_created_at" ON "runs"("account_id", "status", "created_at");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_id" ON "runs"("account_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_created_at" ON "runs"("account_id", "created_at");`);
+}

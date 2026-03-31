@@ -223,11 +223,12 @@ services:
 - **ポート**: `TAKOS_EXECUTOR_HOST_PORT`（デフォルト `8790`）
 - **役割**: エージェント実行の host プロセス
 
-#### Executor
+#### Rust Agent
 
-- **イメージ**: takos-agent または takos-private から提供
+- **イメージ**: `apps/rust-agent/Dockerfile` からビルド
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
-- **役割**: エージェント実行コンテナ
+- **役割**: Rust 製のエージェント実行コンテナ
+- **データ**: `takos-rust-agent-data` volume に object memory を保持
 
 ### Browser サービス
 
