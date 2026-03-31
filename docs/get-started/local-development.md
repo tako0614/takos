@@ -41,7 +41,7 @@ corepack pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
 | `control-dispatch` | tenant dispatch |
 | `control-worker` | background worker |
 | `runtime-host` / `runtime` | tenant runtime |
-| `executor-host` / `executor` | agent executor |
+| `executor-host` / `rust-agent` | agent executor |
 | `browser-host` / `browser` | browser automation |
 | `postgres` / `redis` / `minio` | infra backing services |
 

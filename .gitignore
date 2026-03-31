@@ -5,6 +5,11 @@ deno.lock
 # Node (npm: specifier cache used by Deno)
 node_modules/
 
+# Rust
+target/
+*.profraw
+*.profdata
+
 # Build outputs
 dist/
 build/
