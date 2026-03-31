@@ -1,233 +1,264 @@
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assert, assertEquals } from "jsr:@std/assert";
 
-const mocks = ({
-  callRuntimeRequest: ((..._args: any[]) => undefined) as any,
-});
+import { executeStep } from "@/queues/workflow-steps";
+import type { StepExecutionContext } from "@/queues/workflow-types";
+import type { Step } from "takos-actions-engine";
 
-// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
-// Needed by workflow-runtime-client import chain
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/utils'
-// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
-import { executeStep } from '@/queues/workflow-steps';
-import type { StepExecutionContext } from '@/queues/workflow-types';
-import type { Step } from 'takos-actions-engine';
+type FetchCall = {
+  request: Request;
+};
 
-function createContext(overrides: Partial<StepExecutionContext> = {}): StepExecutionContext {
+function createFetchRecorder(
+  responder: (request: Request) => Response | Promise<Response>,
+) {
+  const calls: FetchCall[] = [];
+
+  const fetch = async (request: Request) => {
+    calls.push({ request });
+    return responder(request);
+  };
+
+  return { calls, fetch };
+}
+
+function createContext(
+  overrides: Partial<StepExecutionContext> = {},
+): StepExecutionContext {
   return {
     env: {
-      RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
+      RUNTIME_HOST: { fetch: async () => new Response(null) },
     } as any,
-    jobId: 'job-1',
+    jobId: "job-1",
     stepNumber: 1,
-    spaceId: 'space-1',
+    spaceId: "space-1",
     ...overrides,
   };
 }
 
-function jsonResponse(body: unknown): Response {
-  return {
-    ok: true,
+function createJsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
     status: 200,
-    statusText: 'OK',
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as unknown as Response;
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
-  Deno.test('executeStep - returns success for step with no uses and no run', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const step: Step = {};
-    const result = await executeStep(step, createContext());
+Deno.test("executeStep - returns success for a no-op step", async () => {
+  const result = await executeStep({}, createContext());
 
-    assertEquals(result.success, true);
-    assertEquals(result.stdout, 'No action to perform');
-    assertEquals(result.outputs, {});
-})
-  Deno.test('executeStep - returns failure when RUNTIME_HOST is not configured', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const step: Step = { run: 'echo test' };
-    const ctx = createContext({
+  assertEquals(result.success, true);
+  assertEquals(result.stdout, "No action to perform");
+  assertEquals(result.outputs, {});
+});
+
+Deno.test("executeStep - returns failure when RUNTIME_HOST is not configured", async () => {
+  const result = await executeStep(
+    { run: "echo test" },
+    createContext({
       env: {} as any,
+    }),
+  );
+
+  assertEquals(result.success, false);
+  assertEquals(result.error, "RUNTIME_HOST binding is required");
+});
+
+Deno.test("executeStep - executes a run step via runtime", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 0,
+      stdout: "hello world",
+      stderr: "",
+      outputs: { result: "ok" },
+      conclusion: "success",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
+
+  const result = await executeStep({ run: "echo hello" }, ctx);
+
+  assertEquals(result.success, true);
+  assertEquals(result.exitCode, 0);
+  assertEquals(result.stdout, "hello world");
+  assertEquals(result.outputs, { result: "ok" });
+  assertEquals(result.error, undefined);
+  assertEquals(recorder.calls.length, 1);
+});
+
+Deno.test("executeStep - executes a uses step via runtime", async () => {
+  const recorder = createFetchRecorder((request) => {
+    assertEquals(request.url, "https://runtime-host/actions/jobs/job-1/step/1");
+    assertEquals(request.method, "POST");
+    return createJsonResponse({
+      exitCode: 0,
+      stdout: "action output",
+      stderr: "",
+      outputs: {},
+      conclusion: "success",
     });
+  });
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
 
-    const result = await executeStep(step, ctx);
+  const result = await executeStep({
+    uses: "actions/checkout@v4",
+    with: { fetch_depth: 1 },
+  }, ctx);
 
-    assertEquals(result.success, false);
-    assertEquals(result.error, 'RUNTIME_HOST binding is required');
-})
-  Deno.test('executeStep - executes a run step via runtime', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: 'hello world',
-        stderr: '',
-        outputs: { result: 'ok' },
-        conclusion: 'success',
-      })) as any;
+  assertEquals(result.success, true);
+  assertEquals(recorder.calls.length, 1);
+  const body = (await recorder.calls[0].request.clone().json()) as Record<
+    string,
+    unknown
+  >;
+  assertEquals(body, {
+    uses: "actions/checkout@v4",
+    with: { fetch_depth: 1 },
+    space_id: "space-1",
+  });
+});
 
-    const step: Step = { run: 'echo hello' };
-    const result = await executeStep(step, createContext());
+Deno.test("executeStep - returns failure when runtime reports failure", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 1,
+      stdout: "",
+      stderr: "command not found",
+      outputs: {},
+      conclusion: "failure",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
 
-    assertEquals(result.success, true);
-    assertEquals(result.exitCode, 0);
-    assertEquals(result.stdout, 'hello world');
-    assertEquals(result.outputs, { result: 'ok' });
-    assertEquals(result.error, undefined);
-})
-  Deno.test('executeStep - executes a uses step via runtime', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: 'action output',
-        stderr: '',
-        outputs: {},
-        conclusion: 'success',
-      })) as any;
+  const result = await executeStep({ run: "invalid-command" }, ctx);
 
-    const step: Step = {
-      uses: 'actions/checkout@v4',
-      with: { fetch_depth: 1 },
-    };
-    const result = await executeStep(step, createContext());
+  assertEquals(result.success, false);
+  assertEquals(result.exitCode, 1);
+  assertEquals(result.error, "command not found");
+});
 
-    assertEquals(result.success, true);
-    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
-      expect.anything(),
-      '/actions/jobs/job-1/step/1',
-      ({
-        method: 'POST',
-        body: ({
-          uses: 'actions/checkout@v4',
-          with: { fetch_depth: 1 },
-          space_id: 'space-1',
-        }),
-      })
-    ]);
-})
-  Deno.test('executeStep - returns failure when conclusion is failure', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 1,
-        stdout: '',
-        stderr: 'command not found',
-        outputs: {},
-        conclusion: 'failure',
-      })) as any;
+Deno.test("executeStep - uses Step failed when stderr is empty", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 1,
+      stdout: "",
+      stderr: "",
+      outputs: {},
+      conclusion: "failure",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
 
-    const step: Step = { run: 'invalid-command' };
-    const result = await executeStep(step, createContext());
+  const result = await executeStep({ run: "false" }, ctx);
 
-    assertEquals(result.success, false);
-    assertEquals(result.exitCode, 1);
-    assertEquals(result.error, 'command not found');
-})
-  Deno.test('executeStep - uses "Step failed" as error when stderr is empty', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 1,
-        stdout: '',
-        stderr: '',
-        outputs: {},
-        conclusion: 'failure',
-      })) as any;
+  assertEquals(result.success, false);
+  assertEquals(result.error, "Step failed");
+});
 
-    const step: Step = { run: 'false' };
-    const result = await executeStep(step, createContext());
+Deno.test("executeStep - passes shell and working-directory to runtime", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+      outputs: {},
+      conclusion: "success",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+    shell: "bash",
+    workingDirectory: "/app",
+  });
 
-    assertEquals(result.success, false);
-    assertEquals(result.error, 'Step failed');
-})
-  Deno.test('executeStep - passes shell and working-directory to runtime', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: 'ok',
-        stderr: '',
-        outputs: {},
-        conclusion: 'success',
-      })) as any;
+  await executeStep({ run: "echo test" }, ctx);
 
-    const step: Step = { run: 'echo test' };
-    const ctx = createContext({ shell: 'bash', workingDirectory: '/app' });
-    await executeStep(step, ctx);
+  const body = (await recorder.calls[0].request.clone().json()) as Record<
+    string,
+    unknown
+  >;
+  assertEquals(body.shell, "bash");
+  assertEquals(body["working-directory"], "/app");
+});
 
-    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
-      expect.anything(),
-      '/actions/jobs/job-1/step/1',
-      ({
-        body: ({
-          shell: 'bash',
-          'working-directory': '/app',
-        }),
-      })
-    ]);
-})
-  Deno.test('executeStep - passes step env, name, and timeout to runtime', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: '',
-        stderr: '',
-        outputs: {},
-        conclusion: 'success',
-      })) as any;
+Deno.test("executeStep - passes step metadata to runtime", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      outputs: {},
+      conclusion: "success",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
 
-    const step: Step = {
-      run: 'echo test',
-      name: 'My Step',
-      env: { NODE_ENV: 'test' },
-      'continue-on-error': true,
-      'timeout-minutes': 10,
-    };
-    await executeStep(step, createContext());
+  await executeStep({
+    run: "echo test",
+    name: "My Step",
+    env: { NODE_ENV: "test" },
+    "continue-on-error": true,
+    "timeout-minutes": 10,
+  }, ctx);
 
-    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
-      expect.anything(),
-      /* expect.any(String) */ {} as any,
-      ({
-        body: ({
-          name: 'My Step',
-          env: { NODE_ENV: 'test' },
-          'continue-on-error': true,
-          'timeout-minutes': 10,
-        }),
-      })
-    ]);
-})
-  Deno.test('executeStep - handles missing outputs in response', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: 'done',
-        stderr: '',
-        conclusion: 'success',
-        // no outputs field
-      })) as any;
+  const body = (await recorder.calls[0].request.clone().json()) as Record<
+    string,
+    unknown
+  >;
+  assertEquals(body.name, "My Step");
+  assertEquals(body.env, { NODE_ENV: "test" });
+  assertEquals(body["continue-on-error"], true);
+  assertEquals(body["timeout-minutes"], 10);
+});
 
-    const step: Step = { run: 'echo done' };
-    const result = await executeStep(step, createContext());
+Deno.test("executeStep - handles missing outputs in response", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 0,
+      stdout: "done",
+      stderr: "",
+      conclusion: "success",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+  });
 
-    assertEquals(result.success, true);
-    assertEquals(result.outputs, {});
-})
-  Deno.test('executeStep - uses correct endpoint for step number', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.callRuntimeRequest = (async () => jsonResponse({
-        exitCode: 0,
-        stdout: '',
-        stderr: '',
-        outputs: {},
-        conclusion: 'success',
-      })) as any;
+  const result = await executeStep({ run: "echo done" }, ctx);
 
-    const step: Step = { run: 'echo test' };
-    await executeStep(step, createContext({ stepNumber: 5, jobId: 'job-42' }));
+  assertEquals(result.success, true);
+  assertEquals(result.outputs, {});
+});
 
-    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
-      expect.anything(),
-      '/actions/jobs/job-42/step/5',
-      expect.anything()
-    ]);
-})
+Deno.test("executeStep - uses the configured step number in the endpoint", async () => {
+  const recorder = createFetchRecorder(() =>
+    createJsonResponse({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      outputs: {},
+      conclusion: "success",
+    })
+  );
+  const ctx = createContext({
+    env: { RUNTIME_HOST: { fetch: recorder.fetch } } as any,
+    stepNumber: 5,
+    jobId: "job-42",
+  });
+
+  await executeStep({ run: "echo test" }, ctx);
+
+  assertEquals(
+    recorder.calls[0].request.url,
+    "https://runtime-host/actions/jobs/job-42/step/5",
+  );
+  assert(recorder.calls.length > 0);
+});

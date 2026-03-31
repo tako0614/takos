@@ -250,7 +250,24 @@ fn truncate_summary(output: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::truncate_summary;
+    use super::{truncate_summary, CompositeToolExecutor};
+    use crate::control_rpc::{
+        ControlRpcClient, SkillCatalogResponse, StartPayload, ToolDefinition,
+    };
+    use serde_json::json;
+
+    fn test_client() -> ControlRpcClient {
+        ControlRpcClient::new(&StartPayload {
+            run_id: "run-test".to_string(),
+            worker_id: "worker-test".to_string(),
+            service_id: None,
+            model: Some("local-smoke".to_string()),
+            lease_version: None,
+            control_rpc_base_url: "http://127.0.0.1:8790".to_string(),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build for test")
+    }
 
     #[test]
     fn truncate_summary_preserves_utf8_boundaries() {
@@ -258,5 +275,40 @@ mod tests {
         let truncated = truncate_summary(&source);
         assert!(truncated.ends_with("..."));
         assert!(truncated.chars().count() <= 280);
+    }
+
+    #[test]
+    fn exposed_tools_keep_local_tools_and_filter_remote_duplicates() {
+        let executor = CompositeToolExecutor::new(
+            test_client(),
+            vec![
+                ToolDefinition {
+                    name: "skill_list".to_string(),
+                    description: "duplicate remote skill list".to_string(),
+                    parameters: json!({ "type": "object" }),
+                },
+                ToolDefinition {
+                    name: "repo_list".to_string(),
+                    description: "remote repo tool".to_string(),
+                    parameters: json!({ "type": "object" }),
+                },
+            ],
+            SkillCatalogResponse::default(),
+        );
+
+        let tools = executor.exposed_tools();
+        let names = tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(names.contains(&"semantic_search_memory"));
+        assert!(names.contains(&"skill_list"));
+        assert!(names.contains(&"repo_list"));
+        assert_eq!(
+            names.iter().filter(|name| **name == "skill_list").count(),
+            1,
+            "local skill tools should win over duplicate remote names"
+        );
     }
 }

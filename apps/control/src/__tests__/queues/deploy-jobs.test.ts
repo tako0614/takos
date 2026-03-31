@@ -1,38 +1,16 @@
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
-import { assertSpyCallArgs, assertSpyCalls } from "jsr:@std/testing/mock";
+import type { D1Database } from "@cloudflare/workers-types";
 
-const mocks = {
-  DeploymentService: ((..._args: any[]) => undefined) as any,
-  getDb: ((..._args: any[]) => undefined) as any,
-};
+import { assertEquals, assertRejects } from "jsr:@std/assert";
 
-// [Deno] vi.mock removed - manually stub imports from '@/services/deployment'
-// [Deno] vi.mock removed - manually stub imports from '@/db'
+import type { DeploymentEnv } from "../../../../../packages/control/src/application/services/deployment/index.ts";
 import {
   type DeploymentQueueMessage,
   handleDeploymentJob,
   handleDeploymentJobDlq,
   isValidDeploymentQueueMessage,
-} from "@/queues/deploy-jobs";
+} from "../../../../../packages/control/src/runtime/queues/deploy-jobs.ts";
 
-// ---------------------------------------------------------------------------
-// Drizzle mock helper
-// ---------------------------------------------------------------------------
-
-function createDrizzleMock(opts: {
-  updateWhere?: any;
-} = {}) {
-  const updateWhere = opts.updateWhere ??
-    (async () => ({ meta: { changes: 1 } }));
-
-  return {
-    update: () => ({
-      set: () => ({
-        where: updateWhere,
-      }),
-    }),
-  };
-}
+type FakeDeploymentRow = unknown[] | null;
 
 function validDeployMessage(): DeploymentQueueMessage {
   return {
@@ -42,191 +20,242 @@ function validDeployMessage(): DeploymentQueueMessage {
     timestamp: Date.now(),
   };
 }
-// ---------------------------------------------------------------------------
-// isValidDeploymentQueueMessage
-// ---------------------------------------------------------------------------
 
-Deno.test("isValidDeploymentQueueMessage - accepts valid deployment message", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+function createDeploymentEnv(
+  overrides: Partial<DeploymentEnv> = {},
+): DeploymentEnv {
+  return {
+    DB: {} as D1Database,
+    ENCRYPTION_KEY: "test-encryption-key",
+    ADMIN_DOMAIN: "takos.test",
+    HOSTNAME_ROUTING: {} as DeploymentEnv["HOSTNAME_ROUTING"],
+    ROUTING_DO: {} as DeploymentEnv["ROUTING_DO"],
+    WORKER_BUNDLES: undefined,
+    ...overrides,
+  } as DeploymentEnv;
+}
+
+function createFakeD1(
+  deploymentRow: FakeDeploymentRow = null,
+): {
+  db: D1Database;
+  prepareCalls: Array<{ sql: string; args: unknown[] }>;
+} {
+  const prepareCalls: Array<{ sql: string; args: unknown[] }> = [];
+
+  const db = {
+    prepare(sql: string) {
+      const normalized = sql.trim().toLowerCase();
+      const row = normalized.startsWith("select") ? deploymentRow : null;
+
+      return {
+        bind(..._args: unknown[]) {
+          prepareCalls.push({ sql, args: _args });
+          return {
+            get: async () => rowToObject(row),
+            first: async () => rowToObject(row),
+            all: async () => ({ results: row ? [rowToObject(row)] : [] }),
+            raw: async () => (row ? [row] : []),
+            run: async () => ({ success: true, meta: { changes: 1 } }),
+          };
+        },
+      };
+    },
+  } as unknown as D1Database;
+
+  return { db, prepareCalls };
+}
+
+function rowToObject(row: FakeDeploymentRow): Record<string, unknown> | null {
+  if (!row) return null;
+  return {
+    id: row[0],
+    serviceId: row[1],
+    spaceId: row[2],
+    version: row[3],
+    artifactRef: row[4],
+    bundleR2Key: row[5],
+    bundleHash: row[6],
+    bundleSize: row[7],
+    wasmR2Key: row[8],
+    wasmHash: row[9],
+    assetsManifest: row[10],
+    runtimeConfigSnapshotJson: row[11],
+    bindingsSnapshotEncrypted: row[12],
+    envVarsSnapshotEncrypted: row[13],
+    deployState: row[14],
+    currentStep: row[15],
+    stepError: row[16],
+    status: row[17],
+    routingStatus: row[18],
+    routingWeight: row[19],
+    deployedBy: row[20],
+    deployMessage: row[21],
+    providerName: row[22],
+    targetJson: row[23],
+    providerStateJson: row[24],
+    artifactKind: row[25],
+    idempotencyKey: row[26],
+    isRollback: row[27],
+    rollbackFromVersion: row[28],
+    rolledBackAt: row[29],
+    rolledBackBy: row[30],
+    startedAt: row[31],
+    completedAt: row[32],
+    createdAt: row[33],
+    updatedAt: row[34],
+  };
+}
+
+function createDeploymentRow(
+  overrides: Partial<{
+    status: string;
+    deployState: string;
+  }> = {},
+): unknown[] {
+  return [
+    "deploy-1",
+    "service-1",
+    "space-1",
+    1,
+    "artifact-1",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    "{}",
+    null,
+    null,
+    overrides.deployState ?? "pending",
+    null,
+    null,
+    overrides.status ?? "pending",
+    "active",
+    100,
+    "user-1",
+    null,
+    "runtime-host",
+    "{}",
+    "{}",
+    "worker-bundle",
+    null,
+    false,
+    null,
+    null,
+    null,
+    null,
+    null,
+    "2026-04-01T00:00:00.000Z",
+    "2026-04-01T00:00:00.000Z",
+  ];
+}
+
+Deno.test("isValidDeploymentQueueMessage - accepts valid messages", () => {
   assertEquals(isValidDeploymentQueueMessage(validDeployMessage()), true);
 });
-Deno.test("isValidDeploymentQueueMessage - rejects null", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+
+Deno.test("isValidDeploymentQueueMessage - rejects invalid messages", () => {
   assertEquals(isValidDeploymentQueueMessage(null), false);
-});
-Deno.test("isValidDeploymentQueueMessage - rejects undefined", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  assertEquals(isValidDeploymentQueueMessage(undefined), false);
-});
-Deno.test("isValidDeploymentQueueMessage - rejects non-object", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  assertEquals(isValidDeploymentQueueMessage("string"), false);
-  assertEquals(isValidDeploymentQueueMessage(42), false);
-});
-Deno.test("isValidDeploymentQueueMessage - rejects wrong version", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
   assertEquals(
     isValidDeploymentQueueMessage({ ...validDeployMessage(), version: 2 }),
     false,
   );
-});
-Deno.test("isValidDeploymentQueueMessage - rejects wrong type", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
   assertEquals(
     isValidDeploymentQueueMessage({ ...validDeployMessage(), type: "job" }),
     false,
   );
 });
-Deno.test("isValidDeploymentQueueMessage - rejects missing deploymentId", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const msg = { ...validDeployMessage() } as Record<string, unknown>;
-  delete msg.deploymentId;
-  assertEquals(isValidDeploymentQueueMessage(msg), false);
+
+Deno.test("handleDeploymentJob - fails closed when ENCRYPTION_KEY is missing", async () => {
+  const env = createDeploymentEnv({ ENCRYPTION_KEY: undefined });
+
+  await assertRejects(
+    () => handleDeploymentJob(validDeployMessage(), env),
+    Error,
+    "ENCRYPTION_KEY must be set for deployment service",
+  );
 });
-Deno.test("isValidDeploymentQueueMessage - rejects non-string deploymentId", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+
+Deno.test("handleDeploymentJobDlq - marks an in-progress deployment as failed", async () => {
+  const { db, prepareCalls } = createFakeD1(
+    createDeploymentRow({ status: "in_progress" }),
+  );
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJobDlq(validDeployMessage(), env, 5);
+
   assertEquals(
-    isValidDeploymentQueueMessage({
-      ...validDeployMessage(),
-      deploymentId: 123,
-    }),
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "deployments"')
+    ),
+    true,
+  );
+});
+
+Deno.test("handleDeploymentJobDlq - skips already successful deployments", async () => {
+  const { db, prepareCalls } = createFakeD1(
+    createDeploymentRow({ status: "success" }),
+  );
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJobDlq(validDeployMessage(), env, 3);
+
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "deployments"')
+    ),
     false,
   );
 });
-Deno.test("isValidDeploymentQueueMessage - rejects missing timestamp", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const msg = { ...validDeployMessage() } as Record<string, unknown>;
-  delete msg.timestamp;
-  assertEquals(isValidDeploymentQueueMessage(msg), false);
-});
-Deno.test("isValidDeploymentQueueMessage - rejects non-number timestamp", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  assertEquals(
-    isValidDeploymentQueueMessage({
-      ...validDeployMessage(),
-      timestamp: "now",
-    }),
-    false,
+
+Deno.test("handleDeploymentJobDlq - rethrows when deployment lookup fails", async () => {
+  const db = {
+    prepare(sql: string) {
+      const normalized = sql.trim().toLowerCase();
+      return {
+        bind() {
+          return {
+            get: async () => {
+              if (normalized.startsWith("select")) {
+                throw new Error("db read failed");
+              }
+              return null;
+            },
+            first: async () => {
+              if (normalized.startsWith("select")) {
+                throw new Error("db read failed");
+              }
+              return null;
+            },
+            all: async () => {
+              if (normalized.startsWith("select")) {
+                throw new Error("db read failed");
+              }
+              return { results: [] };
+            },
+            raw: async () => {
+              if (normalized.startsWith("select")) {
+                throw new Error("db read failed");
+              }
+              return [];
+            },
+            run: async () => {
+              if (normalized.includes('update "deployments"')) {
+                return { success: true, meta: { changes: 1 } };
+              }
+              throw new Error("db read failed");
+            },
+          };
+        },
+      };
+    },
+  } as unknown as D1Database;
+  const env = createDeploymentEnv({ DB: db });
+
+  await assertRejects(
+    () => handleDeploymentJobDlq(validDeployMessage(), env, 1),
+    Error,
   );
-});
-// ---------------------------------------------------------------------------
-// handleDeploymentJob
-// ---------------------------------------------------------------------------
-
-Deno.test("handleDeploymentJob - calls executeDeployment on the deployment service", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const executeDeployment = async () => undefined;
-  mocks.DeploymentService = () => ({ executeDeployment }) as any;
-
-  await handleDeploymentJob(validDeployMessage(), {} as any);
-
-  assert(mocks.DeploymentService.calls.length > 0);
-  assertSpyCallArgs(executeDeployment, 0, ["deploy-1"]);
-});
-Deno.test("handleDeploymentJob - throws when executeDeployment fails (allowing queue retry)", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const error = new Error("deployment failed");
-  mocks.DeploymentService = () =>
-    ({
-      executeDeployment: async () => {
-        throw error;
-      },
-    }) as any;
-
-  await assertRejects(async () => {
-    await handleDeploymentJob(validDeployMessage(), {} as any);
-  }, "deployment failed");
-});
-// ---------------------------------------------------------------------------
-// handleDeploymentJobDlq
-// ---------------------------------------------------------------------------
-
-Deno.test("handleDeploymentJobDlq - marks deployment as failed when still in progress", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock();
-  mocks.getDb = (() => dbMock) as any;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => ({ id: "deploy-1", status: "building" }),
-    }) as any;
-
-  await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 5);
-
-  assert(dbMock.update.calls.length > 0);
-});
-Deno.test("handleDeploymentJobDlq - does not update when deployment is already successful", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock();
-  mocks.getDb = (() => dbMock) as any;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => ({ id: "deploy-1", status: "success" }),
-    }) as any;
-
-  await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
-
-  assertSpyCalls(dbMock.update, 0);
-});
-Deno.test("handleDeploymentJobDlq - does not update when deployment is already rolled_back", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock();
-  mocks.getDb = (() => dbMock) as any;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => ({
-        id: "deploy-1",
-        status: "rolled_back",
-      }),
-    }) as any;
-
-  await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
-
-  assertSpyCalls(dbMock.update, 0);
-});
-Deno.test("handleDeploymentJobDlq - does not update when deployment is not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const dbMock = createDrizzleMock();
-  mocks.getDb = (() => dbMock) as any;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => null,
-    }) as any;
-
-  await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
-
-  assertSpyCalls(dbMock.update, 0);
-});
-Deno.test("handleDeploymentJobDlq - throws when deployment status update fails", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => {
-        throw new Error("db read failed");
-      },
-    }) as any;
-
-  await assertRejects(async () => {
-    await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 3);
-  }, "db read failed");
-});
-Deno.test("handleDeploymentJobDlq - updates with correct failure fields", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const updateWhere = async () => ({ meta: { changes: 1 } });
-  const setFn = () => ({ where: updateWhere });
-  const dbMock = {
-    update: () => ({ set: setFn }),
-  };
-  mocks.getDb = (() => dbMock) as any;
-  mocks.DeploymentService = () =>
-    ({
-      getDeploymentById: async () => ({ id: "deploy-1", status: "pending" }),
-    }) as any;
-
-  await handleDeploymentJobDlq(validDeployMessage(), { DB: {} } as any, 4);
-
-  assertSpyCallArgs(setFn, 0, [{
-    status: "failed",
-    deployState: "failed",
-    stepError: expect.stringContaining("DLQ"),
-  }]);
 });

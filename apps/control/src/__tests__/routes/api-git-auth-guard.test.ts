@@ -1,105 +1,111 @@
-import { Hono, type MiddlewareHandler } from 'hono';
-import type { Env } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup.ts';
-import { createApiRouter, type ApiVariables } from '@/routes/api';
+import { Hono, type MiddlewareHandler } from "hono";
+
+import { assertEquals } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
+
+import type { Env } from "@/types";
+import { type ApiVariables, createApiRouter } from "@/server/routes/api.ts";
+import { createMockEnv } from "../../../test/integration/setup.ts";
 
 type ApiRouteEnv = {
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
-
   Bindings: Env;
   Variables: ApiVariables;
 };
 
+function createAuthSpies() {
+  const requireAuth = spy(
+    async (c: Parameters<MiddlewareHandler<ApiRouteEnv>>[0]) => {
+      return c.json({ error: "Unauthorized" }, 401);
+    },
+  );
+  const optionalAuth = spy(async (
+    _c: Parameters<MiddlewareHandler<ApiRouteEnv>>[0],
+    next: Parameters<MiddlewareHandler<ApiRouteEnv>>[1],
+  ) => {
+    await next();
+  });
 
-  Deno.test('api router git auth guard (issue 025) - requires auth for /api/git/* routes', async () => {
-  const requireAuth: MiddlewareHandler<ApiRouteEnv> = async (c) => {
-      return c.json({ error: 'Unauthorized' }, 401);
-    };
-    const optionalAuth: MiddlewareHandler<ApiRouteEnv> = async (_c, next) => {
-      await next();
-    };
+  return {
+    requireAuth: requireAuth as MiddlewareHandler<ApiRouteEnv>,
+    optionalAuth: optionalAuth as MiddlewareHandler<ApiRouteEnv>,
+    requireAuthSpy: requireAuth,
+    optionalAuthSpy: optionalAuth,
+  };
+}
 
-    const app = new Hono<ApiRouteEnv>();
-    app.route('/api', createApiRouter({ requireAuth, optionalAuth }));
+function createApp() {
+  const auth = createAuthSpies();
+  const app = new Hono<ApiRouteEnv>();
+  app.route(
+    "/api",
+    createApiRouter({
+      requireAuth: auth.requireAuth,
+      optionalAuth: auth.optionalAuth,
+    }),
+  );
+  return { app, ...auth };
+}
 
-    const response = await app.fetch(
-      new Request('http://localhost/api/git/repos/repo-1/refs'),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
+Deno.test("api router requires auth for /api/git/* routes", async () => {
+  const { app, requireAuthSpy } = createApp();
 
-    assertEquals(response.status, 401);
-    assertEquals(await response.json(), { error: 'Unauthorized' });
-    assertSpyCalls(requireAuth, 1);
-})
-  Deno.test('api router git auth guard (issue 025) - does not mount /api/svcs/* routes', async () => {
-  const requireAuth: MiddlewareHandler<ApiRouteEnv> = async (c) => {
-      return c.json({ error: 'Unauthorized' }, 401);
-    };
-    const optionalAuth: MiddlewareHandler<ApiRouteEnv> = async (_c, next) => {
-      await next();
-    };
+  const response = await app.fetch(
+    new Request("http://localhost/api/git/repos/repo-1/refs"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
 
-    const app = new Hono<ApiRouteEnv>();
-    app.route('/api', createApiRouter({ requireAuth, optionalAuth }));
+  assertEquals(response.status, 401);
+  assertEquals(await response.json(), { error: "Unauthorized" });
+  assertSpyCalls(requireAuthSpy, 1);
+});
 
-    const response = await app.fetch(
-      new Request('http://localhost/api/svcs/repos/repo-1/refs'),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
+Deno.test("api router does not mount legacy /api/svcs/* routes", async () => {
+  const { app, requireAuthSpy } = createApp();
 
-    assertEquals(response.status, 404);
-    assertSpyCalls(requireAuth, 0);
-})
-  Deno.test('api router git auth guard (issue 025) - keeps MCP OAuth callback public while protecting MCP servers', async () => {
-  const requireAuth: MiddlewareHandler<ApiRouteEnv> = async (c) => {
-      return c.json({ error: 'Unauthorized' }, 401);
-    };
-    const optionalAuth: MiddlewareHandler<ApiRouteEnv> = async (_c, next) => {
-      await next();
-    };
+  const response = await app.fetch(
+    new Request("http://localhost/api/svcs/repos/repo-1/refs"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
 
-    const app = new Hono<ApiRouteEnv>();
-    app.route('/api', createApiRouter({ requireAuth, optionalAuth }));
+  assertEquals(response.status, 404);
+  assertSpyCalls(requireAuthSpy, 0);
+});
 
-    const callbackResponse = await app.fetch(
-      new Request('http://localhost/api/mcp/oauth/callback'),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
-    assertEquals(callbackResponse.status, 400);
+Deno.test("api router keeps MCP OAuth callback public while protecting MCP servers", async () => {
+  const { app, requireAuthSpy } = createApp();
 
-    const serversResponse = await app.fetch(
-      new Request('http://localhost/api/mcp/servers?spaceId=ws-1'),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
-    assertEquals(serversResponse.status, 401);
-    assertSpyCalls(requireAuth, 1);
-})
-  Deno.test('api router git auth guard (issue 025) - does not expose internal OAuth proxy routes publicly', async () => {
-  const requireAuth: MiddlewareHandler<ApiRouteEnv> = async (c) => {
-      return c.json({ error: 'Unauthorized' }, 401);
-    };
-    const optionalAuth: MiddlewareHandler<ApiRouteEnv> = async (_c, next) => {
-      await next();
-    };
+  const callbackResponse = await app.fetch(
+    new Request("http://localhost/api/mcp/oauth/callback"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+  assertEquals(callbackResponse.status, 400);
 
-    const app = new Hono<ApiRouteEnv>();
-    app.route('/api', createApiRouter({ requireAuth, optionalAuth }));
+  const serversResponse = await app.fetch(
+    new Request("http://localhost/api/mcp/servers?spaceId=ws-1"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
 
-    const response = await app.fetch(
-      new Request('https://internal/api/internal/oauth/token-exchange', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      }),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
+  assertEquals(serversResponse.status, 401);
+  assertSpyCalls(requireAuthSpy, 1);
+});
 
-    assertEquals(response.status, 404);
-    assertSpyCalls(requireAuth, 0);
-})
+Deno.test("api router does not expose internal OAuth proxy routes publicly", async () => {
+  const { app, requireAuthSpy } = createApp();
+
+  const response = await app.fetch(
+    new Request("https://internal/api/internal/oauth/token-exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 404);
+  assertSpyCalls(requireAuthSpy, 0);
+});

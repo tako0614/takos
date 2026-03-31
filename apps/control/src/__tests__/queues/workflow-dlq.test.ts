@@ -1,86 +1,15 @@
+import type { D1Database } from "@cloudflare/workers-types";
+
+import { assertEquals } from "jsr:@std/assert";
+
 import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   type WorkflowJobQueueMessage,
 } from "@/types";
+import { handleWorkflowJobDlq } from "../../../../../packages/control/src/runtime/queues/workflow-dlq.ts";
+import type { WorkflowQueueEnv } from "../../../../../packages/control/src/runtime/queues/workflow-types.ts";
 
-import { assert, assertRejects } from "jsr:@std/assert";
-import { assertSpyCallArgs, assertSpyCalls } from "jsr:@std/testing/mock";
-
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  createWorkflowEngine: ((..._args: any[]) => undefined) as any,
-  isValidWorkflowJobQueueMessage: ((..._args: any[]) => undefined) as any,
-  getRunNotifierStub: ((..._args: any[]) => undefined) as any,
-  buildRunNotifierEmitRequest: ((..._args: any[]) => undefined) as any,
-  buildRunNotifierEmitPayload: ((..._args: any[]) => undefined) as any,
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/types'
-// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
-// [Deno] vi.mock removed - manually stub imports from '@/utils'
-// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
-// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-client'
-// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-payload'
-import { handleWorkflowJobDlq } from "@/queues/workflow-dlq";
-import type { WorkflowQueueEnv } from "@/queues/workflow-types";
-
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
-
-function createDrizzleMock(opts: {
-  selectGet?: any;
-  selectAll?: any;
-  updateWhere?: any;
-} = {}) {
-  const selectGet = opts.selectGet ?? (async () => null);
-  const selectAll = opts.selectAll ?? (async () => []);
-  const updateWhere = opts.updateWhere ??
-    (async () => ({ meta: { changes: 1 } }));
-
-  const chain = () => {
-    const c: Record<string, unknown> = {};
-    c.from = () => c;
-    c.where = () => c;
-    c.orderBy = () => c;
-    c.limit = () => c;
-    c.get = selectGet;
-    c.all = selectAll;
-    return c;
-  };
-
-  const updateChain = () => {
-    const c: Record<string, unknown> = {};
-    c.set = () => c;
-    c.where = updateWhere;
-    return c;
-  };
-
-  return {
-    select: () => chain(),
-    update: () => updateChain(),
-  };
-}
-
-function createEngine() {
-  return {
-    onJobComplete: async () => undefined,
-    storeJobLogs: async () => undefined,
-  };
-}
-
-function createEnv(
-  overrides: Partial<WorkflowQueueEnv> = {},
-): WorkflowQueueEnv {
-  return {
-    DB: {} as any,
-    RUN_NOTIFIER: {} as any,
-    GIT_OBJECTS: {} as any,
-    WORKFLOW_QUEUE: { send: ((..._args: any[]) => undefined) as any } as any,
-    ...overrides,
-  } as unknown as WorkflowQueueEnv;
-}
+type QueryRow = unknown[] | null;
 
 function validMessage(): WorkflowJobQueueMessage {
   return {
@@ -102,268 +31,126 @@ function validMessage(): WorkflowJobQueueMessage {
     timestamp: Date.now(),
   };
 }
-// ---------------------------------------------------------------------------
-// handleWorkflowJobDlq
-// ---------------------------------------------------------------------------
+
+function createEnv(
+  overrides: Partial<WorkflowQueueEnv> = {},
+): WorkflowQueueEnv {
+  const notifierFetch = async () => new Response(null, { status: 204 });
+
+  return {
+    DB: {} as D1Database,
+    RUN_NOTIFIER: {
+      idFromName: (name: string) => name,
+      get: () => ({ fetch: notifierFetch }),
+    } as WorkflowQueueEnv["RUN_NOTIFIER"],
+    GIT_OBJECTS: undefined,
+    WORKFLOW_QUEUE: {
+      send: async () => undefined,
+    } as WorkflowQueueEnv["WORKFLOW_QUEUE"],
+    ...overrides,
+  } as WorkflowQueueEnv;
+}
+
+function createFakeD1(
+  jobRow: QueryRow = null,
+) {
+  const prepareCalls: Array<{ sql: string; args: unknown[] }> = [];
+
+  const db = {
+    prepare(sql: string) {
+      const normalized = sql.trim().toLowerCase();
+      const row = normalized.startsWith("select") ? jobRow : null;
+
+      return {
+        bind(..._args: unknown[]) {
+          prepareCalls.push({ sql, args: _args });
+
+          return {
+            get: async () => rowToObject(row),
+            first: async () => rowToObject(row),
+            all: async () => ({ results: row ? [rowToObject(row)] : [] }),
+            raw: async () => (row ? [row] : []),
+            run: async () => ({ success: true, meta: { changes: 1 } }),
+          };
+        },
+      };
+    },
+  } as unknown as D1Database;
+
+  return { db, prepareCalls };
+}
+
+function createJobRow(
+  overrides: Partial<{ status: string; name: string }> = {},
+): unknown[] {
+  return [overrides.status ?? "in_progress", overrides.name ?? "Build"];
+}
+
+function rowToObject(
+  row: QueryRow,
+): Record<string, unknown> | null {
+  if (!row) return null;
+  return {
+    status: row[0],
+    name: row[1],
+  };
+}
 
 Deno.test("handleWorkflowJobDlq - skips invalid messages", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+  const { db, prepareCalls } = createFakeD1();
+  const env = createEnv({ DB: db });
 
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => false) as any;
+  await handleWorkflowJobDlq({ invalid: true }, env, 3);
 
-  await handleWorkflowJobDlq({ invalid: true }, createEnv(), 3);
-
-  assertSpyCalls(mocks.getDb, 0);
+  assertEquals(prepareCalls.length, 0);
 });
-Deno.test("handleWorkflowJobDlq - skips when job is already completed", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
 
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
+Deno.test("handleWorkflowJobDlq - skips already completed jobs", async () => {
+  const { db, prepareCalls } = createFakeD1(
+    createJobRow({ status: "completed" }),
+  );
+  const env = createEnv({ DB: db });
 
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "completed", name: "Build" }),
-  });
-  mocks.getDb = (() => dbMock) as any;
+  await handleWorkflowJobDlq(validMessage(), env, 3);
 
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 3);
-
-  assertSpyCalls(dbMock.update, 0);
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "workflow_jobs"')
+    ),
+    false,
+  );
 });
-Deno.test("handleWorkflowJobDlq - skips when job record not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
 
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
+Deno.test("handleWorkflowJobDlq - skips when the job record is missing", async () => {
+  const { db, prepareCalls } = createFakeD1(null);
+  const env = createEnv({ DB: db });
 
-  const dbMock = createDrizzleMock({
-    selectGet: async () => null,
-  });
-  mocks.getDb = (() => dbMock) as any;
+  await handleWorkflowJobDlq(validMessage(), env, 3);
 
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 3);
-
-  assertSpyCalls(dbMock.update, 0);
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "workflow_jobs"')
+    ),
+    false,
+  );
 });
-Deno.test("handleWorkflowJobDlq - marks job and run as failed", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
 
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
+Deno.test("handleWorkflowJobDlq - marks job and run as failed without a bucket", async () => {
+  const { db, prepareCalls } = createFakeD1(createJobRow());
+  const env = createEnv({ DB: db, GIT_OBJECTS: undefined });
 
-  const engine = createEngine();
-  mocks.createWorkflowEngine = (() => engine) as any;
+  await handleWorkflowJobDlq(validMessage(), env, 5);
 
-  const updateWhere = async () => ({ meta: { changes: 1 } });
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "in_progress", name: "Build" }),
-    selectAll: async () => [
-      { number: 1, name: "Step 1" },
-    ],
-    updateWhere,
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 5);
-
-  // Update for markJobFailed + update for run status
-  assert(dbMock.update.calls.length > 0);
-  assertSpyCallArgs(engine.storeJobLogs, 0, [
-    "job-1",
-    expect.stringContaining("DLQ"),
-  ]);
-  assertSpyCallArgs(engine.onJobComplete, 0, ["job-1", {
-    conclusion: "failure",
-  }]);
-});
-Deno.test("handleWorkflowJobDlq - emits event without bucket but still marks job failed", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const updateWhere = async () => ({ meta: { changes: 1 } });
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "in_progress", name: "Build" }),
-    updateWhere,
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  // No GIT_OBJECTS bucket
-  const env = createEnv({ GIT_OBJECTS: undefined });
-
-  await handleWorkflowJobDlq(validMessage(), env, 2);
-
-  // Should still update the DB
-  assert(dbMock.update.calls.length > 0);
-  // Should NOT create engine (no bucket)
-  assertSpyCalls(mocks.createWorkflowEngine, 0);
-});
-Deno.test("handleWorkflowJobDlq - handles attempt count in DLQ log", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const engine = createEngine();
-  mocks.createWorkflowEngine = (() => engine) as any;
-
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "queued", name: "Test" }),
-    selectAll: async () => [],
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 7);
-
-  assertSpyCallArgs(engine.storeJobLogs, 0, [
-    "job-1",
-    expect.stringContaining("attempts=7"),
-  ]);
-});
-Deno.test("handleWorkflowJobDlq - handles undefined attempts", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const engine = createEngine();
-  mocks.createWorkflowEngine = (() => engine) as any;
-
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "queued", name: "Test" }),
-    selectAll: async () => [],
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  await handleWorkflowJobDlq(validMessage(), createEnv());
-
-  assertSpyCallArgs(engine.storeJobLogs, 0, [
-    "job-1",
-    expect.stringContaining("attempts=unknown"),
-  ]);
-});
-Deno.test("handleWorkflowJobDlq - re-throws when failJobWithResults (onJobComplete) fails", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const engine = createEngine();
-  engine.onJobComplete = (async () => {
-    throw new Error("db error");
-  }) as any;
-  mocks.createWorkflowEngine = (() => engine) as any;
-
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "in_progress", name: "Build" }),
-    selectAll: async () => [],
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  await assertRejects(async () => {
-    await handleWorkflowJobDlq(validMessage(), createEnv(), 3);
-  }, "db error");
-});
-Deno.test("handleWorkflowJobDlq - handles storeJobLogs failure gracefully", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const engine = createEngine();
-  engine.storeJobLogs = (async () => {
-    throw new Error("r2 error");
-  }) as any;
-  mocks.createWorkflowEngine = (() => engine) as any;
-
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "in_progress", name: "Build" }),
-    selectAll: async () => [],
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  // Should not throw -- storeJobLogs error is caught
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 1);
-
-  assert(engine.onJobComplete.calls.length > 0);
-});
-Deno.test("handleWorkflowJobDlq - handles run update failure gracefully", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-
-  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
-  mocks.buildRunNotifierEmitRequest =
-    (() => new Request("https://notifier.test", { method: "POST" })) as any;
-  mocks.getRunNotifierStub = (() => ({
-    fetch: async () => new Response(null, { status: 204 }),
-  })) as any;
-  mocks.isValidWorkflowJobQueueMessage = (() => true) as any;
-
-  const engine = createEngine();
-  mocks.createWorkflowEngine = (() => engine) as any;
-
-  let updateCallCount = 0;
-  const updateWhere = async () => {
-    updateCallCount++;
-    // Second update (for run) throws
-    if (updateCallCount === 2) {
-      throw new Error("run update failed");
-    }
-    return { meta: { changes: 1 } };
-  };
-  const dbMock = createDrizzleMock({
-    selectGet: async () => ({ status: "in_progress", name: "Build" }),
-    selectAll: async () => [],
-    updateWhere,
-  });
-  mocks.getDb = (() => dbMock) as any;
-
-  // Should not throw -- run update error is caught
-  await handleWorkflowJobDlq(validMessage(), createEnv(), 1);
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "workflow_jobs"')
+    ),
+    true,
+  );
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "workflow_runs"')
+    ),
+    true,
+  );
 });

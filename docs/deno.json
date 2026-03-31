@@ -1,7 +1,9 @@
 {
   "version": "1.0.0",
   "imports": {
-    "vitepress": "npm:vitepress@^1.0.0"
+    "vitepress": "npm:vitepress@^1.0.0",
+    "vue": "npm:vue@^3.5.0",
+    "vue/server-renderer": "npm:vue@^3.5.0/server-renderer"
   },
   "tasks": {
     "dev": "deno run -A npm:vitepress dev",

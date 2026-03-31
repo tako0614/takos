@@ -29,10 +29,10 @@ import { assertEquals, assert, assertThrows } from 'jsr:@std/assert';
   assertEquals(parseKeyValue('key=  value  '), { key: 'key', value: '  value  ' });
 })
   Deno.test('parseKeyValue - throws on missing separator', () => {
-  assertThrows(() => { () => parseKeyValue('noequals'); }, 'Invalid key=value option');
+  assertThrows(() => parseKeyValue('noequals'), Error, 'Invalid key=value option');
 })
   Deno.test('parseKeyValue - throws on leading separator (empty key)', () => {
-  assertThrows(() => { () => parseKeyValue('=value'); }, 'Invalid key=value option');
+  assertThrows(() => parseKeyValue('=value'), Error, 'Invalid key=value option');
 })
   Deno.test('parseKeyValue - handles empty value', () => {
   assertEquals(parseKeyValue('key='), { key: 'key', value: '' });
@@ -52,7 +52,7 @@ import { assertEquals, assert, assertThrows } from 'jsr:@std/assert';
     assertEquals(result.body, '{"key":"value"}');
 })
   Deno.test('prepareBody - throws on invalid JSON body', () => {
-  assertThrows(() => { () => prepareBody({ body: '{invalid' }); }, 'Invalid JSON body');
+  assertThrows(() => prepareBody({ body: '{invalid' }), Error, 'Invalid JSON body');
 })
   Deno.test('prepareBody - prepares raw body with default text content type', () => {
   const result = prepareBody({ rawBody: 'hello world' });
@@ -70,19 +70,25 @@ import { assertEquals, assert, assertThrows } from 'jsr:@std/assert';
     assertEquals(result.contentType, null);
 })
   Deno.test('prepareBody - throws when combining JSON and raw', () => {
-  assertThrows(() => { () => prepareBody({ body: '{}', rawBody: 'raw' }); }, 
-      'Only one body mode can be used at a time',
-    );
+  assertThrows(
+    () => prepareBody({ body: '{}', rawBody: 'raw' }),
+    Error,
+    'Only one body mode can be used at a time',
+  );
 })
   Deno.test('prepareBody - throws when combining JSON and form', () => {
-  assertThrows(() => { () => prepareBody({ body: '{}', form: ['a=b'] }); }, 
-      'Only one body mode can be used at a time',
-    );
+  assertThrows(
+    () => prepareBody({ body: '{}', form: ['a=b'] }),
+    Error,
+    'Only one body mode can be used at a time',
+  );
 })
   Deno.test('prepareBody - throws when combining raw and form', () => {
-  assertThrows(() => { () => prepareBody({ rawBody: 'raw', form: ['a=b'] }); }, 
-      'Only one body mode can be used at a time',
-    );
+  assertThrows(
+    () => prepareBody({ rawBody: 'raw', form: ['a=b'] }),
+    Error,
+    'Only one body mode can be used at a time',
+  );
 })
   Deno.test('prepareBody - does not count empty arrays as form mode', () => {
   const result = prepareBody({ form: [], formFile: [] });
@@ -118,10 +124,10 @@ import { assertEquals, assert, assertThrows } from 'jsr:@std/assert';
   assertEquals(resolveTaskPath('/api', '/api/repos'), '/api/repos');
 })
   Deno.test('resolveTaskPath - throws when path does not start with /api', () => {
-  assertThrows(() => { () => resolveTaskPath('/other', undefined); }, 'Path must start with /api');
+  assertThrows(() => resolveTaskPath('/other', undefined), Error, 'Path must start with /api');
 })
   Deno.test('resolveTaskPath - throws for empty path', () => {
-  assertThrows(() => { () => resolveTaskPath('', undefined); });
+  assertThrows(() => resolveTaskPath('', undefined));
 })
 // ---------------------------------------------------------------------------
 // toWebSocketUrl
@@ -138,9 +144,11 @@ import { assertEquals, assert, assertThrows } from 'jsr:@std/assert';
     assertEquals(result.protocol, 'ws:');
 })
   Deno.test('toWebSocketUrl - throws on unsupported protocol', () => {
-  assertThrows(() => { () => toWebSocketUrl(new URL('ftp://example.com/path')); }, 
-      'Unsupported protocol for WebSocket conversion',
-    );
+  assertThrows(
+    () => toWebSocketUrl(new URL('ftp://example.com/path')),
+    Error,
+    'Unsupported protocol for WebSocket conversion',
+  );
 })
   Deno.test('toWebSocketUrl - preserves path and query params', () => {
   const result = toWebSocketUrl(new URL('https://takos.jp/api/runs/1/ws?token=abc'));

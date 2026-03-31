@@ -33,8 +33,8 @@ const RESOURCE_BINDINGS: ResourceBindingDescriptor[] = [
   { key: 'kv', aliases: ['kv'], resourceType: 'kv' },
   { key: 'queues', aliases: ['queues'], resourceType: 'queue' },
   { key: 'vectorize', aliases: ['vectorize', 'vectorIndexes'], resourceType: 'vectorize' },
-  { key: 'analyticsEngine', aliases: ['analyticsEngine', 'analyticsStores'], resourceType: 'analyticsEngine' },
-  { key: 'workflow', aliases: ['workflow', 'workflowRuntimes'], resourceType: 'workflow' },
+  { key: 'analyticsEngine', aliases: ['analyticsEngine', 'analyticsStores', 'analytics'], resourceType: 'analyticsEngine' },
+  { key: 'workflow', aliases: ['workflow', 'workflowRuntimes', 'workflows'], resourceType: 'workflow' },
   { key: 'durableObjects', aliases: ['durableObjects', 'durableNamespaces'], resourceType: 'durableObject' },
 ];
 

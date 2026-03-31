@@ -6,8 +6,8 @@
  * - Test utilities and helpers
  * - Environment configuration for testing
  */
-import { spy } from 'jsr:@std/testing/mock';
-import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
+import { spy } from "jsr:@std/testing/mock";
+import { buildWorkersWebPlatform } from "@/platform/adapters/workers.ts";
 
 // ============================================================================
 // Mock Cloudflare Workers Types
@@ -39,7 +39,8 @@ export class MockD1Database {
   } {
     return {
       prepare: (query: string) => this.prepare(query),
-      batch: <T>(statements: MockD1PreparedStatement[]) => this.batch<T>(statements),
+      batch: <T>(statements: MockD1PreparedStatement[]) =>
+        this.batch<T>(statements),
       getBookmark: () => null,
     };
   }
@@ -66,11 +67,18 @@ export class MockD1PreparedStatement {
     return null as T | null;
   }
 
-  async all<T = unknown>(): Promise<{ results: T[]; success: boolean; meta: Record<string, unknown> }> {
+  async all<T = unknown>(): Promise<
+    { results: T[]; success: boolean; meta: Record<string, unknown> }
+  > {
     return { results: [], success: true, meta: {} };
   }
 
-  async run(): Promise<{ success: boolean; meta: { changes: number; last_row_id: number; duration: number } }> {
+  async run(): Promise<
+    {
+      success: boolean;
+      meta: { changes: number; last_row_id: number; duration: number };
+    }
+  > {
     return { success: true, meta: { changes: 1, last_row_id: 1, duration: 0 } };
   }
 
@@ -84,20 +92,29 @@ export class MockD1PreparedStatement {
  * Simulates Cloudflare R2 object storage
  */
 export class MockR2Bucket {
-  private objects: Map<string, { body: ArrayBuffer; metadata: Record<string, string> }> = new Map();
+  private objects: Map<
+    string,
+    { body: ArrayBuffer; metadata: Record<string, string> }
+  > = new Map();
 
   async put(
     key: string,
     value: ReadableStream | ArrayBuffer | string,
-    options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> },
+    options?: {
+      customMetadata?: Record<string, string>;
+      httpMetadata?: Record<string, string>;
+    },
   ): Promise<MockR2Object> {
     let body: ArrayBuffer;
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       body = new TextEncoder().encode(value).buffer as ArrayBuffer;
     } else if (value instanceof ArrayBuffer) {
       body = value;
     } else if (ArrayBuffer.isView(value)) {
-      body = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+      body = value.buffer.slice(
+        value.byteOffset,
+        value.byteOffset + value.byteLength,
+      ) as ArrayBuffer;
     } else {
       // ReadableStream
       const reader = value.getReader();
@@ -141,7 +158,9 @@ export class MockR2Bucket {
     }
   }
 
-  async list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+  async list(
+    options?: { prefix?: string; limit?: number; cursor?: string },
+  ): Promise<{
     objects: MockR2Object[];
     truncated: boolean;
     cursor?: string;
@@ -174,7 +193,7 @@ export class MockR2Object {
     readonly customMetadata: Record<string, string>,
   ) {
     this.size = body.byteLength;
-    this.etag = 'mock-etag';
+    this.etag = "mock-etag";
     this.httpEtag = '"mock-etag"';
     this.uploaded = new Date();
   }
@@ -216,9 +235,15 @@ export class MockR2ObjectBody extends MockR2Object {
  * Simulates Cloudflare Workers KV
  */
 export class MockKVNamespace {
-  private store: Map<string, { value: string; metadata?: unknown; expiration?: number }> = new Map();
+  private store: Map<
+    string,
+    { value: string; metadata?: unknown; expiration?: number }
+  > = new Map();
 
-  async get(key: string, options?: { type?: 'text' | 'json' | 'arrayBuffer' | 'stream' }): Promise<string | null> {
+  async get(
+    key: string,
+    options?: { type?: "text" | "json" | "arrayBuffer" | "stream" },
+  ): Promise<string | null> {
     const item = this.store.get(key);
     if (!item) return null;
     if (item.expiration && item.expiration < Date.now() / 1000) {
@@ -239,7 +264,11 @@ export class MockKVNamespace {
   async put(
     key: string,
     value: string,
-    options?: { expiration?: number; expirationTtl?: number; metadata?: unknown },
+    options?: {
+      expiration?: number;
+      expirationTtl?: number;
+      metadata?: unknown;
+    },
   ): Promise<void> {
     let expiration: number | undefined;
     if (options?.expiration) {
@@ -265,7 +294,11 @@ export class MockKVNamespace {
   }> {
     let keys = Array.from(this.store.entries())
       .filter(([name]) => !options?.prefix || name.startsWith(options.prefix))
-      .map(([name, { expiration, metadata }]) => ({ name, expiration, metadata }));
+      .map(([name, { expiration, metadata }]) => ({
+        name,
+        expiration,
+        metadata,
+      }));
 
     if (options?.limit) {
       keys = keys.slice(0, options.limit);
@@ -286,7 +319,9 @@ export class MockQueue<T = unknown> {
   }
 
   async sendBatch(messages: Array<{ body: T }>): Promise<void> {
-    messages.forEach((m) => this.messages.push({ body: m.body, id: crypto.randomUUID() }));
+    messages.forEach((m) =>
+      this.messages.push({ body: m.body, id: crypto.randomUUID() })
+    );
   }
 
   // Test helper methods
@@ -339,7 +374,7 @@ export class MockDurableObjectStub {
 
   async fetch(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 }
@@ -348,25 +383,44 @@ export class MockDurableObjectStub {
  * Mock VectorizeIndex implementation for testing
  */
 export class MockVectorizeIndex {
-  private vectors: Map<string, { id: string; values: number[]; metadata?: Record<string, unknown> }> = new Map();
+  private vectors: Map<
+    string,
+    { id: string; values: number[]; metadata?: Record<string, unknown> }
+  > = new Map();
 
   async insert(
-    vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>,
+    vectors: Array<
+      { id: string; values: number[]; metadata?: Record<string, unknown> }
+    >,
   ): Promise<void> {
     vectors.forEach((v) => this.vectors.set(v.id, v));
   }
 
   async upsert(
-    vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>,
+    vectors: Array<
+      { id: string; values: number[]; metadata?: Record<string, unknown> }
+    >,
   ): Promise<void> {
     vectors.forEach((v) => this.vectors.set(v.id, v));
   }
 
   async query(
     vector: number[],
-    options?: { topK?: number; filter?: Record<string, unknown>; returnValues?: boolean; returnMetadata?: boolean },
+    options?: {
+      topK?: number;
+      filter?: Record<string, unknown>;
+      returnValues?: boolean;
+      returnMetadata?: boolean;
+    },
   ): Promise<{
-    matches: Array<{ id: string; score: number; values?: number[]; metadata?: Record<string, unknown> }>;
+    matches: Array<
+      {
+        id: string;
+        score: number;
+        values?: number[];
+        metadata?: Record<string, unknown>;
+      }
+    >;
   }> {
     const topK = options?.topK || 10;
     const matches = Array.from(this.vectors.values())
@@ -392,7 +446,9 @@ export class MockVectorizeIndex {
 /**
  * Create a mock Env object for testing
  */
-export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) {
+export function createMockEnv(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
   const env = {
     DB: new MockD1Database(),
     HOSTNAME_ROUTING: new MockKVNamespace(),
@@ -408,23 +464,23 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
     GIT_OBJECTS: new MockR2Bucket(),
     VECTORIZE: new MockVectorizeIndex(),
     // Billing (enabled by default in tests so billing gates behave as expected)
-    BILLING_ENABLED: 'true',
+    BILLING_ENABLED: "true",
     // Secrets and configuration
-    GOOGLE_CLIENT_ID: 'test-google-client-id',
-    GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
-    ADMIN_DOMAIN: 'test.takos.jp',
-    TENANT_BASE_DOMAIN: 'app.test.takos.jp',
-    PLATFORM_PRIVATE_KEY: 'test-private-key',
-    PLATFORM_PUBLIC_KEY: 'test-public-key',
-    CF_ACCOUNT_ID: 'test-account-id',
-    CF_API_TOKEN: 'test-api-token',
-    WFP_DISPATCH_NAMESPACE: 'takos-tenants',
-    OPENAI_API_KEY: 'test-openai-key',
+    GOOGLE_CLIENT_ID: "test-google-client-id",
+    GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+    ADMIN_DOMAIN: "test.takos.jp",
+    TENANT_BASE_DOMAIN: "app.test.takos.jp",
+    PLATFORM_PRIVATE_KEY: "test-private-key",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
+    CF_ACCOUNT_ID: "test-account-id",
+    CF_API_TOKEN: "test-api-token",
+    WFP_DISPATCH_NAMESPACE: "takos-tenants",
+    OPENAI_API_KEY: "test-openai-key",
     RUNTIME_HOST: { fetch: spy() },
     ...overrides,
   };
 
-  if (!('PLATFORM' in env)) {
+  if (!("PLATFORM" in env)) {
     Object.assign(env, {
       PLATFORM: buildWorkersWebPlatform(env as never),
     });
@@ -437,5 +493,5 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
 // Re-export test utilities
 // ============================================================================
 
-export * from './helpers/factories.ts';
-export * from './helpers/api.ts';
+export * from "./helpers/factories.ts";
+export * from "./helpers/api.ts";
