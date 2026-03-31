@@ -3,7 +3,7 @@ import { Hono } from "hono";
 
 import { requireTurnstile } from "../../../../../packages/control/src/server/middleware/turnstile.ts";
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
 
 function createApp(envOverrides: Record<string, unknown> = {}) {

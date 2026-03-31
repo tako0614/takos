@@ -54,6 +54,7 @@ import { reconcileGroupRouting } from './group-routing.ts';
 import type { DeploymentProviderName } from './models.ts';
 import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
 import type { Env } from '../../../shared/types/env.ts';
+import { AppTokenService, type AppTokenResult } from './app-token-service.ts';
 
 export interface ApplyEntryResult {
   name: string;
@@ -69,6 +70,7 @@ export interface ApplyResult {
   skipped: string[];
   diff: DiffResult;
   translationReport: TranslationReport;
+  appToken?: AppTokenResult;
 }
 
 export interface PlanResult {
@@ -863,6 +865,22 @@ export async function applyManifest(
   }
   const hasFailures = result.applied.some((entry) => entry.status === 'failed');
   await saveGroupSnapshots(env, groupId, desiredState, hasFailures ? 'degraded' : 'ready');
+
+  // Issue an app token when the manifest declares takos scopes
+  const takosScopes = effectiveManifest.spec.takos?.scopes;
+  if (takosScopes && takosScopes.length > 0) {
+    try {
+      result.appToken = await AppTokenService.issueToken(env, {
+        groupId,
+        spaceId: group.spaceId,
+        appName: effectiveManifest.metadata.name,
+        scopes: takosScopes,
+      });
+    } catch {
+      // Token issuance failure is non-fatal — the deploy itself succeeded.
+      // The caller can retry or issue tokens separately.
+    }
+  }
 
   return result;
 }

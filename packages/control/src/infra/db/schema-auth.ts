@@ -57,3 +57,18 @@ export const serviceTokens = sqliteTable('service_tokens', {
 }, (table) => ({
   idxTokenHash: index('idx_service_tokens_token_hash').on(table.tokenHash),
 }));
+
+// AppToken
+export const appTokens = sqliteTable('app_tokens', {
+  id: text('id').primaryKey(),
+  groupId: text('group_id').notNull(),
+  spaceId: text('space_id').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  scopes: text('scopes').notNull(),        // JSON array of scope strings
+  expiresAt: text('expires_at'),
+  revokedAt: text('revoked_at'),
+  createdAt: text('created_at').notNull(),
+}, (table) => ({
+  idxTokenHash: index('idx_app_tokens_token_hash').on(table.tokenHash),
+  idxGroupId: index('idx_app_tokens_group_id').on(table.groupId),
+}));
