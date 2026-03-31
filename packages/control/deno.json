@@ -1,49 +1,10 @@
 {
   "name": "takos-control",
   "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --config vitest.config.ts",
-    "test:watch": "vitest --config vitest.config.ts",
-    "test:coverage": "vitest run --config vitest.config.ts --coverage"
-  },
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.700.0",
-    "@aws-sdk/client-s3": "^3.700.0",
-    "@aws-sdk/client-secrets-manager": "^3.700.0",
-    "@aws-sdk/client-sqs": "^3.700.0",
-    "@google-cloud/firestore": "^7.11.0",
-    "@google-cloud/pubsub": "^4.9.0",
-    "@google-cloud/storage": "^7.14.0",
-    "@langchain/core": "^1.1.8",
-    "@langchain/langgraph": "^1.0.7",
-    "@langchain/langgraph-checkpoint": "^1.0.0",
-    "@langchain/openai": "^1.2.0",
-    "@libsql/client": "^0.17.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "takos-actions-engine": "workspace:*",
-    "takos-common": "workspace:*",
-    "@cloudflare/workers-types": "^4.20260118.0",
-    "drizzle-orm": "^0.45.1",
-    "hono": "^4.12.4",
-    "jose": "^5.9.0",
-    "pg": "^8.20.0",
-    "redis": "^5.11.0",
-    "yaml": "^2.8.2",
-    "zod": "^3.25.32"
-  },
-  "devDependencies": {
-    "miniflare": "^4.20260124.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
-  },
   "exports": {
     "./agent": "./src/application/services/agent/index.ts",
     "./agent/public-runner": "./src/application/services/agent/runner.ts",
-
     "./bindings": "./src/adapters/index.ts",
-
     "./core": "./src/index.ts",
     "./core/web": "./src/web.ts",
     "./core/dispatch": "./src/dispatch.ts",
@@ -51,13 +12,11 @@
     "./core/platform": "./src/platform/index.ts",
     "./core/cloudflare-api": "./src/application/services/cloudflare/api-client.ts",
     "./core/wfp-client": "./src/application/services/wfp/client.ts",
-
     "./git/smart": "./src/application/services/git-smart/index.ts",
     "./git/smart/client": "./src/application/services/git-smart/client/index.ts",
     "./git/smart/operations": "./src/application/services/git-smart/operations.ts",
     "./git/source": "./src/application/services/source/index.ts",
     "./source/app-manifest": "./src/application/services/source/app-manifest.ts",
-
     "./platform": "./src/platform/index.ts",
     "./platform/accessors": "./src/platform/accessors.ts",
     "./platform/context": "./src/platform/context.ts",
@@ -66,7 +25,6 @@
     "./platform/adapters/workers": "./src/platform/adapters/workers.ts",
     "./platform/providers/cloudflare": "./src/platform/providers/cloudflare/index.ts",
     "./platform/providers/node/pdf-render": "./src/platform/providers/node/pdf-render.ts",
-
     "./runtime/worker": "./src/runtime/worker/index.ts",
     "./runtime/worker/env": "./src/runtime/worker/env.ts",
     "./runtime/worker/egress": "./src/runtime/worker/egress.ts",
@@ -83,17 +41,41 @@
     "./runtime/container-hosts/proxy-token-manager": "./src/runtime/container-hosts/proxy-token-manager.ts",
     "./runtime/container-hosts/runtime-host": "./src/runtime/container-hosts/runtime-host.ts",
     "./runtime/container-hosts/executor-run-state": "./src/runtime/container-hosts/executor-run-state.ts",
-
     "./server/routes": "./src/server/routes/index.ts",
     "./server/middleware": "./src/server/middleware/index.ts",
-
     "./shared/utils": "./src/shared/utils/index.ts",
     "./shared/types": "./src/shared/types/index.ts",
     "./shared/config": "./src/shared/config/index.ts",
     "./shared/constants": "./src/shared/constants/index.ts",
-
     "./runtime/queues/workflow-runtime-client": "./src/runtime/queues/workflow-runtime-client.ts",
-
     "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts"
+  },
+  "imports": {
+    "@aws-sdk/client-dynamodb": "npm:@aws-sdk/client-dynamodb@^3.700.0",
+    "@aws-sdk/client-s3": "npm:@aws-sdk/client-s3@^3.700.0",
+    "@aws-sdk/client-secrets-manager": "npm:@aws-sdk/client-secrets-manager@^3.700.0",
+    "@aws-sdk/client-sqs": "npm:@aws-sdk/client-sqs@^3.700.0",
+    "@google-cloud/firestore": "npm:@google-cloud/firestore@^7.11.0",
+    "@google-cloud/pubsub": "npm:@google-cloud/pubsub@^4.9.0",
+    "@google-cloud/storage": "npm:@google-cloud/storage@^7.14.0",
+    "@langchain/core": "npm:@langchain/core@^1.1.8",
+    "@langchain/langgraph": "npm:@langchain/langgraph@^1.0.7",
+    "@langchain/langgraph-checkpoint": "npm:@langchain/langgraph-checkpoint@^1.0.0",
+    "@langchain/openai": "npm:@langchain/openai@^1.2.0",
+    "@libsql/client": "npm:@libsql/client@^0.17.0",
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.0.0",
+    "@cloudflare/workers-types": "npm:@cloudflare/workers-types@^4.20260118.0",
+    "drizzle-orm": "npm:drizzle-orm@^0.45.1",
+    "hono": "npm:hono@^4.12.4",
+    "jose": "npm:jose@^5.9.0",
+    "pg": "npm:pg@^8.20.0",
+    "redis": "npm:redis@^5.11.0",
+    "yaml": "npm:yaml@^2.8.2",
+    "zod": "npm:zod@^3.25.32",
+    "miniflare": "npm:miniflare@^4.20260124.0"
+  },
+  "tasks": {
+    "test": "deno test --allow-all src/",
+    "test:coverage": "deno test --allow-all --coverage src/"
   }
 }

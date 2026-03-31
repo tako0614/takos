@@ -1,7 +1,10 @@
+import type { Setter } from 'solid-js';
 import type { Run } from '../types';
 import type { WebSocketEventPayload } from '../views/chat/timeline';
 import { parseTimelineEventId } from '../views/chat/timeline';
 import type { TranslationKey } from '../store/i18n';
+
+type MutableRefObject<T> = { current: T };
 
 export const VALID_RUN_STATUSES: Set<string> = new Set([
   'pending', 'queued', 'running', 'completed', 'failed', 'cancelled',
@@ -41,19 +44,19 @@ export interface EventHandlerContext {
   isPrimaryRun: boolean;
   // deps
   verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
-  isMountedRef: React.MutableRefObject<boolean>;
-  currentRunIdRef: React.MutableRefObject<string | null>;
-  lastEventIdRef: React.MutableRefObject<number>;
-  handleWebSocketEventRef: React.MutableRefObject<(
+  isMountedRef: MutableRefObject<boolean>;
+  currentRunIdRef: MutableRefObject<string | null>;
+  lastEventIdRef: MutableRefObject<number>;
+  handleWebSocketEventRef: MutableRefObject<(
     eventType: string,
     data: unknown,
     eventId?: number,
     sourceRunId?: string,
   ) => void>;
-  handleRunCompletedRef: React.MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
-  setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
-  setStreaming: React.Dispatch<React.SetStateAction<import('../views/chat/types').ChatStreamingState>>;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
+  setCurrentRun: Setter<Run | null>;
+  setStreaming: Setter<import('../views/chat/chat-types').ChatStreamingState>;
+  setIsLoading: Setter<boolean>;
   setError: (value: string | null) => void;
   closeWebSocket: () => void;
   resetStreamingState: () => void;

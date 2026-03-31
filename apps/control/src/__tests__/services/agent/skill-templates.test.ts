@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   listSkillTemplates,
   hasSkillTemplate,
   type SkillTemplateDefinition,
 } from '@/services/agent/skill-templates';
 
-describe('listSkillTemplates', () => {
-  it('returns all official skill templates', () => {
-    const templates = listSkillTemplates();
-    expect(templates.length).toBe(7);
+
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
+  Deno.test('listSkillTemplates - returns all official skill templates', () => {
+  const templates = listSkillTemplates();
+    assertEquals(templates.length, 7);
     const ids = templates.map((t) => t.id);
-    expect(ids).toEqual([
+    assertEquals(ids, [
       'research-brief',
       'writing-draft',
       'planning-structurer',
@@ -20,51 +20,44 @@ describe('listSkillTemplates', () => {
       'repo-app-bootstrap',
       'api-worker',
     ]);
-  });
-
-  it('each template has required fields', () => {
-    const templates = listSkillTemplates();
+})
+  Deno.test('listSkillTemplates - each template has required fields', () => {
+  const templates = listSkillTemplates();
     for (const template of templates) {
-      expect(template.id).toBeTruthy();
-      expect(template.title).toBeTruthy();
-      expect(template.description).toBeTruthy();
+      assert(template.id);
+      assert(template.title);
+      assert(template.description);
     }
-  });
-
-  it('returns a copy, not the original array', () => {
-    const first = listSkillTemplates();
+})
+  Deno.test('listSkillTemplates - returns a copy, not the original array', () => {
+  const first = listSkillTemplates();
     const second = listSkillTemplates();
     first[0].title = 'MODIFIED';
-    expect(second[0].title).not.toBe('MODIFIED');
-  });
-
-  it('returns templates with correct properties', () => {
-    const templates = listSkillTemplates();
+    assertNotEquals(second[0].title, 'MODIFIED');
+})
+  Deno.test('listSkillTemplates - returns templates with correct properties', () => {
+  const templates = listSkillTemplates();
     const researchBrief = templates.find((t) => t.id === 'research-brief');
-    expect(researchBrief).toBeDefined();
-    expect(researchBrief!.title).toBe('Research Brief');
-    expect(researchBrief!.description).toContain('research');
+    assert(researchBrief !== undefined);
+    assertEquals(researchBrief!.title, 'Research Brief');
+    assertStringIncludes(researchBrief!.description, 'research');
 
     const apiWorker = templates.find((t) => t.id === 'api-worker');
-    expect(apiWorker).toBeDefined();
-    expect(apiWorker!.title).toBe('API Worker');
-  });
-});
+    assert(apiWorker !== undefined);
+    assertEquals(apiWorker!.title, 'API Worker');
+})
 
-describe('hasSkillTemplate', () => {
-  it('returns true for all known template IDs', () => {
-    expect(hasSkillTemplate('research-brief')).toBe(true);
-    expect(hasSkillTemplate('writing-draft')).toBe(true);
-    expect(hasSkillTemplate('planning-structurer')).toBe(true);
-    expect(hasSkillTemplate('slides-outline')).toBe(true);
-    expect(hasSkillTemplate('speaker-notes')).toBe(true);
-    expect(hasSkillTemplate('repo-app-bootstrap')).toBe(true);
-    expect(hasSkillTemplate('api-worker')).toBe(true);
-  });
-
-  it('returns false for unknown template IDs', () => {
-    expect(hasSkillTemplate('nonexistent')).toBe(false);
-    expect(hasSkillTemplate('')).toBe(false);
-    expect(hasSkillTemplate('RESEARCH-BRIEF')).toBe(false); // case-sensitive
-  });
-});
+  Deno.test('hasSkillTemplate - returns true for all known template IDs', () => {
+  assertEquals(hasSkillTemplate('research-brief'), true);
+    assertEquals(hasSkillTemplate('writing-draft'), true);
+    assertEquals(hasSkillTemplate('planning-structurer'), true);
+    assertEquals(hasSkillTemplate('slides-outline'), true);
+    assertEquals(hasSkillTemplate('speaker-notes'), true);
+    assertEquals(hasSkillTemplate('repo-app-bootstrap'), true);
+    assertEquals(hasSkillTemplate('api-worker'), true);
+})
+  Deno.test('hasSkillTemplate - returns false for unknown template IDs', () => {
+  assertEquals(hasSkillTemplate('nonexistent'), false);
+    assertEquals(hasSkillTemplate(''), false);
+    assertEquals(hasSkillTemplate('RESEARCH-BRIEF'), false); // case-sensitive
+})

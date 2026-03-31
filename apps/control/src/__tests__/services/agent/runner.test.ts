@@ -1,177 +1,92 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  queryRelevantThreadMessages: vi.fn(),
-  buildThreadContextSystemMessage: vi.fn(),
-  readMessageFromR2: vi.fn(),
-  getDelegationPacketFromRunInput: vi.fn(),
-  buildDelegationSystemMessage: vi.fn(),
-  buildDelegationUserMessage: vi.fn(),
-  buildTerminalPayload: vi.fn(),
-  buildRunNotifierEmitRequest: vi.fn(),
-  getRunNotifierStub: vi.fn(),
-  buildRunNotifierEmitPayload: vi.fn(),
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-  logInfo: vi.fn(),
-  safeJsonParseOrDefault: vi.fn(),
-  resolveContextWindow: vi.fn(),
-}));
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  queryRelevantThreadMessages: ((..._args: any[]) => undefined) as any,
+  buildThreadContextSystemMessage: ((..._args: any[]) => undefined) as any,
+  readMessageFromR2: ((..._args: any[]) => undefined) as any,
+  getDelegationPacketFromRunInput: ((..._args: any[]) => undefined) as any,
+  buildDelegationSystemMessage: ((..._args: any[]) => undefined) as any,
+  buildDelegationUserMessage: ((..._args: any[]) => undefined) as any,
+  buildTerminalPayload: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitRequest: ((..._args: any[]) => undefined) as any,
+  getRunNotifierStub: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitPayload: ((..._args: any[]) => undefined) as any,
+  logError: ((..._args: any[]) => undefined) as any,
+  logWarn: ((..._args: any[]) => undefined) as any,
+  logInfo: ((..._args: any[]) => undefined) as any,
+  safeJsonParseOrDefault: ((..._args: any[]) => undefined) as any,
+  resolveContextWindow: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/agent/thread-context', () => ({
-  queryRelevantThreadMessages: mocks.queryRelevantThreadMessages,
-  buildThreadContextSystemMessage: mocks.buildThreadContextSystemMessage,
-}));
-
-vi.mock('@/services/offload/messages', () => ({
-  readMessageFromR2: mocks.readMessageFromR2,
-}));
-
-vi.mock('@/services/agent/delegation', () => ({
-  getDelegationPacketFromRunInput: mocks.getDelegationPacketFromRunInput,
-  buildDelegationSystemMessage: mocks.buildDelegationSystemMessage,
-  buildDelegationUserMessage: mocks.buildDelegationUserMessage,
-}));
-
-vi.mock('@/services/run-notifier', () => ({
-  buildTerminalPayload: mocks.buildTerminalPayload,
-  buildRunNotifierEmitRequest: mocks.buildRunNotifierEmitRequest,
-  getRunNotifierStub: mocks.getRunNotifierStub,
-  buildRunNotifierEmitPayload: mocks.buildRunNotifierEmitPayload,
-}));
-
-vi.mock('@/utils/logger', () => ({
-  logDebug: vi.fn(),
-  logError: mocks.logError,
-  logWarn: mocks.logWarn,
-  logInfo: mocks.logInfo,
-  createLogger: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })),
-  safeJsonParse: vi.fn((v: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } }),
-  safeJsonParseOrDefault: vi.fn((v: unknown, d: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return d; } }),
-}));
-
-vi.mock('@/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/utils')>()),
-  safeJsonParseOrDefault: mocks.safeJsonParseOrDefault,
-}));
-
-vi.mock('@/services/agent/model-catalog', () => ({
-  DEFAULT_MODEL_ID: 'gpt-5.4-nano',
-  resolveHistoryTokenBudget: mocks.resolveContextWindow,
-}));
-
-vi.mock('@/services/agent/graph-runner', () => ({
-  runLangGraphRunner: vi.fn(),
-}));
-
-vi.mock('@/services/agent/runner-config', () => ({
-  getAgentConfig: vi.fn(() => ({
-    type: 'default',
-    systemPrompt: 'System prompt',
-    tools: [],
-  })),
-}));
-
-vi.mock('@/services/agent/prompts', () => ({
-  buildToolCatalogContent: vi.fn(() => 'tool catalog content'),
-}));
-
-vi.mock('@/services/agent/prompt-budget', () => ({
-  buildBudgetedSystemPrompt: vi.fn((_lanes: unknown[]) => 'budgeted prompt'),
-  LANE_PRIORITY: { BASE_PROMPT: 0, TOOL_CATALOG: 1, MEMORY_ACTIVATION: 2, SKILL_INSTRUCTIONS: 3, THREAD_CONTEXT: 4 },
-  LANE_MAX_TOKENS: { BASE_PROMPT: 2000, TOOL_CATALOG: 2500, MEMORY_ACTIVATION: 800, SKILL_INSTRUCTIONS: 2000, THREAD_CONTEXT: 1500 },
-}));
-
-vi.mock('@/services/agent/session-closer', () => ({
-  autoCloseSession: vi.fn(),
-}));
-
-vi.mock('@/services/agent/skills', () => ({
-  emitSkillLoadOutcome: vi.fn(),
-}));
-
-vi.mock('@/services/agent/simple-loop', () => ({
-  runWithSimpleLoop: vi.fn(),
-  runWithoutLLM: vi.fn(),
-}));
-
-vi.mock('@/services/memory-graph/runtime', () => ({
-  AgentMemoryRuntime: vi.fn(),
-}));
-
-vi.mock('@/services/agent/remote-tool-executor', () => ({
-  RemoteToolExecutor: vi.fn(),
-}));
-
-vi.mock('@/services/agent/execute-run', () => ({
-  executeRun: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/thread-context'
+// [Deno] vi.mock removed - manually stub imports from '@/services/offload/messages'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/delegation'
+// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/logger'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/model-catalog'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/graph-runner'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/runner-config'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/prompts'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/prompt-budget'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/session-closer'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/skills'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/simple-loop'
+// [Deno] vi.mock removed - manually stub imports from '@/services/memory-graph/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/remote-tool-executor'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/execute-run'
 import {
   isValidToolCallsArray,
   updateRunStatusImpl,
   buildConversationHistory,
 } from '@/services/agent/runner';
 
-describe('isValidToolCallsArray', () => {
-  it('returns true for valid tool calls', () => {
-    expect(isValidToolCallsArray([
+
+  Deno.test('isValidToolCallsArray - returns true for valid tool calls', () => {
+  assertEquals(isValidToolCallsArray([
       { id: 'tc1', name: 'file_read', arguments: { path: '/test' } },
-    ])).toBe(true);
-  });
+    ]), true);
+})
+  Deno.test('isValidToolCallsArray - returns true for empty array', () => {
+  assertEquals(isValidToolCallsArray([]), true);
+})
+  Deno.test('isValidToolCallsArray - returns false for non-array', () => {
+  assertEquals(isValidToolCallsArray('not-array'), false);
+    assertEquals(isValidToolCallsArray(null), false);
+    assertEquals(isValidToolCallsArray(undefined), false);
+})
+  Deno.test('isValidToolCallsArray - returns false when items lack required fields', () => {
+  assertEquals(isValidToolCallsArray([{ id: 'tc1' }]), false);
+    assertEquals(isValidToolCallsArray([{ id: 'tc1', name: 'tool' }]), false);
+    assertEquals(isValidToolCallsArray([{ id: 'tc1', name: 'tool', arguments: null }]), false);
+})
+  Deno.test('isValidToolCallsArray - returns false for non-object items', () => {
+  assertEquals(isValidToolCallsArray([null]), false);
+    assertEquals(isValidToolCallsArray(['string']), false);
+})
 
-  it('returns true for empty array', () => {
-    expect(isValidToolCallsArray([])).toBe(true);
-  });
-
-  it('returns false for non-array', () => {
-    expect(isValidToolCallsArray('not-array')).toBe(false);
-    expect(isValidToolCallsArray(null)).toBe(false);
-    expect(isValidToolCallsArray(undefined)).toBe(false);
-  });
-
-  it('returns false when items lack required fields', () => {
-    expect(isValidToolCallsArray([{ id: 'tc1' }])).toBe(false);
-    expect(isValidToolCallsArray([{ id: 'tc1', name: 'tool' }])).toBe(false);
-    expect(isValidToolCallsArray([{ id: 'tc1', name: 'tool', arguments: null }])).toBe(false);
-  });
-
-  it('returns false for non-object items', () => {
-    expect(isValidToolCallsArray([null])).toBe(false);
-    expect(isValidToolCallsArray(['string'])).toBe(false);
-  });
-});
-
-describe('EventEmitterState default values', () => {
-  it('has correct initial values when constructed inline', () => {
-    const state = {
+  Deno.test('EventEmitterState default values - has correct initial values when constructed inline', () => {
+  const state = {
       eventSequence: 0,
       pendingEventEmissions: 0,
       eventEmissionErrors: [] as unknown[],
     };
-    expect(state.eventSequence).toBe(0);
-    expect(state.pendingEventEmissions).toBe(0);
-    expect(state.eventEmissionErrors).toEqual([]);
-  });
-});
+    assertEquals(state.eventSequence, 0);
+    assertEquals(state.pendingEventEmissions, 0);
+    assertEquals(state.eventEmissionErrors, []);
+})
 
-describe('updateRunStatusImpl', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('updates run to running status with startedAt', async () => {
-    const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    const mockDb = { update: vi.fn().mockReturnValue({ set: updateSet }) };
-    mocks.getDb.mockReturnValue(mockDb);
+  Deno.test('updateRunStatusImpl - updates run to running status with startedAt', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateSet = (() => ({ where: (async () => undefined) }));
+    const mockDb = { update: (() => ({ set: updateSet })) };
+    mocks.getDb = (() => mockDb) as any;
 
     await updateRunStatusImpl(
       {} as any,
@@ -180,19 +95,19 @@ describe('updateRunStatusImpl', () => {
       'running',
     );
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(updateSet, 0, [
+      ({
         status: 'running',
-        startedAt: expect.any(String),
+        startedAt: /* expect.any(String) */ {} as any,
         usage: JSON.stringify({ inputTokens: 10, outputTokens: 5 }),
       }),
-    );
-  });
-
-  it('updates run to completed status with completedAt', async () => {
-    const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    const mockDb = { update: vi.fn().mockReturnValue({ set: updateSet }) };
-    mocks.getDb.mockReturnValue(mockDb);
+    ]);
+})
+  Deno.test('updateRunStatusImpl - updates run to completed status with completedAt', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateSet = (() => ({ where: (async () => undefined) }));
+    const mockDb = { update: (() => ({ set: updateSet })) };
+    mocks.getDb = (() => mockDb) as any;
 
     await updateRunStatusImpl(
       {} as any,
@@ -202,19 +117,19 @@ describe('updateRunStatusImpl', () => {
       'output data',
     );
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(updateSet, 0, [
+      ({
         status: 'completed',
-        completedAt: expect.any(String),
+        completedAt: /* expect.any(String) */ {} as any,
         output: 'output data',
       }),
-    );
-  });
-
-  it('updates run to failed status with error', async () => {
-    const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    const mockDb = { update: vi.fn().mockReturnValue({ set: updateSet }) };
-    mocks.getDb.mockReturnValue(mockDb);
+    ]);
+})
+  Deno.test('updateRunStatusImpl - updates run to failed status with error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateSet = (() => ({ where: (async () => undefined) }));
+    const mockDb = { update: (() => ({ set: updateSet })) };
+    mocks.getDb = (() => mockDb) as any;
 
     await updateRunStatusImpl(
       {} as any,
@@ -225,20 +140,20 @@ describe('updateRunStatusImpl', () => {
       'Error message',
     );
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(updateSet, 0, [
+      ({
         status: 'failed',
-        completedAt: expect.any(String),
+        completedAt: /* expect.any(String) */ {} as any,
         error: 'Error message',
       }),
-    );
-  });
-
-  it('uses simple id-only WHERE for cancelled status (no != cancelled guard)', async () => {
-    const mockWhere = vi.fn().mockResolvedValue(undefined);
-    const updateSet = vi.fn().mockReturnValue({ where: mockWhere });
-    const mockDb = { update: vi.fn().mockReturnValue({ set: updateSet }) };
-    mocks.getDb.mockReturnValue(mockDb);
+    ]);
+})
+  Deno.test('updateRunStatusImpl - uses simple id-only WHERE for cancelled status (no != cancelled guard)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockWhere = (async () => undefined);
+    const updateSet = (() => ({ where: mockWhere }));
+    const mockDb = { update: (() => ({ set: updateSet })) };
+    mocks.getDb = (() => mockDb) as any;
 
     await updateRunStatusImpl(
       {} as any,
@@ -247,18 +162,18 @@ describe('updateRunStatusImpl', () => {
       'cancelled',
     );
 
-    expect(updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(updateSet, 0, [
+      ({
         status: 'cancelled',
-        completedAt: expect.any(String),
+        completedAt: /* expect.any(String) */ {} as any,
       }),
-    );
+    ]);
 
     // For cancelled: condition = eq(runs.id, runId) — flat queryChunks with just `= `
     // For non-cancelled: condition = and(eq(...), sql`... != 'cancelled'`) — nested with `( ... and ... )`
-    const whereArg = mockWhere.mock.calls[0][0];
-    expect(whereArg).toBeDefined();
-    expect(whereArg.queryChunks).toBeDefined();
+    const whereArg = mockWhere.calls[0][0];
+    assert(whereArg !== undefined);
+    assert(whereArg.queryChunks !== undefined);
 
     // Serialise queryChunks recursively to find all string values
     function collectValues(chunks: unknown[]): string[] {
@@ -275,15 +190,15 @@ describe('updateRunStatusImpl', () => {
     const allValues = collectValues(whereArg.queryChunks);
     const joined = allValues.join('');
     // The cancelled branch should NOT contain 'and' or "!= 'cancelled'" — just eq()
-    expect(joined).not.toContain(' and ');
-    expect(joined).not.toContain("!= 'cancelled'");
-  });
-
-  it('includes != cancelled guard in WHERE for non-cancelled statuses', async () => {
-    const mockWhere = vi.fn().mockResolvedValue(undefined);
-    const updateSet = vi.fn().mockReturnValue({ where: mockWhere });
-    const mockDb = { update: vi.fn().mockReturnValue({ set: updateSet }) };
-    mocks.getDb.mockReturnValue(mockDb);
+    assert(!(joined).includes(' and '));
+    assert(!(joined).includes("!= 'cancelled'"));
+})
+  Deno.test('updateRunStatusImpl - includes != cancelled guard in WHERE for non-cancelled statuses', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockWhere = (async () => undefined);
+    const updateSet = (() => ({ where: mockWhere }));
+    const mockDb = { update: (() => ({ set: updateSet })) };
+    mocks.getDb = (() => mockDb) as any;
 
     await updateRunStatusImpl(
       {} as any,
@@ -293,9 +208,9 @@ describe('updateRunStatusImpl', () => {
       'done',
     );
 
-    const whereArg = mockWhere.mock.calls[0][0];
-    expect(whereArg).toBeDefined();
-    expect(whereArg.queryChunks).toBeDefined();
+    const whereArg = mockWhere.calls[0][0];
+    assert(whereArg !== undefined);
+    assert(whereArg.queryChunks !== undefined);
 
     function collectValues(chunks: unknown[]): string[] {
       const values: string[] = [];
@@ -311,41 +226,35 @@ describe('updateRunStatusImpl', () => {
     const allValues = collectValues(whereArg.queryChunks);
     const joined = allValues.join('');
     // Non-cancelled statuses wrap with and() and include the != 'cancelled' guard
-    expect(joined).toContain(' and ');
-    expect(joined).toContain("!= 'cancelled'");
-  });
-});
+    assertStringIncludes(joined, ' and ');
+    assertStringIncludes(joined, "!= 'cancelled'");
+})
 
-describe('buildConversationHistory', () => {
   function makeDbMock(selectGetResults: unknown[], selectAllResults: unknown[]) {
     let getIndex = 0;
     let allIndex = 0;
     const chain = () => {
       const c: Record<string, unknown> = {};
-      c.from = vi.fn().mockReturnValue(c);
-      c.where = vi.fn().mockReturnValue(c);
-      c.orderBy = vi.fn().mockReturnValue(c);
-      c.limit = vi.fn().mockReturnValue(c);
-      c.all = vi.fn(async () => selectAllResults[allIndex++] ?? []);
-      c.get = vi.fn(async () => selectGetResults[getIndex++] ?? null);
+      c.from = (() => c);
+      c.where = (() => c);
+      c.orderBy = (() => c);
+      c.limit = (() => c);
+      c.all = async () => selectAllResults[allIndex++] ?? [];
+      c.get = async () => selectGetResults[getIndex++] ?? null;
       return c;
     };
     return {
-      select: vi.fn().mockImplementation(() => chain()),
+      select: () => chain(),
     };
   }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.queryRelevantThreadMessages.mockResolvedValue([]);
-    mocks.buildThreadContextSystemMessage.mockReturnValue(null);
-    mocks.getDelegationPacketFromRunInput.mockReturnValue(null);
-    mocks.safeJsonParseOrDefault.mockReturnValue({});
-    mocks.resolveContextWindow.mockReturnValue(50);
-  });
-
-  it('builds conversation from messages in the thread', async () => {
-    mocks.getDb.mockReturnValue(makeDbMock(
+  Deno.test('buildConversationHistory - builds conversation from messages in the thread', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+    mocks.getDelegationPacketFromRunInput = (() => null) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
+    mocks.resolveContextWindow = (() => 50) as any;
+  mocks.getDb = (() => makeDbMock(
       [
         { summary: 'Thread summary', keyPoints: '["point1"]' },
         null, // run row (no parent)
@@ -356,7 +265,7 @@ describe('buildConversationHistory', () => {
           { id: 'msg2', role: 'assistant', content: 'Hi there!', r2Key: null, toolCalls: null, toolCallId: null, metadata: '{}', sequence: 1 },
         ],
       ],
-    ));
+    )) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -367,13 +276,18 @@ describe('buildConversationHistory', () => {
       aiModel: 'gpt-5.4-mini',
     });
 
-    expect(history.length).toBeGreaterThanOrEqual(2);
-    expect(history.find((m) => m.content === 'Hello')).toBeTruthy();
-    expect(history.find((m) => m.content === 'Hi there!')).toBeTruthy();
-  });
-
-  it('builds delegated child context from delegation packet', async () => {
-    mocks.getDb.mockReturnValue(makeDbMock(
+    assert(history.length >= 2);
+    assert(history.find((m) => m.content === 'Hello'));
+    assert(history.find((m) => m.content === 'Hi there!'));
+})
+  Deno.test('buildConversationHistory - builds delegated child context from delegation packet', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+    mocks.getDelegationPacketFromRunInput = (() => null) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
+    mocks.resolveContextWindow = (() => 50) as any;
+  mocks.getDb = (() => makeDbMock(
       [
         { summary: null, keyPoints: '[]' },
         {
@@ -398,9 +312,9 @@ describe('buildConversationHistory', () => {
         },
       ],
       [[]],
-    ));
+    )) as any;
 
-    mocks.getDelegationPacketFromRunInput.mockReturnValue({
+    mocks.getDelegationPacketFromRunInput = (() => ({
       task: 'Implement the fix',
       goal: 'Fix the bug',
       product_hint: 'takos',
@@ -414,17 +328,17 @@ describe('buildConversationHistory', () => {
       deliverable: 'Code changes',
       thread_summary: 'Bug fix',
       thread_key_points: [],
-    });
+    })) as any;
 
-    mocks.buildDelegationSystemMessage.mockReturnValue({
+    mocks.buildDelegationSystemMessage = (() => ({
       role: 'system',
       content: 'Delegated execution context:\nGoal: Fix the bug',
-    });
+    })) as any;
 
-    mocks.buildDelegationUserMessage.mockReturnValue({
+    mocks.buildDelegationUserMessage = (() => ({
       role: 'user',
       content: '[Delegated sub-task from parent agent (run: parent-run)]\n\nImplement the fix',
-    });
+    })) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -435,16 +349,21 @@ describe('buildConversationHistory', () => {
       aiModel: 'gpt-5.4-mini',
     });
 
-    expect(history[0]?.content).toContain('Delegated execution context');
-    expect(history.some((m) => m.content.includes('Implement the fix'))).toBe(true);
-  });
-
-  it('parses tool_calls from stored messages', async () => {
-    const toolCallsJson = JSON.stringify([
+    assertStringIncludes(history[0]?.content, 'Delegated execution context');
+    assertEquals(history.some((m) => m.content.includes('Implement the fix')), true);
+})
+  Deno.test('buildConversationHistory - parses tool_calls from stored messages', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+    mocks.getDelegationPacketFromRunInput = (() => null) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
+    mocks.resolveContextWindow = (() => 50) as any;
+  const toolCallsJson = JSON.stringify([
       { id: 'tc1', name: 'file_read', arguments: { path: '/test' } },
     ]);
 
-    mocks.getDb.mockReturnValue(makeDbMock(
+    mocks.getDb = (() => makeDbMock(
       [
         { summary: null, keyPoints: '[]' },
         null,
@@ -454,7 +373,7 @@ describe('buildConversationHistory', () => {
           { id: 'msg1', role: 'assistant', content: 'calling tool', r2Key: null, toolCalls: toolCallsJson, toolCallId: null, metadata: '{}', sequence: 0 },
         ],
       ],
-    ));
+    )) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -466,12 +385,17 @@ describe('buildConversationHistory', () => {
     });
 
     const assistantMsg = history.find((m) => m.role === 'assistant');
-    expect(assistantMsg?.tool_calls).toBeDefined();
-    expect(assistantMsg?.tool_calls?.[0].name).toBe('file_read');
-  });
-
-  it('handles malformed tool_calls JSON gracefully', async () => {
-    mocks.getDb.mockReturnValue(makeDbMock(
+    assert(assistantMsg?.tool_calls !== undefined);
+    assertEquals(assistantMsg?.tool_calls?.[0].name, 'file_read');
+})
+  Deno.test('buildConversationHistory - handles malformed tool_calls JSON gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+    mocks.getDelegationPacketFromRunInput = (() => null) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
+    mocks.resolveContextWindow = (() => 50) as any;
+  mocks.getDb = (() => makeDbMock(
       [
         { summary: null, keyPoints: '[]' },
         null,
@@ -481,7 +405,7 @@ describe('buildConversationHistory', () => {
           { id: 'msg1', role: 'assistant', content: 'msg', r2Key: null, toolCalls: 'not-json', toolCallId: null, metadata: '{}', sequence: 0 },
         ],
       ],
-    ));
+    )) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -493,17 +417,22 @@ describe('buildConversationHistory', () => {
     });
 
     const msg = history.find((m) => m.role === 'assistant');
-    expect(msg?.tool_calls).toBeUndefined();
-    expect(mocks.logWarn).toHaveBeenCalled();
-  });
-
-  it('prepends thread context when available', async () => {
-    mocks.buildThreadContextSystemMessage.mockReturnValue({
+    assertEquals(msg?.tool_calls, undefined);
+    assert(mocks.logWarn.calls.length > 0);
+})
+  Deno.test('buildConversationHistory - prepends thread context when available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+    mocks.getDelegationPacketFromRunInput = (() => null) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
+    mocks.resolveContextWindow = (() => 50) as any;
+  mocks.buildThreadContextSystemMessage = (() => ({
       role: 'system',
       content: '[THREAD_CONTEXT] Test context [/THREAD_CONTEXT]',
-    });
+    })) as any;
 
-    mocks.getDb.mockReturnValue(makeDbMock(
+    mocks.getDb = (() => makeDbMock(
       [
         { summary: 'Summary', keyPoints: '["point"]' },
         null,
@@ -513,7 +442,7 @@ describe('buildConversationHistory', () => {
           { id: 'msg1', role: 'user', content: 'Hello', r2Key: null, toolCalls: null, toolCallId: null, metadata: '{}', sequence: 0 },
         ],
       ],
-    ));
+    )) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -524,7 +453,6 @@ describe('buildConversationHistory', () => {
       aiModel: 'gpt-5.4-nano',
     });
 
-    expect(history[0]?.role).toBe('system');
-    expect(history[0]?.content).toContain('THREAD_CONTEXT');
-  });
-});
+    assertEquals(history[0]?.role, 'system');
+    assertStringIncludes(history[0]?.content, 'THREAD_CONTEXT');
+})

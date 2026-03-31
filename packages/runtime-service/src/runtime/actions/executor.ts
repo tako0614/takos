@@ -1,24 +1,24 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { pushLog } from '../logging.js';
-import { validateCommand } from '../validation.js';
-import { SANDBOX_LIMITS } from '../../shared/config.js';
-import * as builtinActions from './builtin/index.js';
+import { pushLog } from '../logging.ts';
+import { validateCommand } from '../validation.ts';
+import { SANDBOX_LIMITS } from '../../shared/config.ts';
+import * as builtinActions from './builtin/index.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { resolvePathWithin } from '../paths.js';
+import { resolvePathWithin } from '../paths.ts';
 import {
   failureResult,
   successResult,
   spawnWithTimeout,
-} from './process-spawner.js';
+} from './process-spawner.ts';
 import {
   executeCompositeAction,
   isPathWithin,
   type ActionRuns,
   type ActionOutputDefinition,
-} from './composite-executor.js';
-import { appendOutput, buildCombinedResult } from './action-result-converter.js';
-import { parseKeyValueFile, parsePathFile } from './file-parsers.js';
+} from './composite-executor.ts';
+import { appendOutput, buildCombinedResult } from './action-result-converter.ts';
+import { parseKeyValueFile, parsePathFile } from './file-parsers.ts';
 import {
   fetchMarketplaceRepo,
   type ActionRefInfo,
@@ -27,7 +27,7 @@ import {
   validateActionComponent,
   resolveInputs,
   buildInputEnv,
-} from './action-registry.js';
+} from './action-registry.ts';
 
 export interface ExecutorStepResult {
   exitCode: number;
@@ -149,7 +149,7 @@ export class StepExecutor {
         this.env[name] = value;
       },
       addPath: (pathToAdd: string) => {
-        this.env.PATH = pathToAdd + path.delimiter + (this.env.PATH || process.env.PATH || '');
+        this.env.PATH = pathToAdd + path.delimiter + (this.env.PATH || Deno.env.get('PATH') || '');
       },
     };
   }

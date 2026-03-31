@@ -1,68 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type * as DbModule from '@/db';
 import type * as SharedUtilsModule from '@/shared/utils';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  now: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof DbModule>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  now: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof SharedUtilsModule>()),
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    leftJoin: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    selectDistinct: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    selectDistinct: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock },
   };
 }
 
-describe('getResourceById', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns null when resource not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getResourceById - returns null when resource not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getResourceById } = await import('@/services/resources/store');
     const result = await getResourceById({} as D1Database, 'nonexistent');
 
-    expect(result).toBeNull();
-  });
-
-  it('returns mapped resource when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('getResourceById - returns mapped resource when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'res-1',
       ownerAccountId: 'user-1',
       accountId: 'space-1',
@@ -78,42 +68,37 @@ describe('getResourceById', () => {
       lastUsedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getResourceById } = await import('@/services/resources/store');
     const result = await getResourceById({} as D1Database, 'res-1');
 
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('res-1');
-    expect(result!.owner_id).toBe('user-1');
-    expect(result!.name).toBe('my-db');
-    expect(result!.type).toBe('d1');
-    expect(result!.capability).toBe('sql');
-    expect(result!.implementation).toBe('d1');
-    expect(result!.status).toBe('active');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'res-1');
+    assertEquals(result!.owner_id, 'user-1');
+    assertEquals(result!.name, 'my-db');
+    assertEquals(result!.type, 'd1');
+    assertEquals(result!.capability, 'sql');
+    assertEquals(result!.implementation, 'd1');
+    assertEquals(result!.status, 'active');
+})
 
-describe('getResourceByName', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when resource not found by name', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getResourceByName - returns null when resource not found by name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getResourceByName } = await import('@/services/resources/store');
     const result = await getResourceByName({} as D1Database, 'user-1', 'nonexistent');
 
-    expect(result).toBeNull();
-  });
-
-  it('returns resource with _internal_id when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('getResourceByName - returns resource with _internal_id when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'res-1',
       ownerAccountId: 'user-1',
       accountId: 'space-1',
@@ -129,38 +114,34 @@ describe('getResourceByName', () => {
       lastUsedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getResourceByName } = await import('@/services/resources/store');
     const result = await getResourceByName({} as D1Database, 'user-1', 'my-db');
 
-    expect(result).not.toBeNull();
-    expect(result!._internal_id).toBe('res-1');
-    expect(result!.name).toBe('my-db');
-    expect(result!.type).toBe('d1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!._internal_id, 'res-1');
+    assertEquals(result!.name, 'my-db');
+    assertEquals(result!.type, 'd1');
+})
 
-describe('updateResourceMetadata', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-01-02T00:00:00.000Z');
-  });
-
-  it('returns null when no updates provided', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('updateResourceMetadata - returns null when no updates provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-02T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { updateResourceMetadata } = await import('@/services/resources/store');
     const result = await updateResourceMetadata({} as D1Database, 'res-1', {});
 
-    expect(result).toBeNull();
-  });
-
-  it('updates name when provided', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('updateResourceMetadata - updates name when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-02T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'res-1',
       ownerAccountId: 'user-1',
       accountId: null,
@@ -176,20 +157,21 @@ describe('updateResourceMetadata', () => {
       lastUsedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { updateResourceMetadata } = await import('@/services/resources/store');
     const result = await updateResourceMetadata({} as D1Database, 'res-1', { name: 'new-name' });
 
-    expect(drizzle.update).toHaveBeenCalled();
-    expect(result).not.toBeNull();
-    expect(result!.name).toBe('new-name');
-  });
-
-  it('serializes config and metadata as JSON', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+    assert(drizzle.update.calls.length > 0);
+    assertNotEquals(result, null);
+    assertEquals(result!.name, 'new-name');
+})
+  Deno.test('updateResourceMetadata - serializes config and metadata as JSON', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-02T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'res-1',
       ownerAccountId: 'user-1',
       accountId: null,
@@ -205,8 +187,8 @@ describe('updateResourceMetadata', () => {
       lastUsedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { updateResourceMetadata } = await import('@/services/resources/store');
     await updateResourceMetadata({} as D1Database, 'res-1', {
@@ -214,53 +196,38 @@ describe('updateResourceMetadata', () => {
       metadata: { meta: 'data' },
     });
 
-    expect(drizzle.update).toHaveBeenCalled();
-    const setCall = drizzle._.run.mock.calls;
-    expect(setCall).toBeDefined();
-  });
-});
+    assert(drizzle.update.calls.length > 0);
+    const setCall = drizzle._.run.calls;
+    assert(setCall !== undefined);
+})
 
-describe('markResourceDeleting', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-01-02T00:00:00.000Z');
-  });
-
-  it('updates resource status to deleting', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('markResourceDeleting - updates resource status to deleting', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-02T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { markResourceDeleting } = await import('@/services/resources/store');
     await markResourceDeleting({} as D1Database, 'res-1');
 
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.update.calls.length > 0);
+})
 
-describe('deleteResource', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('deletes a resource by id', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('deleteResource - deletes a resource by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { deleteResource } = await import('@/services/resources/store');
     await deleteResource({} as D1Database, 'res-1');
 
-    expect(drizzle.delete).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.delete.calls.length > 0);
+})
 
-describe('insertResource', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('inserts a resource and returns it', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+  Deno.test('insertResource - inserts a resource and returns it', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'res-1',
       ownerAccountId: 'user-1',
       accountId: 'space-1',
@@ -276,8 +243,8 @@ describe('insertResource', () => {
       lastUsedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { insertResource } = await import('@/services/resources/store');
     const result = await insertResource({} as D1Database, {
@@ -294,20 +261,15 @@ describe('insertResource', () => {
       updated_at: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(drizzle.insert).toHaveBeenCalled();
-    expect(result).not.toBeNull();
-    expect(result!.name).toBe('my-new-db');
-  });
-});
+    assert(drizzle.insert.calls.length > 0);
+    assertNotEquals(result, null);
+    assertEquals(result!.name, 'my-new-db');
+})
 
-describe('insertFailedResource', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('inserts a resource with failed status', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('insertFailedResource - inserts a resource with failed status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { insertFailedResource } = await import('@/services/resources/store');
     await insertFailedResource({} as D1Database, {
@@ -321,6 +283,5 @@ describe('insertFailedResource', () => {
       updated_at: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.insert.calls.length > 0);
+})

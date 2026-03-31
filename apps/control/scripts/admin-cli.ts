@@ -308,5 +308,5 @@ async function main(): Promise<void> {
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`Error: ${sanitizeErrorMessage(message)}`);
-  process.exit(1);
+  Deno.exit(1);
 });

@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
   generateVerificationToken,
   generateDomainId,
@@ -6,131 +5,103 @@ import {
   normalizeDomain,
 } from '@/utils/domain-validation';
 
-describe('generateVerificationToken', () => {
-  it('returns a 64-char hex string', () => {
-    const token = generateVerificationToken();
-    expect(token).toHaveLength(64);
-    expect(token).toMatch(/^[0-9a-f]{64}$/);
-  });
 
-  it('generates different tokens each call', () => {
-    const t1 = generateVerificationToken();
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+
+  Deno.test('generateVerificationToken - returns a 64-char hex string', () => {
+  const token = generateVerificationToken();
+    assertEquals(token.length, 64);
+    assert(/^[0-9a-f]{64}$/.test(token));
+})
+  Deno.test('generateVerificationToken - generates different tokens each call', () => {
+  const t1 = generateVerificationToken();
     const t2 = generateVerificationToken();
-    expect(t1).not.toBe(t2);
-  });
-});
+    assertNotEquals(t1, t2);
+})
 
-describe('generateDomainId', () => {
-  it('starts with "dom_" prefix', () => {
-    const id = generateDomainId();
-    expect(id.startsWith('dom_')).toBe(true);
-  });
-
-  it('has correct total length (4 prefix + 32 hex chars)', () => {
-    const id = generateDomainId();
-    expect(id).toHaveLength(4 + 32);
-  });
-
-  it('hex portion is valid hex', () => {
-    const id = generateDomainId();
+  Deno.test('generateDomainId - starts with "dom_" prefix', () => {
+  const id = generateDomainId();
+    assertEquals(id.startsWith('dom_'), true);
+})
+  Deno.test('generateDomainId - has correct total length (4 prefix + 32 hex chars)', () => {
+  const id = generateDomainId();
+    assertEquals(id.length, 4 + 32);
+})
+  Deno.test('generateDomainId - hex portion is valid hex', () => {
+  const id = generateDomainId();
     const hex = id.slice(4);
-    expect(hex).toMatch(/^[0-9a-f]{32}$/);
-  });
-
-  it('generates unique IDs', () => {
-    const id1 = generateDomainId();
+    assert(/^[0-9a-f]{32}$/.test(hex));
+})
+  Deno.test('generateDomainId - generates unique IDs', () => {
+  const id1 = generateDomainId();
     const id2 = generateDomainId();
-    expect(id1).not.toBe(id2);
-  });
-});
+    assertNotEquals(id1, id2);
+})
 
-describe('isValidDomain', () => {
-  it('accepts a valid two-label domain', () => {
-    expect(isValidDomain('example.com')).toBe(true);
-  });
+  Deno.test('isValidDomain - accepts a valid two-label domain', () => {
+  assertEquals(isValidDomain('example.com'), true);
+})
+  Deno.test('isValidDomain - accepts a valid multi-label domain', () => {
+  assertEquals(isValidDomain('sub.example.com'), true);
+})
+  Deno.test('isValidDomain - accepts domains with trailing dot (FQDN)', () => {
+  assertEquals(isValidDomain('example.com.'), true);
+})
+  Deno.test('isValidDomain - rejects empty string', () => {
+  assertEquals(isValidDomain(''), false);
+})
+  Deno.test('isValidDomain - rejects single-label domain (no dots)', () => {
+  assertEquals(isValidDomain('localhost'), false);
+})
+  Deno.test('isValidDomain - rejects domain exceeding 253 characters', () => {
+  const long = 'a'.repeat(250) + '.com';
+    assertEquals(isValidDomain(long), false);
+})
+  Deno.test('isValidDomain - rejects label exceeding 63 characters', () => {
+  const longLabel = 'a'.repeat(64) + '.com';
+    assertEquals(isValidDomain(longLabel), false);
+})
+  Deno.test('isValidDomain - accepts label at exactly 63 characters', () => {
+  const maxLabel = 'a'.repeat(63) + '.com';
+    assertEquals(isValidDomain(maxLabel), true);
+})
+  Deno.test('isValidDomain - rejects empty label (consecutive dots)', () => {
+  assertEquals(isValidDomain('example..com'), false);
+})
+  Deno.test('isValidDomain - rejects label starting with hyphen', () => {
+  assertEquals(isValidDomain('-example.com'), false);
+})
+  Deno.test('isValidDomain - rejects label ending with hyphen', () => {
+  assertEquals(isValidDomain('example-.com'), false);
+})
+  Deno.test('isValidDomain - accepts label with hyphens in the middle', () => {
+  assertEquals(isValidDomain('my-example.com'), true);
+})
+  Deno.test('isValidDomain - rejects label with underscores', () => {
+  assertEquals(isValidDomain('my_example.com'), false);
+})
+  Deno.test('isValidDomain - rejects domain with spaces', () => {
+  assertEquals(isValidDomain('my domain.com'), false);
+})
+  Deno.test('isValidDomain - accepts numeric labels', () => {
+  assertEquals(isValidDomain('123.456'), true);
+})
+  Deno.test('isValidDomain - accepts mixed case (labels are case-insensitive)', () => {
+  assertEquals(isValidDomain('Example.COM'), true);
+})
 
-  it('accepts a valid multi-label domain', () => {
-    expect(isValidDomain('sub.example.com')).toBe(true);
-  });
-
-  it('accepts domains with trailing dot (FQDN)', () => {
-    expect(isValidDomain('example.com.')).toBe(true);
-  });
-
-  it('rejects empty string', () => {
-    expect(isValidDomain('')).toBe(false);
-  });
-
-  it('rejects single-label domain (no dots)', () => {
-    expect(isValidDomain('localhost')).toBe(false);
-  });
-
-  it('rejects domain exceeding 253 characters', () => {
-    const long = 'a'.repeat(250) + '.com';
-    expect(isValidDomain(long)).toBe(false);
-  });
-
-  it('rejects label exceeding 63 characters', () => {
-    const longLabel = 'a'.repeat(64) + '.com';
-    expect(isValidDomain(longLabel)).toBe(false);
-  });
-
-  it('accepts label at exactly 63 characters', () => {
-    const maxLabel = 'a'.repeat(63) + '.com';
-    expect(isValidDomain(maxLabel)).toBe(true);
-  });
-
-  it('rejects empty label (consecutive dots)', () => {
-    expect(isValidDomain('example..com')).toBe(false);
-  });
-
-  it('rejects label starting with hyphen', () => {
-    expect(isValidDomain('-example.com')).toBe(false);
-  });
-
-  it('rejects label ending with hyphen', () => {
-    expect(isValidDomain('example-.com')).toBe(false);
-  });
-
-  it('accepts label with hyphens in the middle', () => {
-    expect(isValidDomain('my-example.com')).toBe(true);
-  });
-
-  it('rejects label with underscores', () => {
-    expect(isValidDomain('my_example.com')).toBe(false);
-  });
-
-  it('rejects domain with spaces', () => {
-    expect(isValidDomain('my domain.com')).toBe(false);
-  });
-
-  it('accepts numeric labels', () => {
-    expect(isValidDomain('123.456')).toBe(true);
-  });
-
-  it('accepts mixed case (labels are case-insensitive)', () => {
-    expect(isValidDomain('Example.COM')).toBe(true);
-  });
-});
-
-describe('normalizeDomain', () => {
-  it('lowercases the domain', () => {
-    expect(normalizeDomain('EXAMPLE.COM')).toBe('example.com');
-  });
-
-  it('trims whitespace', () => {
-    expect(normalizeDomain('  example.com  ')).toBe('example.com');
-  });
-
-  it('removes trailing dots', () => {
-    expect(normalizeDomain('example.com.')).toBe('example.com');
-  });
-
-  it('removes multiple trailing dots', () => {
-    expect(normalizeDomain('example.com...')).toBe('example.com');
-  });
-
-  it('handles combined normalization', () => {
-    expect(normalizeDomain('  Example.COM.  ')).toBe('example.com');
-  });
-});
+  Deno.test('normalizeDomain - lowercases the domain', () => {
+  assertEquals(normalizeDomain('EXAMPLE.COM'), 'example.com');
+})
+  Deno.test('normalizeDomain - trims whitespace', () => {
+  assertEquals(normalizeDomain('  example.com  '), 'example.com');
+})
+  Deno.test('normalizeDomain - removes trailing dots', () => {
+  assertEquals(normalizeDomain('example.com.'), 'example.com');
+})
+  Deno.test('normalizeDomain - removes multiple trailing dots', () => {
+  assertEquals(normalizeDomain('example.com...'), 'example.com');
+})
+  Deno.test('normalizeDomain - handles combined normalization', () => {
+  assertEquals(normalizeDomain('  Example.COM.  '), 'example.com');
+})

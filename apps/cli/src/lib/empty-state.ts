@@ -4,7 +4,7 @@
  * Used by entity modules (resource, worker, container, service) when no
  * existing state file is found and a fresh state needs to be created.
  */
-import type { TakosState } from './state/state-types.js';
+import type { TakosState } from './state/state-types.ts';
 
 export function createEmptyState(opts: { group: string; env: string; groupName?: string }): TakosState {
   return {

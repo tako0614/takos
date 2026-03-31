@@ -1,17 +1,17 @@
 import type { Context } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { WORKDIR_BASE_DIR } from '../../shared/config.js';
+import { WORKDIR_BASE_DIR } from '../../shared/config.ts';
 import {
   getRepoPath,
   resolveWorkDirPath,
   verifyNoSymlinkPathComponents,
   verifyPathWithinBeforeCreate,
   verifyPathWithinAfterAccess,
-} from '../../runtime/paths.js';
-import { validateGitRef, validateGitPath } from '../../runtime/validation.js';
+} from '../../runtime/paths.ts';
+import { validateGitRef, validateGitPath } from '../../runtime/validation.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { isBoundaryViolationError } from '../../shared/errors.js';
+import { isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, notFound } from 'takos-common/middleware/hono';
 
 // --- getVerifiedRepoPath ---

@@ -88,7 +88,7 @@ if (sortedViolations.length > 0) {
       ...sortedViolations.map((filePath) => ` - ${filePath}`),
     ].join("\n")
   );
-  process.exit(1);
+  Deno.exit(1);
 }
 
 console.log("No package-lock.json files found under pnpm-managed roots.");

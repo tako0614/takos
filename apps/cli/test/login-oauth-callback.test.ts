@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
 import {
   OAUTH_CALLBACK_FAILURE_CODES,
   resolveCallbackParams,
   validateCallbackPayload,
-} from '../src/commands/oauth-callback-validation.js';
+} from '../src/commands/oauth-callback-validation.ts';
 
-describe('resolveCallbackParams', () => {
-  it('parses POST json body as canonical callback data', () => {
-    const result = resolveCallbackParams({
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('resolveCallbackParams - parses POST json body as canonical callback data', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/json; charset=utf-8',
       body: JSON.stringify({
@@ -16,57 +17,53 @@ describe('resolveCallbackParams', () => {
       }),
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: 'token-from-body',
       state: 'state-from-body',
       error: null,
     });
-  });
-
-  it('parses POST form payload as canonical callback data', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - parses POST form payload as canonical callback data', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/x-www-form-urlencoded',
       body: 'token=token-from-form&state=state-from-form',
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: 'token-from-form',
       state: 'state-from-form',
       error: null,
     });
-  });
-
-  it('fails closed for GET callback payload', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - fails closed for GET callback payload', () => {
+  const result = resolveCallbackParams({
       method: 'GET',
       contentType: '',
       body: null,
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: null,
       state: null,
       error: 'Invalid callback payload',
     });
-  });
-
-  it('fails closed for malformed POST json payload', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - fails closed for malformed POST json payload', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/json',
       body: '{"token":"token",',
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: null,
       state: null,
       error: 'Invalid callback payload',
     });
-  });
-
-  it('fails closed when callback payload fields are not strings', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - fails closed when callback payload fields are not strings', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/json',
       body: JSON.stringify({
@@ -75,15 +72,14 @@ describe('resolveCallbackParams', () => {
       }),
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: null,
       state: null,
       error: 'Invalid callback payload',
     });
-  });
-
-  it('fails closed when callback payload contains control characters', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - fails closed when callback payload contains control characters', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/json',
       body: JSON.stringify({
@@ -92,15 +88,14 @@ describe('resolveCallbackParams', () => {
       }),
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: null,
       state: null,
       error: 'Invalid callback payload',
     });
-  });
-
-  it('fails closed when callback payload field is too long', () => {
-    const result = resolveCallbackParams({
+})
+  Deno.test('resolveCallbackParams - fails closed when callback payload field is too long', () => {
+  const result = resolveCallbackParams({
       method: 'POST',
       contentType: 'application/json',
       body: JSON.stringify({
@@ -109,31 +104,28 @@ describe('resolveCallbackParams', () => {
       }),
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       token: null,
       state: null,
       error: 'Invalid callback payload',
     });
-  });
-});
+})
 
-describe('validateCallbackPayload', () => {
-  it('returns payload error before state/token validation', () => {
-    const result = validateCallbackPayload(
+  Deno.test('validateCallbackPayload - returns payload error before state/token validation', () => {
+  const result = validateCallbackPayload(
       { token: null, state: null, error: 'Invalid callback payload' },
       'expected-state',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.CALLBACK_ERROR,
       pageMessage: 'Invalid callback payload',
       logMessage: 'Invalid callback payload',
     });
-  });
-
-  it('prioritizes invalid state over callback error injection', () => {
-    const result = validateCallbackPayload(
+})
+  Deno.test('validateCallbackPayload - prioritizes invalid state over callback error injection', () => {
+  const result = validateCallbackPayload(
       {
         token: 'token',
         state: 'wrong-state',
@@ -142,16 +134,15 @@ describe('validateCallbackPayload', () => {
       'expected-state',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.INVALID_STATE,
       pageMessage: 'Invalid state parameter - possible CSRF attack.',
       logMessage: 'Invalid state parameter (CSRF protection triggered)',
     });
-  });
-
-  it('fails closed for invalid state', () => {
-    const result = validateCallbackPayload(
+})
+  Deno.test('validateCallbackPayload - fails closed for invalid state', () => {
+  const result = validateCallbackPayload(
       {
         token: 'token',
         state: 'wrong-state',
@@ -160,16 +151,15 @@ describe('validateCallbackPayload', () => {
       'expected-state',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.INVALID_STATE,
       pageMessage: 'Invalid state parameter - possible CSRF attack.',
       logMessage: 'Invalid state parameter (CSRF protection triggered)',
     });
-  });
-
-  it('fails closed when token is missing', () => {
-    const result = validateCallbackPayload(
+})
+  Deno.test('validateCallbackPayload - fails closed when token is missing', () => {
+  const result = validateCallbackPayload(
       {
         token: null,
         state: 'expected-state',
@@ -178,16 +168,15 @@ describe('validateCallbackPayload', () => {
       'expected-state',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: false,
       code: OAUTH_CALLBACK_FAILURE_CODES.MISSING_TOKEN,
       pageMessage: 'No token received',
       logMessage: 'No token received',
     });
-  });
-
-  it('accepts valid callback payload', () => {
-    const result = validateCallbackPayload(
+})
+  Deno.test('validateCallbackPayload - accepts valid callback payload', () => {
+  const result = validateCallbackPayload(
       {
         token: 'token',
         state: 'expected-state',
@@ -196,9 +185,8 @@ describe('validateCallbackPayload', () => {
       'expected-state',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: true,
       token: 'token',
     });
-  });
-});
+})

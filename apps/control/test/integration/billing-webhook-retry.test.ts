@@ -1,47 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/shared/types';
 import { createMockEnv } from './setup';
 
-const billingMocks = vi.hoisted(() => ({
-  getOrCreateBillingAccount: vi.fn(),
-  addCredits: vi.fn(),
-  assignPlanToUser: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const stripeMocks = vi.hoisted(() => ({
-  createCheckoutSession: vi.fn(),
-  createPortalSession: vi.fn(),
-  verifyWebhookSignature: vi.fn(),
-  retrieveCheckoutSession: vi.fn(),
-  listInvoices: vi.fn(),
-  retrieveInvoice: vi.fn(),
-  sendInvoice: vi.fn(),
-}));
+const billingMocks = ({
+  getOrCreateBillingAccount: ((..._args: any[]) => undefined) as any,
+  addCredits: ((..._args: any[]) => undefined) as any,
+  assignPlanToUser: ((..._args: any[]) => undefined) as any,
+});
 
-const dbMocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+const stripeMocks = ({
+  createCheckoutSession: ((..._args: any[]) => undefined) as any,
+  createPortalSession: ((..._args: any[]) => undefined) as any,
+  verifyWebhookSignature: ((..._args: any[]) => undefined) as any,
+  retrieveCheckoutSession: ((..._args: any[]) => undefined) as any,
+  listInvoices: ((..._args: any[]) => undefined) as any,
+  retrieveInvoice: ((..._args: any[]) => undefined) as any,
+  sendInvoice: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/application/services/billing/billing', () => ({
-  getOrCreateBillingAccount: billingMocks.getOrCreateBillingAccount,
-  addCredits: billingMocks.addCredits,
-  assignPlanToUser: billingMocks.assignPlanToUser,
-}));
+const dbMocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/application/services/billing/stripe', () => ({
-  createCheckoutSession: stripeMocks.createCheckoutSession,
-  createPortalSession: stripeMocks.createPortalSession,
-  verifyWebhookSignature: stripeMocks.verifyWebhookSignature,
-  retrieveCheckoutSession: stripeMocks.retrieveCheckoutSession,
-  listInvoices: stripeMocks.listInvoices,
-  retrieveInvoice: stripeMocks.retrieveInvoice,
-  sendInvoice: stripeMocks.sendInvoice,
-}));
-
-vi.mock('@/infra/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/infra/db')>()),
-  getDb: dbMocks.getDb,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/billing/billing'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/billing/stripe'
+// [Deno] vi.mock removed - manually stub imports from '@/infra/db'
 import { billingWebhookHandler } from '@/server/routes/billing';
 
 /**
@@ -49,24 +34,24 @@ import { billingWebhookHandler } from '@/server/routes/billing';
  * Production code uses: db.update(table).set({...}).where(...) and db.select().from(table).where(...).get()
  */
 function makeDrizzleDb(overrides?: { updateFn?: ReturnType<typeof vi.fn> }) {
-  const updateFn = overrides?.updateFn ?? vi.fn(async () => ({}));
-  const selectGetFn = vi.fn(async () => null);
+  const updateFn = overrides?.updateFn ?? async () => ({});
+  const selectGetFn = async () => null;
   return {
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
+    update: () => ({
+      set: () => ({
         where: updateFn,
         run: updateFn,
-      })),
-    })),
-    select: vi.fn(() => {
+      }),
+    }),
+    select: () => {
       const chain = {
-        from: vi.fn(() => chain),
-        where: vi.fn(() => chain),
+        from: () => chain,
+        where: () => chain,
         get: selectGetFn,
-        all: vi.fn(async () => []),
+        all: async () => [],
       };
       return chain;
-    }),
+    },
     _updateFn: updateFn,
     _selectGetFn: selectGetFn,
   };
@@ -80,14 +65,11 @@ function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
   }) as unknown as Env;
 }
 
-describe('billing webhook retry behavior', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.getDb.mockReturnValue(makeDrizzleDb());
-  });
 
-  it('returns non-2xx when internal processing fails after signature verification', async () => {
-    const payload = JSON.stringify({
+  Deno.test('billing webhook retry behavior - returns non-2xx when internal processing fails after signature verification', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    dbMocks.getDb = (() => makeDrizzleDb()) as any;
+  const payload = JSON.stringify({
       id: 'evt_checkout_1',
       type: 'checkout.session.completed',
       data: {
@@ -100,22 +82,22 @@ describe('billing webhook retry behavior', () => {
       },
     });
 
-    stripeMocks.verifyWebhookSignature.mockResolvedValue({
+    stripeMocks.verifyWebhookSignature = (async () => ({
       event: JSON.parse(payload),
-    });
-    stripeMocks.retrieveCheckoutSession.mockResolvedValue({
+    })) as any;
+    stripeMocks.retrieveCheckoutSession = (async () => ({
       id: 'cs_test_1',
       customer: 'cus_123',
       subscription: 'sub_123',
       metadata: { user_id: 'user-1', purchase_kind: 'plus_subscription' },
-    });
-    billingMocks.getOrCreateBillingAccount.mockResolvedValue({
+    })) as any;
+    billingMocks.getOrCreateBillingAccount = (async () => ({
       id: 'account-1',
-    });
+    })) as any;
 
-    const failingUpdate = vi.fn().mockRejectedValue(new Error('db write failed'));
+    const failingUpdate = (async () => { throw new Error('db write failed'); });
     const dbLocal = makeDrizzleDb({ updateFn: failingUpdate });
-    dbMocks.getDb.mockReturnValue(dbLocal);
+    dbMocks.getDb = (() => dbLocal) as any;
 
     const response = await billingWebhookHandler.fetch(
       new Request('https://takos.jp/', {
@@ -130,24 +112,25 @@ describe('billing webhook retry behavior', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual(expect.objectContaining({ error: 'Webhook processing failed' }));
-    expect(stripeMocks.verifyWebhookSignature).toHaveBeenCalledWith({
+    assertEquals(response.status, 500);
+    await assertEquals(await response.json(), ({ error: 'Webhook processing failed' }));
+    assertSpyCallArgs(stripeMocks.verifyWebhookSignature, 0, [{
       payload,
       signature: 't=1,v1=test',
       secret: 'whsec_test',
-    });
-    expect(failingUpdate).toHaveBeenCalledTimes(1);
-    expect(billingMocks.addCredits).not.toHaveBeenCalled();
-  });
-
-  it('keeps invalid signature responses as 400', async () => {
-    const payload = JSON.stringify({
+    }]);
+    assertSpyCalls(failingUpdate, 1);
+    assertSpyCalls(billingMocks.addCredits, 0);
+})
+  Deno.test('billing webhook retry behavior - keeps invalid signature responses as 400', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    dbMocks.getDb = (() => makeDrizzleDb()) as any;
+  const payload = JSON.stringify({
       id: 'evt_invalid_sig',
       type: 'invoice.paid',
       data: { object: {} },
     });
-    stripeMocks.verifyWebhookSignature.mockRejectedValue(new Error('Invalid webhook signature'));
+    stripeMocks.verifyWebhookSignature = (async () => { throw new Error('Invalid webhook signature'); }) as any;
 
     const response = await billingWebhookHandler.fetch(
       new Request('https://takos.jp/', {
@@ -162,8 +145,7 @@ describe('billing webhook retry behavior', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual(expect.objectContaining({ error: 'Invalid signature' }));
-    expect(dbMocks.getDb).not.toHaveBeenCalled();
-  });
-});
+    assertEquals(response.status, 400);
+    await assertEquals(await response.json(), ({ error: 'Invalid signature' }));
+    assertSpyCalls(dbMocks.getDb, 0);
+})

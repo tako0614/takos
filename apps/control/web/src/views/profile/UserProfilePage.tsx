@@ -50,76 +50,76 @@ export function UserProfilePage({
     hasMore,
   } = useUserProfile(username);
 
-  if (loading) {
+  if (loading()) {
     return <ProfileLoadingState />;
   }
 
-  if (error) {
-    return <ProfileErrorState message={error} onBack={onBack} />;
+  if (error()) {
+    return <ProfileErrorState message={error()!} onBack={onBack} />;
   }
 
-  if (!profile) return null;
+  if (!profile()) return null;
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900 overflow-auto">
+    <div class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900 overflow-auto">
       <ProfileHeader
-        profile={profile}
+        profile={profile()!}
         onBack={onBack}
         onSelectTab={setActiveTab}
         onToggleFollow={toggleFollow}
-        followLoading={followLoading}
+        followLoading={followLoading()}
         onToggleBlock={toggleBlock}
         onToggleMute={toggleMute}
-        blockLoading={blockLoading}
-        muteLoading={muteLoading}
+        blockLoading={blockLoading()}
+        muteLoading={muteLoading()}
       />
 
       <ProfileTabs
-        activeTab={activeTab}
-        profile={profile}
+        activeTab={activeTab()}
+        profile={profile()!}
         onSelectTab={setActiveTab}
-        requestsCount={followRequests.length}
+        requestsCount={followRequests().length}
       />
 
-      <div className="flex-1 p-6">
-        {activeTab === 'repositories' && (
+      <div class="flex-1 p-6">
+        {activeTab() === 'repositories' && (
           <ProfileReposTab
-            repos={repos}
+            repos={repos()}
             onSelectRepo={(repoName) => onNavigateToRepo?.(username, repoName)}
             onStarToggle={toggleRepoStar}
-            starringRepo={starringRepo}
+            starringRepo={starringRepo()}
           />
         )}
 
-        {activeTab === 'stars' && (
+        {activeTab() === 'stars' && (
           <ProfileStarsTab
-            starredRepos={starredRepos}
+            starredRepos={starredRepos()}
             onSelectRepo={(repoName) => onNavigateToRepo?.(username, repoName)}
             onStarToggle={toggleRepoStar}
-            starringRepo={starringRepo}
+            starringRepo={starringRepo()}
           />
         )}
 
-        {activeTab === 'activity' && (
-          activityError ? (
-            <div className="p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
-              {activityError}
+        {activeTab() === 'activity' && (
+          activityError() ? (
+            <div class="p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+              {activityError()}
             </div>
           ) : (
             <ProfileActivityTab
-              events={activityEvents}
+              events={activityEvents()}
               onNavigateToRepo={(ownerUsername, repoName) => onNavigateToRepo?.(ownerUsername, repoName)}
             />
           )
         )}
 
-        {activeTab === 'followers' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">Sort:</span>
+        {activeTab() === 'followers' && (
+          <div class="space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-zinc-500 dark:text-zinc-400">Sort:</span>
               <select
-                className="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
-                value={followersSort}
+                class="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
+                value={followersSort()}
                 onChange={(e) => {
                   const nextSort = e.target.value;
                   setFollowersSortKey(nextSort === 'username' ? 'username' : 'created');
@@ -130,7 +130,7 @@ export function UserProfilePage({
               </select>
             </div>
             <ProfileUserList
-              users={followers}
+              users={followers()}
               emptyTitle="No followers yet"
               emptyIcon={<ProfileEmptyIcon />}
               onNavigateToProfile={onNavigateToProfile}
@@ -139,13 +139,13 @@ export function UserProfilePage({
           </div>
         )}
 
-        {activeTab === 'following' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">Sort:</span>
+        {activeTab() === 'following' && (
+          <div class="space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-zinc-500 dark:text-zinc-400">Sort:</span>
               <select
-                className="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
-                value={followingSort}
+                class="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
+                value={followingSort()}
                 onChange={(e) => {
                   const nextSort = e.target.value;
                   setFollowingSortKey(nextSort === 'username' ? 'username' : 'created');
@@ -156,7 +156,7 @@ export function UserProfilePage({
               </select>
             </div>
             <ProfileUserList
-              users={following}
+              users={following()}
               emptyTitle="Not following anyone yet"
               emptyIcon={<ProfileEmptyIcon />}
               onNavigateToProfile={onNavigateToProfile}
@@ -165,23 +165,23 @@ export function UserProfilePage({
           </div>
         )}
 
-        {activeTab === 'requests' && (
+        {activeTab() === 'requests' && (
           <ProfileRequestsTab
-            requests={followRequests}
-            actionLoadingId={requestActionLoadingId}
+            requests={followRequests()}
+            actionLoadingId={requestActionLoadingId()}
             onAccept={acceptFollowRequest}
             onReject={rejectFollowRequest}
             onNavigateToProfile={onNavigateToProfile}
           />
         )}
 
-        {tabLoading && (
-          <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white rounded-full animate-spin" />
+        {tabLoading() && (
+          <div class="flex justify-center py-8">
+            <div class="w-6 h-6 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white rounded-full animate-spin" />
           </div>
         )}
 
-        {hasMore && !tabLoading && <ProfileLoadMoreButton onLoadMore={loadMore} />}
+        {hasMore() && !tabLoading() && <ProfileLoadMoreButton onLoadMore={loadMore} />}
       </div>
     </div>
   );

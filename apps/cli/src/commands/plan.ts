@@ -13,15 +13,15 @@
  *   takos plan --offline
  */
 import type { Command } from 'commander';
-import chalk from 'chalk';
-import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
-import { cliExit } from '../lib/command-exit.js';
-import { api } from '../lib/api.js';
-import { resolveSpaceId } from '../lib/cli-utils.js';
-import { formatPlan } from '../lib/state/plan.js';
-import type { DiffResult } from '../lib/state/diff.js';
-import type { TakosState } from '../lib/state/state-types.js';
-import { printTranslationReport, type TranslationReport } from '../lib/translation-report.js';
+import { bold, dim, green, red, yellow } from '@std/fmt/colors';
+import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.ts';
+import { cliExit } from '../lib/command-exit.ts';
+import { api } from '../lib/api.ts';
+import { resolveSpaceId } from '../lib/cli-utils.ts';
+import { formatPlan } from '../lib/state/plan.ts';
+import type { DiffResult } from '../lib/state/diff.ts';
+import type { TakosState } from '../lib/state/state-types.ts';
+import { printTranslationReport, type TranslationReport } from '../lib/translation-report.ts';
 
 type PlanByNameResponse = {
   group: { id: string; name: string };
@@ -54,8 +54,8 @@ function parseGroupProvider(raw?: string): GroupProviderName | undefined {
 
 /** Offline fallback: compute diff locally (original logic). */
 async function handlePlanOffline(manifest: Awaited<ReturnType<typeof loadAppManifest>>, manifestPath: string, options: PlanCommandOptions): Promise<void> {
-  const { readState, getStateDir } = await import('../lib/state/state-file.js');
-  const { computeDiff } = await import('../lib/state/diff.js');
+  const { readState, getStateDir } = await import('../lib/state/state-file.ts');
+  const { computeDiff } = await import('../lib/state/diff.ts');
 
   const group = options.group || manifest.metadata.name;
   let currentState: TakosState | null = null;
@@ -68,7 +68,7 @@ async function handlePlanOffline(manifest: Awaited<ReturnType<typeof loadAppMani
   const diff = computeDiff(manifest, currentState);
 
   console.log('');
-  console.log(chalk.bold(`Plan: ${manifest.metadata.name}`));
+  console.log(bold(`Plan: ${manifest.metadata.name}`));
   console.log(`  Environment: ${options.env}`);
   console.log(`  Manifest:    ${manifestPath}`);
   console.log(`  Mode:        offline`);
@@ -79,10 +79,10 @@ async function handlePlanOffline(manifest: Awaited<ReturnType<typeof loadAppMani
 
   const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
   if (totalChanges === 0) {
-    console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
+    console.log(green('No changes. Infrastructure is up-to-date.'));
   } else {
-    console.log(chalk.yellow(`Plan: ${totalChanges} change(s) detected.`));
-    console.log(chalk.dim('Run `takos apply` to apply these changes.'));
+    console.log(yellow(`Plan: ${totalChanges} change(s) detected.`));
+    console.log(dim('Run `takos apply` to apply these changes.'));
   }
 }
 
@@ -104,7 +104,7 @@ export function registerPlanCommand(program: Command): void {
           ? options.manifest
           : await resolveAppManifestPath(process.cwd());
       } catch {
-        console.log(chalk.red('No .takos/app.yml found. Specify --manifest or run from a project root.'));
+        console.log(red('No .takos/app.yml found. Specify --manifest or run from a project root.'));
         cliExit(1);
       }
 
@@ -113,7 +113,7 @@ export function registerPlanCommand(program: Command): void {
         manifest = await loadAppManifest(manifestPath);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Invalid manifest: ${message}`));
+        console.log(red(`Invalid manifest: ${message}`));
         cliExit(1);
       }
 
@@ -121,7 +121,7 @@ export function registerPlanCommand(program: Command): void {
       try {
         provider = parseGroupProvider(options.provider);
       } catch (error) {
-        console.log(chalk.red(error instanceof Error ? error.message : 'Invalid provider'));
+        console.log(red(error instanceof Error ? error.message : 'Invalid provider'));
         cliExit(1);
       }
 
@@ -145,7 +145,7 @@ export function registerPlanCommand(program: Command): void {
       });
 
       if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(red(`Error: ${res.error}`));
         cliExit(1);
       }
 
@@ -153,7 +153,7 @@ export function registerPlanCommand(program: Command): void {
       const translationReport = res.data.translationReport;
 
       console.log('');
-      console.log(chalk.bold(`Plan: ${manifest.metadata.name}`));
+      console.log(bold(`Plan: ${manifest.metadata.name}`));
       console.log(`  Environment: ${options.env}`);
       console.log(`  Manifest:    ${manifestPath}`);
       console.log('');
@@ -165,10 +165,10 @@ export function registerPlanCommand(program: Command): void {
 
       const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
       if (totalChanges === 0) {
-        console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
+        console.log(green('No changes. Infrastructure is up-to-date.'));
       } else {
-        console.log(chalk.yellow(`Plan: ${totalChanges} change(s) detected.`));
-        console.log(chalk.dim('Run `takos apply` to apply these changes.'));
+        console.log(yellow(`Plan: ${totalChanges} change(s) detected.`));
+        console.log(dim('Run `takos apply` to apply these changes.'));
       }
 
       if (!translationReport.supported) {

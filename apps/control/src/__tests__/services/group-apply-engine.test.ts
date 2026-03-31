@@ -1,86 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assert, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  groupGet: vi.fn(),
-  listResources: vi.fn(),
-  createResource: vi.fn(),
-  updateManagedResource: vi.fn(),
-  listGroupManagedServices: vi.fn(),
-  upsertGroupManagedService: vi.fn(),
-  createDeployment: vi.fn(),
-  executeDeployment: vi.fn(),
-  reconcileGroupRouting: vi.fn(),
-  groupUpdateRun: vi.fn(),
-  getDeploymentById: vi.fn(),
-  getBundleContent: vi.fn(),
-}));
+const mocks = ({
+  groupGet: ((..._args: any[]) => undefined) as any,
+  listResources: ((..._args: any[]) => undefined) as any,
+  createResource: ((..._args: any[]) => undefined) as any,
+  updateManagedResource: ((..._args: any[]) => undefined) as any,
+  listGroupManagedServices: ((..._args: any[]) => undefined) as any,
+  upsertGroupManagedService: ((..._args: any[]) => undefined) as any,
+  createDeployment: ((..._args: any[]) => undefined) as any,
+  executeDeployment: ((..._args: any[]) => undefined) as any,
+  reconcileGroupRouting: ((..._args: any[]) => undefined) as any,
+  groupUpdateRun: ((..._args: any[]) => undefined) as any,
+  getDeploymentById: ((..._args: any[]) => undefined) as any,
+  getBundleContent: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/infra/db/client', () => ({
-  getDb: () => ({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          get: mocks.groupGet,
-        }),
-      }),
-    }),
-    update: () => ({
-      set: () => ({
-        where: () => ({
-          run: mocks.groupUpdateRun,
-        }),
-      }),
-    }),
-  }),
-}));
-
-vi.mock('@/services/entities/resource-ops', () => ({
-  createResource: mocks.createResource,
-  deleteResource: vi.fn(),
-  listResources: mocks.listResources,
-  updateManagedResource: mocks.updateManagedResource,
-}));
-
-vi.mock('@/services/entities/group-managed-services', () => ({
-  listGroupManagedServices: mocks.listGroupManagedServices,
-  upsertGroupManagedService: mocks.upsertGroupManagedService,
-}));
-
-vi.mock('@/services/entities/worker-ops', () => ({
-  deleteWorker: vi.fn(),
-}));
-
-vi.mock('@/services/entities/container-ops', () => ({
-  deleteContainer: vi.fn(),
-}));
-
-vi.mock('@/services/entities/service-ops', () => ({
-  deleteService: vi.fn(),
-}));
-
-vi.mock('@/services/deployment/group-managed-desired-state', () => ({
-  syncGroupManagedDesiredState: vi.fn().mockResolvedValue([]),
-}));
-
-vi.mock('@/services/deployment/service', () => ({
-  DeploymentService: vi.fn().mockImplementation(() => ({
-    createDeployment: mocks.createDeployment,
-    executeDeployment: mocks.executeDeployment,
-  })),
-}));
-
-vi.mock('@/services/deployment/store', () => ({
-  getDeploymentById: mocks.getDeploymentById,
-}));
-
-vi.mock('@/services/deployment/artifact-io', () => ({
-  getBundleContent: mocks.getBundleContent,
-}));
-
-vi.mock('@/services/deployment/group-routing', () => ({
-  reconcileGroupRouting: mocks.reconcileGroupRouting,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/infra/db/client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/entities/resource-ops'
+// [Deno] vi.mock removed - manually stub imports from '@/services/entities/group-managed-services'
+// [Deno] vi.mock removed - manually stub imports from '@/services/entities/worker-ops'
+// [Deno] vi.mock removed - manually stub imports from '@/services/entities/container-ops'
+// [Deno] vi.mock removed - manually stub imports from '@/services/entities/service-ops'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-managed-desired-state'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/service'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/store'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/artifact-io'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-routing'
 import { applyManifest, getGroupState, planManifest } from '@/services/deployment/apply-engine';
 
 function makeManifest() {
@@ -109,19 +55,16 @@ function makeManifest() {
   };
 }
 
-describe('group apply engine', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.reconcileGroupRouting.mockResolvedValue({ routes: {}, failedRoutes: [] });
-    mocks.groupUpdateRun.mockResolvedValue(undefined);
-    mocks.createResource.mockResolvedValue(undefined);
-    mocks.updateManagedResource.mockResolvedValue(undefined);
-  });
 
-  it('plans against canonical group resources/services state', async () => {
-    const desiredSpecJson = JSON.stringify(makeManifest());
+  Deno.test('group apply engine - plans against canonical group resources/services state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.reconcileGroupRouting = (async () => ({ routes: {}, failedRoutes: [] })) as any;
+    mocks.groupUpdateRun = (async () => undefined) as any;
+    mocks.createResource = (async () => undefined) as any;
+    mocks.updateManagedResource = (async () => undefined) as any;
+  const desiredSpecJson = JSON.stringify(makeManifest());
 
-    mocks.groupGet.mockResolvedValue({
+    mocks.groupGet = (async () => ({
       id: 'group-1',
       spaceId: 'ws-1',
       name: 'demo-app',
@@ -134,9 +77,9 @@ describe('group apply engine', () => {
       lastAppliedAt: '2026-03-29T00:00:00.000Z',
       createdAt: '2026-03-29T00:00:00.000Z',
       updatedAt: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.listResources.mockResolvedValue([]);
-    mocks.listGroupManagedServices.mockResolvedValue([
+    })) as any;
+    mocks.listResources = (async () => []) as any;
+    mocks.listGroupManagedServices = (async () => [
         {
           row: {
             id: 'svc-api',
@@ -176,26 +119,30 @@ describe('group apply engine', () => {
           deployedAt: '2026-03-29T00:00:00.000Z',
         },
       },
-    ]);
+    ]) as any;
 
     const result = await planManifest({ DB: {} as never } as never, 'group-1', makeManifest() as never);
 
-    expect(result.diff.hasChanges).toBe(false);
-    expect(result.diff.summary).toEqual({
+    assertEquals(result.diff.hasChanges, false);
+    assertEquals(result.diff.summary, {
       create: 0,
       update: 0,
       delete: 0,
       unchanged: 2,
     });
-    expect(result.translationReport.provider).toBe('cloudflare');
-    expect(result.translationReport.resources).toEqual([]);
-    expect(result.translationReport.workloads).toEqual([
-      expect.objectContaining({ name: 'api', category: 'worker', provider: 'workers-dispatch', status: 'native' }),
+    assertEquals(result.translationReport.provider, 'cloudflare');
+    assertEquals(result.translationReport.resources, []);
+    assertEquals(result.translationReport.workloads, [
+      ({ name: 'api', category: 'worker', provider: 'workers-dispatch', status: 'native' }),
     ]);
-  });
-
-  it('derives observed routes from desiredSpecJson instead of stored observedStateJson', async () => {
-    mocks.groupGet.mockResolvedValue({
+})
+  Deno.test('group apply engine - derives observed routes from desiredSpecJson instead of stored observedStateJson', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.reconcileGroupRouting = (async () => ({ routes: {}, failedRoutes: [] })) as any;
+    mocks.groupUpdateRun = (async () => undefined) as any;
+    mocks.createResource = (async () => undefined) as any;
+    mocks.updateManagedResource = (async () => undefined) as any;
+  mocks.groupGet = (async () => ({
       id: 'group-1',
       spaceId: 'ws-1',
       name: 'demo-app',
@@ -208,9 +155,9 @@ describe('group apply engine', () => {
       lastAppliedAt: '2026-03-29T00:00:00.000Z',
       createdAt: '2026-03-29T00:00:00.000Z',
       updatedAt: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.listResources.mockResolvedValue([]);
-    mocks.listGroupManagedServices.mockResolvedValue([
+    })) as any;
+    mocks.listResources = (async () => []) as any;
+    mocks.listGroupManagedServices = (async () => [
       {
         row: {
           id: 'svc-api',
@@ -240,20 +187,24 @@ describe('group apply engine', () => {
           specFingerprint: JSON.stringify(makeManifest().spec.workers.api),
         },
       },
-    ]);
+    ]) as any;
 
     const state = await getGroupState({ DB: {} as never } as never, 'group-1');
 
-    expect(state?.routes['api-route']).toMatchObject({
+    assertObjectMatch(state?.routes['api-route'], {
       path: '/api',
       url: 'https://grp-group-1-production-worker-api.example.test/api',
     });
-    expect(state?.routes['api-route']?.url).toContain('/api');
-  });
-
-  it('applies worker workloads through deployment service and routing reconcile', async () => {
-    const manifest = makeManifest();
-    mocks.groupGet.mockResolvedValue({
+    assertStringIncludes(state?.routes['api-route']?.url, '/api');
+})
+  Deno.test('group apply engine - applies worker workloads through deployment service and routing reconcile', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.reconcileGroupRouting = (async () => ({ routes: {}, failedRoutes: [] })) as any;
+    mocks.groupUpdateRun = (async () => undefined) as any;
+    mocks.createResource = (async () => undefined) as any;
+    mocks.updateManagedResource = (async () => undefined) as any;
+  const manifest = makeManifest();
+    mocks.groupGet = (async () => ({
       id: 'group-1',
       spaceId: 'ws-1',
       name: 'demo-app',
@@ -266,11 +217,11 @@ describe('group apply engine', () => {
       lastAppliedAt: '2026-03-29T00:00:00.000Z',
       createdAt: '2026-03-29T00:00:00.000Z',
       updatedAt: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.listResources.mockResolvedValue([]);
+    })) as any;
+    mocks.listResources = (async () => []) as any;
     mocks.listGroupManagedServices
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+       = (async () => []) as any
+       = (async () => [
         {
           row: {
             id: 'svc-api',
@@ -297,8 +248,8 @@ describe('group apply engine', () => {
             specFingerprint: JSON.stringify(manifest.spec.workers?.api),
           },
         },
-      ])
-      .mockResolvedValue([
+      ]) as any
+       = (async () => [
         {
           row: {
             id: 'svc-api',
@@ -326,8 +277,8 @@ describe('group apply engine', () => {
             deployedAt: '2026-03-29T00:00:01.000Z',
           },
         },
-      ]);
-    mocks.upsertGroupManagedService.mockResolvedValue({
+      ]) as any;
+    mocks.upsertGroupManagedService = (async () => ({
       row: {
         id: 'svc-api',
         accountId: 'ws-1',
@@ -352,16 +303,16 @@ describe('group apply engine', () => {
         componentKind: 'worker',
         specFingerprint: JSON.stringify(manifest.spec.workers?.api),
       },
-    });
-    mocks.createDeployment.mockResolvedValue({
+    })) as any;
+    mocks.createDeployment = (async () => ({
       id: 'dep-1',
-    });
-    mocks.executeDeployment.mockResolvedValue({
+    })) as any;
+    mocks.executeDeployment = (async () => ({
       id: 'dep-1',
       completed_at: '2026-03-29T00:00:01.000Z',
       provider_state_json: '{}',
       bundle_hash: 'sha256:demo',
-    });
+    })) as any;
 
     const result = await applyManifest({ DB: {} as never } as never, 'group-1', manifest as never, {
       artifacts: {
@@ -372,20 +323,24 @@ describe('group apply engine', () => {
       },
     });
 
-    expect(mocks.createDeployment).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(mocks.createDeployment, 0, [({
       serviceId: 'svc-api',
       artifactKind: 'worker-bundle',
       provider: { name: 'workers-dispatch' },
-    }));
-    expect(mocks.executeDeployment).toHaveBeenCalledWith('dep-1');
-    expect(mocks.reconcileGroupRouting).toHaveBeenCalled();
-    expect(result.applied).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'api', category: 'worker', status: 'success' }),
+    })]);
+    assertSpyCallArgs(mocks.executeDeployment, 0, ['dep-1']);
+    assert(mocks.reconcileGroupRouting.calls.length > 0);
+    assertEquals(result.applied, ([
+      ({ name: 'api', category: 'worker', status: 'success' }),
     ]));
-  });
-
-  it('resolves worker bundle artifacts from desired manifest direct-artifact references', async () => {
-    const manifest = {
+})
+  Deno.test('group apply engine - resolves worker bundle artifacts from desired manifest direct-artifact references', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.reconcileGroupRouting = (async () => ({ routes: {}, failedRoutes: [] })) as any;
+    mocks.groupUpdateRun = (async () => undefined) as any;
+    mocks.createResource = (async () => undefined) as any;
+    mocks.updateManagedResource = (async () => undefined) as any;
+  const manifest = {
       ...makeManifest(),
       spec: {
         ...makeManifest().spec,
@@ -401,7 +356,7 @@ describe('group apply engine', () => {
       },
     };
 
-    mocks.groupGet.mockResolvedValue({
+    mocks.groupGet = (async () => ({
       id: 'group-1',
       spaceId: 'ws-1',
       name: 'demo-app',
@@ -414,22 +369,22 @@ describe('group apply engine', () => {
       lastAppliedAt: '2026-03-29T00:00:00.000Z',
       createdAt: '2026-03-29T00:00:00.000Z',
       updatedAt: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.listResources.mockResolvedValue([]);
+    })) as any;
+    mocks.listResources = (async () => []) as any;
     mocks.listGroupManagedServices
-      .mockResolvedValue([]);
-    mocks.upsertGroupManagedService.mockResolvedValue({
+       = (async () => []) as any;
+    mocks.upsertGroupManagedService = (async () => ({
       row: { id: 'svc-api', routeRef: 'grp-api', updatedAt: '2026-03-29T00:00:00.000Z' },
       config: {},
-    });
-    mocks.getDeploymentById.mockResolvedValue({
+    })) as any;
+    mocks.getDeploymentById = (async () => ({
       id: 'dep-source',
       bundle_r2_key: 'deployments/svc-api/7/bundle.js',
       bundle_hash: null,
       bundle_size: null,
-    });
-    mocks.getBundleContent.mockResolvedValue('export default { fetch() { return new Response("ok"); } };');
-    mocks.createDeployment.mockResolvedValue({
+    })) as any;
+    mocks.getBundleContent = (async () => 'export default { fetch() { return new Response("ok"); } };') as any;
+    mocks.createDeployment = (async () => ({
       id: 'dep-2',
       version: 2,
       status: 'pending',
@@ -438,24 +393,28 @@ describe('group apply engine', () => {
       routing_status: 'active',
       routing_weight: 100,
       created_at: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.executeDeployment.mockResolvedValue({
+    })) as any;
+    mocks.executeDeployment = (async () => ({
       provider_state_json: '{}',
       completed_at: '2026-03-29T00:00:00.000Z',
       bundle_hash: 'sha256-123',
-    });
+    })) as any;
 
     await applyManifest({ DB: {} as never, WORKER_BUNDLES: {} as never } as never, 'group-1');
 
-    expect(mocks.getDeploymentById).toHaveBeenCalledWith({} as never, 'dep-source');
-    expect(mocks.getBundleContent).toHaveBeenCalled();
-    expect(mocks.createDeployment).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(mocks.getDeploymentById, 0, [{} as never, 'dep-source']);
+    assert(mocks.getBundleContent.calls.length > 0);
+    assertSpyCallArgs(mocks.createDeployment, 0, [({
       bundleContent: expect.stringContaining('export default'),
-    }));
-  });
-
-  it('passes canonical resource specs into resource creation', async () => {
-    const manifest = {
+    })]);
+})
+  Deno.test('group apply engine - passes canonical resource specs into resource creation', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.reconcileGroupRouting = (async () => ({ routes: {}, failedRoutes: [] })) as any;
+    mocks.groupUpdateRun = (async () => undefined) as any;
+    mocks.createResource = (async () => undefined) as any;
+    mocks.updateManagedResource = (async () => undefined) as any;
+  const manifest = {
       apiVersion: 'takos.dev/v1alpha1',
       kind: 'App',
       metadata: { name: 'demo-app' },
@@ -473,7 +432,7 @@ describe('group apply engine', () => {
       },
     };
 
-    mocks.groupGet.mockResolvedValue({
+    mocks.groupGet = (async () => ({
       id: 'group-1',
       spaceId: 'ws-1',
       name: 'demo-app',
@@ -486,20 +445,19 @@ describe('group apply engine', () => {
       lastAppliedAt: '2026-03-29T00:00:00.000Z',
       createdAt: '2026-03-29T00:00:00.000Z',
       updatedAt: '2026-03-29T00:00:00.000Z',
-    });
-    mocks.listResources.mockResolvedValue([]);
-    mocks.listGroupManagedServices.mockResolvedValue([]);
+    })) as any;
+    mocks.listResources = (async () => []) as any;
+    mocks.listGroupManagedServices = (async () => []) as any;
 
     await applyManifest({ DB: {} as never } as never, 'group-1', manifest as never);
 
-    expect(mocks.createResource).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.createResource, 0, [
       expect.anything(),
       'group-1',
       'events',
-      expect.objectContaining({
+      ({
         type: 'analyticsEngine',
         spec: manifest.spec.resources.events,
       }),
-    );
-  });
-});
+    ]);
+})

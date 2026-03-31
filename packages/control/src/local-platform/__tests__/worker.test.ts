@@ -1,48 +1,38 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryQueue } from '../in-memory-bindings.ts';
 import { LOCAL_QUEUE_NAMES } from '../queue-runtime.ts';
 
-const queueSpy = vi.hoisted(() => vi.fn());
-const scheduledSpy = vi.hoisted(() => vi.fn());
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('../../runtime/worker/index.ts', () => ({
-  createWorkerRuntime: () => ({
-    queue: queueSpy,
-    scheduled: scheduledSpy,
-  }),
-  default: {
-    queue: queueSpy,
-    scheduled: scheduledSpy,
-  },
-}));
+const queueSpy = ((..._args: any[]) => undefined) as any;
+const scheduledSpy = ((..._args: any[]) => undefined) as any;
 
+// [Deno] vi.mock removed - manually stub imports from '../../runtime/worker/index.ts'
 import { runLocalWorkerIteration } from '../worker.ts';
 
-describe('local worker loop', () => {
-  beforeEach(() => {
-    queueSpy.mockReset();
-    scheduledSpy.mockReset();
-  });
 
-  it('acks and drains a local queue message', async () => {
-    queueSpy.mockImplementation(async (batch: { messages: Array<{ ack(): void }> }) => {
+  Deno.test('local worker loop - acks and drains a local queue message', async () => {
+  queueSpy;
+    scheduledSpy;
+  queueSpy = async (batch: { messages: Array<{ ack(): void }> }) => {
       batch.messages[0].ack();
-    });
+    } as any;
 
     const queue = createInMemoryQueue(LOCAL_QUEUE_NAMES.run) as ReturnType<typeof createInMemoryQueue> & { receive(): Promise<unknown> };
     await queue.send({ runId: 'run-1' });
 
     const worked = await runLocalWorkerIteration({} as never, [queue as never]);
 
-    expect(worked).toBe(true);
-    await expect(queue.receive()).resolves.toBeNull();
-    expect(queueSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('requeues with incremented attempts when a handler retries', async () => {
-    queueSpy.mockImplementation(async (batch: { messages: Array<{ retry(): void }> }) => {
+    assertEquals(worked, true);
+    await assertEquals(await queue.receive(), null);
+    assertSpyCalls(queueSpy, 1);
+})
+  Deno.test('local worker loop - requeues with incremented attempts when a handler retries', async () => {
+  queueSpy;
+    scheduledSpy;
+  queueSpy = async (batch: { messages: Array<{ retry(): void }> }) => {
       batch.messages[0].retry();
-    });
+    } as any;
 
     const queue = createInMemoryQueue(LOCAL_QUEUE_NAMES.run) as ReturnType<typeof createInMemoryQueue> & {
       receive(): Promise<{ attempts?: number } | null>;
@@ -52,15 +42,16 @@ describe('local worker loop', () => {
     const worked = await runLocalWorkerIteration({} as never, [queue as never]);
     const retried = await queue.receive();
 
-    expect(worked).toBe(true);
-    expect(retried).toMatchObject({ attempts: 2 });
-    expect(queueSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('dispatches to the DLQ queue name after retries are exhausted', async () => {
-    queueSpy.mockImplementation(async (batch: { messages: Array<{ retry(): void }> }) => {
+    assertEquals(worked, true);
+    assertObjectMatch(retried, { attempts: 2 });
+    assertSpyCalls(queueSpy, 1);
+})
+  Deno.test('local worker loop - dispatches to the DLQ queue name after retries are exhausted', async () => {
+  queueSpy;
+    scheduledSpy;
+  queueSpy = async (batch: { messages: Array<{ retry(): void }> }) => {
       batch.messages[0].retry();
-    });
+    } as any;
 
     const queue = createInMemoryQueue(LOCAL_QUEUE_NAMES.run) as ReturnType<typeof createInMemoryQueue> & { receive(): Promise<unknown> };
     await (queue as { sendBatch(messages: Iterable<unknown>): Promise<void> }).sendBatch([
@@ -69,10 +60,9 @@ describe('local worker loop', () => {
 
     const worked = await runLocalWorkerIteration({} as never, [queue as never]);
 
-    expect(worked).toBe(true);
-    expect(queueSpy).toHaveBeenCalledTimes(2);
-    expect(queueSpy.mock.calls[0][0].queue).toBe('takos-runs');
-    expect(queueSpy.mock.calls[1][0].queue).toBe('takos-runs-dlq');
-    await expect(queue.receive()).resolves.toBeNull();
-  });
-});
+    assertEquals(worked, true);
+    assertSpyCalls(queueSpy, 2);
+    assertEquals(queueSpy.calls[0][0].queue, 'takos-runs');
+    assertEquals(queueSpy.calls[1][0].queue, 'takos-runs-dlq');
+    await assertEquals(await queue.receive(), null);
+})

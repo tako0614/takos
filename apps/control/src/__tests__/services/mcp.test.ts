@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
@@ -6,18 +5,14 @@ import type { Env } from '@/types';
 // Mock DB
 // ---------------------------------------------------------------------------
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -42,40 +37,40 @@ function createDrizzleMock(options: {
   selectGet?: unknown;
   selectAll?: unknown[];
 } = {}) {
-  const runFn = vi.fn().mockResolvedValue(undefined);
+  const runFn = (async () => undefined);
 
   const selectChain = {
-    get: vi.fn().mockResolvedValue(options.selectGet),
-    all: vi.fn().mockResolvedValue(options.selectAll ?? []),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
+    get: (async () => options.selectGet),
+    all: (async () => options.selectAll ?? []),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
   };
   const selectFrom = {
-    where: vi.fn().mockReturnValue(selectChain),
-    get: vi.fn().mockResolvedValue(options.selectGet),
-    all: vi.fn().mockResolvedValue(options.selectAll ?? []),
-    orderBy: vi.fn().mockReturnValue(selectChain),
+    where: (() => selectChain),
+    get: (async () => options.selectGet),
+    all: (async () => options.selectAll ?? []),
+    orderBy: (() => selectChain),
   };
 
   return {
-    select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue(selectFrom) }),
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({}) }),
+    select: (() => ({ from: (() => selectFrom) })),
+    insert: (() => ({
+      values: (() => ({
+        returning: (() => ({ get: (async () => ({})) })),
         run: runFn,
-      }),
-    }),
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ run: runFn }),
+      })),
+    })),
+    update: (() => ({
+      set: (() => ({
+        where: (() => ({ run: runFn })),
         run: runFn,
-      }),
-    }),
-    delete: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({ run: runFn }),
+      })),
+    })),
+    delete: (() => ({
+      where: (() => ({ run: runFn })),
       run: runFn,
-    }),
+    })),
   };
 }
 
@@ -85,63 +80,57 @@ function createDrizzleMock(options: {
 
 import { discoverOAuthMetadata } from '@/services/platform/mcp';
 
-describe('discoverOAuthMetadata', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns parsed metadata on 200 response', async () => {
-    const meta = {
+  
+  Deno.test('discoverOAuthMetadata - returns parsed metadata on 200 response', async () => {
+  const meta = {
       issuer: 'https://auth.example.com',
       authorization_endpoint: 'https://auth.example.com/auth',
       token_endpoint: 'https://auth.example.com/token',
     };
 
-    global.fetch = vi.fn().mockResolvedValue({
+    global.fetch = (async () => ({
       ok: true,
       json: () => Promise.resolve(meta),
-    } as unknown as Response);
+    } as unknown as Response));
 
     const result = await discoverOAuthMetadata('https://mcp.example.com');
 
-    expect(result.issuer).toBe('https://auth.example.com');
-    expect(result.token_endpoint).toBe('https://auth.example.com/token');
-  });
-
-  it('throws when server returns non-200', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    assertEquals(result.issuer, 'https://auth.example.com');
+    assertEquals(result.token_endpoint, 'https://auth.example.com/token');
+})
+  Deno.test('discoverOAuthMetadata - throws when server returns non-200', async () => {
+  global.fetch = (async () => ({
       ok: false,
       status: 404,
       statusText: 'Not Found',
-    } as unknown as Response);
+    } as unknown as Response));
 
-    await expect(discoverOAuthMetadata('https://mcp.example.com')).rejects.toThrow(
+    await await assertRejects(async () => { await discoverOAuthMetadata('https://mcp.example.com'); }, 
       'OAuth metadata discovery failed',
     );
-  });
-
-  it('throws when required fields are missing', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+})
+  Deno.test('discoverOAuthMetadata - throws when required fields are missing', async () => {
+  global.fetch = (async () => ({
       ok: true,
       json: () => Promise.resolve({ issuer: 'https://auth.example.com' }),
-    } as unknown as Response);
+    } as unknown as Response));
 
-    await expect(discoverOAuthMetadata('https://mcp.example.com')).rejects.toThrow(
+    await await assertRejects(async () => { await discoverOAuthMetadata('https://mcp.example.com'); }, 
       'missing required fields',
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // createMcpOAuthPending
 // ---------------------------------------------------------------------------
 
 import { createMcpOAuthPending } from '@/services/platform/mcp';
 
-describe('createMcpOAuthPending', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('creates a pending record and returns an auth URL', async () => {
-    const drizzleMock = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzleMock);
+  
+  Deno.test('createMcpOAuthPending - creates a pending record and returns an auth URL', async () => {
+  const drizzleMock = createDrizzleMock();
+    mocks.getDb = (() => drizzleMock) as any;
     const db = makeDb();
     const env = makeEnv();
 
@@ -155,18 +144,17 @@ describe('createMcpOAuthPending', () => {
       redirectUri: 'https://takos.example.com/api/mcp/oauth/callback',
     });
 
-    expect(state).toBeTruthy();
-    expect(authUrl).toContain('https://auth.example.com/auth');
-    expect(authUrl).toContain('code_challenge_method=S256');
-    expect(authUrl).toContain(`state=${state}`);
-    expect(drizzleMock.insert).toHaveBeenCalledOnce();
-  });
-
-  it('throws when ENCRYPTION_KEY is not configured', async () => {
-    const db = makeDb();
+    assert(state);
+    assertStringIncludes(authUrl, 'https://auth.example.com/auth');
+    assertStringIncludes(authUrl, 'code_challenge_method=S256');
+    assertStringIncludes(authUrl, `state=${state}`);
+    assertSpyCalls(drizzleMock.insert, 1);
+})
+  Deno.test('createMcpOAuthPending - throws when ENCRYPTION_KEY is not configured', async () => {
+  const db = makeDb();
     const env = makeEnv({ ENCRYPTION_KEY: undefined });
 
-    await expect(
+    await await assertRejects(async () => { await 
       createMcpOAuthPending(db, env, {
         spaceId: 'ws1',
         serverName: 'srv',
@@ -176,29 +164,25 @@ describe('createMcpOAuthPending', () => {
         authorizationEndpoint: 'https://auth.example.com/auth',
         redirectUri: 'https://takos.example.com/api/mcp/oauth/callback',
       }),
-    ).rejects.toThrow('ENCRYPTION_KEY');
-  });
-});
-
+    ; }, 'ENCRYPTION_KEY');
+})
 // ---------------------------------------------------------------------------
 // consumeMcpOAuthPending
 // ---------------------------------------------------------------------------
 
 import { consumeMcpOAuthPending } from '@/services/platform/mcp';
 
-describe('consumeMcpOAuthPending', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns null when state is not found', async () => {
-    const drizzleMock = createDrizzleMock({ selectGet: undefined });
-    mocks.getDb.mockReturnValue(drizzleMock);
+  
+  Deno.test('consumeMcpOAuthPending - returns null when state is not found', async () => {
+  const drizzleMock = createDrizzleMock({ selectGet: undefined });
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await consumeMcpOAuthPending(makeDb(), makeEnv(), 'unknown_state');
-    expect(result).toBeNull();
-  });
-
-  it('returns null and deletes expired record', async () => {
-    const drizzleMock = createDrizzleMock({
+    assertEquals(result, null);
+})
+  Deno.test('consumeMcpOAuthPending - returns null and deletes expired record', async () => {
+  const drizzleMock = createDrizzleMock({
       selectGet: {
         id: 'p1',
         expiresAt: new Date(Date.now() - 1000).toISOString(),
@@ -212,31 +196,28 @@ describe('consumeMcpOAuthPending', () => {
         scope: null,
       },
     });
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await consumeMcpOAuthPending(makeDb(), makeEnv(), 'st');
-    expect(result).toBeNull();
-    expect(drizzleMock.delete).toHaveBeenCalled();
-  });
-
-  it('returns null when record does not exist', async () => {
-    const drizzleMock = createDrizzleMock({ selectGet: undefined });
-    mocks.getDb.mockReturnValue(drizzleMock);
+    assertEquals(result, null);
+    assert(drizzleMock.delete.calls.length > 0);
+})
+  Deno.test('consumeMcpOAuthPending - returns null when record does not exist', async () => {
+  const drizzleMock = createDrizzleMock({ selectGet: undefined });
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await consumeMcpOAuthPending(makeDb(), makeEnv(), 'some_state');
-    expect(result).toBeNull();
-  });
-});
-
+    assertEquals(result, null);
+})
 // ---------------------------------------------------------------------------
 // listMcpServers / deleteMcpServer / updateMcpServer
 // ---------------------------------------------------------------------------
 
 import { listMcpServers, deleteMcpServer, updateMcpServer } from '@/services/platform/mcp';
 
-describe('listMcpServers', () => {
-  it('returns mapped server records', async () => {
-    const serverRow = {
+
+  Deno.test('listMcpServers - returns mapped server records', async () => {
+  const serverRow = {
       id: 's1',
       accountId: 'ws1',
       name: 'my_mcp',
@@ -254,49 +235,43 @@ describe('listMcpServers', () => {
       updatedAt: '2025-01-01T00:00:00.000Z',
     };
     const drizzleMock = createDrizzleMock({ selectAll: [serverRow] });
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const servers = await listMcpServers(makeDb(), 'ws1');
 
-    expect(servers).toHaveLength(1);
-    expect(servers[0].name).toBe('my_mcp');
-    expect(servers[0].enabled).toBe(true);
-    expect(servers[0].bundleDeploymentId).toBeNull();
-  });
-});
+    assertEquals(servers.length, 1);
+    assertEquals(servers[0].name, 'my_mcp');
+    assertEquals(servers[0].enabled, true);
+    assertEquals(servers[0].bundleDeploymentId, null);
+})
 
-describe('deleteMcpServer', () => {
-  it('returns false when server not found', async () => {
-    const drizzleMock = createDrizzleMock({ selectGet: undefined });
-    mocks.getDb.mockReturnValue(drizzleMock);
+  Deno.test('deleteMcpServer - returns false when server not found', async () => {
+  const drizzleMock = createDrizzleMock({ selectGet: undefined });
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await deleteMcpServer(makeDb(), 'ws1', 'nonexistent');
-    expect(result).toBe(false);
-  });
-
-  it('deletes and returns true when found', async () => {
-    const drizzleMock = createDrizzleMock({
+    assertEquals(result, false);
+})
+  Deno.test('deleteMcpServer - deletes and returns true when found', async () => {
+  const drizzleMock = createDrizzleMock({
       selectGet: { id: 's1', sourceType: 'external' },
     });
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await deleteMcpServer(makeDb(), 'ws1', 's1');
-    expect(result).toBe(true);
-    expect(drizzleMock.delete).toHaveBeenCalled();
-  });
-});
+    assertEquals(result, true);
+    assert(drizzleMock.delete.calls.length > 0);
+})
 
-describe('updateMcpServer', () => {
-  it('returns null when server not found', async () => {
-    const drizzleMock = createDrizzleMock({ selectGet: undefined });
-    mocks.getDb.mockReturnValue(drizzleMock);
+  Deno.test('updateMcpServer - returns null when server not found', async () => {
+  const drizzleMock = createDrizzleMock({ selectGet: undefined });
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await updateMcpServer(makeDb(), 'ws1', 'nonexistent', { enabled: false });
-    expect(result).toBeNull();
-  });
-
-  it('updates enabled flag', async () => {
-    const updatedRow = {
+    assertEquals(result, null);
+})
+  Deno.test('updateMcpServer - updates enabled flag', async () => {
+  const updatedRow = {
       id: 's1',
       accountId: 'ws1',
       name: 'my_mcp',
@@ -320,36 +295,35 @@ describe('updateMcpServer', () => {
       updatedRow,
     ];
 
-    const runFn = vi.fn().mockResolvedValue(undefined);
+    const runFn = (async () => undefined);
     const drizzleMock = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         const result = selectResults[selectCallIdx++];
         const chain = {
-          get: vi.fn().mockResolvedValue(result),
-          all: vi.fn().mockResolvedValue([]),
+          get: (async () => result),
+          all: (async () => []),
         };
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue(chain),
-            get: vi.fn().mockResolvedValue(result),
-            all: vi.fn().mockResolvedValue([]),
-          }),
+          from: (() => ({
+            where: (() => chain),
+            get: (async () => result),
+            all: (async () => []),
+          })),
         };
-      }),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({ run: runFn }),
-        }),
-      }),
-      delete: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({ run: runFn }),
-      }),
+      },
+      update: (() => ({
+        set: (() => ({
+          where: (() => ({ run: runFn })),
+        })),
+      })),
+      delete: (() => ({
+        where: (() => ({ run: runFn })),
+      })),
     };
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await updateMcpServer(makeDb(), 'ws1', 's1', { enabled: false });
-    expect(result).not.toBeNull();
-    expect(result?.enabled).toBe(false);
-    expect(result?.bundleDeploymentId).toBeNull();
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result?.enabled, false);
+    assertEquals(result?.bundleDeploymentId, null);
+})

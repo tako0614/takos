@@ -22,6 +22,7 @@ export interface RouteState {
   view: View;
   spaceId?: string;
   workspaceSlug?: string;
+  spaceSlug?: string;
   threadId?: string;
   runId?: string;
   messageId?: string;

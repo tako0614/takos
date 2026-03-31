@@ -6,7 +6,7 @@
  * timeouts at once.
  */
 
-import { logWarning } from './cli-log.js';
+import { logWarning } from './cli-log.ts';
 
 const SHARED_TIMEOUT_ENV_VAR = 'TAKOS_TIMEOUT_MS';
 const API_TIMEOUT_ENV_VAR = 'TAKOS_API_TIMEOUT_MS';
@@ -16,7 +16,7 @@ const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60_000;
 
 function resolveTimeoutMs(envVar: string, defaultMs: number): number {
   for (const name of [envVar, SHARED_TIMEOUT_ENV_VAR]) {
-    const raw = process.env[name];
+    const raw = Deno.env.get(name);
     if (raw === undefined) continue;
     const parsed = Number(raw);
     if (Number.isInteger(parsed) && parsed > 0) return parsed;

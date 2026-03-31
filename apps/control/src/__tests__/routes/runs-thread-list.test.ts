@@ -1,21 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  checkThreadAccess: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  checkThreadAccess: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/threads/thread-service', () => ({
-  checkThreadAccess: mocks.checkThreadAccess,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-service'
 import runs from '@/routes/runs/routes';
 
 type Vars = { user: User };
@@ -67,28 +63,25 @@ function createRunRow(id: string, createdAt: string) {
   };
 }
 
-describe('GET /threads/:threadId/runs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.checkThreadAccess.mockResolvedValue({
+
+  Deno.test('GET /threads/:threadId/runs - returns 400 when cursor is invalid', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
       thread: { id: 'thread-1', space_id: 'ws-1' },
       role: 'owner',
-    });
-  });
-
-  it('returns 400 when cursor is invalid', async () => {
-    // Drizzle chain mock (not actually called due to early return)
-    const selectAll = vi.fn();
+    })) as any;
+  // Drizzle chain mock (not actually called due to early return)
+    const selectAll = ((..._args: any[]) => undefined) as any;
     const chain: Record<string, unknown> = {};
-    chain.from = vi.fn().mockReturnValue(chain);
-    chain.where = vi.fn().mockReturnValue(chain);
-    chain.orderBy = vi.fn().mockReturnValue(chain);
-    chain.limit = vi.fn().mockReturnValue(chain);
+    chain.from = (() => chain);
+    chain.where = (() => chain);
+    chain.orderBy = (() => chain);
+    chain.limit = (() => chain);
     chain.all = selectAll;
-    chain.get = vi.fn();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn().mockReturnValue(chain),
-    });
+    chain.get = ((..._args: any[]) => undefined) as any;
+    mocks.getDb = (() => ({
+      select: (() => chain),
+    })) as any;
 
     const app = createApp(createUser('user-1', 'alice'));
     const env = createMockEnv() as unknown as Env;
@@ -99,29 +92,33 @@ describe('GET /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid cursor' });
-    expect(selectAll).not.toHaveBeenCalled();
-  });
-
-  it('applies active_only/limit/cursor query and returns pagination metadata', async () => {
-    const cursor = '2026-02-21T12:00:00.000Z';
+    assertEquals(response.status, 400);
+    await assertObjectMatch(await response.json(), { error: 'Invalid cursor' });
+    assertSpyCalls(selectAll, 0);
+})
+  Deno.test('GET /threads/:threadId/runs - applies active_only/limit/cursor query and returns pagination metadata', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
+      thread: { id: 'thread-1', space_id: 'ws-1' },
+      role: 'owner',
+    })) as any;
+  const cursor = '2026-02-21T12:00:00.000Z';
     const rows = [
       createRunRow('run-2', '2026-02-21T11:00:00.000Z'),
       createRunRow('run-1', '2026-02-21T10:00:00.000Z'),
     ];
     // Production code: db.select().from(runs).where(...).orderBy(...).limit(...).all()
-    const selectAll = vi.fn().mockResolvedValue(rows);
+    const selectAll = (async () => rows);
     const chain: Record<string, unknown> = {};
-    chain.from = vi.fn().mockReturnValue(chain);
-    chain.where = vi.fn().mockReturnValue(chain);
-    chain.orderBy = vi.fn().mockReturnValue(chain);
-    chain.limit = vi.fn().mockReturnValue(chain);
+    chain.from = (() => chain);
+    chain.where = (() => chain);
+    chain.orderBy = (() => chain);
+    chain.limit = (() => chain);
     chain.all = selectAll;
-    chain.get = vi.fn();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn().mockReturnValue(chain),
-    });
+    chain.get = ((..._args: any[]) => undefined) as any;
+    mocks.getDb = (() => ({
+      select: (() => chain),
+    })) as any;
 
     const app = createApp(createUser('user-1', 'alice'));
     const env = createMockEnv() as unknown as Env;
@@ -132,7 +129,7 @@ describe('GET /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
 
     const payload = await response.json() as {
       runs: Array<{ id: string }>;
@@ -142,28 +139,32 @@ describe('GET /threads/:threadId/runs', () => {
       next_cursor: string | null;
     };
 
-    expect(payload.runs.map((run) => run.id)).toEqual(['run-2', 'run-1']);
-    expect(payload.limit).toBe(2);
-    expect(payload.active_only).toBe(true);
-    expect(payload.cursor).toBe(cursor);
-    expect(payload.next_cursor).toBe('2026-02-21T10:00:00.000Z,run-1');
-    expect(selectAll).toHaveBeenCalledTimes(1);
-  });
-
-  it('supports composite cursor token with createdAt + run id for stable pagination', async () => {
-    const cursor = '2026-02-21T12:00:00.000Z,run-10';
+    assertEquals(payload.runs.map((run) => run.id), ['run-2', 'run-1']);
+    assertEquals(payload.limit, 2);
+    assertEquals(payload.active_only, true);
+    assertEquals(payload.cursor, cursor);
+    assertEquals(payload.next_cursor, '2026-02-21T10:00:00.000Z,run-1');
+    assertSpyCalls(selectAll, 1);
+})
+  Deno.test('GET /threads/:threadId/runs - supports composite cursor token with createdAt + run id for stable pagination', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
+      thread: { id: 'thread-1', space_id: 'ws-1' },
+      role: 'owner',
+    })) as any;
+  const cursor = '2026-02-21T12:00:00.000Z,run-10';
     const rows = [createRunRow('run-9', '2026-02-21T12:00:00.000Z')];
-    const selectAll = vi.fn().mockResolvedValue(rows);
+    const selectAll = (async () => rows);
     const chain: Record<string, unknown> = {};
-    chain.from = vi.fn().mockReturnValue(chain);
-    chain.where = vi.fn().mockReturnValue(chain);
-    chain.orderBy = vi.fn().mockReturnValue(chain);
-    chain.limit = vi.fn().mockReturnValue(chain);
+    chain.from = (() => chain);
+    chain.where = (() => chain);
+    chain.orderBy = (() => chain);
+    chain.limit = (() => chain);
     chain.all = selectAll;
-    chain.get = vi.fn();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn().mockReturnValue(chain),
-    });
+    chain.get = ((..._args: any[]) => undefined) as any;
+    mocks.getDb = (() => ({
+      select: (() => chain),
+    })) as any;
 
     const app = createApp(createUser('user-1', 'alice'));
     const env = createMockEnv() as unknown as Env;
@@ -174,10 +175,9 @@ describe('GET /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const payload = await response.json() as { cursor: string | null; next_cursor: string | null };
-    expect(payload.cursor).toBe(cursor);
-    expect(payload.next_cursor).toBe('2026-02-21T12:00:00.000Z,run-9');
-    expect(selectAll).toHaveBeenCalledTimes(1);
-  });
-});
+    assertEquals(payload.cursor, cursor);
+    assertEquals(payload.next_cursor, '2026-02-21T12:00:00.000Z,run-9');
+    assertSpyCalls(selectAll, 1);
+})

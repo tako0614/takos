@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
   formatRepositoryResponse,
   toWorkspaceResponse,
@@ -6,9 +5,11 @@ import {
 } from '@/services/identity/response-formatters';
 import type { User } from '@/types';
 
-describe('formatRepositoryResponse', () => {
-  it('maps database fields to API response shape', () => {
-    const repo = {
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+
+  Deno.test('formatRepositoryResponse - maps database fields to API response shape', () => {
+  const repo = {
       name: 'my-repo',
       description: 'A test repo',
       visibility: 'public',
@@ -22,7 +23,7 @@ describe('formatRepositoryResponse', () => {
 
     const result = formatRepositoryResponse(repo, 'alice');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       owner_username: 'alice',
       name: 'my-repo',
       description: 'A test repo',
@@ -34,10 +35,9 @@ describe('formatRepositoryResponse', () => {
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-02T00:00:00.000Z',
     });
-  });
-
-  it('handles null description', () => {
-    const repo = {
+})
+  Deno.test('formatRepositoryResponse - handles null description', () => {
+  const repo = {
       name: 'test',
       description: null,
       visibility: 'private',
@@ -50,14 +50,13 @@ describe('formatRepositoryResponse', () => {
     };
 
     const result = formatRepositoryResponse(repo, 'bob');
-    expect(result.description).toBeNull();
-    expect(result.git_enabled).toBe(0);
+    assertEquals(result.description, null);
+    assertEquals(result.git_enabled, 0);
     // Date objects should be converted to ISO strings
-    expect(result.created_at).toBe(new Date('2026-01-01').toISOString());
-  });
-
-  it('converts Date objects in timestamps', () => {
-    const repo = {
+    assertEquals(result.created_at, new Date('2026-01-01').toISOString());
+})
+  Deno.test('formatRepositoryResponse - converts Date objects in timestamps', () => {
+  const repo = {
       name: 'test',
       description: null,
       visibility: 'public',
@@ -70,14 +69,12 @@ describe('formatRepositoryResponse', () => {
     };
 
     const result = formatRepositoryResponse(repo, 'user');
-    expect(result.created_at).toBe('2026-06-15T12:00:00.000Z');
-    expect(result.updated_at).toBe('2026-06-16T12:00:00.000Z');
-  });
-});
+    assertEquals(result.created_at, '2026-06-15T12:00:00.000Z');
+    assertEquals(result.updated_at, '2026-06-16T12:00:00.000Z');
+})
 
-describe('toWorkspaceResponse', () => {
-  it('maps workspace to API response with defaults', () => {
-    const ws = {
+  Deno.test('toWorkspaceResponse - maps workspace to API response with defaults', () => {
+  const ws = {
       id: 'ws-1',
       kind: 'team',
       name: 'My Team',
@@ -92,7 +89,7 @@ describe('toWorkspaceResponse', () => {
 
     const result = toWorkspaceResponse(ws);
 
-    expect(result).toEqual({
+    assertEquals(result, {
       id: 'ws-1',
       slug: 'my-team',
       name: 'My Team',
@@ -104,10 +101,9 @@ describe('toWorkspaceResponse', () => {
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-02T00:00:00.000Z',
     });
-  });
-
-  it('uses id as slug fallback when slug is null', () => {
-    const ws = {
+})
+  Deno.test('toWorkspaceResponse - uses id as slug fallback when slug is null', () => {
+  const ws = {
       id: 'ws-fallback',
       name: 'Fallback',
       slug: null,
@@ -116,11 +112,10 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.slug).toBe('ws-fallback');
-  });
-
-  it('uses "unknown" as slug when both slug and id are missing', () => {
-    const ws = {
+    assertEquals(result.slug, 'ws-fallback');
+})
+  Deno.test('toWorkspaceResponse - uses "unknown" as slug when both slug and id are missing', () => {
+  const ws = {
       name: 'No ID',
       slug: null,
       created_at: '2026-01-01T00:00:00.000Z',
@@ -128,11 +123,10 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.slug).toBe('unknown');
-  });
-
-  it('defaults kind to team when not specified', () => {
-    const ws = {
+    assertEquals(result.slug, 'unknown');
+})
+  Deno.test('toWorkspaceResponse - defaults kind to team when not specified', () => {
+  const ws = {
       name: 'NoKind',
       slug: 'no-kind',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -140,11 +134,10 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.kind).toBe('team');
-  });
-
-  it('defaults description to null when not specified', () => {
-    const ws = {
+    assertEquals(result.kind, 'team');
+})
+  Deno.test('toWorkspaceResponse - defaults description to null when not specified', () => {
+  const ws = {
       name: 'NoDesc',
       slug: 'no-desc',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -152,11 +145,10 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.description).toBeNull();
-  });
-
-  it('defaults security_posture to standard when not specified', () => {
-    const ws = {
+    assertEquals(result.description, null);
+})
+  Deno.test('toWorkspaceResponse - defaults security_posture to standard when not specified', () => {
+  const ws = {
       name: 'Default',
       slug: 'default',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -164,11 +156,10 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.security_posture).toBe('standard');
-  });
-
-  it('defaults owner_principal_id to null when not specified', () => {
-    const ws = {
+    assertEquals(result.security_posture, 'standard');
+})
+  Deno.test('toWorkspaceResponse - defaults owner_principal_id to null when not specified', () => {
+  const ws = {
       name: 'NoOwner',
       slug: 'no-owner',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -176,13 +167,11 @@ describe('toWorkspaceResponse', () => {
     };
 
     const result = toWorkspaceResponse(ws);
-    expect(result.owner_principal_id).toBeNull();
-  });
-});
+    assertEquals(result.owner_principal_id, null);
+})
 
-describe('toUserResponse', () => {
-  it('maps user to API response without internal id', () => {
-    const user: User = {
+  Deno.test('toUserResponse - maps user to API response without internal id', () => {
+  const user: User = {
       id: 'internal-id',
       email: 'alice@example.com',
       name: 'Alice',
@@ -197,20 +186,19 @@ describe('toUserResponse', () => {
 
     const result = toUserResponse(user);
 
-    expect(result).toEqual({
+    assertEquals(result, {
       email: 'alice@example.com',
       name: 'Alice',
       username: 'alice',
       picture: 'https://example.com/avatar.png',
       setup_completed: true,
     });
-    expect(result).not.toHaveProperty('id');
-    expect(result).not.toHaveProperty('bio');
-    expect(result).not.toHaveProperty('trust_tier');
-  });
-
-  it('converts falsy setup_completed to false', () => {
-    const user: User = {
+    assert(!('id' in result));
+    assert(!('bio' in result));
+    assert(!('trust_tier' in result));
+})
+  Deno.test('toUserResponse - converts falsy setup_completed to false', () => {
+  const user: User = {
       id: 'internal-id',
       email: 'bob@example.com',
       name: 'Bob',
@@ -224,7 +212,6 @@ describe('toUserResponse', () => {
     };
 
     const result = toUserResponse(user);
-    expect(result.setup_completed).toBe(false);
-    expect(result.picture).toBeNull();
-  });
-});
+    assertEquals(result.setup_completed, false);
+    assertEquals(result.picture, null);
+})

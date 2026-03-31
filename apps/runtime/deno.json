@@ -1,0 +1,13 @@
+{
+  "name": "takos-runtime",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "tasks": {
+    "start": "deno run --allow-all src/index.ts",
+    "dev": "deno run --allow-all --watch src/index.ts",
+    "test": "deno test --allow-all src/",
+    "test:coverage": "deno test --allow-all --coverage src/"
+  }
+}

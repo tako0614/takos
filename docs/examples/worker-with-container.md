@@ -2,7 +2,7 @@
 
 > このページでわかること: Worker と Docker コンテナを組み合わせる方法。
 
-takos-computer と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker が必要な場合に使います。
+takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker が必要な場合に使います。
 
 この例は現行の `takos apply` で読める構成に合わせています。Store 経由の `takos deploy` / app-deployments はまだ end-to-end ではありません。
 
@@ -143,4 +143,4 @@ services:
 
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)
 - コンテナの詳細 → [Containers ガイド](/apps/containers)
-- 実際の takos-computer の構成 → [app.yml リファレンス](/apps/manifest#完全な例)
+- 実際の takos-agent の構成 → [app.yml リファレンス](/apps/manifest#完全な例)

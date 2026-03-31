@@ -10,7 +10,7 @@ import type { Context, Next, Env, ErrorHandler } from 'hono';
 import {
   verifyServiceToken,
   type ServiceTokenPayloadWithClaims,
-} from '../jwt.js';
+} from '../jwt.ts';
 
 export type { ServiceTokenPayloadWithClaims };
 import {
@@ -25,7 +25,7 @@ import {
   ServiceUnavailableError,
   type ErrorCode,
   type ErrorResponse,
-} from '../errors.js';
+} from '../errors.ts';
 
 // =============================================================================
 // Hono 用コンテキスト変数の型定義

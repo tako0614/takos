@@ -1,36 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkRepoAccess: vi.fn(),
-  resolveReadableCommitFromRef: vi.fn(),
-  getCommit: vi.fn(),
-  flattenTree: vi.fn(),
-  getBlobWithMeta: vi.fn(),
-  getEntryAtPath: vi.fn(),
-  getBlob: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/source/repos', () => ({
-  checkRepoAccess: mocks.checkRepoAccess,
-}));
-
-vi.mock('@/services/git-smart', async () => {
-  const actual = await vi.importActual<typeof import('@/services/git-smart')>('@/services/git-smart');
-  return {
-    ...actual,
-    resolveReadableCommitFromRef: mocks.resolveReadableCommitFromRef,
-    getCommit: mocks.getCommit,
-    flattenTree: mocks.flattenTree,
-    getBlobWithMeta: mocks.getBlobWithMeta,
-    getEntryAtPath: mocks.getEntryAtPath,
-    getBlob: mocks.getBlob,
-  };
+const mocks = ({
+  checkRepoAccess: ((..._args: any[]) => undefined) as any,
+  resolveReadableCommitFromRef: ((..._args: any[]) => undefined) as any,
+  getCommit: ((..._args: any[]) => undefined) as any,
+  flattenTree: ((..._args: any[]) => undefined) as any,
+  getBlobWithMeta: ((..._args: any[]) => undefined) as any,
+  getEntryAtPath: ((..._args: any[]) => undefined) as any,
+  getBlob: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/repos'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import repoGitAdvanced from '@/routes/repos/git-advanced';
 
 interface SearchPayload {
@@ -77,11 +64,11 @@ function createApp() {
   return app;
 }
 
-describe('repos git advanced', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
 
-    mocks.checkRepoAccess.mockResolvedValue({
+  Deno.test('repos git advanced - search finds lexical matches (case-insensitive by default)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+    mocks.checkRepoAccess = (async () => ({
       repo: {
         id: 'repo-1',
         name: 'repo',
@@ -101,11 +88,8 @@ describe('repos git advanced', () => {
       },
       spaceId: 'ws-1',
       role: 'owner',
-    });
-  });
-
-  it('search finds lexical matches (case-insensitive by default)', async () => {
-    const env = createEnv();
+    })) as any;
+  const env = createEnv();
     const app = createApp();
 
     const headCommit = {
@@ -117,21 +101,19 @@ describe('repos git advanced', () => {
       message: 'm1',
     };
 
-    mocks.resolveReadableCommitFromRef.mockResolvedValue({
+    mocks.resolveReadableCommitFromRef = (async () => ({
       ok: true,
       refCommitSha: 'c1',
       resolvedCommitSha: 'c1',
       degraded: false,
       commit: headCommit,
-    });
+    })) as any;
 
-    mocks.flattenTree.mockResolvedValue([
+    mocks.flattenTree = (async () => [
       { path: 'src/a.ts', sha: 'blob-1', mode: '100644' },
-    ]);
+    ]) as any;
 
-    mocks.getBlob.mockResolvedValue(
-      new TextEncoder().encode('hello\nWorld\n'),
-    );
+    mocks.getBlob = (async () => new TextEncoder().encode('hello\nWorld\n'),) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/search?q=world&ref=main&limit=10'),
@@ -139,9 +121,9 @@ describe('repos git advanced', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const payload = await response.json() as SearchPayload;
-    expect(payload).toMatchObject({
+    assertObjectMatch(payload, {
       query: 'world',
       ref: 'main',
       resolved_commit_sha: 'c1',
@@ -151,10 +133,32 @@ describe('repos git advanced', () => {
       ],
       truncated: false,
     });
-  });
+})
+  Deno.test('repos git advanced - search skips symlink entries by requesting flattenTree with skipSymlinks', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('search skips symlink entries by requesting flattenTree with skipSymlinks', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+  const env = createEnv();
     const app = createApp();
 
     const headCommit = {
@@ -166,24 +170,22 @@ describe('repos git advanced', () => {
       message: 'm1',
     };
 
-    mocks.resolveReadableCommitFromRef.mockResolvedValue({
+    mocks.resolveReadableCommitFromRef = (async () => ({
       ok: true,
       refCommitSha: 'c1',
       resolvedCommitSha: 'c1',
       degraded: false,
       commit: headCommit,
-    });
+    })) as any;
 
-    mocks.flattenTree.mockImplementation(async (_bucket: unknown, _treeOid: string, _basePath = '', options?: { skipSymlinks?: boolean }) => {
+    mocks.flattenTree = async (_bucket: unknown, _treeOid: string, _basePath = '', options?: { skipSymlinks?: boolean }) => {
       if (!options?.skipSymlinks) {
         throw new Error('Symlink blob entries are not supported: link');
       }
       return [{ path: 'src/a.ts', sha: 'blob-1', mode: '100644' }];
-    });
+    } as any;
 
-    mocks.getBlob.mockResolvedValue(
-      new TextEncoder().encode('hello symlink world\n'),
-    );
+    mocks.getBlob = (async () => new TextEncoder().encode('hello symlink world\n'),) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/search?q=symlink&ref=main&limit=10'),
@@ -191,16 +193,38 @@ describe('repos git advanced', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const payload = await response.json() as SearchPayload;
-    expect(payload.matches).toMatchObject([
+    assertObjectMatch(payload.matches, [
       { path: 'src/a.ts', line_number: 1, column: 7 },
     ]);
-    expect(mocks.flattenTree).toHaveBeenCalledWith(expect.anything(), 't1', '', { skipSymlinks: true });
-  });
+    assertSpyCallArgs(mocks.flattenTree, 0, [expect.anything(), 't1', '', { skipSymlinks: true }]);
+})
+  Deno.test('repos git advanced - log returns first-parent file history where blob oid changes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('log returns first-parent file history where blob oid changes', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+  const env = createEnv();
     const app = createApp();
 
     const commit1 = {
@@ -228,19 +252,19 @@ describe('repos git advanced', () => {
       message: 'm3',
     };
 
-    mocks.resolveReadableCommitFromRef.mockResolvedValue({
+    mocks.resolveReadableCommitFromRef = (async () => ({
       ok: true,
       refCommitSha: 'c3',
       resolvedCommitSha: 'c3',
       degraded: false,
       commit: commit3,
-    });
+    })) as any;
 
-    mocks.getCommit.mockImplementation(async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
+    mocks.getCommit = async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
       if (sha === 'c2') return commit2;
       if (sha === 'c1') return commit1;
       return null;
-    });
+    } as any;
 
     const oidByTree = new Map([
       ['t3', 'b3'],
@@ -248,12 +272,12 @@ describe('repos git advanced', () => {
       ['t1', 'b1'],
     ]);
 
-    mocks.getEntryAtPath.mockImplementation(async (_bucket: unknown, treeOid: string, path: string) => {
+    mocks.getEntryAtPath = async (_bucket: unknown, treeOid: string, path: string) => {
       if (path !== 'src/file.txt') return null;
       const sha = oidByTree.get(treeOid);
       if (!sha) return null;
       return { mode: '100644', name: 'file.txt', sha, type: 'blob' };
-    });
+    } as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/log/main/src/file.txt?limit=10'),
@@ -266,7 +290,7 @@ describe('repos git advanced', () => {
       throw new Error(`unexpected status=${response.status} body=${body}`);
     }
     const payload = JSON.parse(body) as LogPayload;
-    expect(payload).toMatchObject({
+    assertObjectMatch(payload, {
       path: 'src/file.txt',
       ref: 'main',
       resolved_commit_sha: 'c3',
@@ -277,10 +301,32 @@ describe('repos git advanced', () => {
         { sha: 'c1', status: 'added' },
       ],
     });
-  });
+})
+  Deno.test('repos git advanced - blame attributes inserted lines to the commit that introduced them', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('blame attributes inserted lines to the commit that introduced them', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+  const env = createEnv();
     const app = createApp();
 
     const commit1 = {
@@ -308,19 +354,19 @@ describe('repos git advanced', () => {
       message: 'm3',
     };
 
-    mocks.resolveReadableCommitFromRef.mockResolvedValue({
+    mocks.resolveReadableCommitFromRef = (async () => ({
       ok: true,
       refCommitSha: 'c3',
       resolvedCommitSha: 'c3',
       degraded: false,
       commit: commit3,
-    });
+    })) as any;
 
-    mocks.getCommit.mockImplementation(async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
+    mocks.getCommit = async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
       if (sha === 'c2') return commit2;
       if (sha === 'c1') return commit1;
       return null;
-    });
+    } as any;
 
     const oidByTree = new Map([
       ['t3', 'b3'],
@@ -328,12 +374,12 @@ describe('repos git advanced', () => {
       ['t1', 'b1'],
     ]);
 
-    mocks.getEntryAtPath.mockImplementation(async (_bucket: unknown, treeOid: string, path: string) => {
+    mocks.getEntryAtPath = async (_bucket: unknown, treeOid: string, path: string) => {
       if (path !== 'src/file.txt') return null;
       const sha = oidByTree.get(treeOid);
       if (!sha) return null;
       return { mode: '100644', name: 'file.txt', sha, type: 'blob' };
-    });
+    } as any;
 
     const blobByOid = new Map([
       ['b1', new TextEncoder().encode('a\nb')],
@@ -341,7 +387,7 @@ describe('repos git advanced', () => {
       ['b3', new TextEncoder().encode('a\nc\nd')],
     ]);
 
-    mocks.getBlob.mockImplementation(async (_bucket: unknown, oid: string) => blobByOid.get(oid) || null);
+    mocks.getBlob = async (_bucket: unknown, oid: string) => blobByOid.get(oid) || null as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/blame/main/src/file.txt'),
@@ -355,11 +401,10 @@ describe('repos git advanced', () => {
     }
     const payload = JSON.parse(body) as BlamePayload;
 
-    expect(payload.lines).toHaveLength(3);
-    expect(payload.lines.map((l: BlameLine) => ({ content: l.content, commit_sha: l.commit_sha }))).toEqual([
+    assertEquals(payload.lines.length, 3);
+    assertEquals(payload.lines.map((l: BlameLine) => ({ content: l.content, commit_sha: l.commit_sha })), [
       { content: 'a', commit_sha: 'c1' },
       { content: 'c', commit_sha: 'c2' },
       { content: 'd', commit_sha: 'c3' },
     ]);
-  });
-});
+})

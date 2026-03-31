@@ -7,11 +7,11 @@ import { Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { badRequest, internalError, notFound } from 'takos-common/middleware/hono';
-import { REPOS_BASE_DIR } from '../../shared/config.js';
-import { isPathWithinBase, verifyPathWithinAfterAccess } from '../../runtime/paths.js';
-import { validateGitName } from '../../runtime/validation.js';
-import { runGitHttpBackend } from '../../runtime/git-http-backend.js';
-import { enforceSpaceScopeMiddleware } from '../../middleware/space-scope.js';
+import { REPOS_BASE_DIR } from '../../shared/config.ts';
+import { isPathWithinBase, verifyPathWithinAfterAccess } from '../../runtime/paths.ts';
+import { validateGitName } from '../../runtime/validation.ts';
+import { runGitHttpBackend } from '../../runtime/git-http-backend.ts';
+import { enforceSpaceScopeMiddleware } from '../../middleware/space-scope.ts';
 
 // --- LFS policy helpers ---
 

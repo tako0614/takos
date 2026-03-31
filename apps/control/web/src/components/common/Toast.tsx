@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import type { Toast } from '../../types';
 import { useToast } from '../../store/toast';
@@ -15,54 +16,53 @@ const iconClasses: Record<Toast['type'], string> = {
   info: 'text-[var(--color-text-secondary)] opacity-90',
 };
 
-export function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
-  const [isMobile, setIsMobile] = useState(
+export function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+  const [isMobile, setIsMobile] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
 
-  useEffect(() => {
+  onMount(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  if (toasts.length === 0) return null;
+    onCleanup(() => window.removeEventListener('resize', checkMobile));
+  });
 
   return (
-    <div
-      className={`
-        fixed z-[9999] flex flex-col gap-3 pointer-events-none
-        ${isMobile
-          ? 'bottom-[calc(var(--nav-height-mobile)+1rem+var(--spacing-safe-bottom))] left-4 right-4 items-center'
-          : 'bottom-6 right-6 items-end'
-        }
-      `}
-    >
-      {toasts.map(toast => (
-        <div
-          key={toast.id}
-          className={`
-            flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]
-            border border-[var(--color-border-primary)] shadow-[var(--shadow-lg)]
-            bg-[var(--color-surface-primary)] animate-[slideUp_0.2s_ease-out]
-            pointer-events-auto
-            ${isMobile ? 'w-full' : 'max-w-[400px]'}
-          `}
-        >
-          <span className={`shrink-0 ${iconClasses[toast.type]}`}>
-            {toast.type === 'success' && <Icons.Check className="w-5 h-5 block" />}
-            {toast.type === 'error' && <Icons.AlertTriangle className="w-5 h-5 block" />}
-            {toast.type === 'info' && <Icons.Bell className="w-5 h-5 block" />}
-          </span>
-          <span className="text-sm text-[var(--color-text-primary)]">{toast.message}</span>
-          <button
-            className="shrink-0 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
-            onClick={() => onDismiss(toast.id)}
+    <Show when={props.toasts.length > 0}>
+      <div
+        class={`
+          fixed z-[9999] flex flex-col gap-3 pointer-events-none
+          ${isMobile()
+            ? 'bottom-[calc(var(--nav-height-mobile)+1rem+var(--spacing-safe-bottom))] left-4 right-4 items-center'
+            : 'bottom-6 right-6 items-end'
+          }
+        `}
+      >
+        <For each={props.toasts}>{(toast) =>
+          <div
+            class={`
+              flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]
+              border border-[var(--color-border-primary)] shadow-[var(--shadow-lg)]
+              bg-[var(--color-surface-primary)] animate-[slideUp_0.2s_ease-out]
+              pointer-events-auto
+              ${isMobile() ? 'w-full' : 'max-w-[400px]'}
+            `}
           >
-            <Icons.X className="w-4 h-4 block" />
-          </button>
-        </div>
-      ))}
-    </div>
+            <span class={`shrink-0 ${iconClasses[toast.type]}`}>
+              <Show when={toast.type === 'success'}><Icons.Check class="w-5 h-5 block" /></Show>
+              <Show when={toast.type === 'error'}><Icons.AlertTriangle class="w-5 h-5 block" /></Show>
+              <Show when={toast.type === 'info'}><Icons.Bell class="w-5 h-5 block" /></Show>
+            </span>
+            <span class="text-sm text-[var(--color-text-primary)]">{toast.message}</span>
+            <button
+              class="shrink-0 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
+              onClick={() => props.onDismiss(toast.id)}
+            >
+              <Icons.X class="w-4 h-4 block" />
+            </button>
+          </div>
+        }</For>
+      </div>
+    </Show>
   );
 }

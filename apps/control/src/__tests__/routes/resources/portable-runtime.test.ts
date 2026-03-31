@@ -1,18 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
 import { createPrefixedKvNamespace } from '@/routes/resources/portable-runtime';
 
-describe('createPrefixedKvNamespace', () => {
-  it('prefixes kv operations per managed resource and strips prefixes from list results', async () => {
-    const baseKv = {
-      get: vi.fn(async (key: string) => (key === 'managed-ns:hello' ? 'world' : null)),
-      getWithMetadata: vi.fn(async (key: string) => ({
+
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('createPrefixedKvNamespace - prefixes kv operations per managed resource and strips prefixes from list results', async () => {
+  const baseKv = {
+      get: async (key: string) => (key === 'managed-ns:hello' ? 'world' : null),
+      getWithMetadata: async (key: string) => ({
         value: key === 'managed-ns:hello' ? 'world' : null,
         metadata: { source: 'shared-store' },
         cacheStatus: null,
-      })),
-      put: vi.fn(async () => undefined),
-      delete: vi.fn(async () => undefined),
-      list: vi.fn(async (options?: { prefix?: string }) => ({
+      }),
+      put: async () => undefined,
+      delete: async () => undefined,
+      list: async (options?: { prefix?: string }) => ({
         keys: [
           { name: 'managed-ns:hello', metadata: { source: 'shared-store' } },
           { name: 'managed-ns:world' },
@@ -20,7 +22,7 @@ describe('createPrefixedKvNamespace', () => {
         ],
         list_complete: true,
         cursor: options?.prefix ?? '',
-      })),
+      }),
     };
 
     const kv = createPrefixedKvNamespace(baseKv as never, 'managed-ns');
@@ -31,18 +33,18 @@ describe('createPrefixedKvNamespace', () => {
     const list = await kv.list({ prefix: 'he' });
     await kv.delete('hello');
 
-    expect(baseKv.put).toHaveBeenCalledWith('managed-ns:hello', 'world', undefined);
-    expect(baseKv.get).toHaveBeenCalledWith('managed-ns:hello', 'text');
-    expect(baseKv.getWithMetadata).toHaveBeenCalledWith('managed-ns:hello', 'text');
-    expect(baseKv.list).toHaveBeenCalledWith({ prefix: 'managed-ns:he' });
-    expect(baseKv.delete).toHaveBeenCalledWith('managed-ns:hello');
-    expect(raw).toBe('world');
-    expect(value).toEqual({
+    assertSpyCallArgs(baseKv.put, 0, ['managed-ns:hello', 'world', undefined]);
+    assertSpyCallArgs(baseKv.get, 0, ['managed-ns:hello', 'text']);
+    assertSpyCallArgs(baseKv.getWithMetadata, 0, ['managed-ns:hello', 'text']);
+    assertSpyCallArgs(baseKv.list, 0, [{ prefix: 'managed-ns:he' }]);
+    assertSpyCallArgs(baseKv.delete, 0, ['managed-ns:hello']);
+    assertEquals(raw, 'world');
+    assertEquals(value, {
       value: 'world',
       metadata: { source: 'shared-store' },
       cacheStatus: null,
     });
-    expect(list).toEqual({
+    assertEquals(list, {
       keys: [
         { name: 'hello', metadata: { source: 'shared-store' } },
         { name: 'world' },
@@ -50,5 +52,4 @@ describe('createPrefixedKvNamespace', () => {
       list_complete: true,
       cursor: 'managed-ns:he',
     });
-  });
-});
+})

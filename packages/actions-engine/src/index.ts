@@ -53,11 +53,11 @@ export type {
   ExecutionPlan,
   StepExecutor,
   ActionResolver,
-} from './workflow-models.js';
+} from './workflow-models.ts';
 
 // パーサー API（公開）
-export { parseWorkflow } from './parser/workflow.js';
-export { validateWorkflow, type ValidationResult } from './parser/validator.js';
+export { parseWorkflow } from './parser/workflow.ts';
+export { validateWorkflow, type ValidationResult } from './parser/validator.ts';
 
 // スケジューラー API（公開）
-export { createExecutionPlan } from './scheduler/job.js';
+export { createExecutionPlan } from './scheduler/job.ts';

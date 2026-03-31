@@ -1,4 +1,4 @@
-import { atom } from 'jotai';
+import { atom } from 'jotai/vanilla';
 import { rpc, rpcJson } from '../lib/rpc';
 import { getErrorMessage } from '../lib/errors';
 import { normalizeSpaces } from '../lib/spaces';
@@ -77,6 +77,7 @@ export const fetchSpacesAtom = atom(
           description: null,
           kind: 'user',
           is_personal: true,
+          owner_principal_id: currentUser.username,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };

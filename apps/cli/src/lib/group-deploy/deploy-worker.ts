@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { execCommand } from './cloudflare-utils.js';
+import { execCommand } from './cloudflare-utils.ts';
 
 // ── Worker Deploy via Wrangler ───────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ export async function deployWorkerWithWrangler(
 ): Promise<{ success: boolean; error?: string }> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-group-deploy-'));
   const tomlPath = path.join(tmpDir, 'wrangler.toml');
-  const entryPath = path.join(tmpDir, 'index.js');
+  const entryPath = path.join(tmpDir, 'index.ts');
 
   try {
     await fs.writeFile(tomlPath, tomlContent, 'utf8');

@@ -2,7 +2,7 @@ import os from 'os';
 import { parseIntEnv } from 'takos-common/env-parse';
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
+  const value = Deno.env.get(name);
   if (!value) {
     throw new Error(`Required environment variable ${name} is not set`);
   }
@@ -10,12 +10,12 @@ function requireEnv(name: string): string {
 }
 
 function optionalEnv(name: string, fallback = ''): string {
-  return process.env[name] || fallback;
+  return Deno.env.get(name) || fallback;
 }
 
 function optionalEnvAny(names: string[], fallback = ''): string {
   for (const name of names) {
-    const value = process.env[name];
+    const value = Deno.env.get(name);
     if (value) return value;
   }
   return fallback;
@@ -40,8 +40,8 @@ export const TAKOS_API_URL = requireEnv('TAKOS_API_URL');
 export const PROXY_BASE_URL = optionalEnv('PROXY_BASE_URL');
 export const GIT_ENDPOINT_URL = optionalEnv('GIT_ENDPOINT_URL', 'https://git.takos.dev');
 
-const rawJwtPublicKey = process.env.JWT_PUBLIC_KEY
-  ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n').trim()
+const rawJwtPublicKey = Deno.env.get('JWT_PUBLIC_KEY')
+  ? Deno.env.get('JWT_PUBLIC_KEY')!.replace(/\\n/g, '\n').trim()
   : '';
 export const JWT_PUBLIC_KEY = rawJwtPublicKey.length > 0 ? rawJwtPublicKey : '';
 
@@ -83,7 +83,7 @@ const EXTENDED_COMMANDS = [
   'printenv',
 ];
 
-const IS_EXTENDED_PROFILE = process.env.COMMAND_PROFILE === 'extended';
+const IS_EXTENDED_PROFILE = Deno.env.get('COMMAND_PROFILE') === 'extended';
 
 export const ALLOWED_COMMANDS_SET = new Set(
   IS_EXTENDED_PROFILE ? [...BASE_COMMANDS, ...EXTENDED_COMMANDS] : [...BASE_COMMANDS]

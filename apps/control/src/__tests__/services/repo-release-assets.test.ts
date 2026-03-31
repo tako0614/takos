@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { toReleaseAsset, toReleaseAssets } from '@/services/source/repo-release-assets';
 
-describe('repo release asset mapping', () => {
-  it('maps bundle metadata without legacy takopack aliases', () => {
-    const asset = toReleaseAsset({
+
+import { assertEquals, assert, assertObjectMatch } from 'jsr:@std/assert';
+
+  Deno.test('repo release asset mapping - maps bundle metadata without legacy takopack aliases', () => {
+  const asset = toReleaseAsset({
       id: 'asset-1',
       assetKey: 'releases/release-1/app.takopack',
       name: 'app.takopack',
@@ -19,7 +20,7 @@ describe('repo release asset mapping', () => {
       createdAt: '2026-03-10T00:00:00.000Z',
     });
 
-    expect(asset).toMatchObject({
+    assertObjectMatch(asset, {
       id: 'asset-1',
       bundle_format: 'takopack',
       bundle_meta: {
@@ -28,12 +29,11 @@ describe('repo release asset mapping', () => {
         description: 'Deployable bundle',
       },
     });
-    expect(asset).not.toHaveProperty('is_takopack');
-    expect(asset).not.toHaveProperty('takopack_meta');
-  });
-
-  it('maps asset arrays through the same canonical contract', () => {
-    const assets = toReleaseAssets([
+    assert(!('is_takopack' in asset));
+    assert(!('takopack_meta' in asset));
+})
+  Deno.test('repo release asset mapping - maps asset arrays through the same canonical contract', () => {
+  const assets = toReleaseAssets([
       {
         id: 'asset-2',
         assetKey: 'releases/release-2/readme.txt',
@@ -47,11 +47,10 @@ describe('repo release asset mapping', () => {
       },
     ]);
 
-    expect(assets).toHaveLength(1);
-    expect(assets[0]).toMatchObject({
+    assertEquals(assets.length, 1);
+    assertObjectMatch(assets[0], {
       id: 'asset-2',
       bundle_format: undefined,
       bundle_meta: undefined,
     });
-  });
-});
+})

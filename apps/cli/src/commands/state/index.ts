@@ -16,12 +16,12 @@
  *   takos state sync                      -- Synchronise local and remote state
  */
 import { Command } from 'commander';
-import { registerStateListCommand } from './list.js';
-import { registerStateShowCommand } from './show.js';
-import { registerStateImportCommand } from './import.js';
-import { registerStateRmCommand } from './rm.js';
-import { registerStateRefreshCommand } from './refresh.js';
-import { registerStateSyncCommand } from './sync.js';
+import { registerStateListCommand } from './list.ts';
+import { registerStateShowCommand } from './show.ts';
+import { registerStateImportCommand } from './import.ts';
+import { registerStateRmCommand } from './rm.ts';
+import { registerStateRefreshCommand } from './refresh.ts';
+import { registerStateSyncCommand } from './sync.ts';
 
 export function registerStateCommand(program: Command): void {
   const stateCmd = program

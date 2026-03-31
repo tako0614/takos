@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+
+import { assert, assertStringIncludes } from 'jsr:@std/assert';
 
 const rootDir = path.resolve(import.meta.dirname, '../..');
 
@@ -8,9 +9,9 @@ function read(relativePath: string): string {
   return readFileSync(path.join(rootDir, relativePath), 'utf8');
 }
 
-describe('worker entrypoint contract', () => {
-  it('routes every first-party worker through the runtime app entrypoints', () => {
-    const cases = [
+
+  Deno.test('worker entrypoint contract - routes every first-party worker through the runtime app entrypoints', () => {
+  const cases = [
       ['wrangler.toml', 'src/web.ts'],
       ['wrangler.dispatch.toml', 'src/dispatch.ts'],
       ['wrangler.worker.toml', 'src/worker.ts'],
@@ -21,12 +22,11 @@ describe('worker entrypoint contract', () => {
 
     for (const [configPath, expectedMain] of cases) {
       const contents = read(configPath);
-      expect(contents).toContain(`main = "${expectedMain}"`);
+      assertStringIncludes(contents, `main = "${expectedMain}"`);
     }
-  });
-
-  it('does not require markdown module rules on Cloudflare worker configs', () => {
-    const markdownConfigs = [
+})
+  Deno.test('worker entrypoint contract - does not require markdown module rules on Cloudflare worker configs', () => {
+  const markdownConfigs = [
       'wrangler.toml',
       'wrangler.worker.toml',
       'wrangler.executor.toml',
@@ -34,8 +34,7 @@ describe('worker entrypoint contract', () => {
 
     for (const configPath of markdownConfigs) {
       const contents = read(configPath);
-      expect(contents).not.toContain('type = "Text"');
-      expect(contents).not.toContain('globs = ["**/*.md"]');
+      assert(!(contents).includes('type = "Text"'));
+      assert(!(contents).includes('globs = ["**/*.md"]'));
     }
-  });
-});
+})

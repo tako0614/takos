@@ -8,7 +8,7 @@ import path from 'node:path';
 // ---------------------------------------------------------------------------
 
 export function optionalEnv(name: string): string | undefined {
-  return process.env[name]?.trim() || undefined;
+  return Deno.env.get(name)?.trim() || undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ export function optionalEnv(name: string): string | undefined {
 export function resolveLocalDataDir(): string | null {
   const explicit = optionalEnv('TAKOS_LOCAL_DATA_DIR');
   if (explicit) return path.resolve(explicit);
-  if (process.env.VITEST) return null;
+  if (Deno.env.get('VITEST')) return null;
   // Only use the default directory if no cloud storage env vars are set —
   // this avoids accidentally creating a .takos-local directory when running
   // on a cloud platform.

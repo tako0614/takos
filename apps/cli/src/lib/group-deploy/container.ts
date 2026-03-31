@@ -11,9 +11,9 @@ import type {
   ContainerServiceDef,
   ProvisionedResource,
   ServiceDeployResult,
-} from './deploy-models.js';
-import { execCommand } from './cloudflare-utils.js';
-import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
+} from './deploy-models.ts';
+import { execCommand } from './cloudflare-utils.ts';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.ts';
 
 // ── Container Deploy Helpers ─────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ export function generateContainerWranglerConfig(
 
   return {
     name: scriptName,
-    main: 'index.js',
+    main: 'index.ts',
     compatibility_date: options.compatibilityDate || DEFAULT_COMPATIBILITY_DATE,
     compatibility_flags: ['nodejs_compat'],
     durable_objects: {
@@ -167,7 +167,7 @@ export async function deployContainerWithWrangler(
     await fs.writeFile(path.join(tmpDir, 'wrangler.toml'), tomlContent, 'utf8');
 
     const entryContent = generateContainerHostEntry(serviceName, service);
-    await fs.writeFile(path.join(tmpDir, 'index.js'), entryContent, 'utf8');
+    await fs.writeFile(path.join(tmpDir, 'index.ts'), entryContent, 'utf8');
 
     const wranglerEnv: NodeJS.ProcessEnv = {
       CLOUDFLARE_ACCOUNT_ID: options.accountId,

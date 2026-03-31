@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { Button } from '../../components/ui/Button';
 import { ConsentLayout, ConsentLogo } from './ConsentLayout';
@@ -42,11 +42,11 @@ type ContextResponse =
 
 export function OAuthConsentView() {
   const { t } = useI18n();
-  const [consentData, setConsentData] = useState<ConsentData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [consentData, setConsentData] = createSignal<ConsentData | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
+  const [submitting, setSubmitting] = createSignal(false);
 
-  useEffect(() => {
+  onMount(() => {
     const search = window.location.search;
     fetch(`/api/oauth/authorize/context${search}`, { credentials: 'include' })
       .then(async (res) => {
@@ -73,9 +73,9 @@ export function OAuthConsentView() {
         }
       })
       .catch(() => setError('Failed to load authorization data'));
-  }, []);
+  });
 
-  const handleDecision = useCallback(async (action: 'allow' | 'deny') => {
+  const handleDecision = async (action: 'allow' | 'deny') => {
     if (!consentData) return;
     setSubmitting(true);
 
@@ -86,8 +86,8 @@ export function OAuthConsentView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          csrf_token: consentData.csrf_token,
-          ...consentData.params,
+          csrf_token: consentData()!.csrf_token,
+          ...consentData()!.params,
         }),
       });
 
@@ -106,61 +106,64 @@ export function OAuthConsentView() {
       setError('Failed to submit decision');
       setSubmitting(false);
     }
-  }, [consentData]);
+  };
 
-  if (error) {
+  if (error()) {
     return (
       <ConsentLayout>
         <ConsentLogo />
-        <h1 className="text-lg font-bold text-[var(--color-error)] mb-2">{t('oauthConsentError')}</h1>
-        <p className="text-sm text-[var(--color-text-tertiary)]">{error}</p>
+        <h1 class="text-lg font-bold text-[var(--color-error)] mb-2">{t('oauthConsentError')}</h1>
+        <p class="text-sm text-[var(--color-text-tertiary)]">{error()}</p>
       </ConsentLayout>
     );
   }
 
-  if (!consentData) {
+  if (!consentData()) {
     return <LoadingScreen />;
   }
 
-  return (
+  return (() => {
+    const cd = consentData()!;
+    return (
     <ConsentLayout>
-      <ConsentLogo src={consentData.client.logo_uri} />
-      <h1 className="text-lg font-bold text-[var(--color-text-primary)] mb-1">
-        {consentData.client.name}
+      <ConsentLogo src={cd.client.logo_uri} />
+      <h1 class="text-lg font-bold text-[var(--color-text-primary)] mb-1">
+        {cd.client.name}
       </h1>
-      <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-        {consentData.user.email} {t('oauthConsentLoggedInAs')}
+      <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+        {cd.user.email} {t('oauthConsentLoggedInAs')}
       </p>
-      <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-        <strong className="text-[var(--color-text-primary)]">{consentData.client.name}</strong>
+      <p class="text-sm text-[var(--color-text-secondary)] mb-4">
+        <strong class="text-[var(--color-text-primary)]">{cd.client.name}</strong>
         {t('oauthConsentRequesting')}
       </p>
 
-      <div className="mb-4">
+      <div class="mb-4">
         <ScopeList
-          identity={consentData.scopes.identity}
-          resources={consentData.scopes.resources}
+          identity={cd.scopes.identity}
+          resources={cd.scopes.resources}
         />
       </div>
 
-      <div className="flex gap-3">
+      <div class="flex gap-3">
         <Button
           variant="secondary"
-          className="flex-1"
-          disabled={submitting}
+          class="flex-1"
+          disabled={submitting()}
           onClick={() => handleDecision('deny')}
         >
           {t('oauthConsentDeny')}
         </Button>
         <Button
           variant="primary"
-          className="flex-1"
-          isLoading={submitting}
+          class="flex-1"
+          isLoading={submitting()}
           onClick={() => handleDecision('allow')}
         >
           {t('oauthConsentAllow')}
         </Button>
       </div>
     </ConsentLayout>
-  );
+    );
+  })();
 }

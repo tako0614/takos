@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { BUILTIN_TOOLS, getBuiltinTool } from '@/tools/builtin';
 import {
   canRoleAccessTool,
@@ -8,112 +7,103 @@ import {
 } from '@/tools/tool-policy';
 import { getRequiredCapabilitiesForTool } from '@/tools/capabilities';
 
-describe('tool-policy', () => {
-  it('validates built-in workspace policy metadata', () => {
-    expect(validateBuiltinToolPolicies(BUILTIN_TOOLS)).toEqual([]);
-  });
 
-  it('enforces service delete access policy', () => {
-    const serviceDelete = getBuiltinTool('service_delete');
+import { assertEquals, assert, assertObjectMatch } from 'jsr:@std/assert';
 
-    expect(serviceDelete).toBeDefined();
+  Deno.test('tool-policy - validates built-in workspace policy metadata', () => {
+  assertEquals(validateBuiltinToolPolicies(BUILTIN_TOOLS), []);
+})
+  Deno.test('tool-policy - enforces service delete access policy', () => {
+  const serviceDelete = getBuiltinTool('service_delete');
 
-    expect(canRoleAccessTool('editor', serviceDelete!)).toBe(false);
-    expect(canRoleAccessTool('owner', serviceDelete!)).toBe(true);
-  });
+    assert(serviceDelete !== undefined);
 
-  it('enforces deploy_frontend access policy', () => {
-    const deployFrontend = getBuiltinTool('deploy_frontend');
+    assertEquals(canRoleAccessTool('editor', serviceDelete!), false);
+    assertEquals(canRoleAccessTool('owner', serviceDelete!), true);
+})
+  Deno.test('tool-policy - enforces deploy_frontend access policy', () => {
+  const deployFrontend = getBuiltinTool('deploy_frontend');
 
-    expect(deployFrontend).toBeDefined();
+    assert(deployFrontend !== undefined);
 
-    expect(canRoleAccessTool('editor', deployFrontend!)).toBe(false);
-    expect(canRoleAccessTool('admin', deployFrontend!)).toBe(true);
-  });
-
-  it('filters workspace-mapped tools by workspace role', () => {
-    const tools = [
+    assertEquals(canRoleAccessTool('editor', deployFrontend!), false);
+    assertEquals(canRoleAccessTool('admin', deployFrontend!), true);
+})
+  Deno.test('tool-policy - filters workspace-mapped tools by workspace role', () => {
+  const tools = [
       getBuiltinTool('service_list')!,
       getBuiltinTool('service_delete')!,
       getBuiltinTool('skill_list')!,
       getBuiltinTool('skill_update')!,
     ];
 
-    expect(filterToolsForRole(tools, 'viewer').map((tool) => tool.name)).toEqual([
+    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
       'service_list',
       'skill_list',
     ]);
-    expect(filterToolsForRole(tools, 'admin').map((tool) => tool.name)).toEqual([
+    assertEquals(filterToolsForRole(tools, 'admin').map((tool) => tool.name), [
       'service_list',
       'service_delete',
       'skill_list',
       'skill_update',
     ]);
-  });
-
-  it('maps service lifecycle tools to workspace operations', () => {
-    expect(getToolPolicyMetadata('service_delete')).toMatchObject({
+})
+  Deno.test('tool-policy - maps service lifecycle tools to workspace operations', () => {
+  assertObjectMatch(getToolPolicyMetadata('service_delete'), {
       operation_id: 'service.delete',
     });
-  });
-
-  it('maps repository ownership tools to workspace operations', () => {
-    expect(getToolPolicyMetadata('create_repository')).toMatchObject({
+})
+  Deno.test('tool-policy - maps repository ownership tools to workspace operations', () => {
+  assertObjectMatch(getToolPolicyMetadata('create_repository'), {
       operation_id: 'repo.create',
     });
-    expect(getToolPolicyMetadata('repo_fork')).toMatchObject({
+    assertObjectMatch(getToolPolicyMetadata('repo_fork'), {
       operation_id: 'repo.fork',
     });
-  });
-
-  it('hides repo ownership tools from viewers', () => {
-    const tools = [
+})
+  Deno.test('tool-policy - hides repo ownership tools from viewers', () => {
+  const tools = [
       getBuiltinTool('create_repository')!,
       getBuiltinTool('repo_fork')!,
       getBuiltinTool('store_search')!,
     ];
 
-    expect(filterToolsForRole(tools, 'viewer').map((tool) => tool.name)).toEqual([
+    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
       'store_search',
     ]);
-    expect(filterToolsForRole(tools, 'editor').map((tool) => tool.name)).toEqual([
+    assertEquals(filterToolsForRole(tools, 'editor').map((tool) => tool.name), [
       'create_repository',
       'repo_fork',
       'store_search',
     ]);
-  });
-
-  it('maps skill introspection helpers to workspace operations', () => {
-    expect(getToolPolicyMetadata('skill_catalog')).toMatchObject({
+})
+  Deno.test('tool-policy - maps skill introspection helpers to workspace operations', () => {
+  assertObjectMatch(getToolPolicyMetadata('skill_catalog'), {
       operation_id: 'skill.catalog',
     });
-    expect(getToolPolicyMetadata('skill_describe')).toMatchObject({
+    assertObjectMatch(getToolPolicyMetadata('skill_describe'), {
       operation_id: 'skill.describe',
     });
-  });
-
-  it('exposes skill introspection helpers to viewers', () => {
-    const tools = [
+})
+  Deno.test('tool-policy - exposes skill introspection helpers to viewers', () => {
+  const tools = [
       getBuiltinTool('skill_catalog')!,
       getBuiltinTool('skill_describe')!,
       getBuiltinTool('skill_delete')!,
     ];
 
-    expect(filterToolsForRole(tools, 'viewer').map((tool) => tool.name)).toEqual([
+    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
       'skill_catalog',
       'skill_describe',
     ]);
-  });
-
-  it('maps workspace storage write helpers to storage.write capability', () => {
-    expect(getRequiredCapabilitiesForTool('workspace_files_write')).toEqual(['storage.write']);
-    expect(getRequiredCapabilitiesForTool('workspace_files_create')).toEqual(['storage.write']);
-    expect(getRequiredCapabilitiesForTool('workspace_files_delete')).toEqual(['storage.write']);
-  });
-
-  it('maps repository ownership helpers to repo capabilities', () => {
-    expect(getRequiredCapabilitiesForTool('create_repository')).toEqual(['repo.write']);
-    expect(getRequiredCapabilitiesForTool('repo_fork')).toEqual(['repo.write']);
-    expect(getRequiredCapabilitiesForTool('repo_switch')).toEqual(['repo.read']);
-  });
-});
+})
+  Deno.test('tool-policy - maps workspace storage write helpers to storage.write capability', () => {
+  assertEquals(getRequiredCapabilitiesForTool('workspace_files_write'), ['storage.write']);
+    assertEquals(getRequiredCapabilitiesForTool('workspace_files_create'), ['storage.write']);
+    assertEquals(getRequiredCapabilitiesForTool('workspace_files_delete'), ['storage.write']);
+})
+  Deno.test('tool-policy - maps repository ownership helpers to repo capabilities', () => {
+  assertEquals(getRequiredCapabilitiesForTool('create_repository'), ['repo.write']);
+    assertEquals(getRequiredCapabilitiesForTool('repo_fork'), ['repo.write']);
+    assertEquals(getRequiredCapabilitiesForTool('repo_switch'), ['repo.read']);
+})

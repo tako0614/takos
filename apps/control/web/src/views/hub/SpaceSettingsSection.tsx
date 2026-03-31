@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
@@ -36,33 +36,33 @@ export function SpaceSettingsSection({
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [spaceName, setSpaceName] = useState('');
-  const [isPersonal, setIsPersonal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [spaceName, setSpaceName] = createSignal('');
+  const [isPersonal, setIsPersonal] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
 
-  const [members, setMembers] = useState<SpaceMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [members, setMembers] = createSignal<SpaceMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = createSignal(false);
 
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
-  const [inviting, setInviting] = useState(false);
+  const [inviteEmail, setInviteEmail] = createSignal('');
+  const [inviteRole, setInviteRole] = createSignal<'admin' | 'member'>('member');
+  const [inviting, setInviting] = createSignal(false);
 
-  const [showCreateSpace, setShowCreateSpace] = useState(false);
-  const [creatingSpace, setCreatingSpace] = useState(false);
+  const [showCreateSpace, setShowCreateSpace] = createSignal(false);
+  const [creatingSpace, setCreatingSpace] = createSignal(false);
 
   const { personalSpace, otherSpaces } = splitSpaces(spaces || [], t('personal'));
   const selectedSpace = selectedSpaceId
     ? findSpaceByIdentifier(spaces || [], selectedSpaceId, t('personal'))
     : null;
 
-  useEffect(() => {
+  createEffect(() => {
     if (selectedSpace) {
-      setSpaceName(selectedSpace.name);
-      setIsPersonal(selectedSpace.is_personal);
+      setSpaceName(selectedSpace.name as string);
+      setIsPersonal(selectedSpace.is_personal as boolean);
     }
-  }, [selectedSpace]);
+  });
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = async () => {
     if (!selectedSpaceId) return;
     try {
       setLoadingMembers(true);
@@ -76,23 +76,23 @@ export function SpaceSettingsSection({
     } finally {
       setLoadingMembers(false);
     }
-  }, [selectedSpaceId]);
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     if (selectedSpaceId && !selectedSpace?.is_personal) {
       fetchMembers();
     } else {
       setMembers([]);
     }
-  }, [selectedSpaceId, selectedSpace?.is_personal, fetchMembers]);
+  });
 
   const handleSaveSpace = async () => {
-    if (!selectedSpaceId || !spaceName.trim()) return;
+    if (!selectedSpaceId || !spaceName().trim()) return;
     try {
       setSaving(true);
       const res = await rpc.spaces[':spaceId'].$patch({
         param: { spaceId: selectedSpaceId },
-        json: { name: spaceName.trim() },
+        json: { name: spaceName().trim() },
       });
       await rpcJson(res);
       showToast('success', t('saved'));
@@ -105,12 +105,12 @@ export function SpaceSettingsSection({
   };
 
   const handleInviteMember = async () => {
-    if (!selectedSpaceId || !inviteEmail.trim()) return;
+    if (!selectedSpaceId || !inviteEmail().trim()) return;
     try {
       setInviting(true);
       const res = await rpc.spaces[':spaceId'].members.$post({
         param: { spaceId: selectedSpaceId },
-        json: { email: inviteEmail.trim(), role: inviteRole },
+        json: { email: inviteEmail().trim(), role: inviteRole() },
       });
       await rpcJson(res);
       showToast('success', t('memberInvited') || 'Member invited');
@@ -161,7 +161,7 @@ export function SpaceSettingsSection({
   };
 
   const handleDeleteSpace = async () => {
-    if (!selectedSpaceId || isPersonal) return;
+    if (!selectedSpaceId || isPersonal()) return;
     const confirmed = await confirm({
       title: t('deleteSpace') || 'Delete Space',
       message: t('deleteSpaceWarning') || 'Are you sure you want to delete this space? This action cannot be undone and all data will be permanently deleted.',
@@ -202,19 +202,19 @@ export function SpaceSettingsSection({
   };
 
   return (
-    <div className="h-full flex flex-col bg-zinc-50/30 dark:bg-zinc-900/30">
-      <div className="flex items-center gap-3 px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
-          <Icons.Settings className="w-4 h-4" />
+    <div class="h-full flex flex-col bg-zinc-50/30 dark:bg-zinc-900/30">
+      <div class="flex items-center gap-3 px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+          <Icons.Settings class="w-4 h-4" />
         </div>
-        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <h3 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
           {t('spaceSettings') || 'Space Settings'}
         </h3>
       </div>
 
-      <div className="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+      <div class="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
             {t('selectSpace') || 'Select Space'}
           </label>
           <Button
@@ -222,13 +222,13 @@ export function SpaceSettingsSection({
             size="sm"
             onClick={() => setShowCreateSpace(true)}
           >
-            <Icons.Plus className="w-4 h-4 mr-1" />
+            <Icons.Plus class="w-4 h-4 mr-1" />
             {t('createSpace') || 'Create'}
           </Button>
         </div>
         <select
-          className="w-full max-w-md px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
-          value={selectedSpaceId || ''}
+          class="w-full max-w-md px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
+          value={selectedSpaceId ?? ''}
           onChange={(e) => setSelectedSpaceId(e.target.value)}
         >
           <option value="" disabled>{t('selectSpace') || 'Select a space'}</option>
@@ -236,53 +236,53 @@ export function SpaceSettingsSection({
             <option value="me">{t('personal')} ({personalSpace.name})</option>
           )}
           {otherSpaces.map((ws) => (
-            <option key={ws.slug} value={ws.slug}>{ws.name}</option>
+            <option value={ws.slug ?? ''}>{ws.name}</option>
           ))}
         </select>
 
-        {showCreateSpace && (
+        {showCreateSpace() && (
           <CreateSpaceModal
             onClose={() => setShowCreateSpace(false)}
             onCreate={handleCreateSpace}
-            creating={creatingSpace}
+            creating={creatingSpace()}
           />
         )}
       </div>
 
       {selectedSpace ? (
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
           <SpaceInfoCard
             selectedSpace={selectedSpace}
-            spaceName={spaceName}
+            spaceName={spaceName()}
             setSpaceName={setSpaceName}
-            isPersonal={isPersonal}
-            saving={saving}
+            isPersonal={isPersonal()}
+            saving={saving()}
             onSave={handleSaveSpace}
           />
 
-          {!isPersonal && (
+          {!isPersonal() && (
             <MembersCard
-              members={members}
-              loadingMembers={loadingMembers}
-              inviteEmail={inviteEmail}
+              members={members()}
+              loadingMembers={loadingMembers()}
+              inviteEmail={inviteEmail()}
               setInviteEmail={setInviteEmail}
-              inviteRole={inviteRole}
+              inviteRole={inviteRole()}
               setInviteRole={setInviteRole}
-              inviting={inviting}
+              inviting={inviting()}
               onInvite={handleInviteMember}
               onRemove={handleRemoveMember}
               onChangeRole={handleChangeMemberRole}
             />
           )}
 
-          {!isPersonal && (
+          {!isPersonal() && (
             <DangerZoneCard onDelete={handleDeleteSpace} />
           )}
 
-          {isPersonal && <PersonalSpaceNote />}
+          {isPersonal() && <PersonalSpaceNote />}
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+        <div class="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
           {t('selectSpaceHint') || 'Select a space to view settings'}
         </div>
       )}

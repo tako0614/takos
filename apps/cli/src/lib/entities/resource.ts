@@ -6,11 +6,11 @@
  * designed to be called from CLI commands directly, without requiring a
  * full app.yml manifest.
  */
-import type { ResourceState } from '../state/state-types.js';
-import type { ProvisionResult } from '../group-deploy/resource-provider.js';
-import { resolveProvider } from '../group-deploy/provisioner.js';
-import { readState, writeState, getStateDir } from '../state/state-file.js';
-import { createEmptyState } from '../empty-state.js';
+import type { ResourceState } from '../state/state-types.ts';
+import type { ProvisionResult } from '../group-deploy/resource-provider.ts';
+import { resolveProvider } from '../group-deploy/provisioner.ts';
+import { readState, writeState, getStateDir } from '../state/state-file.ts';
+import { createEmptyState } from '../empty-state.ts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

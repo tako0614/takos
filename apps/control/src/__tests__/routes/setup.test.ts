@@ -1,36 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  lastSetData: null as Record<string, unknown> | null,
-}));
+import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: () => ({
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            get: vi.fn(async () => undefined),
-          })),
-        })),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn((data: Record<string, unknown>) => {
-          mocks.lastSetData = data;
-          return {
-            where: vi.fn(async () => undefined),
-          };
-        }),
-      })),
-    }),
-  };
+const mocks = ({
+  lastSetData: null as Record<string, unknown> | null,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import setupRoutes from '@/routes/setup';
 
 type TestEnv = {
@@ -68,13 +46,10 @@ function createApp(user: User) {
   return app;
 }
 
-describe('setup route', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('completes setup with username only (no password)', async () => {
-    const db = new TestDb();
+  Deno.test('setup route - completes setup with username only (no password)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const db = new TestDb();
     const app = createApp(createUser());
 
     const response = await app.fetch(
@@ -89,18 +64,17 @@ describe('setup route', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       success: true,
       username: 'userone',
     });
 
-    expect(mocks.lastSetData).not.toBeNull();
+    assertNotEquals(mocks.lastSetData, null);
     const setData = mocks.lastSetData as Record<string, unknown>;
 
-    expect(setData.slug).toBe('userone');
-    expect(setData.setupCompleted).toBe(true);
+    assertEquals(setData.slug, 'userone');
+    assertEquals(setData.setupCompleted, true);
     // No password hash should be set
-    expect(setData.passwordHash).toBeUndefined();
-  });
-});
+    assertEquals(setData.passwordHash, undefined);
+})

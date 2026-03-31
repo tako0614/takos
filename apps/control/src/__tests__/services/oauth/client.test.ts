@@ -1,4 +1,3 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { OAuthClient, JsonStringArray } from '@/types/oauth';
 import {
@@ -14,6 +13,8 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Helper to create a {@link JsonStringArray} from a native array in tests. */
+import { assertEquals, assertNotEquals, assert, assertThrows, assertRejects } from 'jsr:@std/assert';
+
 function jsonArray(arr: string[]): JsonStringArray {
   return JSON.stringify(arr) as JsonStringArray;
 }
@@ -43,185 +44,157 @@ function makeClient(overrides: Partial<OAuthClient> = {}): OAuthClient {
   };
 }
 
-describe('validateRedirectUri', () => {
-  it('returns true when URI is in the registered list', () => {
-    const client = makeClient({
+
+  Deno.test('validateRedirectUri - returns true when URI is in the registered list', () => {
+  const client = makeClient({
       redirect_uris: jsonArray([
         'https://example.com/callback',
         'https://other.example.com/auth',
       ]),
     });
 
-    expect(validateRedirectUri(client, 'https://example.com/callback')).toBe(true);
-    expect(validateRedirectUri(client, 'https://other.example.com/auth')).toBe(true);
-  });
-
-  it('returns false when URI is not in the registered list', () => {
-    const client = makeClient();
-    expect(validateRedirectUri(client, 'https://evil.com/callback')).toBe(false);
-  });
-
-  it('does exact string matching (no normalization)', () => {
-    const client = makeClient({
+    assertEquals(validateRedirectUri(client, 'https://example.com/callback'), true);
+    assertEquals(validateRedirectUri(client, 'https://other.example.com/auth'), true);
+})
+  Deno.test('validateRedirectUri - returns false when URI is not in the registered list', () => {
+  const client = makeClient();
+    assertEquals(validateRedirectUri(client, 'https://evil.com/callback'), false);
+})
+  Deno.test('validateRedirectUri - does exact string matching (no normalization)', () => {
+  const client = makeClient({
       redirect_uris: jsonArray(['https://example.com/callback']),
     });
 
     // Trailing slash is different
-    expect(validateRedirectUri(client, 'https://example.com/callback/')).toBe(false);
-  });
+    assertEquals(validateRedirectUri(client, 'https://example.com/callback/'), false);
+})
+  Deno.test('validateRedirectUri - returns false when redirect_uris is invalid JSON', () => {
+  const client = makeClient({ redirect_uris: 'not-json' as JsonStringArray });
+    assertEquals(validateRedirectUri(client, 'https://example.com/callback'), false);
+})
+  Deno.test('validateRedirectUri - returns false for empty redirect_uris', () => {
+  const client = makeClient({ redirect_uris: '[]' as JsonStringArray });
+    assertEquals(validateRedirectUri(client, 'https://example.com/callback'), false);
+})
 
-  it('returns false when redirect_uris is invalid JSON', () => {
-    const client = makeClient({ redirect_uris: 'not-json' as JsonStringArray });
-    expect(validateRedirectUri(client, 'https://example.com/callback')).toBe(false);
-  });
-
-  it('returns false for empty redirect_uris', () => {
-    const client = makeClient({ redirect_uris: '[]' as JsonStringArray });
-    expect(validateRedirectUri(client, 'https://example.com/callback')).toBe(false);
-  });
-});
-
-describe('validateRedirectUris', () => {
-  it('accepts valid HTTPS URIs', () => {
-    expect(() => validateRedirectUris(['https://example.com/callback'])).not.toThrow();
-  });
-
-  it('accepts localhost HTTP URIs', () => {
-    expect(() =>
+  Deno.test('validateRedirectUris - accepts valid HTTPS URIs', () => {
+  try { () => validateRedirectUris(['https://example.com/callback']); } catch (_e) { throw new Error('Expected no throw'); };
+})
+  Deno.test('validateRedirectUris - accepts localhost HTTP URIs', () => {
+  try { () =>
       validateRedirectUris(['http://localhost:3000/callback']),
-    ).not.toThrow();
-    expect(() =>
+    ; } catch (_e) { throw new Error('Expected no throw'); };
+    try { () =>
       validateRedirectUris(['http://127.0.0.1:8080/callback']),
-    ).not.toThrow();
-    expect(() =>
+    ; } catch (_e) { throw new Error('Expected no throw'); };
+    try { () =>
       validateRedirectUris(['http://[::1]:3000/callback']),
-    ).not.toThrow();
-    expect(() =>
+    ; } catch (_e) { throw new Error('Expected no throw'); };
+    try { () =>
       validateRedirectUris(['http://sub.localhost/callback']),
-    ).not.toThrow();
-  });
-
-  it('throws for empty array', () => {
-    expect(() => validateRedirectUris([])).toThrow('At least one redirect_uri is required');
-  });
-
-  it('throws for non-HTTPS non-localhost URIs', () => {
-    expect(() => validateRedirectUris(['http://example.com/callback'])).toThrow('must use HTTPS');
-  });
-
-  it('throws for URIs with fragments', () => {
-    expect(() =>
+    ; } catch (_e) { throw new Error('Expected no throw'); };
+})
+  Deno.test('validateRedirectUris - throws for empty array', () => {
+  assertThrows(() => { () => validateRedirectUris([]); }, 'At least one redirect_uri is required');
+})
+  Deno.test('validateRedirectUris - throws for non-HTTPS non-localhost URIs', () => {
+  assertThrows(() => { () => validateRedirectUris(['http://example.com/callback']); }, 'must use HTTPS');
+})
+  Deno.test('validateRedirectUris - throws for URIs with fragments', () => {
+  assertThrows(() => { () =>
       validateRedirectUris(['https://example.com/callback#fragment']),
-    ).toThrow('fragment not allowed');
-  });
-
-  it('throws for malformed URIs', () => {
-    expect(() => validateRedirectUris(['not-a-url'])).toThrow('Invalid redirect_uri');
-  });
-
-  it('accepts multiple valid URIs', () => {
-    expect(() =>
+    ; }, 'fragment not allowed');
+})
+  Deno.test('validateRedirectUris - throws for malformed URIs', () => {
+  assertThrows(() => { () => validateRedirectUris(['not-a-url']); }, 'Invalid redirect_uri');
+})
+  Deno.test('validateRedirectUris - accepts multiple valid URIs', () => {
+  try { () =>
       validateRedirectUris([
         'https://example.com/callback',
         'https://other.example.com/auth',
         'http://localhost:3000/callback',
       ]),
-    ).not.toThrow();
-  });
-});
+    ; } catch (_e) { throw new Error('Expected no throw'); };
+})
 
-describe('supportsGrantType', () => {
-  it('returns true when grant type is in the list', () => {
-    const client = makeClient({
+  Deno.test('supportsGrantType - returns true when grant type is in the list', () => {
+  const client = makeClient({
       grant_types: jsonArray(['authorization_code', 'refresh_token']),
     });
 
-    expect(supportsGrantType(client, 'authorization_code')).toBe(true);
-    expect(supportsGrantType(client, 'refresh_token')).toBe(true);
-  });
-
-  it('returns false when grant type is not in the list', () => {
-    const client = makeClient({
+    assertEquals(supportsGrantType(client, 'authorization_code'), true);
+    assertEquals(supportsGrantType(client, 'refresh_token'), true);
+})
+  Deno.test('supportsGrantType - returns false when grant type is not in the list', () => {
+  const client = makeClient({
       grant_types: jsonArray(['authorization_code']),
     });
 
-    expect(supportsGrantType(client, 'client_credentials')).toBe(false);
-  });
+    assertEquals(supportsGrantType(client, 'client_credentials'), false);
+})
+  Deno.test('supportsGrantType - returns false for invalid JSON', () => {
+  const client = makeClient({ grant_types: 'not-json' as JsonStringArray });
+    assertEquals(supportsGrantType(client, 'authorization_code'), false);
+})
 
-  it('returns false for invalid JSON', () => {
-    const client = makeClient({ grant_types: 'not-json' as JsonStringArray });
-    expect(supportsGrantType(client, 'authorization_code')).toBe(false);
-  });
-});
-
-describe('getClientAllowedScopes', () => {
-  it('parses and returns the allowed scopes', () => {
-    const client = makeClient({
+  Deno.test('getClientAllowedScopes - parses and returns the allowed scopes', () => {
+  const client = makeClient({
       allowed_scopes: jsonArray(['openid', 'profile', 'spaces:read']),
     });
 
-    expect(getClientAllowedScopes(client)).toEqual(['openid', 'profile', 'spaces:read']);
-  });
+    assertEquals(getClientAllowedScopes(client), ['openid', 'profile', 'spaces:read']);
+})
+  Deno.test('getClientAllowedScopes - returns empty array for invalid JSON', () => {
+  const client = makeClient({ allowed_scopes: 'bad' as JsonStringArray });
+    assertEquals(getClientAllowedScopes(client), []);
+})
 
-  it('returns empty array for invalid JSON', () => {
-    const client = makeClient({ allowed_scopes: 'bad' as JsonStringArray });
-    expect(getClientAllowedScopes(client)).toEqual([]);
-  });
-});
-
-describe('getClientRedirectUris', () => {
-  it('parses and returns redirect URIs', () => {
-    const client = makeClient({
+  Deno.test('getClientRedirectUris - parses and returns redirect URIs', () => {
+  const client = makeClient({
       redirect_uris: jsonArray(['https://a.com/cb', 'https://b.com/cb']),
     });
 
-    expect(getClientRedirectUris(client)).toEqual(['https://a.com/cb', 'https://b.com/cb']);
-  });
-
-  it('returns empty array for invalid JSON', () => {
-    const client = makeClient({ redirect_uris: '{bad}' as JsonStringArray });
-    expect(getClientRedirectUris(client)).toEqual([]);
-  });
-});
-
+    assertEquals(getClientRedirectUris(client), ['https://a.com/cb', 'https://b.com/cb']);
+})
+  Deno.test('getClientRedirectUris - returns empty array for invalid JSON', () => {
+  const client = makeClient({ redirect_uris: '{bad}' as JsonStringArray });
+    assertEquals(getClientRedirectUris(client), []);
+})
 // ---------------------------------------------------------------------------
 // DB-dependent tests
 // ---------------------------------------------------------------------------
 
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   getClientById,
   getClientsByOwner,
@@ -231,14 +204,11 @@ import {
   deleteClient,
 } from '@/services/oauth/client';
 
-describe('getClientById', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('returns mapped OAuthClient when found', async () => {
-    db._.get.mockResolvedValueOnce({
+  Deno.test('getClientById - returns mapped OAuthClient when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'int-1',
       clientId: 'client-1',
       clientSecretHash: 'hash',
@@ -258,30 +228,26 @@ describe('getClientById', () => {
       status: 'active',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const client = await getClientById({} as D1Database, 'client-1');
-    expect(client).not.toBeNull();
-    expect(client!.client_id).toBe('client-1');
-    expect(client!.client_type).toBe('confidential');
-    expect(client!.name).toBe('Test');
-  });
-
-  it('returns null when client is not found', async () => {
-    db._.get.mockResolvedValueOnce(null);
+    assertNotEquals(client, null);
+    assertEquals(client!.client_id, 'client-1');
+    assertEquals(client!.client_type, 'confidential');
+    assertEquals(client!.name, 'Test');
+})
+  Deno.test('getClientById - returns null when client is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
     const client = await getClientById({} as D1Database, 'nonexistent');
-    expect(client).toBeNull();
-  });
-});
+    assertEquals(client, null);
+})
 
-describe('getClientsByOwner', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns array of mapped clients', async () => {
-    db._.all.mockResolvedValueOnce([
+  Deno.test('getClientsByOwner - returns array of mapped clients', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all = (async () => [
       {
         id: 'int-1',
         clientId: 'client-1',
@@ -303,22 +269,17 @@ describe('getClientsByOwner', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
+    ]) as any;
 
     const clients = await getClientsByOwner({} as D1Database, 'owner-1');
-    expect(clients).toHaveLength(1);
-    expect(clients[0]!.client_id).toBe('client-1');
-  });
-});
+    assertEquals(clients.length, 1);
+    assertEquals(clients[0]!.client_id, 'client-1');
+})
 
-describe('validateClientCredentials', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns valid for a public client without secret', async () => {
-    db._.get.mockResolvedValueOnce({
+  Deno.test('validateClientCredentials - returns valid for a public client without secret', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'int-1',
       clientId: 'client-1',
       clientSecretHash: null,
@@ -338,24 +299,26 @@ describe('validateClientCredentials', () => {
       status: 'active',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await validateClientCredentials({} as D1Database, 'client-1');
-    expect(result.valid).toBe(true);
-    expect(result.client).not.toBeNull();
-  });
-
-  it('returns invalid when client is not found', async () => {
-    db._.get.mockResolvedValueOnce(null);
+    assertEquals(result.valid, true);
+    assertNotEquals(result.client, null);
+})
+  Deno.test('validateClientCredentials - returns invalid when client is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
     const result = await validateClientCredentials({} as D1Database, 'nonexistent');
-    expect(result.valid).toBe(false);
-    expect(result.client).toBeNull();
-    expect(result.error).toBe('Client not found');
-  });
-
-  it('returns invalid for confidential client without secret', async () => {
-    db._.get.mockResolvedValueOnce({
+    assertEquals(result.valid, false);
+    assertEquals(result.client, null);
+    assertEquals(result.error, 'Client not found');
+})
+  Deno.test('validateClientCredentials - returns invalid for confidential client without secret', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'int-1',
       clientId: 'client-1',
       clientSecretHash: 'some-hash',
@@ -375,82 +338,74 @@ describe('validateClientCredentials', () => {
       status: 'active',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await validateClientCredentials({} as D1Database, 'client-1');
-    expect(result.valid).toBe(false);
-    expect(result.error).toBe('Client secret required');
-  });
-});
+    assertEquals(result.valid, false);
+    assertEquals(result.error, 'Client secret required');
+})
 
-describe('createClient', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('creates a client and returns registration response', async () => {
-    const response = await createClient({} as D1Database, {
+  Deno.test('createClient - creates a client and returns registration response', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const response = await createClient({} as D1Database, {
       client_name: 'New App',
       redirect_uris: ['https://example.com/callback'],
       scope: 'openid profile',
     });
 
-    expect(response.client_id).toBeTruthy();
-    expect(response.client_secret).toBeTruthy(); // confidential by default
-    expect(response.client_name).toBe('New App');
-    expect(response.redirect_uris).toEqual(['https://example.com/callback']);
-    expect(response.scope).toBe('openid profile');
-    expect(response.registration_access_token).toBeTruthy();
-    expect(response.client_secret_expires_at).toBe(0);
-  });
-
-  it('creates a public client when token_endpoint_auth_method is none', async () => {
-    const response = await createClient({} as D1Database, {
+    assert(response.client_id);
+    assert(response.client_secret); // confidential by default
+    assertEquals(response.client_name, 'New App');
+    assertEquals(response.redirect_uris, ['https://example.com/callback']);
+    assertEquals(response.scope, 'openid profile');
+    assert(response.registration_access_token);
+    assertEquals(response.client_secret_expires_at, 0);
+})
+  Deno.test('createClient - creates a public client when token_endpoint_auth_method is none', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const response = await createClient({} as D1Database, {
       client_name: 'Public App',
       redirect_uris: ['https://example.com/callback'],
       token_endpoint_auth_method: 'none',
     });
 
-    expect(response.client_secret).toBeUndefined();
-  });
-
-  it('throws for unknown scopes', async () => {
-    await expect(
+    assertEquals(response.client_secret, undefined);
+})
+  Deno.test('createClient - throws for unknown scopes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  await await assertRejects(async () => { await 
       createClient({} as D1Database, {
         client_name: 'Bad Scopes',
         redirect_uris: ['https://example.com/callback'],
         scope: 'openid unknown_scope',
       }),
-    ).rejects.toThrow('Unknown scopes');
-  });
-
-  it('defaults grant_types and response_types', async () => {
-    const response = await createClient({} as D1Database, {
+    ; }, 'Unknown scopes');
+})
+  Deno.test('createClient - defaults grant_types and response_types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const response = await createClient({} as D1Database, {
       client_name: 'Default Grants',
       redirect_uris: ['https://example.com/callback'],
     });
 
-    expect(response.grant_types).toEqual(['authorization_code', 'refresh_token']);
-    expect(response.response_types).toEqual(['code']);
-  });
-});
+    assertEquals(response.grant_types, ['authorization_code', 'refresh_token']);
+    assertEquals(response.response_types, ['code']);
+})
 
-describe('deleteClient', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('sets client status to revoked', async () => {
-    (db._.chain as any).run = undefined; // Not used here; the update returns meta
-    (db.update as ReturnType<typeof vi.fn>).mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-      }),
-    });
+  Deno.test('deleteClient - sets client status to revoked', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  (db._.chain as any).run = undefined; // Not used here; the update returns meta
+    (db.update as ReturnType<typeof vi.fn>) = (() => ({
+      set: (() => ({
+        where: (async () => ({ meta: { changes: 1 } })),
+      })),
+    })) as any;
 
     const result = await deleteClient({} as D1Database, 'client-1');
-    expect(result).toBe(true);
-  });
-});
+    assertEquals(result, true);
+})

@@ -9,11 +9,11 @@ import {
   S3_BUCKET,
   MAX_R2_DOWNLOAD_FILE_BYTES,
   MAX_R2_DOWNLOAD_TOTAL_BYTES,
-} from '../shared/config.js';
-import { pushLog } from '../runtime/logging.js';
-import { isPathWithinBase, resolveBaseDirectory, resolveAndVerifyPathWithinBase, hasEscapingSymlinkComponent } from '../runtime/paths.js';
+} from '../shared/config.ts';
+import { pushLog } from '../runtime/logging.ts';
+import { isPathWithinBase, resolveBaseDirectory, resolveAndVerifyPathWithinBase, hasEscapingSymlinkComponent } from '../runtime/paths.ts';
 import { createLogger } from 'takos-common/logger';
-import { generateTempSuffix } from '../shared/temp-id.js';
+import { generateTempSuffix } from '../shared/temp-id.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

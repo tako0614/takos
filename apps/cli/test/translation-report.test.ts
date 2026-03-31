@@ -1,17 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { printTranslationReport, type TranslationReport } from '../src/lib/translation-report.js';
+import { printTranslationReport, type TranslationReport } from '../src/lib/translation-report.ts';
+
+import { assertStringIncludes } from 'jsr:@std/assert';
+import { stub } from 'jsr:@std/testing/mock';
 
 function captureOutput(logSpy: ReturnType<typeof vi.spyOn>) {
-  return logSpy.mock.calls.map((args) => args.map((entry) => String(entry)).join(' ')).join('\n');
+  return logSpy.calls.map((args) => args.map((entry) => String(entry)).join(' ')).join('\n');
 }
 
-describe('printTranslationReport', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
 
-  it('prints spec, runtime, backend, and realization summaries for Cloudflare', () => {
-    const report: TranslationReport = {
+  Deno.test('printTranslationReport - prints spec, runtime, backend, and realization summaries for Cloudflare', () => {
+  try {
+  const report: TranslationReport = {
       provider: 'cloudflare',
       supported: true,
       requirements: ['CF_ACCOUNT_ID', 'CF_API_TOKEN'],
@@ -21,22 +20,25 @@ describe('printTranslationReport', () => {
       unsupported: [],
     };
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = stub(console, 'log') = () => {} as any;
     printTranslationReport(report);
     const output = captureOutput(logSpy);
 
-    expect(output).toContain('Spec:     Cloudflare-native');
-    expect(output).toContain('Runtime:  Takos runtime');
-    expect(output).toContain('Backend:  Cloudflare backend');
-    expect(output).toContain('supported');
-    expect(output).toContain('Needs:    CF_ACCOUNT_ID, CF_API_TOKEN');
-    expect(output).toContain('Resources: cloudflare-native=1');
-    expect(output).toContain('Workloads: native=1, portable=1');
-    expect(output).toContain('Routes:   native=1');
-  });
-
-  it('prints blocked status and unsupported details for compatibility backends', () => {
-    const report: TranslationReport = {
+    assertStringIncludes(output, 'Spec:     Cloudflare-native');
+    assertStringIncludes(output, 'Runtime:  Takos runtime');
+    assertStringIncludes(output, 'Backend:  Cloudflare backend');
+    assertStringIncludes(output, 'supported');
+    assertStringIncludes(output, 'Needs:    CF_ACCOUNT_ID, CF_API_TOKEN');
+    assertStringIncludes(output, 'Resources: cloudflare-native=1');
+    assertStringIncludes(output, 'Workloads: native=1, portable=1');
+    assertStringIncludes(output, 'Routes:   native=1');
+  } finally {
+  /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('printTranslationReport - prints blocked status and unsupported details for compatibility backends', () => {
+  try {
+  const report: TranslationReport = {
       provider: 'aws',
       supported: false,
       requirements: ['OCI_ORCHESTRATOR_URL'],
@@ -52,17 +54,19 @@ describe('printTranslationReport', () => {
       ],
     };
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = stub(console, 'log') = () => {} as any;
     printTranslationReport(report);
     const output = captureOutput(logSpy);
 
-    expect(output).toContain('Backend:  AWS compatibility backend');
-    expect(output).toContain('blocked');
-    expect(output).toContain('Needs:    OCI_ORCHESTRATOR_URL');
-    expect(output).toContain('Resources: provider-backed=1, takos-runtime=1');
-    expect(output).toContain('Workloads: portable=1');
-    expect(output).toContain('Routes:   portable=1');
-    expect(output).toContain('Blocked:');
-    expect(output).toContain('resource.db d1 resolves to unknown (unsupported) on provider aws');
-  });
-});
+    assertStringIncludes(output, 'Backend:  AWS compatibility backend');
+    assertStringIncludes(output, 'blocked');
+    assertStringIncludes(output, 'Needs:    OCI_ORCHESTRATOR_URL');
+    assertStringIncludes(output, 'Resources: provider-backed=1, takos-runtime=1');
+    assertStringIncludes(output, 'Workloads: portable=1');
+    assertStringIncludes(output, 'Routes:   portable=1');
+    assertStringIncludes(output, 'Blocked:');
+    assertStringIncludes(output, 'resource.db d1 resolves to unknown (unsupported) on provider aws');
+  } finally {
+  /* TODO: restore mocks manually */ void 0;
+  }
+})

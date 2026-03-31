@@ -2,13 +2,13 @@
  * `takos group list` subcommand.
  */
 import { Command } from 'commander';
-import chalk from 'chalk';
+import { bold, dim } from '@std/fmt/colors';
 import {
   getStateDir,
   getStateFilePath,
   listStateGroups,
-} from '../../lib/state/state-file.js';
-import { listApiGroups, resolveGroupSpaceId, toAccessOpts } from './helpers.js';
+} from '../../lib/state/state-file.ts';
+import { listApiGroups, resolveGroupSpaceId, toAccessOpts } from './helpers.ts';
 
 export function registerGroupListCommand(groupCmd: Command): void {
   groupCmd
@@ -31,21 +31,21 @@ export function registerGroupListCommand(groupCmd: Command): void {
       }
 
       if (groups.length === 0) {
-        console.log(chalk.dim('No groups found. Run `takos apply` to create one.'));
+        console.log(dim('No groups found. Run `takos apply` to create one.'));
         return;
       }
 
       console.log('');
-      console.log(chalk.bold('Groups:'));
+      console.log(bold('Groups:'));
       for (const name of groups) {
         if (accessOpts.offline) {
           const stateFilePath = getStateFilePath(stateDir, name);
-          console.log(`  ${name}  ${chalk.dim(stateFilePath)}`);
+          console.log(`  ${name}  ${dim(stateFilePath)}`);
         } else {
           console.log(`  ${name}`);
         }
       }
       console.log('');
-      console.log(chalk.dim(`${groups.length} group(s)`));
+      console.log(dim(`${groups.length} group(s)`));
     });
 }

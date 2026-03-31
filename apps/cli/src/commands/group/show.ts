@@ -2,11 +2,11 @@
  * `takos group show` subcommand.
  */
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, getStateDir } from '../../lib/state/state-file.js';
-import { cliExit } from '../../lib/command-exit.js';
-import { api } from '../../lib/api.js';
-import { validateGroupName, toAccessOpts, requireApiGroupByName, resolveGroupSpaceId } from './helpers.js';
+import { bold, dim, red } from '@std/fmt/colors';
+import { readState, getStateDir } from '../../lib/state/state-file.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import { api } from '../../lib/api.ts';
+import { validateGroupName, toAccessOpts, requireApiGroupByName, resolveGroupSpaceId } from './helpers.ts';
 
 type ApiInventoryItem = Record<string, unknown>;
 type GroupDetailResponse = {
@@ -52,7 +52,7 @@ export function registerGroupShowCommand(groupCmd: Command): void {
           }
 
           console.log('');
-          console.log(chalk.bold(`Group: ${name}`));
+          console.log(bold(`Group: ${name}`));
           console.log(`  Provider:    ${data.provider || '(unknown)'}`);
           console.log(`  Environment: ${data.env || '(unknown)'}`);
           console.log(`  Group name:  ${observed.groupName || name}`);
@@ -64,33 +64,33 @@ export function registerGroupShowCommand(groupCmd: Command): void {
           const routes = inventory.routes ?? [];
 
           if (resources.length > 0) {
-            console.log(chalk.bold('Resources:'));
+            console.log(bold('Resources:'));
             for (const resource of resources) {
               const resourceName = String(resource.name ?? '(unnamed)');
               const typeLabel = resource.manifestType ? `[${String(resource.manifestType)}]` : '';
-              const idLabel = resource.resourceId ? chalk.dim(` (${String(resource.resourceId)})`) : '';
+              const idLabel = resource.resourceId ? dim(` (${String(resource.resourceId)})`) : '';
               console.log(`  resources.${resourceName} ${typeLabel}${idLabel}`);
             }
             console.log('');
           }
 
           if (workloads.length > 0) {
-            console.log(chalk.bold('Workloads:'));
+            console.log(bold('Workloads:'));
             for (const workload of workloads) {
               const workloadName = String(workload.name ?? '(unnamed)');
               const sourceKind = String(workload.sourceKind ?? 'service');
-              const hostLabel = workload.hostname ? chalk.dim(` -> ${String(workload.hostname)}`) : '';
+              const hostLabel = workload.hostname ? dim(` -> ${String(workload.hostname)}`) : '';
               console.log(`  ${sourceKind}s.${workloadName} [${sourceKind}]${hostLabel}`);
             }
             console.log('');
           }
 
           if (routes.length > 0) {
-            console.log(chalk.bold('Routes:'));
+            console.log(bold('Routes:'));
             for (const route of routes) {
               const routeName = String(route.name ?? '(unnamed)');
               const target = String(route.target ?? '(unknown)');
-              const urlLabel = route.url ? chalk.dim(` url=${String(route.url)}`) : '';
+              const urlLabel = route.url ? dim(` url=${String(route.url)}`) : '';
               console.log(`  routes.${routeName} -> ${target}${urlLabel}`);
             }
             console.log('');
@@ -98,15 +98,15 @@ export function registerGroupShowCommand(groupCmd: Command): void {
 
           const totalCount = resources.length + workloads.length + routes.length;
           if (totalCount === 0) {
-            console.log(chalk.dim('Group is empty.'));
+            console.log(dim('Group is empty.'));
           }
 
-          console.log(chalk.dim(
+          console.log(dim(
             `${resources.length} resource(s), ${workloads.length} workload(s), ${routes.length} route(s)`,
           ));
           return;
         } catch (error) {
-          console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+          console.log(red(error instanceof Error ? error.message : String(error)));
           cliExit(1);
           return;
         }
@@ -118,8 +118,8 @@ export function registerGroupShowCommand(groupCmd: Command): void {
       const state = await readState(stateDir, name, accessOpts);
 
       if (!state) {
-        console.log(chalk.red(`Group not found: ${name}`));
-        console.log(chalk.dim('Use `takos group list` to see available groups.'));
+        console.log(red(`Group not found: ${name}`));
+        console.log(dim('Use `takos group list` to see available groups.'));
         cliExit(1);
         return; // unreachable
       }
@@ -130,7 +130,7 @@ export function registerGroupShowCommand(groupCmd: Command): void {
       }
 
       console.log('');
-      console.log(chalk.bold(`Group: ${name}`));
+      console.log(bold(`Group: ${name}`));
       console.log(`  Provider:    ${state.provider || '(unknown)'}`);
       console.log(`  Environment: ${state.env || '(unknown)'}`);
       console.log(`  Group name:  ${state.groupName || '(unknown)'}`);
@@ -150,28 +150,28 @@ export function registerGroupShowCommand(groupCmd: Command): void {
       const routeKeys = Object.keys(routes);
 
       if (resourceKeys.length > 0) {
-        console.log(chalk.bold('Resources:'));
+        console.log(bold('Resources:'));
         for (const resourceName of resourceKeys) {
           const resource = resources[resourceName];
           const typeLabel = resource.type ? `[${resource.type}]` : '';
-          const idLabel = resource.id ? chalk.dim(` (${resource.id})`) : '';
+          const idLabel = resource.id ? dim(` (${resource.id})`) : '';
           console.log(`  resources.${resourceName} ${typeLabel}${idLabel}`);
         }
         console.log('');
       }
 
       if (workerKeys.length > 0) {
-        console.log(chalk.bold('Workers:'));
+        console.log(bold('Workers:'));
         for (const workerName of workerKeys) {
           const worker = workers[workerName];
-          const scriptLabel = worker.scriptName ? chalk.dim(` -> ${worker.scriptName}`) : '';
+          const scriptLabel = worker.scriptName ? dim(` -> ${worker.scriptName}`) : '';
           console.log(`  workers.${workerName} [worker]${scriptLabel}`);
         }
         console.log('');
       }
 
       if (containerKeys.length > 0) {
-        console.log(chalk.bold('Containers:'));
+        console.log(bold('Containers:'));
         for (const containerName of containerKeys) {
           console.log(`  containers.${containerName} [container]`);
         }
@@ -179,21 +179,21 @@ export function registerGroupShowCommand(groupCmd: Command): void {
       }
 
       if (serviceKeys.length > 0) {
-        console.log(chalk.bold('Services:'));
+        console.log(bold('Services:'));
         for (const serviceName of serviceKeys) {
           const service = services[serviceName];
-          const ipLabel = service.ipv4 ? chalk.dim(` (${service.ipv4})`) : '';
+          const ipLabel = service.ipv4 ? dim(` (${service.ipv4})`) : '';
           console.log(`  services.${serviceName} [service]${ipLabel}`);
         }
         console.log('');
       }
 
       if (routeKeys.length > 0) {
-        console.log(chalk.bold('Routes:'));
+        console.log(bold('Routes:'));
         for (const routeName of routeKeys) {
           const route = routes[routeName];
-          const domainLabel = route.domain ? chalk.dim(` domain=${route.domain}`) : '';
-          const urlLabel = route.url ? chalk.dim(` url=${route.url}`) : '';
+          const domainLabel = route.domain ? dim(` domain=${route.domain}`) : '';
+          const urlLabel = route.url ? dim(` url=${route.url}`) : '';
           console.log(`  routes.${routeName} -> ${route.target}${domainLabel}${urlLabel}`);
         }
         console.log('');
@@ -201,10 +201,10 @@ export function registerGroupShowCommand(groupCmd: Command): void {
 
       const totalCount = resourceKeys.length + workerKeys.length + containerKeys.length + serviceKeys.length + routeKeys.length;
       if (totalCount === 0) {
-        console.log(chalk.dim('Group is empty.'));
+        console.log(dim('Group is empty.'));
       }
 
-      console.log(chalk.dim(
+      console.log(dim(
         `${resourceKeys.length} resource(s), ${workerKeys.length} worker(s), ` +
         `${containerKeys.length} container(s), ${serviceKeys.length} service(s), ` +
         `${routeKeys.length} route(s)`,

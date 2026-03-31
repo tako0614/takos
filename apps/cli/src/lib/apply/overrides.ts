@@ -2,7 +2,7 @@
  * Override resolution — env-specific deep merge (no lodash).
  */
 
-import type { AppManifest } from '../app-manifest.js';
+import type { AppManifest } from '../app-manifest.ts';
 
 // ---------------------------------------------------------------------------
 // Overrides — env-specific deep merge

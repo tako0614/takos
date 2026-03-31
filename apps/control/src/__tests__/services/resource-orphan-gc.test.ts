@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@/db';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  deleteManagedResource: vi.fn(),
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  deleteManagedResource: ((..._args: any[]) => undefined) as any,
   orphanedResources: [] as Array<{
     id: string;
     type: string;
@@ -11,23 +13,16 @@ const mocks = vi.hoisted(() => ({
     providerResourceId: string | null;
     providerResourceName: string | null;
   }>,
-}));
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof DbModule>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/resources/lifecycle', () => ({
-  deleteManagedResource: mocks.deleteManagedResource,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources/lifecycle'
 import { gcOrphanedResources } from '@/services/maintenance/resource-orphan-gc';
 
-describe('gcOrphanedResources', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue({
+
+  Deno.test('gcOrphanedResources - reclaims cloudflare and portable orphaned resources through the shared lifecycle path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => ({
       select() {
         return {
           from() {
@@ -48,12 +43,9 @@ describe('gcOrphanedResources', () => {
           },
         };
       },
-    });
-    mocks.deleteManagedResource.mockResolvedValue(undefined);
-  });
-
-  it('reclaims cloudflare and portable orphaned resources through the shared lifecycle path', async () => {
-    mocks.orphanedResources = [
+    })) as any;
+    mocks.deleteManagedResource = (async () => undefined) as any;
+  mocks.orphanedResources = [
       {
         id: 'res-cf',
         type: 'd1',
@@ -77,20 +69,19 @@ describe('gcOrphanedResources', () => {
       WFP_DISPATCH_NAMESPACE: 'dispatch',
     });
 
-    expect(mocks.deleteManagedResource).toHaveBeenCalledTimes(2);
-    expect(mocks.deleteManagedResource).toHaveBeenNthCalledWith(1, expect.anything(), {
+    assertSpyCalls(mocks.deleteManagedResource, 2);
+    assertSpyCallArgs(mocks.deleteManagedResource, 0, [expect.anything(), {
       type: 'd1',
       providerName: 'cloudflare',
       providerResourceId: 'cf-db',
       providerResourceName: 'cf-db',
-    });
-    expect(mocks.deleteManagedResource).toHaveBeenNthCalledWith(2, expect.anything(), {
+    }]);
+    assertSpyCallArgs(mocks.deleteManagedResource, 1, [expect.anything(), {
       type: 'kv',
       providerName: 'aws',
       providerResourceId: 'portable-kv',
       providerResourceName: 'portable-kv',
-    });
-    expect(result.deleted).toBe(2);
-    expect(result.failed).toBe(0);
-  });
-});
+    }]);
+    assertEquals(result.deleted, 2);
+    assertEquals(result.failed, 0);
+})

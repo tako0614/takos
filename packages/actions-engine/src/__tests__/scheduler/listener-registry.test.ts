@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
-
-import { JobScheduler, type JobSchedulerEvent } from '../../scheduler/job.js';
-import { createBaseContext } from '../../context.js';
-import type { Workflow } from '../../workflow-models.js';
+import { JobScheduler, type JobSchedulerEvent } from '../../scheduler/job.ts';
+import { createBaseContext } from '../../context.ts';
+import type { Workflow } from '../../workflow-models.ts';
 
 /**
  * JobScheduler インスタンス生成用の最小ワークフロー
  */
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+
 function createMinimalWorkflow(): Workflow {
   return {
     name: 'listener-test',
@@ -17,9 +17,9 @@ function createMinimalWorkflow(): Workflow {
   };
 }
 
-describe('JobScheduler listener management', () => {
-  it('keeps current emit stable when a listener is removed during emit', async () => {
-    const scheduler = new JobScheduler(createMinimalWorkflow());
+
+  Deno.test('JobScheduler listener management - keeps current emit stable when a listener is removed during emit', async () => {
+  const scheduler = new JobScheduler(createMinimalWorkflow());
     const callOrder: string[] = [];
 
     let unsubscribeSecond = () => {};
@@ -37,16 +37,15 @@ describe('JobScheduler listener management', () => {
 
     // 最初に送信されるイベントは 'workflow:start'。スナップショットを
     // 元にした emit なので、1回目には 2 つのリスナーが呼ばれるはず。
-    expect(callOrder[0]).toBe('first');
-    expect(callOrder[1]).toBe('second');
+    assertEquals(callOrder[0], 'first');
+    assertEquals(callOrder[1], 'second');
     // 1回目以降は二番目のリスナーは削除されるため、
     // 次の emit では 'first' のみになる。
     const afterFirstEmit = callOrder.slice(2);
-    expect(afterFirstEmit.every((v) => v === 'first')).toBe(true);
-  });
-
-  it('defers listeners added during emit until the next emit cycle', async () => {
-    const scheduler = new JobScheduler(createMinimalWorkflow());
+    assertEquals(afterFirstEmit.every((v) => v === 'first'), true);
+})
+  Deno.test('JobScheduler listener management - defers listeners added during emit until the next emit cycle', async () => {
+  const scheduler = new JobScheduler(createMinimalWorkflow());
     const callOrder: string[] = [];
 
     const lateListener = () => {
@@ -65,12 +64,11 @@ describe('JobScheduler listener management', () => {
     await scheduler.run(createBaseContext());
 
     // 'late' は 1回目の emit には出現せず、後続の emit のみ。
-    expect(callOrder[0]).toBe('first');
-    expect(callOrder[1]).not.toBe('late');
-  });
-
-  it('continues calling remaining listeners even if an earlier listener throws', async () => {
-    const scheduler = new JobScheduler(createMinimalWorkflow());
+    assertEquals(callOrder[0], 'first');
+    assertNotEquals(callOrder[1], 'late');
+})
+  Deno.test('JobScheduler listener management - continues calling remaining listeners even if an earlier listener throws', async () => {
+  const scheduler = new JobScheduler(createMinimalWorkflow());
     const callOrder: string[] = [];
 
     scheduler.on(() => {
@@ -85,11 +83,10 @@ describe('JobScheduler listener management', () => {
     });
 
     // リスナー内で例外が発生しても実行は継続
-    await expect(scheduler.run(createBaseContext())).resolves.toBeDefined();
+    await assert((await scheduler.run(createBaseContext())) !== undefined);
 
     // 最低 1 回目の emit では 3 つのリスナーすべてが呼ばれる
-    expect(callOrder.includes('first')).toBe(true);
-    expect(callOrder.includes('second')).toBe(true);
-    expect(callOrder.includes('third')).toBe(true);
-  });
-});
+    assertEquals(callOrder.includes('first'), true);
+    assertEquals(callOrder.includes('second'), true);
+    assertEquals(callOrder.includes('third'), true);
+})

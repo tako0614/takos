@@ -11,11 +11,11 @@
  * `lib/entities/*`.
  */
 
-import type { DiffResult } from '../state/diff.js';
-import type { AppManifest } from '../app-manifest.js';
-import { applyOverrides } from './overrides.js';
-import { topologicalSort } from './topological-sort.js';
-import { executeEntry } from './entry-executor.js';
+import type { DiffResult } from '../state/diff.ts';
+import type { AppManifest } from '../app-manifest.ts';
+import { applyOverrides } from './overrides.ts';
+import { topologicalSort } from './topological-sort.ts';
+import { executeEntry } from './entry-executor.ts';
 
 export const DEFAULT_CONTAINER_PORT = 8080;
 

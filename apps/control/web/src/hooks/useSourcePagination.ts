@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { createSignal } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 
 export const PAGE_SIZE = 20;
 
 export interface UseSourcePaginationResult {
-  showCreateModal: boolean;
-  setShowCreateModal: React.Dispatch<React.SetStateAction<boolean>>;
+  showCreateModal: Accessor<boolean>;
+  setShowCreateModal: Setter<boolean>;
   loadMore: (
     filter: string,
     loading: boolean,
     hasMore: boolean,
-    appendInFlightRef: React.MutableRefObject<boolean>,
-    requestSeqRef: React.MutableRefObject<number>,
+    appendInFlightHolder: { appendInFlightRef: boolean },
+    requestSeqHolder: { requestSeqRef: number },
     fetchAll: (offset: number, append: boolean, requestId: number) => Promise<void>,
     fetchStarred: (offset: number, append: boolean, requestId: number) => Promise<void>,
   ) => void;
@@ -18,8 +19,8 @@ export interface UseSourcePaginationResult {
 }
 
 export function useSourcePagination(): UseSourcePaginationResult {
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [, setOffset] = useState(0);
+  const [showCreateModal, setShowCreateModal] = createSignal(false);
+  const [, setOffset] = createSignal(0);
 
   const resetOffset = () => setOffset(0);
 
@@ -27,14 +28,14 @@ export function useSourcePagination(): UseSourcePaginationResult {
     filter: string,
     currentLoading: boolean,
     currentHasMore: boolean,
-    appendInFlightRef: React.MutableRefObject<boolean>,
-    requestSeqRef: React.MutableRefObject<number>,
+    appendInFlightHolder: { appendInFlightRef: boolean },
+    requestSeqHolder: { requestSeqRef: number },
     fetchAll: (offset: number, append: boolean, requestId: number) => Promise<void>,
     fetchStarred: (offset: number, append: boolean, requestId: number) => Promise<void>,
   ) => {
-    if (currentLoading || !currentHasMore || appendInFlightRef.current) return;
-    appendInFlightRef.current = true;
-    const requestId = requestSeqRef.current;
+    if (currentLoading || !currentHasMore || appendInFlightHolder.appendInFlightRef) return;
+    appendInFlightHolder.appendInFlightRef = true;
+    const requestId = requestSeqHolder.requestSeqRef;
     setOffset((prevOffset) => {
       const nextOffset = prevOffset + PAGE_SIZE;
       if (filter === 'all') {

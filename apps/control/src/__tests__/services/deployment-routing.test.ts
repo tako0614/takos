@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import { buildRoutingTarget } from '@/services/deployment/routing';
 
-describe('deployment routing', () => {
+
+import { assertEquals, assertThrows } from 'jsr:@std/assert';
+
   const serviceRouteRecord = {
     id: 'worker-1',
     hostname: 'tenant.example.test',
@@ -9,8 +10,8 @@ describe('deployment routing', () => {
     customDomains: [],
   };
 
-  it('builds an http-endpoint-set for generic http-url targets', () => {
-    const result = buildRoutingTarget({
+  Deno.test('deployment routing - builds an http-endpoint-set for generic http-url targets', () => {
+  const result = buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -27,7 +28,7 @@ describe('deployment routing', () => {
       activeDeployment: null,
     }, ['tenant.example.test']);
 
-    expect(result.target).toEqual({
+    assertEquals(result.target, {
       type: 'http-endpoint-set',
       endpoints: [
           {
@@ -40,10 +41,9 @@ describe('deployment routing', () => {
           },
       ],
     });
-  });
-
-  it('uses route_ref for service-ref deployment routing', () => {
-    const result = buildRoutingTarget({
+})
+  Deno.test('deployment routing - uses route_ref for service-ref deployment routing', () => {
+  const result = buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -60,7 +60,7 @@ describe('deployment routing', () => {
       activeDeployment: null,
     }, ['tenant.example.test']);
 
-    expect(result.target).toEqual({
+    assertEquals(result.target, {
       type: 'deployments',
       deployments: [
         {
@@ -71,10 +71,9 @@ describe('deployment routing', () => {
         },
       ],
     });
-  });
-
-  it('uses rollback status for generic service-ref rollback routing', () => {
-    const result = buildRoutingTarget({
+})
+  Deno.test('deployment routing - uses rollback status for generic service-ref rollback routing', () => {
+  const result = buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -91,7 +90,7 @@ describe('deployment routing', () => {
       activeDeployment: null,
     }, ['tenant.example.test']);
 
-    expect(result.target).toEqual({
+    assertEquals(result.target, {
       type: 'deployments',
       deployments: [
         {
@@ -102,11 +101,10 @@ describe('deployment routing', () => {
         },
       ],
     });
-    expect(result.auditDetails.mode).toBe('rollback');
-  });
-
-  it('keeps http-url rollback routing on http-endpoint-set', () => {
-    const result = buildRoutingTarget({
+    assertEquals(result.auditDetails.mode, 'rollback');
+})
+  Deno.test('deployment routing - keeps http-url rollback routing on http-endpoint-set', () => {
+  const result = buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -123,7 +121,7 @@ describe('deployment routing', () => {
       activeDeployment: null,
     }, ['tenant.example.test']);
 
-    expect(result.target).toEqual({
+    assertEquals(result.target, {
       type: 'http-endpoint-set',
       endpoints: [
           {
@@ -136,11 +134,10 @@ describe('deployment routing', () => {
           },
       ],
     });
-    expect(result.auditDetails.mode).toBe('http-url');
-  });
-
-  it('rejects canary routing for http-url targets', () => {
-    expect(() => buildRoutingTarget({
+    assertEquals(result.auditDetails.mode, 'http-url');
+})
+  Deno.test('deployment routing - rejects canary routing for http-url targets', () => {
+  assertThrows(() => { () => buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -165,6 +162,5 @@ describe('deployment routing', () => {
         }),
         routingStatus: 'active',
       },
-    }, ['tenant.example.test'])).toThrow('http-url deployment targets do not support canary routing');
-  });
-});
+    }, ['tenant.example.test']); }, 'http-url deployment targets do not support canary routing');
+})

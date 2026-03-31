@@ -1,54 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  hashPassword: vi.fn(),
-  verifyPassword: vi.fn(),
-  now: vi.fn(),
-  base64UrlEncode: vi.fn(),
-  randomUUID: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  hashPassword: ((..._args: any[]) => undefined) as any,
+  verifyPassword: ((..._args: any[]) => undefined) as any,
+  now: ((..._args: any[]) => undefined) as any,
+  base64UrlEncode: ((..._args: any[]) => undefined) as any,
+  randomUUID: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/identity/auth-utils', () => ({
-  hashPassword: mocks.hashPassword,
-  verifyPassword: mocks.verifyPassword,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/utils')>();
-  return {
-    ...actual,
-    now: mocks.now,
-    base64UrlEncode: mocks.base64UrlEncode,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/auth-utils'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 // Mock crypto.randomUUID and crypto.getRandomValues
 const originalCrypto = globalThis.crypto;
-beforeEach(() => {
-  Object.defineProperty(globalThis, 'crypto', {
-    value: {
-      ...originalCrypto,
-      randomUUID: mocks.randomUUID,
-      getRandomValues: vi.fn((arr: Uint8Array) => {
-        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
-        return arr;
-      }),
-    },
-    writable: true,
-    configurable: true,
-  });
-});
-
 import {
   createThreadShare,
   listThreadShares,
@@ -84,59 +52,78 @@ function buildDrizzleMock(options: {
   selectAll?: unknown[];
   updateReturning?: unknown[];
 } = {}) {
-  const runFn = vi.fn().mockResolvedValue(undefined);
-  const getFn = vi.fn().mockResolvedValue(options.selectGet);
-  const allFn = vi.fn().mockResolvedValue(options.selectAll ?? []);
+  const runFn = (async () => undefined);
+  const getFn = (async () => options.selectGet);
+  const allFn = (async () => options.selectAll ?? []);
 
   const chain: Record<string, unknown> = {};
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockReturnValue(chain);
-  chain.limit = vi.fn().mockReturnValue(chain);
+  chain.from = (() => chain);
+  chain.where = (() => chain);
+  chain.orderBy = (() => chain);
+  chain.limit = (() => chain);
   chain.get = getFn;
   chain.all = allFn;
 
   const insertChain: Record<string, unknown> = {};
-  insertChain.values = vi.fn().mockReturnValue(insertChain);
-  insertChain.returning = vi.fn().mockReturnValue(insertChain);
-  insertChain.get = vi.fn().mockResolvedValue(options.insertValues);
+  insertChain.values = (() => insertChain);
+  insertChain.returning = (() => insertChain);
+  insertChain.get = (async () => options.insertValues);
   insertChain.run = runFn;
 
   const updateChain: Record<string, unknown> = {};
-  updateChain.set = vi.fn().mockReturnValue(updateChain);
-  updateChain.where = vi.fn().mockReturnValue(updateChain);
-  updateChain.returning = vi.fn().mockReturnValue(options.updateReturning ?? []);
+  updateChain.set = (() => updateChain);
+  updateChain.where = (() => updateChain);
+  updateChain.returning = (() => options.updateReturning ?? []);
   updateChain.run = runFn;
 
   return {
-    select: vi.fn().mockReturnValue(chain),
-    insert: vi.fn().mockReturnValue(insertChain),
-    update: vi.fn().mockReturnValue(updateChain),
+    select: (() => chain),
+    insert: (() => insertChain),
+    update: (() => updateChain),
   };
 }
 
-describe('generateThreadShareToken', () => {
-  it('returns a string token', () => {
-    mocks.base64UrlEncode.mockReturnValue('abcdefghijklmnopqrstuvwx');
+
+  Deno.test('generateThreadShareToken - returns a string token', () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
+  });
+  mocks.base64UrlEncode = (() => 'abcdefghijklmnopqrstuvwx') as any;
     const token = generateThreadShareToken();
-    expect(typeof token).toBe('string');
-    expect(token.length).toBeGreaterThan(0);
-  });
-});
+    assertEquals(typeof token, 'string');
+    assert(token.length > 0);
+})
 
-describe('createThreadShare', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-03-01T00:00:00.000Z');
-    mocks.base64UrlEncode.mockReturnValue('generated-token-abc');
-    mocks.randomUUID.mockReturnValue('generated-uuid-1');
+  Deno.test('createThreadShare - creates a public thread share', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('creates a public thread share', async () => {
-    const shareRow = makeShareRow({ id: 'generated-uuid-1', token: 'generated-token-abc' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  const shareRow = makeShareRow({ id: 'generated-uuid-1', token: 'generated-token-abc' });
 
     const drizzle = buildDrizzleMock({ selectGet: shareRow });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await createThreadShare({
       db: {} as D1Database,
@@ -146,19 +133,34 @@ describe('createThreadShare', () => {
       mode: 'public',
     });
 
-    expect(result.share.id).toBe('generated-uuid-1');
-    expect(result.share.thread_id).toBe('thread-1');
-    expect(result.share.space_id).toBe('space-1');
-    expect(result.share.mode).toBe('public');
-    expect(result.passwordRequired).toBe(false);
+    assertEquals(result.share.id, 'generated-uuid-1');
+    assertEquals(result.share.thread_id, 'thread-1');
+    assertEquals(result.share.space_id, 'space-1');
+    assertEquals(result.share.mode, 'public');
+    assertEquals(result.passwordRequired, false);
+})
+  Deno.test('createThreadShare - creates a password-protected share', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('creates a password-protected share', async () => {
-    mocks.hashPassword.mockResolvedValue('hashed-pw');
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  mocks.hashPassword = (async () => 'hashed-pw') as any;
     const shareRow = makeShareRow({ id: 'generated-uuid-1', mode: 'password', passwordHash: 'hashed-pw' });
 
     const drizzle = buildDrizzleMock({ selectGet: shareRow });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await createThreadShare({
       db: {} as D1Database,
@@ -169,109 +171,210 @@ describe('createThreadShare', () => {
       password: 'mypassword123',
     });
 
-    expect(result.share.mode).toBe('password');
-    expect(result.passwordRequired).toBe(true);
-    expect(mocks.hashPassword).toHaveBeenCalledWith('mypassword123');
+    assertEquals(result.share.mode, 'password');
+    assertEquals(result.passwordRequired, true);
+    assertSpyCallArgs(mocks.hashPassword, 0, ['mypassword123']);
+})
+  Deno.test('createThreadShare - throws when password mode has short password', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('throws when password mode has short password', async () => {
-    await expect(createThreadShare({
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  await await assertRejects(async () => { await createThreadShare({
       db: {} as D1Database,
       threadId: 'thread-1',
       spaceId: 'space-1',
       createdBy: 'user-1',
       mode: 'password',
       password: 'short',
-    })).rejects.toThrow('Password is required (min 8 characters)');
+    }); }, 'Password is required (min 8 characters)');
+})
+  Deno.test('createThreadShare - throws when password mode has empty password', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('throws when password mode has empty password', async () => {
-    await expect(createThreadShare({
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  await await assertRejects(async () => { await createThreadShare({
       db: {} as D1Database,
       threadId: 'thread-1',
       spaceId: 'space-1',
       createdBy: 'user-1',
       mode: 'password',
       password: '',
-    })).rejects.toThrow('Password is required (min 8 characters)');
+    }); }, 'Password is required (min 8 characters)');
+})
+  Deno.test('createThreadShare - throws on invalid expiresAt', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('throws on invalid expiresAt', async () => {
-    await expect(createThreadShare({
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  await await assertRejects(async () => { await createThreadShare({
       db: {} as D1Database,
       threadId: 'thread-1',
       spaceId: 'space-1',
       createdBy: 'user-1',
       mode: 'public',
       expiresAt: 'not-a-date',
-    })).rejects.toThrow('Invalid expires_at');
+    }); }, 'Invalid expires_at');
+})
+  Deno.test('createThreadShare - throws when expiresAt is in the past', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('throws when expiresAt is in the past', async () => {
-    await expect(createThreadShare({
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  await await assertRejects(async () => { await createThreadShare({
       db: {} as D1Database,
       threadId: 'thread-1',
       spaceId: 'space-1',
       createdBy: 'user-1',
       mode: 'public',
       expiresAt: '2020-01-01T00:00:00.000Z',
-    })).rejects.toThrow('expires_at must be in the future');
+    }); }, 'expires_at must be in the future');
+})
+  Deno.test('createThreadShare - throws when select after insert returns null', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-01T00:00:00.000Z') as any;
+    mocks.base64UrlEncode = (() => 'generated-token-abc') as any;
+    mocks.randomUUID = (() => 'generated-uuid-1') as any;
+  const drizzle = buildDrizzleMock({ selectGet: null });
+    mocks.getDb = (() => drizzle) as any;
 
-  it('throws when select after insert returns null', async () => {
-    const drizzle = buildDrizzleMock({ selectGet: null });
-    mocks.getDb.mockReturnValue(drizzle);
-
-    await expect(createThreadShare({
+    await await assertRejects(async () => { await createThreadShare({
       db: {} as D1Database,
       threadId: 'thread-1',
       spaceId: 'space-1',
       createdBy: 'user-1',
       mode: 'public',
-    })).rejects.toThrow('Failed to create share');
-  });
-});
+    }); }, 'Failed to create share');
+})
 
-describe('listThreadShares', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  Deno.test('listThreadShares - returns mapped share records', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns mapped share records', async () => {
-    const rows = [
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const rows = [
       makeShareRow({ id: 'share-1' }),
       makeShareRow({ id: 'share-2', mode: 'password' }),
     ];
     const drizzle = buildDrizzleMock({ selectAll: rows });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listThreadShares({} as D1Database, 'thread-1');
 
-    expect(result).toHaveLength(2);
-    expect(result[0].id).toBe('share-1');
-    expect(result[0].mode).toBe('public');
-    expect(result[1].id).toBe('share-2');
-    expect(result[1].mode).toBe('password');
+    assertEquals(result.length, 2);
+    assertEquals(result[0].id, 'share-1');
+    assertEquals(result[0].mode, 'public');
+    assertEquals(result[1].id, 'share-2');
+    assertEquals(result[1].mode, 'password');
+})
+  Deno.test('listThreadShares - returns empty array when no shares exist', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns empty array when no shares exist', async () => {
-    const drizzle = buildDrizzleMock({ selectAll: [] });
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = buildDrizzleMock({ selectAll: [] });
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listThreadShares({} as D1Database, 'thread-1');
-    expect(result).toEqual([]);
-  });
-});
+    assertEquals(result, []);
+})
 
-describe('revokeThreadShare', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-03-02T00:00:00.000Z');
+  Deno.test('revokeThreadShare - returns true when revocation succeeds', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns true when revocation succeeds', async () => {
-    const drizzle = buildDrizzleMock({ updateReturning: [{ id: 'share-1' }] });
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-02T00:00:00.000Z') as any;
+  const drizzle = buildDrizzleMock({ updateReturning: [{ id: 'share-1' }] });
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await revokeThreadShare({
       db: {} as D1Database,
@@ -279,12 +382,25 @@ describe('revokeThreadShare', () => {
       shareId: 'share-1',
     });
 
-    expect(result).toBe(true);
+    assertEquals(result, true);
+})
+  Deno.test('revokeThreadShare - returns false when share is not found or already revoked', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns false when share is not found or already revoked', async () => {
-    const drizzle = buildDrizzleMock({ updateReturning: [] });
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-02T00:00:00.000Z') as any;
+  const drizzle = buildDrizzleMock({ updateReturning: [] });
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await revokeThreadShare({
       db: {} as D1Database,
@@ -292,152 +408,260 @@ describe('revokeThreadShare', () => {
       shareId: 'share-999',
     });
 
-    expect(result).toBe(false);
-  });
-});
+    assertEquals(result, false);
+})
 
-describe('getThreadShareByToken', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  Deno.test('getThreadShareByToken - returns share record with password_hash for valid token', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns share record with password_hash for valid token', async () => {
-    const row = makeShareRow({ passwordHash: 'some-hash' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = makeShareRow({ passwordHash: 'some-hash' });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getThreadShareByToken({} as D1Database, 'token-abc123');
 
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('share-1');
-    expect(result!.password_hash).toBe('some-hash');
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'share-1');
+    assertEquals(result!.password_hash, 'some-hash');
+})
+  Deno.test('getThreadShareByToken - returns null when token not found', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns null when token not found', async () => {
-    const drizzle = buildDrizzleMock({ selectGet: null });
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = buildDrizzleMock({ selectGet: null });
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getThreadShareByToken({} as D1Database, 'bad-token');
-    expect(result).toBeNull();
+    assertEquals(result, null);
+})
+  Deno.test('getThreadShareByToken - returns null when share is revoked', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns null when share is revoked', async () => {
-    const row = makeShareRow({ revokedAt: '2026-03-01T12:00:00.000Z' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = makeShareRow({ revokedAt: '2026-03-01T12:00:00.000Z' });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getThreadShareByToken({} as D1Database, 'token-abc123');
-    expect(result).toBeNull();
+    assertEquals(result, null);
+})
+  Deno.test('getThreadShareByToken - returns null when share has expired', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns null when share has expired', async () => {
-    const row = makeShareRow({ expiresAt: '2020-01-01T00:00:00.000Z' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = makeShareRow({ expiresAt: '2020-01-01T00:00:00.000Z' });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getThreadShareByToken({} as D1Database, 'token-abc123');
-    expect(result).toBeNull();
+    assertEquals(result, null);
+})
+  Deno.test('getThreadShareByToken - returns share when expiresAt is in the future', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns share when expiresAt is in the future', async () => {
-    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const futureDate = new Date(Date.now() + 86_400_000).toISOString();
     const row = makeShareRow({ expiresAt: futureDate });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getThreadShareByToken({} as D1Database, 'token-abc123');
-    expect(result).not.toBeNull();
-  });
-});
+    assertNotEquals(result, null);
+})
 
-describe('markThreadShareAccessed', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-03-05T00:00:00.000Z');
+  Deno.test('markThreadShareAccessed - updates lastAccessedAt on the share', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('updates lastAccessedAt on the share', async () => {
-    const drizzle = buildDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const drizzle = buildDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await markThreadShareAccessed({} as D1Database, 'share-1');
 
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.update.calls.length > 0);
+})
 
-describe('verifyThreadShareAccess', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-03-05T00:00:00.000Z');
+  Deno.test('verifyThreadShareAccess - returns share data for valid public share', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns share data for valid public share', async () => {
-    const row = makeShareRow();
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const row = makeShareRow();
     // Two DB calls: getThreadShareByToken then markThreadShareAccessed
     let callIdx = 0;
     const drizzle = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         callIdx++;
         const chain: Record<string, unknown> = {};
-        chain.from = vi.fn().mockReturnValue(chain);
-        chain.where = vi.fn().mockReturnValue(chain);
-        chain.get = vi.fn().mockResolvedValue(callIdx === 1 ? row : null);
+        chain.from = (() => chain);
+        chain.where = (() => chain);
+        chain.get = (async () => callIdx === 1 ? row : null);
         return chain;
-      }),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            run: vi.fn().mockResolvedValue(undefined),
-          }),
-        }),
-      }),
+      },
+      update: (() => ({
+        set: (() => ({
+          where: (() => ({
+            run: (async () => undefined),
+          })),
+        })),
+      })),
     };
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
       token: 'token-abc123',
     });
 
-    expect('error' in result).toBe(false);
+    assertEquals('error' in result, false);
     if (!('error' in result)) {
-      expect(result.share.id).toBe('share-1');
-      expect(result.threadId).toBe('thread-1');
-      expect(result.spaceId).toBe('space-1');
+      assertEquals(result.share.id, 'share-1');
+      assertEquals(result.threadId, 'thread-1');
+      assertEquals(result.spaceId, 'space-1');
     }
+})
+  Deno.test('verifyThreadShareAccess - returns not_found error for invalid token', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns not_found error for invalid token', async () => {
-    const drizzle = buildDrizzleMock({ selectGet: null });
-    mocks.getDb.mockReturnValue(drizzle);
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const drizzle = buildDrizzleMock({ selectGet: null });
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
       token: 'bad-token',
     });
 
-    expect(result).toEqual({ error: 'not_found' });
+    assertEquals(result, { error: 'not_found' });
+})
+  Deno.test('verifyThreadShareAccess - returns password_required when password share has no password provided', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns password_required when password share has no password provided', async () => {
-    const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
       token: 'token-abc123',
     });
 
-    expect(result).toEqual({ error: 'password_required' });
+    assertEquals(result, { error: 'password_required' });
+})
+  Deno.test('verifyThreadShareAccess - returns forbidden when password is incorrect', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns forbidden when password is incorrect', async () => {
-    const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.verifyPassword.mockResolvedValue(false);
+    mocks.getDb = (() => drizzle) as any;
+    mocks.verifyPassword = (async () => false) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
@@ -445,13 +669,26 @@ describe('verifyThreadShareAccess', () => {
       password: 'wrongpassword',
     });
 
-    expect(result).toEqual({ error: 'forbidden' });
+    assertEquals(result, { error: 'forbidden' });
+})
+  Deno.test('verifyThreadShareAccess - returns forbidden when password_hash is null despite password mode', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('returns forbidden when password_hash is null despite password mode', async () => {
-    const row = makeShareRow({ mode: 'password', passwordHash: null });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const row = makeShareRow({ mode: 'password', passwordHash: null });
     const drizzle = buildDrizzleMock({ selectGet: row });
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
@@ -459,31 +696,44 @@ describe('verifyThreadShareAccess', () => {
       password: 'anypassword',
     });
 
-    expect(result).toEqual({ error: 'forbidden' });
+    assertEquals(result, { error: 'forbidden' });
+})
+  Deno.test('verifyThreadShareAccess - succeeds with correct password on password-protected share', async () => {
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      ...originalCrypto,
+      randomUUID: mocks.randomUUID,
+      getRandomValues: (arr: Uint8Array) => {
+        for (let i = 0; i < arr.length; i++) arr[i] = i % 256;
+        return arr;
+      },
+    },
+    writable: true,
+    configurable: true,
   });
-
-  it('succeeds with correct password on password-protected share', async () => {
-    const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-03-05T00:00:00.000Z') as any;
+  const row = makeShareRow({ mode: 'password', passwordHash: 'hashed-pw' });
     let callIdx = 0;
     const drizzle = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         callIdx++;
         const chain: Record<string, unknown> = {};
-        chain.from = vi.fn().mockReturnValue(chain);
-        chain.where = vi.fn().mockReturnValue(chain);
-        chain.get = vi.fn().mockResolvedValue(callIdx === 1 ? row : null);
+        chain.from = (() => chain);
+        chain.where = (() => chain);
+        chain.get = (async () => callIdx === 1 ? row : null);
         return chain;
-      }),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            run: vi.fn().mockResolvedValue(undefined),
-          }),
-        }),
-      }),
+      },
+      update: (() => ({
+        set: (() => ({
+          where: (() => ({
+            run: (async () => undefined),
+          })),
+        })),
+      })),
     };
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.verifyPassword.mockResolvedValue(true);
+    mocks.getDb = (() => drizzle) as any;
+    mocks.verifyPassword = (async () => true) as any;
 
     const result = await verifyThreadShareAccess({
       db: {} as D1Database,
@@ -491,9 +741,8 @@ describe('verifyThreadShareAccess', () => {
       password: 'correctpassword',
     });
 
-    expect('error' in result).toBe(false);
+    assertEquals('error' in result, false);
     if (!('error' in result)) {
-      expect(result.threadId).toBe('thread-1');
+      assertEquals(result.threadId, 'thread-1');
     }
-  });
-});
+})

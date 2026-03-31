@@ -61,7 +61,7 @@ export type OciOrchestratorBackendResolver = (
   input: OciOrchestratorBackendResolverInput,
 ) => ContainerBackend;
 
-const DOCKER_NETWORK = process.env.TAKOS_DOCKER_NETWORK || 'takos-containers';
+const DOCKER_NETWORK = Deno.env.get('TAKOS_DOCKER_NETWORK') || 'takos-containers';
 const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_POLL_INTERVAL_MS = 1_000;
 
@@ -73,7 +73,7 @@ async function pollHealthCheck(
   healthPath: string,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (process.env.TAKOS_SKIP_OCI_HEALTH_CHECK === '1') {
+  if (Deno.env.get('TAKOS_SKIP_OCI_HEALTH_CHECK') === '1') {
     return true;
   }
 
@@ -109,7 +109,7 @@ async function pollHealthCheckUrl(
   url: string,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (process.env.TAKOS_SKIP_OCI_HEALTH_CHECK === '1') {
+  if (Deno.env.get('TAKOS_SKIP_OCI_HEALTH_CHECK') === '1') {
     return true;
   }
 
@@ -177,9 +177,9 @@ const serviceActionSchema = z.object({
 });
 
 function resolveDataDir(): string {
-  const explicit = process.env.OCI_ORCHESTRATOR_DATA_DIR?.trim();
+  const explicit = Deno.env.get('OCI_ORCHESTRATOR_DATA_DIR')?.trim();
   if (explicit) return path.resolve(explicit);
-  const localDir = process.env.TAKOS_LOCAL_DATA_DIR?.trim();
+  const localDir = Deno.env.get('TAKOS_LOCAL_DATA_DIR')?.trim();
   if (localDir) {
     return path.resolve(localDir, 'oci-orchestrator');
   }
@@ -187,7 +187,7 @@ function resolveDataDir(): string {
 }
 
 function resolvePort(): number {
-  const parsed = Number.parseInt(process.env.PORT ?? process.env.OCI_ORCHESTRATOR_PORT ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get('PORT') ?? Deno.env.get('OCI_ORCHESTRATOR_PORT') ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 9002;
 }
 
@@ -238,7 +238,7 @@ function tailLines(text: string, tail: number): string {
 }
 
 function createAuthMiddleware() {
-  const token = process.env.OCI_ORCHESTRATOR_TOKEN?.trim();
+  const token = Deno.env.get('OCI_ORCHESTRATOR_TOKEN')?.trim();
   return async (c: Context, next: Next) => {
     if (!token) {
       return next();

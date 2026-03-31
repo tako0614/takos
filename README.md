@@ -58,8 +58,7 @@ VitePress. Keep `README.md` as the short entrypoint and put longer setup,
 runtime, deployment, and contributor guidance in the docs site.
 
 `takos-private/` can consume this repo as a sibling checkout and should only use
-package exports, not `apps/*` source paths. The `home-agent` runner is
-private-only and does not belong in OSS product flow.
+package exports, not `apps/*` source paths.
 
 ## Deployment Configuration
 

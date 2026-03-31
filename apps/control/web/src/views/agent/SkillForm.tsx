@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent } from 'react';
+import type { JSX } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 import { rpcJson } from '../../lib/rpc';
@@ -93,11 +93,11 @@ export async function readSkillMutationResponse(response: Response) {
   throw error;
 }
 
-const selectStyle: CSSProperties = {
-  minHeight: '2.5rem',
-  borderRadius: 'var(--radius-md)',
+const selectStyle: JSX.CSSProperties = {
+  "min-height": '2.5rem',
+  "border-radius": 'var(--radius-md)',
   border: '1px solid var(--color-border-primary)',
-  backgroundColor: 'var(--color-bg-primary)',
+  "background-color": 'var(--color-bg-primary)',
   color: 'var(--color-text-primary)',
   padding: '0.5rem 0.75rem',
 };
@@ -114,9 +114,9 @@ function MetadataInput({
   placeholder: string;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-      <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+      <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>{label}</label>
+      <Input value={value} onInput={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   );
 }
@@ -137,7 +137,7 @@ export function SkillFormView({
   saving: boolean;
   error: string | null;
   fieldErrors: Record<string, string>;
-  onSubmit: (e: FormEvent) => void;
+  onSubmit: (e: Event & { currentTarget: HTMLFormElement }) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -147,64 +147,64 @@ export function SkillFormView({
   };
 
   return (
-    <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }} onSubmit={onSubmit}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+    <form style={{ display: 'flex', "flex-direction": 'column', gap: '1rem' }} onSubmit={onSubmit}>
+      <div style={{ display: 'flex', "align-items": 'center', gap: '0.75rem', "margin-bottom": '0.5rem' }}>
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
           <Icons.ArrowLeft />
         </Button>
-        <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+        <h4 style={{ "font-size": '1rem', "font-weight": 600, color: 'var(--color-text-primary)', margin: 0 }}>
           {isEditing ? t('editSkill') : t('createSkill')}
         </h4>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{t('skillName')}</label>
+      <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+        <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>{t('skillName')}</label>
         <Input
           placeholder={t('skillNamePlaceholder')}
           value={form.name}
-          onChange={(e) => updateField('name', e.target.value)}
-          autoFocus
+          onInput={(e) => updateField('name', e.target.value)}
+          autofocus
           required
         />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{t('skillDescription')}</label>
+      <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+        <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>{t('skillDescription')}</label>
         <Input
           placeholder={t('skillDescriptionPlaceholder')}
           value={form.description}
-          onChange={(e) => updateField('description', e.target.value)}
+          onInput={(e) => updateField('description', e.target.value)}
         />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{t('skillInstructions')}</label>
+      <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+        <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>{t('skillInstructions')}</label>
         <Textarea
           placeholder={t('skillInstructionsPlaceholder')}
           value={form.instructions}
-          onChange={(e) => updateField('instructions', e.target.value)}
+          onInput={(e) => updateField('instructions', e.target.value)}
           required
           rows={8}
-          style={{ minHeight: '200px' }}
+          style={{ "min-height": '200px' }}
         />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{t('skillTriggers')}</label>
+      <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+        <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>{t('skillTriggers')}</label>
         <Input
           placeholder={t('skillTriggersPlaceholder')}
           value={form.triggers}
-          onChange={(e) => updateField('triggers', e.target.value)}
+          onInput={(e) => updateField('triggers', e.target.value)}
         />
-        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>{t('skillTriggersHint')}</span>
+        <span style={{ "font-size": '0.75rem', color: 'var(--color-text-tertiary)' }}>{t('skillTriggersHint')}</span>
       </div>
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Locale</label>
+      <div style={{ display: 'grid', gap: '1rem', "grid-template-columns": 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+          <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>Locale</label>
           <select value={form.skillLocale} onChange={(e) => updateField('skillLocale', e.target.value)} style={selectStyle}>
             <option value="">auto</option>
             <option value="ja">ja</option>
             <option value="en">en</option>
           </select>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Category</label>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.5rem' }}>
+          <label style={{ "font-size": '0.875rem', "font-weight": 500, color: 'var(--color-text-secondary)' }}>Category</label>
           <select value={form.category} onChange={(e) => updateField('category', e.target.value)} style={selectStyle}>
             <option value="">unspecified</option>
             <option value="research">research</option>
@@ -215,7 +215,7 @@ export function SkillFormView({
           </select>
         </div>
       </div>
-      <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: '1rem', "grid-template-columns": 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <MetadataInput label="Activation Tags" value={form.activationTags} onChange={(v) => updateField('activationTags', v)} placeholder="slides, narrative" />
         <MetadataInput label="Preferred Tools" value={form.preferredTools} onChange={(v) => updateField('preferredTools', v)} placeholder="create_artifact, workspace_files_write" />
         <MetadataInput label="Durable Outputs" value={form.durableOutputs} onChange={(v) => updateField('durableOutputs', v)} placeholder="artifact, workspace_file" />
@@ -224,14 +224,14 @@ export function SkillFormView({
         <MetadataInput label="Template IDs" value={form.templateIds} onChange={(v) => updateField('templateIds', v)} placeholder="slides-outline, speaker-notes" />
       </div>
       {Object.keys(fieldErrors).length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem', color: 'var(--color-error)' }}>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.25rem', "font-size": '0.8rem', color: 'var(--color-error)' }}>
           {Object.entries(fieldErrors).map(([field, message]) => (
-            <span key={field}>{field}: {message}</span>
+            <span>{field}: {message}</span>
           ))}
         </div>
       ) : null}
-      {error && <div style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>{error}</div>}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+      {error && <div style={{ color: 'var(--color-error)', "font-size": '0.875rem' }}>{error}</div>}
+      <div style={{ display: 'flex', "justify-content": 'flex-end', gap: '0.75rem', "margin-top": '1rem' }}>
         <Button type="button" variant="secondary" onClick={onClose}>
           {t('cancel')}
         </Button>

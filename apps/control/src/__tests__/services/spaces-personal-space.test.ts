@@ -1,50 +1,48 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertObjectMatch } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { getPersonalWorkspace } from '@/services/identity/spaces';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    onConflictDoUpdate: vi.fn().mockReturnThis(),
-    onConflictDoNothing: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
+    leftJoin: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
+    onConflictDoUpdate: (function(this: any) { return this; }),
+    onConflictDoNothing: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
-describe('personal space (user account as workspace)', () => {
-  it('returns the user account itself as the personal workspace with kind=user', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+
+  Deno.test('personal space (user account as workspace) - returns the user account itself as the personal workspace with kind=user', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     // Call sequence:
     // 1. getPersonalWorkspace: select().from(accounts).where(id=userId, type='user').limit(1).get() -> user account
@@ -52,17 +50,16 @@ describe('personal space (user account as workspace)', () => {
     // 3. ensureSelfMembership: select({id}).from(accountMemberships).where(...).limit(1).get() -> existing membership
     // 4. findLatestRepositoryBySpaceId: select().from(repositories).where(...).orderBy(...).limit(1).get() -> null
     drizzle._.get
-      .mockResolvedValueOnce({ id: 'user-1', type: 'user', name: 'User One', slug: 'user1', headSnapshotId: null, createdAt: '2026-03-01', updatedAt: '2026-03-01' }) // user account
-      .mockResolvedValueOnce({ id: 'user-1' }) // resolveUserPrincipalId
-      .mockResolvedValueOnce({ id: 'membership-1' }) // existing self-membership
-      .mockResolvedValueOnce(undefined); // no repo
+       = (async () => ({ id: 'user-1', type: 'user', name: 'User One', slug: 'user1', headSnapshotId: null, createdAt: '2026-03-01', updatedAt: '2026-03-01' })) as any // user account
+       = (async () => ({ id: 'user-1' })) as any // resolveUserPrincipalId
+       = (async () => ({ id: 'membership-1' })) as any // existing self-membership
+       = (async () => undefined) as any; // no repo
 
     const result = await getPersonalWorkspace({ DB: {} } as unknown as Env, 'user-1');
 
-    expect(result).toMatchObject({
+    assertObjectMatch(result, {
       id: 'user-1',
       kind: 'user',
       owner_principal_id: 'user-1',
     });
-  });
-});
+})

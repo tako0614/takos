@@ -1,29 +1,29 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
-import { ALLOWED_COMMANDS_SET } from '../../shared/config.js';
-import { runCommand } from '../../runtime/command.js';
-import { validateRuntimeExecEnv } from '../../utils/sandbox-env.js';
-import { pushLog } from '../../runtime/logging.js';
+import { ALLOWED_COMMANDS_SET } from '../../shared/config.ts';
+import { runCommand } from '../../runtime/command.ts';
+import { validateRuntimeExecEnv } from '../../utils/sandbox-env.ts';
+import { pushLog } from '../../runtime/logging.ts';
 import {
   verifyNoSymlinkPathComponents,
   resolvePathWithin,
   verifyPathWithinAfterAccess,
   verifyPathWithinBeforeCreate,
-} from '../../runtime/paths.js';
-import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
-import { isValidSessionId, validateCommandLine } from '../../runtime/validation.js';
-import { sessionStore } from './storage.js';
+} from '../../runtime/paths.ts';
+import { writeFileWithinSpace } from '../../runtime/secure-fs.ts';
+import { isValidSessionId, validateCommandLine } from '../../runtime/validation.ts';
+import { sessionStore } from './storage.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { writeAuditLog } from '../../utils/audit-log.js';
+import { writeAuditLog } from '../../utils/audit-log.ts';
 import {
   getSessionOwnerSub,
   getOwnerSubFromServiceContext,
   parseRequiredSessionSpaceIds,
   resolveSessionWorkDir,
-} from './session-utils.js';
+} from './session-utils.ts';
 import { forbidden, badRequest, internalError } from 'takos-common/middleware/hono';
-import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.js';
-import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
+import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.ts';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
 
 import type { Context } from 'hono';
 
@@ -43,7 +43,7 @@ app.post('/session/exec', async (c) => {
     env?: Record<string, string>;
   };
 
-  function buildAuditEntry(extra: { exitCode?: number; durationMs?: number; status: 'started' | 'completed' | 'failed'; error?: string }): import('../../utils/audit-log.js').AuditEntry {
+  function buildAuditEntry(extra: { exitCode?: number; durationMs?: number; status: 'started' | 'completed' | 'failed'; error?: string }): import('../../utils/audit-log.ts').AuditEntry {
     return {
       timestamp: new Date().toISOString(),
       event: 'session_exec',

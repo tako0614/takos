@@ -1,8 +1,8 @@
 /**
  * Shared formatter for apply results.
  */
-import chalk from 'chalk';
-import type { ApplyResult } from './coordinator.js';
+import { bold, dim, green, red } from '@std/fmt/colors';
+import type { ApplyResult } from './coordinator.ts';
 
 export interface PrintApplyResultOptions {
   title?: string;
@@ -22,24 +22,24 @@ export function printApplyResult(
   const title = options.title || 'Apply';
 
   console.log('');
-  console.log(chalk.bold(`${titlePrefix}${title}: ${groupName}`));
+  console.log(bold(`${titlePrefix}${title}: ${groupName}`));
   console.log(`  Environment: ${env}`);
   console.log('');
 
   if (result.applied.length > 0) {
-    console.log(chalk.bold('Applied:'));
+    console.log(bold('Applied:'));
     for (const entry of result.applied) {
-      const icon = entry.status === 'success' ? chalk.green('+') : chalk.red('!');
-      const errorInfo = entry.error ? chalk.red(` -- ${entry.error}`) : '';
+      const icon = entry.status === 'success' ? green('+') : red('!');
+      const errorInfo = entry.error ? red(` -- ${entry.error}`) : '';
       console.log(`  ${icon} ${entry.name} [${entry.category}] ${entry.action}${errorInfo}`);
     }
     console.log('');
   }
 
   if (result.skipped.length > 0) {
-    console.log(chalk.bold('Unchanged:'));
+    console.log(bold('Unchanged:'));
     for (const name of result.skipped) {
-      console.log(`  ${chalk.dim('=')} ${name}`);
+      console.log(`  ${dim('=')} ${name}`);
     }
     console.log('');
   }
@@ -47,15 +47,15 @@ export function printApplyResult(
   const succeeded = result.applied.filter(e => e.status === 'success').length;
   const failed = result.applied.filter(e => e.status === 'failed').length;
 
-  console.log(chalk.bold('Summary:'));
+  console.log(bold('Summary:'));
   console.log(`  Applied:   ${succeeded} succeeded, ${failed} failed`);
   console.log(`  Unchanged: ${result.skipped.length}`);
 
   if (failed > 0) {
     console.log('');
-    console.log(chalk.red('Some steps failed. Review errors above.'));
+    console.log(red('Some steps failed. Review errors above.'));
   } else if (!options.dryRun) {
     console.log('');
-    console.log(chalk.green('Apply completed successfully.'));
+    console.log(green('Apply completed successfully.'));
   }
 }

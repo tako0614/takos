@@ -8,9 +8,9 @@
  * as dependencies. When the CLI is not available the provider returns a
  * graceful 'failed' result rather than throwing.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { isAlreadyExistsError } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-utils.js';
+import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
+import { isAlreadyExistsError } from '../resource-provider.ts';
+import { execCommand } from '../cloudflare-utils.ts';
 
 const GCP_ALREADY_EXISTS_PATTERNS = [
   'already exists',
@@ -25,8 +25,8 @@ export class GCPProvider implements ResourceProvider {
   private readonly region: string;
 
   constructor(opts?: { project?: string; region?: string }) {
-    this.project = opts?.project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '';
-    this.region = opts?.region || process.env.GOOGLE_CLOUD_REGION || 'us-central1';
+    this.project = opts?.project || Deno.env.get('GOOGLE_CLOUD_PROJECT') || Deno.env.get('GCLOUD_PROJECT') || '';
+    this.region = opts?.region || Deno.env.get('GOOGLE_CLOUD_REGION') || 'us-central1';
   }
 
   /** Run a gcloud CLI command with graceful failure handling. */

@@ -1,52 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn(),
-  shouldOffloadMessage: vi.fn(),
-  writeMessageToR2: vi.fn(),
-  makeMessagePreview: vi.fn(),
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: ((..._args: any[]) => undefined) as any,
+  shouldOffloadMessage: ((..._args: any[]) => undefined) as any,
+  writeMessageToR2: ((..._args: any[]) => undefined) as any,
+  makeMessagePreview: ((..._args: any[]) => undefined) as any,
+  logError: ((..._args: any[]) => undefined) as any,
+  logWarn: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/db', () => ({
-  getDb: mocks.getDb,
-  messages: {
-    id: 'id',
-    threadId: 'threadId',
-    role: 'role',
-    content: 'content',
-    r2Key: 'r2Key',
-    toolCalls: 'toolCalls',
-    toolCallId: 'toolCallId',
-    metadata: 'metadata',
-    sequence: 'sequence',
-    createdAt: 'createdAt',
-  },
-}));
-
-vi.mock('@/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/utils')>()),
-  generateId: mocks.generateId,
-}));
-
-vi.mock('@/services/offload/messages', () => ({
-  shouldOffloadMessage: mocks.shouldOffloadMessage,
-  writeMessageToR2: mocks.writeMessageToR2,
-  makeMessagePreview: mocks.makeMessagePreview,
-}));
-
-vi.mock('@/utils/logger', () => ({
-  logDebug: vi.fn(),
-  logInfo: vi.fn(),
-  logError: mocks.logError,
-  logWarn: mocks.logWarn,
-  createLogger: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })),
-  safeJsonParse: vi.fn((v: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } }),
-  safeJsonParseOrDefault: vi.fn((v: unknown, d: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return d; } }),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/offload/messages'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/logger'
 import { persistMessage, type MessagePersistenceDeps } from '@/services/agent/message-persistence';
 
 function createDbMock(options?: {
@@ -56,44 +24,41 @@ function createDbMock(options?: {
 }) {
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.get = vi.fn(async () => options?.existingGet ?? null);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.get = async () => options?.existingGet ?? null;
     return c;
   };
   const maxSeqChain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.get = vi.fn(async () => options?.maxSeqGet ?? { maxSeq: 0 });
+    c.from = (() => c);
+    c.where = (() => c);
+    c.get = async () => options?.maxSeqGet ?? { maxSeq: 0 };
     return c;
   };
 
   let selectCallCount = 0;
   return {
-    select: vi.fn().mockImplementation(() => {
+    select: () => {
       selectCallCount++;
       if (selectCallCount === 1) return chain(); // existing check
       return maxSeqChain(); // max seq
-    }),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockImplementation(async () => {
+    },
+    insert: () => ({
+      values: async () => {
         if (options?.insertThrows) throw options.insertThrows;
-      }),
-    })),
+      },
+    }),
   };
 }
 
-describe('persistMessage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('abcd');
-    mocks.shouldOffloadMessage.mockReturnValue(false);
-  });
 
-  it('inserts a new message with correct sequence', async () => {
-    const mockDb = createDbMock({ maxSeqGet: { maxSeq: 5 } });
-    mocks.getDb.mockReturnValue(mockDb);
+  Deno.test('persistMessage - inserts a new message with correct sequence', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = createDbMock({ maxSeqGet: { maxSeq: 5 } });
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -106,12 +71,14 @@ describe('persistMessage', () => {
       content: 'Hello',
     });
 
-    expect(mockDb.insert).toHaveBeenCalled();
-  });
-
-  it('skips insert if message already exists (idempotency)', async () => {
-    const mockDb = createDbMock({ existingGet: { id: 'msg_existing' } });
-    mocks.getDb.mockReturnValue(mockDb);
+    assert(mockDb.insert.calls.length > 0);
+})
+  Deno.test('persistMessage - skips insert if message already exists (idempotency)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = createDbMock({ existingGet: { id: 'msg_existing' } });
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -124,15 +91,17 @@ describe('persistMessage', () => {
       content: 'Already stored',
     });
 
-    expect(mockDb.insert).not.toHaveBeenCalled();
-  });
-
-  it('offloads to R2 when bucket is available and message qualifies', async () => {
-    const mockDb = createDbMock({ maxSeqGet: { maxSeq: 0 } });
-    mocks.getDb.mockReturnValue(mockDb);
-    mocks.shouldOffloadMessage.mockReturnValue(true);
-    mocks.writeMessageToR2.mockResolvedValue({ key: 'r2-key-123' });
-    mocks.makeMessagePreview.mockReturnValue('[preview]');
+    assertSpyCalls(mockDb.insert, 0);
+})
+  Deno.test('persistMessage - offloads to R2 when bucket is available and message qualifies', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = createDbMock({ maxSeqGet: { maxSeq: 0 } });
+    mocks.getDb = (() => mockDb) as any;
+    mocks.shouldOffloadMessage = (() => true) as any;
+    mocks.writeMessageToR2 = (async () => ({ key: 'r2-key-123' })) as any;
+    mocks.makeMessagePreview = (() => '[preview]') as any;
 
     const fakeBucket = {};
     const deps: MessagePersistenceDeps = {
@@ -146,22 +115,24 @@ describe('persistMessage', () => {
       content: 'Long content to offload',
     });
 
-    expect(mocks.writeMessageToR2).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.writeMessageToR2, 0, [
       fakeBucket,
       'thread-1',
-      expect.any(String),
-      expect.objectContaining({
+      /* expect.any(String) */ {} as any,
+      ({
         thread_id: 'thread-1',
         role: 'assistant',
       }),
-    );
-  });
-
-  it('falls back to inline storage when R2 write fails', async () => {
-    const mockDb = createDbMock({ maxSeqGet: { maxSeq: 0 } });
-    mocks.getDb.mockReturnValue(mockDb);
-    mocks.shouldOffloadMessage.mockReturnValue(true);
-    mocks.writeMessageToR2.mockRejectedValue(new Error('R2 failure'));
+    ]);
+})
+  Deno.test('persistMessage - falls back to inline storage when R2 write fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = createDbMock({ maxSeqGet: { maxSeq: 0 } });
+    mocks.getDb = (() => mockDb) as any;
+    mocks.shouldOffloadMessage = (() => true) as any;
+    mocks.writeMessageToR2 = (async () => { throw new Error('R2 failure'); }) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -174,18 +145,20 @@ describe('persistMessage', () => {
       content: 'Content',
     });
 
-    expect(mocks.logWarn).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logWarn, 0, [
       expect.stringContaining('Failed to persist message'),
-      expect.any(Object),
-    );
-    expect(mockDb.insert).toHaveBeenCalled();
-  });
-
-  it('handles UNIQUE constraint on id as successful (duplicate detection)', async () => {
-    const mockDb = createDbMock({
+      /* expect.any(Object) */ {} as any,
+    ]);
+    assert(mockDb.insert.calls.length > 0);
+})
+  Deno.test('persistMessage - handles UNIQUE constraint on id as successful (duplicate detection)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = createDbMock({
       insertThrows: Object.assign(new Error('UNIQUE constraint failed: messages.id'), {}),
     });
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -198,34 +171,36 @@ describe('persistMessage', () => {
       role: 'user',
       content: 'Hello',
     });
-  });
-
-  it('retries on sequence conflict (UNIQUE constraint)', async () => {
-    let callCount = 0;
+})
+  Deno.test('persistMessage - retries on sequence conflict (UNIQUE constraint)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  let callCount = 0;
     let insertAttempt = 0;
     const mockDb = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         const c: Record<string, unknown> = {};
-        c.from = vi.fn().mockReturnValue(c);
-        c.where = vi.fn().mockReturnValue(c);
-        c.get = vi.fn(async () => {
+        c.from = (() => c);
+        c.where = (() => c);
+        c.get = async () => {
           callCount++;
           if (callCount % 2 === 1) return null; // existing check
           return { maxSeq: callCount }; // max seq
-        });
+        };
         return c;
-      }),
-      insert: vi.fn().mockImplementation(() => ({
-        values: vi.fn().mockImplementation(async () => {
+      },
+      insert: () => ({
+        values: async () => {
           insertAttempt++;
           if (insertAttempt === 1) {
             throw new Error('UNIQUE constraint failed: sequence');
           }
           return undefined;
-        }),
-      })),
+        },
+      }),
     };
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -237,22 +212,24 @@ describe('persistMessage', () => {
       role: 'user',
       content: 'Retry test',
     });
-  });
-
-  it('throws after max retries exhausted', async () => {
-    const mockDb = {
-      select: vi.fn().mockImplementation(() => {
+})
+  Deno.test('persistMessage - throws after max retries exhausted', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const mockDb = {
+      select: () => {
         const c: Record<string, unknown> = {};
-        c.from = vi.fn().mockReturnValue(c);
-        c.where = vi.fn().mockReturnValue(c);
-        c.get = vi.fn(async () => null);
+        c.from = (() => c);
+        c.where = (() => c);
+        c.get = async () => null;
         return c;
+      },
+      insert: () => ({
+        values: (async () => { throw new Error('SQLITE_BUSY'); }),
       }),
-      insert: vi.fn().mockImplementation(() => ({
-        values: vi.fn().mockRejectedValue(new Error('SQLITE_BUSY')),
-      })),
     };
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -260,16 +237,18 @@ describe('persistMessage', () => {
       threadId: 'thread-1',
     };
 
-    await expect(
+    await await assertRejects(async () => { await 
       persistMessage(deps, { role: 'user', content: 'Fail' }),
-    ).rejects.toThrow('SQLITE_BUSY');
-  });
-
-  it('stores tool_calls and tool_call_id when present', async () => {
-    const insertValues = vi.fn().mockResolvedValue(undefined);
+    ; }, 'SQLITE_BUSY');
+})
+  Deno.test('persistMessage - stores tool_calls and tool_call_id when present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'abcd') as any;
+    mocks.shouldOffloadMessage = (() => false) as any;
+  const insertValues = (async () => undefined);
     const mockDb = createDbMock({ maxSeqGet: { maxSeq: 0 } });
-    mockDb.insert = vi.fn().mockReturnValue({ values: insertValues });
-    mocks.getDb.mockReturnValue(mockDb);
+    mockDb.insert = (() => ({ values: insertValues }));
+    mocks.getDb = (() => mockDb) as any;
 
     const deps: MessagePersistenceDeps = {
       db: {} as any,
@@ -283,10 +262,9 @@ describe('persistMessage', () => {
       tool_calls: [{ id: 'tc1', name: 'file_read', arguments: { path: '/test' } }],
     });
 
-    expect(insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(insertValues, 0, [
+      ({
         toolCalls: expect.stringContaining('file_read'),
       }),
-    );
-  });
-});
+    ]);
+})

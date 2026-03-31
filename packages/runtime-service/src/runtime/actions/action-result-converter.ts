@@ -1,4 +1,4 @@
-import type { ExecutorStepResult } from './executor.js';
+import type { ExecutorStepResult } from './executor.ts';
 
 /**
  * Append a step result's stdout/stderr to accumulator arrays.

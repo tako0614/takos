@@ -1,0 +1,15 @@
+{
+  "name": "takos-browser-service",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "imports": {
+    "hono": "npm:hono@^4.12.4",
+    "playwright-core": "npm:playwright-core@^1.52.0"
+  },
+  "tasks": {
+    "test": "deno test --allow-all src/",
+    "start": "deno run --allow-all src/app.ts"
+  }
+}

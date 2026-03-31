@@ -22,7 +22,7 @@ const DEFAULT_HEARTBEAT_TTL_MS = 120_000;
 const workerHandler = createWorkerRuntime(buildNodeWorkerPlatform);
 
 function resolveDuration(envVarName: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[envVarName] ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get(envVarName) ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
@@ -31,9 +31,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 function resolveHeartbeatFile(): string | null {
-  const explicit = process.env.TAKOS_LOCAL_WORKER_HEARTBEAT_FILE?.trim();
+  const explicit = Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')?.trim();
   if (explicit) return path.resolve(explicit);
-  const dataDir = process.env.TAKOS_LOCAL_DATA_DIR?.trim();
+  const dataDir = Deno.env.get('TAKOS_LOCAL_DATA_DIR')?.trim();
   if (!dataDir) return null;
   return path.resolve(dataDir, 'worker-heartbeat.json');
 }
@@ -142,8 +142,8 @@ export async function runLocalWorkerIteration(
 
 export async function createLocalWorkerEnv(): Promise<WorkerEnv> {
   const baseEnv = await createNodeWebEnv();
-  const executorHostUrl = process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL;
-  const runtimeHostUrl = process.env.TAKOS_LOCAL_RUNTIME_HOST_URL;
+  const executorHostUrl = Deno.env.get('TAKOS_LOCAL_EXECUTOR_HOST_URL');
+  const runtimeHostUrl = Deno.env.get('TAKOS_LOCAL_RUNTIME_HOST_URL');
   return {
     ...baseEnv,
     ...(executorHostUrl ? { EXECUTOR_HOST: createForwardingBinding(executorHostUrl) } : {}),

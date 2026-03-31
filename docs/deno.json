@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "imports": {
+    "vitepress": "npm:vitepress@^1.0.0"
+  },
+  "tasks": {
+    "dev": "deno run -A npm:vitepress dev",
+    "build": "deno run -A npm:vitepress build",
+    "preview": "deno run -A npm:vitepress preview",
+    "deploy": "deno run -A npm:wrangler pages deploy .vitepress/dist --project-name takos-docs"
+  }
+}

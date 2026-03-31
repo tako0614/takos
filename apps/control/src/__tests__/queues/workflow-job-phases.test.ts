@@ -1,42 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  callRuntimeRequest: vi.fn(),
-  safeJsonParseOrDefault: vi.fn(),
-  createWorkflowEngine: vi.fn(),
-  getRunNotifierStub: vi.fn(),
-  buildRunNotifierEmitRequest: vi.fn(),
-  buildRunNotifierEmitPayload: vi.fn(),
-}));
-
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db');
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  callRuntimeRequest: ((..._args: any[]) => undefined) as any,
+  safeJsonParseOrDefault: ((..._args: any[]) => undefined) as any,
+  createWorkflowEngine: ((..._args: any[]) => undefined) as any,
+  getRunNotifierStub: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitRequest: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitPayload: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', () => ({
-  safeJsonParseOrDefault: mocks.safeJsonParseOrDefault,
-  decrypt: vi.fn().mockResolvedValue('decrypted'),
-}));
-
-vi.mock('@/services/execution/runtime', () => ({
-  callRuntimeRequest: mocks.callRuntimeRequest,
-}));
-
-vi.mock('@/services/execution/workflow-engine', () => ({
-  createWorkflowEngine: mocks.createWorkflowEngine,
-}));
-
-vi.mock('@/services/run-notifier-client', () => ({
-  buildRunNotifierEmitRequest: mocks.buildRunNotifierEmitRequest,
-  getRunNotifierStub: mocks.getRunNotifierStub,
-}));
-
-vi.mock('@/services/run-notifier-payload', () => ({
-  buildRunNotifierEmitPayload: mocks.buildRunNotifierEmitPayload,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
+// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-payload'
 import {
   handleJobSkipped,
   executeStepLoop,
@@ -56,15 +36,15 @@ function createDrizzleMock(opts: {
   selectGet?: ReturnType<typeof vi.fn>;
   selectAll?: ReturnType<typeof vi.fn>;
 } = {}) {
-  const selectGet = opts.selectGet ?? vi.fn().mockResolvedValue(null);
-  const selectAll = opts.selectAll ?? vi.fn().mockResolvedValue([]);
+  const selectGet = opts.selectGet ?? (async () => null);
+  const selectAll = opts.selectAll ?? (async () => []);
 
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
-    c.limit = vi.fn().mockReturnValue(c);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
+    c.limit = (() => c);
     c.get = selectGet;
     c.all = selectAll;
     return c;
@@ -72,30 +52,30 @@ function createDrizzleMock(opts: {
 
   const updateChain = () => {
     const c: Record<string, unknown> = {};
-    c.set = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+    c.set = (() => c);
+    c.where = (async () => ({ meta: { changes: 1 } }));
     return c;
   };
 
   return {
-    select: vi.fn().mockImplementation(() => chain()),
-    update: vi.fn().mockImplementation(() => updateChain()),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ id: 1 }) }),
-      }),
-    })),
-    delete: vi.fn().mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
+    select: () => chain(),
+    update: () => updateChain(),
+    insert: () => ({
+      values: (() => ({
+        returning: (() => ({ get: (async () => ({ id: 1 })) })),
+      })),
+    }),
+    delete: () => ({ where: (async () => undefined) }),
   };
 }
 
 function createEngine() {
   return {
-    onJobStart: vi.fn().mockResolvedValue(undefined),
-    onJobComplete: vi.fn().mockResolvedValue(undefined),
-    updateStepStatus: vi.fn().mockResolvedValue(undefined),
-    storeJobLogs: vi.fn().mockResolvedValue(undefined),
-    cancelRun: vi.fn().mockResolvedValue(undefined),
+    onJobStart: (async () => undefined),
+    onJobComplete: (async () => undefined),
+    updateStepStatus: (async () => undefined),
+    storeJobLogs: (async () => undefined),
+    cancelRun: (async () => undefined),
   };
 }
 
@@ -126,7 +106,7 @@ function createJobQueueContext(overrides: Partial<JobQueueContext> = {}): JobQue
     env: {
       DB: {} as any,
       RUN_NOTIFIER: {} as any,
-      RUNTIME_HOST: { fetch: vi.fn() },
+      RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
     } as any,
     engine: createEngine() as any,
     message: createMessage(),
@@ -148,35 +128,35 @@ function jsonResponse(body: unknown): Response {
     text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
-
-beforeEach(() => {
-  vi.clearAllMocks();
-
-  mocks.buildRunNotifierEmitPayload.mockReturnValue({});
-  mocks.buildRunNotifierEmitRequest.mockReturnValue(
-    new Request('https://notifier.example.test', { method: 'POST' })
-  );
-  mocks.getRunNotifierStub.mockReturnValue({
-    fetch: vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
-  });
-});
-
 // ---------------------------------------------------------------------------
 // handleJobSkipped
 // ---------------------------------------------------------------------------
 
-describe('handleJobSkipped', () => {
-  it('returns false when job has no if condition', async () => {
-    const ctx = createJobQueueContext();
+
+  Deno.test('handleJobSkipped - returns false when job has no if condition', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const ctx = createJobQueueContext();
     const state = createInitialState();
 
     const skipped = await handleJobSkipped(ctx, state);
 
-    expect(skipped).toBe(false);
-  });
+    assertEquals(skipped, false);
+})
+  Deno.test('handleJobSkipped - returns false when condition evaluates to true', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns false when condition evaluates to true', async () => {
-    const ctx = createJobQueueContext({
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const ctx = createJobQueueContext({
       message: createMessage({
         jobDefinition: {
           name: 'Build',
@@ -189,11 +169,17 @@ describe('handleJobSkipped', () => {
     const state = createInitialState();
 
     const skipped = await handleJobSkipped(ctx, state);
-    expect(skipped).toBe(false);
-  });
+    assertEquals(skipped, false);
+})
+  Deno.test('handleJobSkipped - returns true and marks job as skipped when condition is false', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns true and marks job as skipped when condition is false', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -213,21 +199,27 @@ describe('handleJobSkipped', () => {
 
     const skipped = await handleJobSkipped(ctx, state);
 
-    expect(skipped).toBe(true);
-    expect(state.jobConclusion).toBe('skipped');
-    expect(state.logs).toContain('Job skipped (condition not met): ${{ env.MISSING_VAR }}');
-    expect(engine.storeJobLogs).toHaveBeenCalledWith('job-1', expect.any(String));
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assertEquals(skipped, true);
+    assertEquals(state.jobConclusion, 'skipped');
+    assertStringIncludes(state.logs, 'Job skipped (condition not met): ${{ env.MISSING_VAR }}');
+    assertSpyCallArgs(engine.storeJobLogs, 0, ['job-1', /* expect.any(String) */ {} as any]);
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       conclusion: 'skipped',
-      stepResults: expect.arrayContaining([
-        expect.objectContaining({ stepNumber: 1, name: 'Step 1', conclusion: 'skipped' }),
-        expect.objectContaining({ stepNumber: 2, name: 'Step 2', conclusion: 'skipped' }),
+      stepResults: ([
+        ({ stepNumber: 1, name: 'Step 1', conclusion: 'skipped' }),
+        ({ stepNumber: 2, name: 'Step 2', conclusion: 'skipped' }),
       ]),
-    }));
-  });
+    })]);
+})
+  Deno.test('handleJobSkipped - skips job when always() is NOT the condition (unrecognized becomes false)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('skips job when always() is NOT the condition (unrecognized becomes false)', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -242,11 +234,17 @@ describe('handleJobSkipped', () => {
     const state = createInitialState();
 
     const skipped = await handleJobSkipped(ctx, state);
-    expect(skipped).toBe(true);
-  });
+    assertEquals(skipped, true);
+})
+  Deno.test('handleJobSkipped - does not skip job when always() is condition', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('does not skip job when always() is condition', async () => {
-    const ctx = createJobQueueContext({
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const ctx = createJobQueueContext({
       message: createMessage({
         jobDefinition: {
           name: 'Build',
@@ -259,33 +257,36 @@ describe('handleJobSkipped', () => {
     const state = createInitialState();
 
     const skipped = await handleJobSkipped(ctx, state);
-    expect(skipped).toBe(false);
-  });
-});
-
+    assertEquals(skipped, false);
+})
 // ---------------------------------------------------------------------------
 // executeStepLoop
 // ---------------------------------------------------------------------------
 
-describe('executeStepLoop', () => {
-  it('executes all steps sequentially on success', async () => {
-    const engine = createEngine();
+
+  Deno.test('executeStepLoop - executes all steps sequentially on success', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     // getRunStatus returns 'running' for each step check
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockResolvedValue(
-      jsonResponse({
+    mocks.callRuntimeRequest = (async () => jsonResponse({
         exitCode: 0,
         stdout: 'ok',
         stderr: '',
         outputs: {},
         conclusion: 'success',
-      })
-    );
+      })) as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -305,20 +306,26 @@ describe('executeStepLoop', () => {
 
     const result = await executeStepLoop(ctx, state);
 
-    expect(result).toBeUndefined();
-    expect(state.stepResults).toHaveLength(2);
-    expect(state.stepResults[0].conclusion).toBe('success');
-    expect(state.stepResults[1].conclusion).toBe('success');
-    expect(engine.updateStepStatus).toHaveBeenCalledTimes(4); // in_progress + completed for each
-  });
+    assertEquals(result, undefined);
+    assertEquals(state.stepResults.length, 2);
+    assertEquals(state.stepResults[0].conclusion, 'success');
+    assertEquals(state.stepResults[1].conclusion, 'success');
+    assertSpyCalls(engine.updateStepStatus, 4); // in_progress + completed for each
+})
+  Deno.test('executeStepLoop - cancels when run status is cancelled', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('cancels when run status is cancelled', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'cancelled' }),
+      selectGet: (async () => ({ status: 'cancelled' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -328,27 +335,33 @@ describe('executeStepLoop', () => {
     state.runtimeSpaceId = 'ws-1';
 
     // Mock runtimeDelete (callRuntimeRequest for DELETE)
-    mocks.callRuntimeRequest.mockResolvedValue({ ok: true, status: 200 });
+    mocks.callRuntimeRequest = (async () => ({ ok: true, status: 200 })) as any;
 
     const result = await executeStepLoop(ctx, state);
 
-    expect(result).toBe('cancelled');
-    expect(state.jobConclusion).toBe('cancelled');
-    expect(state.runtimeCancelled).toBe(true);
-    expect(engine.cancelRun).toHaveBeenCalledWith('run-1');
-    expect(engine.storeJobLogs).toHaveBeenCalled();
-  });
+    assertEquals(result, 'cancelled');
+    assertEquals(state.jobConclusion, 'cancelled');
+    assertEquals(state.runtimeCancelled, true);
+    assertSpyCallArgs(engine.cancelRun, 0, ['run-1']);
+    assert(engine.storeJobLogs.calls.length > 0);
+})
+  Deno.test('executeStepLoop - skips subsequent steps after a failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('skips subsequent steps after a failure', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     let stepCallCount = 0;
-    mocks.callRuntimeRequest.mockImplementation(async () => {
+    mocks.callRuntimeRequest = async () => {
       stepCallCount++;
       if (stepCallCount === 1) {
         return jsonResponse({
@@ -366,7 +379,7 @@ describe('executeStepLoop', () => {
         outputs: {},
         conclusion: 'success',
       });
-    });
+    } as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -386,22 +399,28 @@ describe('executeStepLoop', () => {
 
     await executeStepLoop(ctx, state);
 
-    expect(state.stepResults).toHaveLength(2);
-    expect(state.stepResults[0].conclusion).toBe('failure');
-    expect(state.stepResults[1].conclusion).toBe('skipped');
-    expect(state.jobConclusion).toBe('failure');
-  });
+    assertEquals(state.stepResults.length, 2);
+    assertEquals(state.stepResults[0].conclusion, 'failure');
+    assertEquals(state.stepResults[1].conclusion, 'skipped');
+    assertEquals(state.jobConclusion, 'failure');
+})
+  Deno.test('executeStepLoop - continues on error when step has continue-on-error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('continues on error when step has continue-on-error', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     let stepCallCount = 0;
-    mocks.callRuntimeRequest.mockImplementation(async () => {
+    mocks.callRuntimeRequest = async () => {
       stepCallCount++;
       if (stepCallCount === 1) {
         return jsonResponse({
@@ -419,7 +438,7 @@ describe('executeStepLoop', () => {
         outputs: {},
         conclusion: 'success',
       });
-    });
+    } as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -439,30 +458,34 @@ describe('executeStepLoop', () => {
 
     await executeStepLoop(ctx, state);
 
-    expect(state.stepResults).toHaveLength(2);
-    expect(state.stepResults[0].conclusion).toBe('failure');
-    expect(state.stepResults[1].conclusion).toBe('success');
+    assertEquals(state.stepResults.length, 2);
+    assertEquals(state.stepResults[0].conclusion, 'failure');
+    assertEquals(state.stepResults[1].conclusion, 'success');
     // jobConclusion stays success because continue-on-error
-    expect(state.jobConclusion).toBe('success');
-  });
+    assertEquals(state.jobConclusion, 'success');
+})
+  Deno.test('executeStepLoop - respects step.if condition to skip a step', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('respects step.if condition to skip a step', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockResolvedValue(
-      jsonResponse({
+    mocks.callRuntimeRequest = (async () => jsonResponse({
         exitCode: 0,
         stdout: 'ok',
         stderr: '',
         outputs: {},
         conclusion: 'success',
-      })
-    );
+      })) as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -483,29 +506,33 @@ describe('executeStepLoop', () => {
 
     await executeStepLoop(ctx, state);
 
-    expect(state.stepResults).toHaveLength(2);
-    expect(state.stepResults[0].conclusion).toBe('success');
-    expect(state.stepResults[1].conclusion).toBe('skipped');
-    expect(engine.updateStepStatus).toHaveBeenCalledWith('job-1', 2, 'skipped', 'skipped');
-  });
+    assertEquals(state.stepResults.length, 2);
+    assertEquals(state.stepResults[0].conclusion, 'success');
+    assertEquals(state.stepResults[1].conclusion, 'skipped');
+    assertSpyCallArgs(engine.updateStepStatus, 0, ['job-1', 2, 'skipped', 'skipped']);
+})
+  Deno.test('executeStepLoop - stores step outputs when step has id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('stores step outputs when step has id', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockResolvedValue(
-      jsonResponse({
+    mocks.callRuntimeRequest = (async () => jsonResponse({
         exitCode: 0,
         stdout: 'ok',
         stderr: '',
         outputs: { version: '1.0.0' },
         conclusion: 'success',
-      })
-    );
+      })) as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -522,19 +549,25 @@ describe('executeStepLoop', () => {
 
     await executeStepLoop(ctx, state);
 
-    expect(state.stepOutputs['get_version']).toEqual({ version: '1.0.0' });
-  });
+    assertEquals(state.stepOutputs['get_version'], { version: '1.0.0' });
+})
+  Deno.test('executeStepLoop - runs step with failure() condition after a failed step', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('runs step with failure() condition after a failed step', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
 
     const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     let stepCallCount = 0;
-    mocks.callRuntimeRequest.mockImplementation(async () => {
+    mocks.callRuntimeRequest = async () => {
       stepCallCount++;
       if (stepCallCount === 1) {
         return jsonResponse({
@@ -552,7 +585,7 @@ describe('executeStepLoop', () => {
         outputs: {},
         conclusion: 'success',
       });
-    });
+    } as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -572,19 +605,24 @@ describe('executeStepLoop', () => {
 
     await executeStepLoop(ctx, state);
 
-    expect(state.stepResults).toHaveLength(2);
-    expect(state.stepResults[0].conclusion).toBe('failure');
-    expect(state.stepResults[1].conclusion).toBe('success');
-  });
-});
-
+    assertEquals(state.stepResults.length, 2);
+    assertEquals(state.stepResults[0].conclusion, 'failure');
+    assertEquals(state.stepResults[1].conclusion, 'success');
+})
 // ---------------------------------------------------------------------------
 // completeJobSuccess
 // ---------------------------------------------------------------------------
 
-describe('completeJobSuccess', () => {
-  it('completes job with success conclusion', async () => {
-    const engine = createEngine();
+
+  Deno.test('completeJobSuccess - completes job with success conclusion', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
     state.stepResults = [
@@ -593,16 +631,22 @@ describe('completeJobSuccess', () => {
 
     await completeJobSuccess(ctx, state);
 
-    expect(engine.storeJobLogs).toHaveBeenCalled();
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assert(engine.storeJobLogs.calls.length > 0);
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       status: 'completed',
       conclusion: 'success',
-    }));
-    expect(state.completionConclusion).toBe('success');
-  });
+    })]);
+    assertEquals(state.completionConclusion, 'success');
+})
+  Deno.test('completeJobSuccess - reports success when job has continue-on-error and conclusion is failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('reports success when job has continue-on-error and conclusion is failure', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -619,14 +663,20 @@ describe('completeJobSuccess', () => {
 
     await completeJobSuccess(ctx, state);
 
-    expect(state.completionConclusion).toBe('success');
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assertEquals(state.completionConclusion, 'success');
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       conclusion: 'success',
-    }));
-  });
+    })]);
+})
+  Deno.test('completeJobSuccess - evaluates job outputs from step outputs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('evaluates job outputs from step outputs', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -645,13 +695,19 @@ describe('completeJobSuccess', () => {
 
     await completeJobSuccess(ctx, state);
 
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       outputs: { version: '1.0.0' },
-    }));
-  });
+    })]);
+})
+  Deno.test('completeJobSuccess - handles expression evaluation errors gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('handles expression evaluation errors gracefully', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -670,34 +726,45 @@ describe('completeJobSuccess', () => {
     await completeJobSuccess(ctx, state);
 
     // Should not throw, val should be omitted since evaluateExpression returns null
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       outputs: {},
-    }));
-  });
-});
-
+    })]);
+})
 // ---------------------------------------------------------------------------
 // completeJobFailure
 // ---------------------------------------------------------------------------
 
-describe('completeJobFailure', () => {
-  it('sets job conclusion to failure and stores logs', async () => {
-    const engine = createEngine();
+
+  Deno.test('completeJobFailure - sets job conclusion to failure and stores logs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     await completeJobFailure(ctx, state, new Error('build broke'));
 
-    expect(state.jobConclusion).toBe('failure');
-    expect(state.logs).toContain('Error: build broke');
-    expect(engine.storeJobLogs).toHaveBeenCalledWith('job-1', expect.stringContaining('build broke'));
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', expect.objectContaining({
+    assertEquals(state.jobConclusion, 'failure');
+    assertStringIncludes(state.logs, 'Error: build broke');
+    assertSpyCallArgs(engine.storeJobLogs, 0, ['job-1', expect.stringContaining('build broke')]);
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', ({
       conclusion: 'failure',
-    }));
-  });
+    })]);
+})
+  Deno.test('completeJobFailure - marks unseen steps as skipped', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('marks unseen steps as skipped', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({
       engine: engine as any,
       message: createMessage({
@@ -719,26 +786,38 @@ describe('completeJobFailure', () => {
 
     await completeJobFailure(ctx, state, new Error('oops'));
 
-    expect(state.stepResults).toHaveLength(3);
-    expect(state.stepResults[1].conclusion).toBe('skipped');
-    expect(state.stepResults[2].conclusion).toBe('skipped');
-    expect(engine.updateStepStatus).toHaveBeenCalledWith('job-1', 2, 'skipped', 'skipped');
-    expect(engine.updateStepStatus).toHaveBeenCalledWith('job-1', 3, 'skipped', 'skipped');
-  });
+    assertEquals(state.stepResults.length, 3);
+    assertEquals(state.stepResults[1].conclusion, 'skipped');
+    assertEquals(state.stepResults[2].conclusion, 'skipped');
+    assertSpyCallArgs(engine.updateStepStatus, 0, ['job-1', 2, 'skipped', 'skipped']);
+    assertSpyCallArgs(engine.updateStepStatus, 0, ['job-1', 3, 'skipped', 'skipped']);
+})
+  Deno.test('completeJobFailure - converts non-Error to string for error message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('converts non-Error to string for error message', async () => {
-    const engine = createEngine();
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
     const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
     await completeJobFailure(ctx, state, 'string error');
 
-    expect(state.logs).toContain('Error: string error');
-  });
+    assertStringIncludes(state.logs, 'Error: string error');
+})
+  Deno.test('completeJobFailure - handles storeJobLogs failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('handles storeJobLogs failure gracefully', async () => {
-    const engine = createEngine();
-    engine.storeJobLogs.mockRejectedValue(new Error('log storage failed'));
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
+    engine.storeJobLogs = (async () => { throw new Error('log storage failed'); }) as any;
 
     const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
@@ -746,22 +825,34 @@ describe('completeJobFailure', () => {
     // Should not throw from storeJobLogs failure
     await completeJobFailure(ctx, state, new Error('original error'));
 
-    expect(engine.onJobComplete).toHaveBeenCalled();
-  });
+    assert(engine.onJobComplete.calls.length > 0);
+})
+  Deno.test('completeJobFailure - re-throws when onJobComplete fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('re-throws when onJobComplete fails', async () => {
-    const engine = createEngine();
-    engine.onJobComplete.mockRejectedValue(new Error('db write failed'));
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
+    engine.onJobComplete = (async () => { throw new Error('db write failed'); }) as any;
 
     const ctx = createJobQueueContext({ engine: engine as any });
     const state = createInitialState();
 
-    await expect(completeJobFailure(ctx, state, new Error('original'))).rejects.toThrow('db write failed');
-  });
+    await await assertRejects(async () => { await completeJobFailure(ctx, state, new Error('original')); }, 'db write failed');
+})
+  Deno.test('completeJobFailure - handles updateStepStatus failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('handles updateStepStatus failure gracefully', async () => {
-    const engine = createEngine();
-    engine.updateStepStatus.mockRejectedValue(new Error('step update failed'));
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.example.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  const engine = createEngine();
+    engine.updateStepStatus = (async () => { throw new Error('step update failed'); }) as any;
 
     const ctx = createJobQueueContext({
       engine: engine as any,
@@ -781,6 +872,5 @@ describe('completeJobFailure', () => {
     // Should not throw from updateStepStatus failure
     await completeJobFailure(ctx, state, new Error('original'));
 
-    expect(engine.onJobComplete).toHaveBeenCalled();
-  });
-});
+    assert(engine.onJobComplete.calls.length > 0);
+})

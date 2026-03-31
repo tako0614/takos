@@ -59,6 +59,8 @@ import {
   getProxyUsageSnapshot,
   isControlRpcPath,
   forwardToControlPlane,
+  resolveContainerNamespace,
+  parseExecutorTier,
 } from './executor-utils';
 import type {
   AgentExecutorEnv,
@@ -114,14 +116,85 @@ export type { AgentExecutorEnv, ProxyTokenInfo };
 export { getRequiredProxyCapability, validateProxyResourceAccess };
 
 // ---------------------------------------------------------------------------
-// Durable Object — TakosAgentExecutorContainer
+// Durable Objects — Tiered executor containers
+//
+// Three tiers share the same implementation but run on different CF Container
+// instance types (configured in wrangler.executor.toml):
+//   Tier 1 (lite):   lightweight, always-on, max ~20 instances
+//   Tier 2 (basic):  scale-out, max ~200 instances
+//   Tier 3 (custom): max memory (12 GiB), max ~25 instances
+//
+// The dispatch handler selects the tier based on a `tier` field in the
+// dispatch payload (defaults to tier 1).
 // ---------------------------------------------------------------------------
 
-/**
- * Durable Object that manages the executor container lifecycle.
- * Receives /start requests from the runner and /proxy/* calls from the container.
- * The Container base class starts the image on first fetch() and routes to port 8080.
- */
+function createExecutorContainerClass(tier: import('./executor-utils').ExecutorTier, sleepAfterOverride?: string) {
+  return class extends HostContainerRuntime<Env> {
+    defaultPort = 8080;
+    sleepAfter = sleepAfterOverride ?? '5m';
+    pingEndpoint = 'container/health';
+
+    private cachedTokens: Map<string, ProxyTokenInfo> | null = null;
+
+    constructor(ctx: DurableObjectState<Record<string, never>>, env: Env) {
+      super(ctx, env);
+      this.envVars = {
+        ...buildAgentExecutorContainerEnvVars(env),
+        EXECUTOR_TIER: String(tier),
+      };
+    }
+
+    async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch').AgentExecutorDispatchResult> {
+      const serviceId = resolveAgentExecutorServiceId(body);
+      if (!serviceId) {
+        return {
+          ok: false,
+          status: 400,
+          body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+        };
+      }
+      const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, {
+        runId: body.runId,
+        serviceId,
+      });
+      const tokenMap: Record<string, ProxyTokenInfo> = {
+        [controlConfig.controlRpcToken]: { runId: body.runId, serviceId, capability: 'control' },
+      };
+      await this.ctx.storage.put('proxyTokens', tokenMap);
+      this.cachedTokens = new Map(Object.entries(tokenMap));
+
+      return await dispatchAgentExecutorStart({
+        startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
+        fetch: async (request: Request) => {
+          this.renewActivityTimeout();
+          const tcpPort = (this as unknown as HostContainerInternals).container.getTcpPort(8080);
+          return await tcpPort.fetch(request.url.replace('https:', 'http:'), request);
+        },
+      }, body, controlConfig);
+    }
+
+    async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
+      if (!this.cachedTokens) {
+        const stored = await this.ctx.storage.get<Record<string, ProxyTokenInfo>>('proxyTokens');
+        if (!stored) return null;
+        this.cachedTokens = new Map(Object.entries(stored));
+      }
+      for (const [storedToken, info] of this.cachedTokens) {
+        if (constantTimeEqual(token, storedToken)) return info;
+      }
+      return null;
+    }
+  };
+}
+
+/** Tier 1 — lite instances, always-on, low concurrency */
+export const ExecutorContainerTier1 = createExecutorContainerClass(1, '10m');
+/** Tier 2 — basic instances, scale-out */
+export const ExecutorContainerTier2 = createExecutorContainerClass(2, '5m');
+/** Tier 3 — large instances, max memory */
+export const ExecutorContainerTier3 = createExecutorContainerClass(3, '3m');
+
+/** @deprecated Use ExecutorContainerTier1 for new deployments */
 export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
   defaultPort = 8080;
   sleepAfter = '5m';
@@ -212,14 +285,16 @@ export default {
     // /dispatch — called by takos-runner via service binding (same CF account).
     // Service binding provides implicit authentication; no JWT required.
     if (path === '/dispatch' && request.method === 'POST') {
-      const body = await request.json() as AgentExecutorDispatchPayload;
+      const body = await request.json() as AgentExecutorDispatchPayload & { tier?: unknown };
       const { runId } = body;
 
       if (!runId) {
         return errorJsonResponse('Missing runId', 400);
       }
 
-      const stub = env.EXECUTOR_CONTAINER.getByName(runId);
+      const tier = parseExecutorTier(body.tier);
+      const ns = resolveContainerNamespace(env, tier);
+      const stub = ns.getByName(runId);
 
       // Container dispatch is the canonical OSS execution path.
       return await forwardAgentExecutorDispatch(stub, body);
@@ -230,12 +305,14 @@ export default {
       const runId = request.headers.get('X-Takos-Run-Id');
       const authHeader = request.headers.get('Authorization');
       const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
+      const tier = parseExecutorTier(request.headers.get('X-Takos-Executor-Tier'));
       if (!runId || !token) {
         return unauthorized();
       }
 
       // Verify token via DO RPC (DO stores the random tokens generated at dispatch)
-      const stub = env.EXECUTOR_CONTAINER.getByName(runId);
+      const ns = resolveContainerNamespace(env, tier);
+      const stub = ns.getByName(runId);
       const tokenInfo = await stub.verifyProxyToken(token);
       if (!tokenInfo) {
         return unauthorized();

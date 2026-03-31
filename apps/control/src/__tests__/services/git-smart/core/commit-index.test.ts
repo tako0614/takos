@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { GitCommit, GitSignature } from '@/services/git-smart/types';
 
-// All mocks must be hoisted to survive vi.clearAllMocks() in the global setup
+// All mocks must be hoisted to survive /* mocks cleared (no-op in Deno) */ void 0 in the global setup
+import { assertEquals } from 'jsr:@std/assert';
+
 const {
   mockGetCommitData,
   mockDbGet,
@@ -9,24 +10,18 @@ const {
   mockDbFrom,
   mockDbSelect,
   mockGetDb,
-} = vi.hoisted(() => ({
-  mockGetCommitData: vi.fn(),
-  mockDbGet: vi.fn(),
-  mockDbWhere: vi.fn(),
-  mockDbFrom: vi.fn(),
-  mockDbSelect: vi.fn(),
-  mockGetDb: vi.fn(),
-}));
+} = ({
+  mockGetCommitData: ((..._args: any[]) => undefined) as any,
+  mockDbGet: ((..._args: any[]) => undefined) as any,
+  mockDbWhere: ((..._args: any[]) => undefined) as any,
+  mockDbFrom: ((..._args: any[]) => undefined) as any,
+  mockDbSelect: ((..._args: any[]) => undefined) as any,
+  mockGetDb: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/git-smart/core/object-store', () => ({
-  getCommitData: mockGetCommitData,
-  putCommit: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/object-store'
 
-vi.mock('@/db', () => ({
-  getDb: mockGetDb,
-  commits: { repoId: 'repoId', sha: 'sha' },
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 
 import { isAncestor, findMergeBase } from '@/services/git-smart/core/commit-index';
 
@@ -82,74 +77,107 @@ const mockBucket = {} as any;
 
 /** Re-establish the Drizzle mock chain so getCommitFromIndex returns null */
 function setupDbChain() {
-  mockDbGet.mockResolvedValue(null);
-  mockDbWhere.mockReturnValue({ get: mockDbGet });
-  mockDbFrom.mockReturnValue({ where: mockDbWhere });
-  mockDbSelect.mockReturnValue({ from: mockDbFrom });
-  mockGetDb.mockReturnValue({ select: mockDbSelect });
-}
+  mockDbGet = (async () => null) as any;
+  mockDbWhere = (() => ({ get: mockDbGet })) as any;
+  mockDbFrom = (() => ({ where: mockDbWhere })) as any;
+  mockDbSelect = (() => ({ from: mockDbFrom })) as any;
+  mockGetDb = (() => ({ select: mockDbSelect })) as any;
+}
 
-beforeEach(() => {
+
+  Deno.test('isAncestor - returns true when SHAs are the same', async () => {
   setupDbChain();
-  mockGetCommitData.mockImplementation(async (_bucket: any, sha: string) => {
+  mockGetCommitData = async (_bucket: any, sha: string) => {
     return commitMap.get(sha) ?? null;
-  });
-});
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_A), true);
+})
 
-describe('isAncestor', () => {
-  it('returns true when SHAs are the same', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_A)).toBe(true);
-  });
+  Deno.test('isAncestor - returns true for direct parent', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_B), true);
+})
 
-  it('returns true for direct parent', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_B)).toBe(true);
-  });
+  Deno.test('isAncestor - returns true for grandparent', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_D), true);
+})
 
-  it('returns true for grandparent', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_D)).toBe(true);
-  });
+  Deno.test('isAncestor - returns true for ancestor via merge parent', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_E, SHA_D), true);
+})
 
-  it('returns true for ancestor via merge parent', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_E, SHA_D)).toBe(true);
-  });
+  Deno.test('isAncestor - returns false when not an ancestor', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_D, SHA_A), false);
+})
 
-  it('returns false when not an ancestor', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_D, SHA_A)).toBe(false);
-  });
+  Deno.test('isAncestor - returns false for unknown SHA', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_UNKNOWN, SHA_D), false);
+})
 
-  it('returns false for unknown SHA', async () => {
-    expect(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_UNKNOWN, SHA_D)).toBe(false);
-  });
-});
 
-describe('findMergeBase', () => {
-  it('finds common ancestor in linear chain', async () => {
-    const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_B, SHA_D);
-    expect(base).toBe(SHA_B);
-  });
 
-  it('finds merge base of diverged branches', async () => {
-    // ancestors of D: {D, C, B, A, E}
+  Deno.test('findMergeBase - finds common ancestor in linear chain', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_B, SHA_D);
+    assertEquals(base, SHA_B);
+})
+
+  Deno.test('findMergeBase - finds merge base of diverged branches', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  // ancestors of D: {D, C, B, A, E}
     // Walking from E: E is in ancestors of D -> return E
     const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_D, SHA_E);
-    expect(base).toBe(SHA_E);
-  });
+    assertEquals(base, SHA_E);
+})
 
-  it('finds merge base when both share a common root', async () => {
-    // ancestors of A: {A}
+  Deno.test('findMergeBase - finds merge base when both share a common root', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  // ancestors of A: {A}
     // Walking from B: B not in {A}, then A is in {A} -> return A
     const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_A, SHA_B);
-    expect(base).toBe(SHA_A);
-  });
+    assertEquals(base, SHA_A);
+})
 
-  it('returns null when no common ancestor exists', async () => {
-    const SHA_ISOLATED = '1111111111111111111111111111111111111111';
-    mockGetCommitData.mockImplementation(async (_bucket: any, sha: string) => {
+  Deno.test('findMergeBase - returns null when no common ancestor exists', async () => {
+  setupDbChain();
+  mockGetCommitData = async (_bucket: any, sha: string) => {
+    return commitMap.get(sha) ?? null;
+  } as any;
+  const SHA_ISOLATED = '1111111111111111111111111111111111111111';
+    mockGetCommitData = async (_bucket: any, sha: string) => {
       if (sha === SHA_ISOLATED) return makeCommit(SHA_ISOLATED, []);
       return commitMap.get(sha) ?? null;
-    });
+    } as any;
 
     const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_A, SHA_ISOLATED);
-    expect(base).toBeNull();
-  });
-});
+    assertEquals(base, null);
+})
+

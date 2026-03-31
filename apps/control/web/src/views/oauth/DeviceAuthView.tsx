@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { Button } from '../../components/ui/Button';
 import { ConsentLayout, ConsentLogo } from './ConsentLayout';
@@ -27,12 +27,12 @@ type DeviceDecisionResponse =
 
 export function DeviceAuthView() {
   const { t } = useI18n();
-  const [state, setState] = useState<DeviceContextResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [codeInput, setCodeInput] = useState('');
+  const [state, setState] = createSignal<DeviceContextResponse | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [submitting, setSubmitting] = createSignal(false);
+  const [codeInput, setCodeInput] = createSignal('');
 
-  const fetchContext = useCallback(async (userCode?: string) => {
+  const fetchContext = async (userCode?: string) => {
     setLoading(true);
     try {
       const params = userCode ? `?user_code=${encodeURIComponent(userCode)}` : '';
@@ -52,27 +52,28 @@ export function DeviceAuthView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const userCode = params.get('user_code') || undefined;
     if (userCode) setCodeInput(userCode);
     fetchContext(userCode);
-  }, [fetchContext]);
+  });
 
-  const handleCodeSubmit = useCallback((e: React.FormEvent) => {
+  const handleCodeSubmit = (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
-    const trimmed = codeInput.trim();
+    const trimmed = codeInput().trim();
     if (!trimmed) return;
     // Update URL and fetch context
     const newUrl = `/oauth/device?user_code=${encodeURIComponent(trimmed)}`;
     window.history.replaceState(null, '', newUrl);
     fetchContext(trimmed);
-  }, [codeInput, fetchContext]);
+  };
 
-  const handleDecision = useCallback(async (action: 'allow' | 'deny') => {
-    if (!state || state.status !== 'consent_required') return;
+  const handleDecision = async (action: 'allow' | 'deny') => {
+    const s = state();
+    if (!s || s.status !== 'consent_required') return;
     setSubmitting(true);
 
     try {
@@ -81,9 +82,9 @@ export function DeviceAuthView() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_code: state.user_code,
+          user_code: s.user_code,
           action,
-          csrf_token: state.csrf_token,
+          csrf_token: s.csrf_token,
         }),
       });
 
@@ -99,46 +100,47 @@ export function DeviceAuthView() {
     } finally {
       setSubmitting(false);
     }
-  }, [state]);
+  };
 
-  if (loading) {
+  if (loading()) {
     return <LoadingScreen />;
   }
 
-  if (!state) {
+  if (!state()) {
     return <LoadingScreen />;
   }
 
   // Code entry screen
-  if (state.status === 'code_entry') {
+  if (state()!.status === 'code_entry') {
+    const s = state() as Extract<DeviceContextResponse, { status: 'code_entry' }>;
     return (
       <ConsentLayout>
         <ConsentLogo />
-        <h1 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">
+        <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
           {t('deviceAuthTitle')}
         </h1>
-        <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {state.user.email} {t('oauthConsentLoggedInAs')}
+        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+          {s.user.email} {t('oauthConsentLoggedInAs')}
         </p>
-        <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+        <p class="text-sm text-[var(--color-text-secondary)] mb-4">
           {t('deviceAuthCodePrompt')}
         </p>
-        <form onSubmit={handleCodeSubmit} className="text-left">
-          <label className="block text-xs text-[var(--color-text-tertiary)] mb-2">
+        <form onSubmit={handleCodeSubmit} class="text-left">
+          <label class="block text-xs text-[var(--color-text-tertiary)] mb-2">
             {t('deviceAuthCodeLabel')}
           </label>
           <input
             type="text"
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            autoComplete="one-time-code"
-            inputMode="text"
+            value={codeInput()}
+            onInput={(e) => setCodeInput(e.target.value)}
+            autocomplete="one-time-code"
+            inputmode="text"
             placeholder={t('deviceAuthCodePlaceholder')}
             required
-            className="w-full px-3 py-3 rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base tracking-wider uppercase placeholder:text-[var(--color-text-tertiary)] placeholder:normal-case placeholder:tracking-normal"
+            class="w-full px-3 py-3 rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base tracking-wider uppercase placeholder:text-[var(--color-text-tertiary)] placeholder:normal-case placeholder:tracking-normal"
           />
-          <div className="mt-4">
-            <Button variant="primary" className="w-full" type="submit">
+          <div class="mt-4">
+            <Button variant="primary" class="w-full" type="submit">
               {t('deviceAuthContinue')}
             </Button>
           </div>
@@ -148,41 +150,42 @@ export function DeviceAuthView() {
   }
 
   // Consent screen
-  if (state.status === 'consent_required') {
+  if (state()!.status === 'consent_required') {
+    const s = state() as Extract<DeviceContextResponse, { status: 'consent_required' }>;
     return (
       <ConsentLayout>
-        <ConsentLogo src={state.client.logo_uri} />
-        <h1 className="text-lg font-bold text-[var(--color-text-primary)] mb-1">
-          {state.client.name}
+        <ConsentLogo src={s.client.logo_uri} />
+        <h1 class="text-lg font-bold text-[var(--color-text-primary)] mb-1">
+          {s.client.name}
         </h1>
-        <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {state.user.email} {t('oauthConsentLoggedInAs')}
+        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+          {s.user.email} {t('oauthConsentLoggedInAs')}
         </p>
-        <p className="text-sm text-[var(--color-text-secondary)] mb-2">
-          <strong className="text-[var(--color-text-primary)]">{state.client.name}</strong>
+        <p class="text-sm text-[var(--color-text-secondary)] mb-2">
+          <strong class="text-[var(--color-text-primary)]">{s.client.name}</strong>
           {t('oauthConsentDeviceRequesting')}
         </p>
-        <p className="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {t('deviceAuthCode')}: <span className="tracking-wider uppercase text-[var(--color-text-secondary)]">{state.user_code}</span>
+        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+          {t('deviceAuthCode')}: <span class="tracking-wider uppercase text-[var(--color-text-secondary)]">{s.user_code}</span>
         </p>
 
-        <div className="mb-4">
-          <ScopeList identity={state.scopes.identity} resources={state.scopes.resources} />
+        <div class="mb-4">
+          <ScopeList identity={s.scopes.identity} resources={s.scopes.resources} />
         </div>
 
-        <div className="flex gap-3">
+        <div class="flex gap-3">
           <Button
             variant="secondary"
-            className="flex-1"
-            disabled={submitting}
+            class="flex-1"
+            disabled={submitting()}
             onClick={() => handleDecision('deny')}
           >
             {t('oauthConsentDeny')}
           </Button>
           <Button
             variant="primary"
-            className="flex-1"
-            isLoading={submitting}
+            class="flex-1"
+            isLoading={submitting()}
             onClick={() => handleDecision('allow')}
           >
             {t('oauthConsentAllow')}
@@ -194,17 +197,17 @@ export function DeviceAuthView() {
 
   // Result / Error / Auto-approved screens
   // At this point, code_entry / consent_required / unauthenticated are already handled above
-  const resultState = state as DeviceResultState;
+  const resultState = state() as unknown as DeviceResultState;
   return (
     <ConsentLayout>
       <ConsentLogo />
-      <h1 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">
+      <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
         {resultState.title}
       </h1>
-      <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+      <p class="text-sm text-[var(--color-text-secondary)] mb-4">
         {resultState.message}
       </p>
-      <a href="/" className="text-sm text-[var(--color-primary)] hover:underline">
+      <a href="/" class="text-sm text-[var(--color-primary)] hover:underline">
         Home
       </a>
     </ConsentLayout>

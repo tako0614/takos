@@ -1,50 +1,44 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, all: allMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { fetchProfileActivity } from '@/services/identity/profile-activity';
 
-describe('fetchProfileActivity', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('returns empty events when all queries return empty', async () => {
-    // 4 concurrent queries: commits, releases, PRs, deployments
+  Deno.test('fetchProfileActivity - returns empty events when all queries return empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  // 4 concurrent queries: commits, releases, PRs, deployments
     db._.all
-      .mockResolvedValueOnce([]) // commits
-      .mockResolvedValueOnce([]) // releases
-      .mockResolvedValueOnce([]) // PRs
-      .mockResolvedValueOnce([]); // deployments
+       = (async () => []) as any // commits
+       = (async () => []) as any // releases
+       = (async () => []) as any // PRs
+       = (async () => []) as any; // deployments
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -53,13 +47,14 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events).toEqual([]);
-    expect(result.has_more).toBe(false);
-  });
-
-  it('merges and sorts events by created_at descending', async () => {
-    db._.all
-      .mockResolvedValueOnce([
+    assertEquals(result.events, []);
+    assertEquals(result.has_more, false);
+})
+  Deno.test('fetchProfileActivity - merges and sorts events by created_at descending', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => [
         {
           id: 'c1',
           sha: 'abc123',
@@ -69,8 +64,8 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'alice',
         },
-      ])
-      .mockResolvedValueOnce([
+      ]) as any
+       = (async () => [
         {
           id: 'r1',
           tag: 'v1.0.0',
@@ -81,8 +76,8 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'alice',
         },
-      ])
-      .mockResolvedValueOnce([
+      ]) as any
+       = (async () => [
         {
           id: 'pr1',
           number: 42,
@@ -93,8 +88,8 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'alice',
         },
-      ])
-      .mockResolvedValueOnce([]); // deployments
+      ]) as any
+       = (async () => []) as any; // deployments
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -103,17 +98,18 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events).toHaveLength(3);
+    assertEquals(result.events.length, 3);
     // Should be sorted descending by date
-    expect(result.events[0]!.id).toBe('c1');   // Jan 3
-    expect(result.events[1]!.id).toBe('pr1');  // Jan 2
-    expect(result.events[2]!.id).toBe('r1');   // Jan 1
-    expect(result.has_more).toBe(false);
-  });
-
-  it('correctly maps commit events (first line of message)', async () => {
-    db._.all
-      .mockResolvedValueOnce([
+    assertEquals(result.events[0]!.id, 'c1');   // Jan 3
+    assertEquals(result.events[1]!.id, 'pr1');  // Jan 2
+    assertEquals(result.events[2]!.id, 'r1');   // Jan 1
+    assertEquals(result.has_more, false);
+})
+  Deno.test('fetchProfileActivity - correctly maps commit events (first line of message)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => [
         {
           id: 'c1',
           sha: 'deadbeef',
@@ -123,10 +119,10 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'alice',
         },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      ]) as any
+       = (async () => []) as any
+       = (async () => []) as any
+       = (async () => []) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -135,18 +131,19 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events[0]).toMatchObject({
+    assertObjectMatch(result.events[0], {
       type: 'commit',
       title: 'first line',
       data: { sha: 'deadbeef' },
       repo: { owner_username: 'alice', name: 'my-repo' },
     });
-  });
-
-  it('correctly maps release events', async () => {
-    db._.all
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+})
+  Deno.test('fetchProfileActivity - correctly maps release events', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => []) as any
+       = (async () => [
         {
           id: 'r1',
           tag: 'v2.0.0',
@@ -157,9 +154,9 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'alice',
         },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      ]) as any
+       = (async () => []) as any
+       = (async () => []) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -168,18 +165,19 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events[0]).toMatchObject({
+    assertObjectMatch(result.events[0], {
       type: 'release',
       title: 'Released v2.0.0',
       data: { tag: 'v2.0.0', name: 'Major Release' },
     });
-  });
-
-  it('correctly maps pull request events', async () => {
-    db._.all
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+})
+  Deno.test('fetchProfileActivity - correctly maps pull request events', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => []) as any
+       = (async () => []) as any
+       = (async () => [
         {
           id: 'pr1',
           number: 99,
@@ -190,8 +188,8 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: 'bob',
         },
-      ])
-      .mockResolvedValueOnce([]);
+      ]) as any
+       = (async () => []) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -200,19 +198,20 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events[0]).toMatchObject({
+    assertObjectMatch(result.events[0], {
       type: 'pull_request',
       title: 'PR #99: My PR',
       data: { number: 99, status: 'open' },
     });
-  });
-
-  it('correctly maps deployment events', async () => {
-    db._.all
-      .mockResolvedValueOnce([])  // commits
-      .mockResolvedValueOnce([])  // releases
-      .mockResolvedValueOnce([])  // PRs
-      .mockResolvedValueOnce([    // deployments
+})
+  Deno.test('fetchProfileActivity - correctly maps deployment events', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => []) as any  // commits
+       = (async () => []) as any  // releases
+       = (async () => []) as any  // PRs
+       = (async () => [    // deployments
         {
           id: 'd1',
           status: 'success',
@@ -221,8 +220,8 @@ describe('fetchProfileActivity', () => {
           createdAt: '2026-01-01T00:00:00.000Z',
           serviceId: 'w1',
         },
-      ])
-      .mockResolvedValueOnce([    // listWorkerRouteRecordsByIds
+      ]) as any
+       = (async () => [    // listWorkerRouteRecordsByIds
         {
           id: 'w1',
           accountId: 'acc-1',
@@ -232,7 +231,7 @@ describe('fetchProfileActivity', () => {
           routeRef: 'worker-route',
           slug: 'my-worker',
         },
-      ]);
+      ]) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -241,7 +240,7 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events[0]).toMatchObject({
+    assertObjectMatch(result.events[0], {
       type: 'deployment',
       title: 'Deployed my-worker.example.com',
       repo: null,
@@ -251,10 +250,11 @@ describe('fetchProfileActivity', () => {
         version: '1.0.0',
       },
     });
-  });
-
-  it('sets has_more when events exceed limit', async () => {
-    const commits = Array.from({ length: 6 }, (_, i) => ({
+})
+  Deno.test('fetchProfileActivity - sets has_more when events exceed limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const commits = Array.from({ length: 6 }, (_, i) => ({
       id: `c${i}`,
       sha: `sha${i}`,
       message: `Commit ${i}`,
@@ -265,10 +265,10 @@ describe('fetchProfileActivity', () => {
     }));
 
     db._.all
-      .mockResolvedValueOnce(commits)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+       = (async () => commits) as any
+       = (async () => []) as any
+       = (async () => []) as any
+       = (async () => []) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -277,13 +277,14 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events).toHaveLength(5);
-    expect(result.has_more).toBe(true);
-  });
-
-  it('uses account id as owner_username when slug is null', async () => {
-    db._.all
-      .mockResolvedValueOnce([
+    assertEquals(result.events.length, 5);
+    assertEquals(result.has_more, true);
+})
+  Deno.test('fetchProfileActivity - uses account id as owner_username when slug is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.all
+       = (async () => [
         {
           id: 'c1',
           sha: 'abc',
@@ -293,10 +294,10 @@ describe('fetchProfileActivity', () => {
           accountId: 'acc-1',
           accountSlug: null,
         },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      ]) as any
+       = (async () => []) as any
+       = (async () => []) as any
+       = (async () => []) as any;
 
     const result = await fetchProfileActivity({} as D1Database, {
       profileUserId: 'user-1',
@@ -305,6 +306,5 @@ describe('fetchProfileActivity', () => {
       before: null,
     });
 
-    expect(result.events[0]!.repo?.owner_username).toBe('acc-1');
-  });
-});
+    assertEquals(result.events[0]!.repo?.owner_username, 'acc-1');
+})

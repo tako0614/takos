@@ -3,16 +3,16 @@ import { constants as fsConstants } from 'fs';
 import * as path from 'path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { MAX_SESSION_FILE_READ_BYTES } from '../../shared/config.js';
+import { MAX_SESSION_FILE_READ_BYTES } from '../../shared/config.ts';
 import {
   verifyNoSymlinkPathComponents,
   resolvePathWithin,
   verifyPathWithinAfterAccess,
   verifyPathWithinBeforeCreate,
-} from '../../runtime/paths.js';
-import { isProbablyBinary } from '../../runtime/validation.js';
-import { resolveSessionWorkDir } from './session-utils.js';
-import { OwnerBindingError, SymlinkNotAllowedError, SymlinkEscapeError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.js';
+} from '../../runtime/paths.ts';
+import { isProbablyBinary } from '../../runtime/validation.ts';
+import { resolveSessionWorkDir } from './session-utils.ts';
+import { OwnerBindingError, SymlinkNotAllowedError, SymlinkEscapeError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
 
 function handleRouteError(c: Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {

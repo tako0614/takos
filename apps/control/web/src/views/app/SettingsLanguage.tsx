@@ -7,7 +7,7 @@ export function SettingsLanguage() {
 
   return (
     <Section title={t('language')}>
-      <div className="flex gap-2">
+      <div class="flex gap-2">
         <Button
           variant={lang === 'ja' ? 'primary' : 'secondary'}
           size="sm"

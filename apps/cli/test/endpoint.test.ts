@@ -1,88 +1,88 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
-import { CliCommandExit } from '../src/lib/command-exit.js';
+import { CliCommandExit } from '../src/lib/command-exit.ts';
 
-const endpointMocks = vi.hoisted(() => {
-  const saveApiUrlMock = vi.fn();
-  const getConfigMock = vi.fn(() => ({ apiUrl: 'https://takos.jp' }));
-  const isContainerModeMock = vi.fn(() => false);
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { stub, assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const endpointMocks = {
+  const saveApiUrlMock = ((..._args: any[]) => undefined) as any;
+  const getConfigMock = () => ({ apiUrl: 'https://takos.jp' });
+  const isContainerModeMock = () => false;
 
   return {
     saveApiUrlMock,
     getConfigMock,
     isContainerModeMock,
   };
-});
+};
 
-vi.mock('../src/lib/config.js', () => ({
-  saveApiUrl: endpointMocks.saveApiUrlMock,
-  getConfig: endpointMocks.getConfigMock,
-  isContainerMode: endpointMocks.isContainerModeMock,
-}));
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
+import { registerEndpointCommand, resolveEndpointTarget } from '../src/commands/endpoint.ts';
 
-import { registerEndpointCommand, resolveEndpointTarget } from '../src/commands/endpoint.js';
 
-describe('resolveEndpointTarget', () => {
-  it('maps preset names to canonical URLs', () => {
-    expect(resolveEndpointTarget('prod')).toBe('https://takos.jp');
-    expect(resolveEndpointTarget('production')).toBe('https://takos.jp');
-    expect(resolveEndpointTarget('test')).toBe('https://test.takos.jp');
-    expect(resolveEndpointTarget('staging')).toBe('https://test.takos.jp');
-  });
+  Deno.test('resolveEndpointTarget - maps preset names to canonical URLs', () => {
+  assertEquals(resolveEndpointTarget('prod'), 'https://takos.jp');
+    assertEquals(resolveEndpointTarget('production'), 'https://takos.jp');
+    assertEquals(resolveEndpointTarget('test'), 'https://test.takos.jp');
+    assertEquals(resolveEndpointTarget('staging'), 'https://test.takos.jp');
+})
+  Deno.test('resolveEndpointTarget - uses explicit URL as-is', () => {
+  assertEquals(resolveEndpointTarget('https://api.takos.dev'), 'https://api.takos.dev');
+})
 
-  it('uses explicit URL as-is', () => {
-    expect(resolveEndpointTarget('https://api.takos.dev')).toBe('https://api.takos.dev');
-  });
-});
-
-describe('endpoint command', () => {
-  beforeEach(() => {
-    endpointMocks.saveApiUrlMock.mockReset();
-    endpointMocks.getConfigMock.mockReset();
-    endpointMocks.getConfigMock.mockReturnValue({ apiUrl: 'https://takos.jp' });
-    endpointMocks.isContainerModeMock.mockReset();
-    endpointMocks.isContainerModeMock.mockReturnValue(false);
-  });
-
-  it('updates endpoint to test preset', async () => {
-    const program = new Command();
+  Deno.test('endpoint command - updates endpoint to test preset', async () => {
+  endpointMocks.saveApiUrlMock;
+    endpointMocks.getConfigMock;
+    endpointMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    endpointMocks.isContainerModeMock;
+    endpointMocks.isContainerModeMock = (() => false) as any;
+  const program = new Command();
     registerEndpointCommand(program);
 
     await program.parseAsync(['node', 'takos', 'endpoint', 'use', 'test']);
 
-    expect(endpointMocks.saveApiUrlMock).toHaveBeenCalledWith('https://test.takos.jp');
-  });
-
-  it('updates endpoint to prod preset', async () => {
-    const program = new Command();
+    assertSpyCallArgs(endpointMocks.saveApiUrlMock, 0, ['https://test.takos.jp']);
+})
+  Deno.test('endpoint command - updates endpoint to prod preset', async () => {
+  endpointMocks.saveApiUrlMock;
+    endpointMocks.getConfigMock;
+    endpointMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    endpointMocks.isContainerModeMock;
+    endpointMocks.isContainerModeMock = (() => false) as any;
+  const program = new Command();
     registerEndpointCommand(program);
 
     await program.parseAsync(['node', 'takos', 'endpoint', 'use', 'prod']);
 
-    expect(endpointMocks.saveApiUrlMock).toHaveBeenCalledWith('https://takos.jp');
-  });
-
-  it('shows current endpoint', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    endpointMocks.getConfigMock.mockReturnValue({ apiUrl: 'https://test.takos.jp' });
+    assertSpyCallArgs(endpointMocks.saveApiUrlMock, 0, ['https://takos.jp']);
+})
+  Deno.test('endpoint command - shows current endpoint', async () => {
+  endpointMocks.saveApiUrlMock;
+    endpointMocks.getConfigMock;
+    endpointMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    endpointMocks.isContainerModeMock;
+    endpointMocks.isContainerModeMock = (() => false) as any;
+  const logSpy = stub(console, 'log') = () => {} as any;
+    endpointMocks.getConfigMock = (() => ({ apiUrl: 'https://test.takos.jp' })) as any;
 
     const program = new Command();
     registerEndpointCommand(program);
 
     await program.parseAsync(['node', 'takos', 'endpoint', 'show']);
 
-    expect(logSpy).toHaveBeenCalledWith('https://test.takos.jp');
-    logSpy.mockRestore();
-  });
-
-  it('fails when running in container mode', async () => {
-    endpointMocks.isContainerModeMock.mockReturnValue(true);
+    assertSpyCallArgs(logSpy, 0, ['https://test.takos.jp']);
+    logSpy.restore();
+})
+  Deno.test('endpoint command - fails when running in container mode', async () => {
+  endpointMocks.saveApiUrlMock;
+    endpointMocks.getConfigMock;
+    endpointMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    endpointMocks.isContainerModeMock;
+    endpointMocks.isContainerModeMock = (() => false) as any;
+  endpointMocks.isContainerModeMock = (() => true) as any;
     const program = new Command();
     registerEndpointCommand(program);
 
-    await expect(program.parseAsync(['node', 'takos', 'endpoint', 'use', 'test']))
-      .rejects
-      .toBeInstanceOf(CliCommandExit);
-    expect(endpointMocks.saveApiUrlMock).not.toHaveBeenCalled();
-  });
-});
+    await await assertRejects(async () => { await program.parseAsync(['node', 'takos', 'endpoint', 'use', 'test']); }, CliCommandExit);
+    assertSpyCalls(endpointMocks.saveApiUrlMock, 0);
+})

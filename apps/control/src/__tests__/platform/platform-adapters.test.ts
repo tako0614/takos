@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest';
 import { buildPlatform, createPlatformConfig, createPlatformServices } from '@/platform/adapters/shared';
 import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
 import { buildNodeWebPlatform } from '@/platform/adapters/node';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 const minimalBindings = {
   ADMIN_DOMAIN: 'admin.example.test',
   TENANT_BASE_DOMAIN: 'tenant.example.test',
 };
 
-describe('platform adapters', () => {
-  it('keeps the shared platform builder provider-neutral', () => {
-    const platform = buildPlatform(
+
+  Deno.test('platform adapters - keeps the shared platform builder provider-neutral', () => {
+  const platform = buildPlatform(
       'node',
       minimalBindings,
       createPlatformConfig({
@@ -26,11 +27,10 @@ describe('platform adapters', () => {
       }),
     );
 
-    expect(platform.services.deploymentProviders).toBeUndefined();
-  });
-
-  it('preserves an attached deployment provider registry when one is supplied by the caller', () => {
-    const deploymentProviders = {
+    assertEquals(platform.services.deploymentProviders, undefined);
+})
+  Deno.test('platform adapters - preserves an attached deployment provider registry when one is supplied by the caller', () => {
+  const deploymentProviders = {
       defaultName: 'ecs',
       list: () => [
         {
@@ -81,8 +81,8 @@ describe('platform adapters', () => {
       } as never,
     );
 
-    expect(platform.services.deploymentProviders).toBe(deploymentProviders);
-    expect(platform.services.deploymentProviders?.list()).toEqual([
+    assertEquals(platform.services.deploymentProviders, deploymentProviders);
+    assertEquals(platform.services.deploymentProviders?.list(), [
       {
         name: 'ecs',
         config: {
@@ -107,10 +107,9 @@ describe('platform adapters', () => {
         },
       },
     ]);
-  });
-
-  it('attaches workers-dispatch deploy provider in the workers adapter', () => {
-    const platform = buildWorkersWebPlatform({
+})
+  Deno.test('platform adapters - attaches workers-dispatch deploy provider in the workers adapter', () => {
+  const platform = buildWorkersWebPlatform({
       ...minimalBindings,
       CF_ACCOUNT_ID: 'cf-account',
       CF_API_TOKEN: 'cf-token',
@@ -119,7 +118,7 @@ describe('platform adapters', () => {
       BROWSER: { connect: async () => ({ webSocketDebuggerUrl: 'ws://example.test' }) },
     } as never);
 
-    expect(platform.services.deploymentProviders?.list()).toEqual([{
+    assertEquals(platform.services.deploymentProviders?.list(), [{
       name: 'workers-dispatch',
       config: {
         accountId: 'cf-account',
@@ -128,12 +127,11 @@ describe('platform adapters', () => {
         dispatchNamespace: 'dispatch-ns',
       },
     }]);
-    expect(platform.services.deploymentProviders?.defaultName).toBe('workers-dispatch');
-    expect(platform.services.documents.renderPdf).toBeTypeOf('function');
-  });
-
-  it('attaches deploy providers in the node adapter', async () => {
-    const platform = await buildNodeWebPlatform({
+    assertEquals(platform.services.deploymentProviders?.defaultName, 'workers-dispatch');
+    assertEquals(typeof platform.services.documents.renderPdf, 'function');
+})
+  Deno.test('platform adapters - attaches deploy providers in the node adapter', async () => {
+  const platform = await buildNodeWebPlatform({
       ...minimalBindings,
       OCI_ORCHESTRATOR_URL: 'http://oci-orchestrator.internal/deploy',
       OCI_ORCHESTRATOR_TOKEN: 'oci-token',
@@ -161,7 +159,7 @@ describe('platform adapters', () => {
       K8S_DEPLOYMENT_NAME: 'takos-worker',
     } as never);
 
-    expect(platform.services.deploymentProviders?.list()).toEqual([
+    assertEquals(platform.services.deploymentProviders?.list(), [
       {
         name: 'ecs',
         config: {
@@ -207,7 +205,6 @@ describe('platform adapters', () => {
         },
       },
     ]);
-    expect(platform.services.deploymentProviders?.defaultName).toBe('ecs');
-    expect(platform.services.documents.renderPdf).toBeUndefined();
-  });
-});
+    assertEquals(platform.services.deploymentProviders?.defaultName, 'ecs');
+    assertEquals(platform.services.documents.renderPdf, undefined);
+})

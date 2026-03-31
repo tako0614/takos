@@ -2,7 +2,7 @@
  * Type definitions for group deploy — deploying an entire app.yml manifest
  * as a unit directly to Cloudflare, bypassing the store install flow.
  */
-import type { AppManifest } from './group-deploy-manifest.js';
+import type { AppManifest } from './group-deploy-manifest.ts';
 
 // ── Options ──────────────────────────────────────────────────────────────────
 

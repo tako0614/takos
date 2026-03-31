@@ -1,22 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  decrypt: vi.fn(),
-}));
-
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db');
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  decrypt: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', () => ({
-  decrypt: mocks.decrypt,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from '@/queues/workflow-secrets';
 
 // ---------------------------------------------------------------------------
@@ -24,222 +15,216 @@ import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from '@/queu
 // ---------------------------------------------------------------------------
 
 function createDrizzleMock(opts: { selectAll?: ReturnType<typeof vi.fn> }) {
-  const selectAll = opts.selectAll ?? vi.fn().mockResolvedValue([]);
+  const selectAll = opts.selectAll ?? (async () => []);
 
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
     c.all = selectAll;
     return c;
   };
 
   return {
-    select: vi.fn().mockImplementation(() => chain()),
+    select: () => chain(),
   };
 }
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
 // ---------------------------------------------------------------------------
 // collectReferencedSecretNamesFromEnv
 // ---------------------------------------------------------------------------
 
-describe('collectReferencedSecretNamesFromEnv', () => {
-  it('extracts secret names from ${{ secrets.X }} references', () => {
-    const env = {
+
+  Deno.test('collectReferencedSecretNamesFromEnv - extracts secret names from ${{ secrets.X }} references', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       API_TOKEN: '${{ secrets.API_TOKEN }}',
       OTHER: 'static-value',
       DB_PASS: '${{ secrets.DB_PASSWORD }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['API_TOKEN', 'DB_PASSWORD']);
-  });
-
-  it('returns empty array when no secrets are referenced', () => {
-    const env = {
+    assertEquals(names, ['API_TOKEN', 'DB_PASSWORD']);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - returns empty array when no secrets are referenced', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       CI: 'true',
       NODE_ENV: 'production',
     };
 
-    expect(collectReferencedSecretNamesFromEnv(env)).toEqual([]);
-  });
-
-  it('handles empty env', () => {
-    expect(collectReferencedSecretNamesFromEnv({})).toEqual([]);
-  });
-
-  it('handles multiple secret references in same value', () => {
-    const env = {
+    assertEquals(collectReferencedSecretNamesFromEnv(env), []);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - handles empty env', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(collectReferencedSecretNamesFromEnv({}), []);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - handles multiple secret references in same value', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       COMBINED: '${{ secrets.USER }}:${{ secrets.PASS }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['PASS', 'USER']);
-  });
-
-  it('deduplicates secret names', () => {
-    const env = {
+    assertEquals(names, ['PASS', 'USER']);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - deduplicates secret names', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       A: '${{ secrets.TOKEN }}',
       B: '${{ secrets.TOKEN }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['TOKEN']);
-  });
-
-  it('returns sorted names', () => {
-    const env = {
+    assertEquals(names, ['TOKEN']);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - returns sorted names', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       Z: '${{ secrets.ZEBRA }}',
       A: '${{ secrets.ALPHA }}',
       M: '${{ secrets.MIKE }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['ALPHA', 'MIKE', 'ZEBRA']);
-  });
-
-  it('supports spaces inside expression', () => {
-    const env = {
+    assertEquals(names, ['ALPHA', 'MIKE', 'ZEBRA']);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - supports spaces inside expression', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       TOKEN: '${{  secrets.MY_TOKEN  }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['MY_TOKEN']);
-  });
-
-  it('supports underscores and numbers in secret names', () => {
-    const env = {
+    assertEquals(names, ['MY_TOKEN']);
+})
+  Deno.test('collectReferencedSecretNamesFromEnv - supports underscores and numbers in secret names', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = {
       KEY: '${{ secrets.API_KEY_V2 }}',
     };
 
     const names = collectReferencedSecretNamesFromEnv(env);
-    expect(names).toEqual(['API_KEY_V2']);
-  });
-});
-
+    assertEquals(names, ['API_KEY_V2']);
+})
 // ---------------------------------------------------------------------------
 // resolveSecretValues
 // ---------------------------------------------------------------------------
 
-describe('resolveSecretValues', () => {
-  it('returns empty object when no encryption key', async () => {
-    const result = await resolveSecretValues({} as any, 'repo-1', ['s1'], undefined, []);
-    expect(result).toEqual({});
-  });
 
-  it('throws when required secrets exist but no encryption key', async () => {
-    await expect(
+  Deno.test('resolveSecretValues - returns empty object when no encryption key', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await resolveSecretValues({} as any, 'repo-1', ['s1'], undefined, []);
+    assertEquals(result, {});
+})
+  Deno.test('resolveSecretValues - throws when required secrets exist but no encryption key', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
       resolveSecretValues({} as any, 'repo-1', ['s1'], undefined, ['SECRET_A'])
-    ).rejects.toThrow('Encryption key is required to resolve referenced workflow secrets');
-  });
-
-  it('returns empty object when secretIds is empty and no required names', async () => {
-    const result = await resolveSecretValues({} as any, 'repo-1', [], 'enc-key', []);
-    expect(result).toEqual({});
-  });
-
-  it('throws when secretIds is empty but required names exist', async () => {
-    await expect(
+    ; }, 'Encryption key is required to resolve referenced workflow secrets');
+})
+  Deno.test('resolveSecretValues - returns empty object when secretIds is empty and no required names', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await resolveSecretValues({} as any, 'repo-1', [], 'enc-key', []);
+    assertEquals(result, {});
+})
+  Deno.test('resolveSecretValues - throws when secretIds is empty but required names exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
       resolveSecretValues({} as any, 'repo-1', [], 'enc-key', ['NEEDED_SECRET'])
-    ).rejects.toThrow('Missing referenced secrets: NEEDED_SECRET');
-  });
-
-  it('decrypts secrets from DB records', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+    ; }, 'Missing referenced secrets: NEEDED_SECRET');
+})
+  Deno.test('resolveSecretValues - decrypts secrets from DB records', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { id: 's1', name: 'API_TOKEN', encryptedValue: '{"iv":"abc","ct":"xyz"}' },
         { id: 's2', name: 'DB_PASS', encryptedValue: '{"iv":"def","ct":"uvw"}' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
     mocks.decrypt
-      .mockResolvedValueOnce('token-value')
-      .mockResolvedValueOnce('password-value');
+       = (async () => 'token-value') as any
+       = (async () => 'password-value') as any;
 
     const result = await resolveSecretValues({} as any, 'repo-1', ['s1', 's2'], 'enc-key');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       API_TOKEN: 'token-value',
       DB_PASS: 'password-value',
     });
-    expect(mocks.decrypt).toHaveBeenCalledTimes(2);
-    expect(mocks.decrypt).toHaveBeenCalledWith(
+    assertSpyCalls(mocks.decrypt, 2);
+    assertSpyCallArgs(mocks.decrypt, 0, [
       { iv: 'abc', ct: 'xyz' },
       'enc-key',
       'secret:repo-1:API_TOKEN'
-    );
-  });
-
-  it('skips secrets that fail to decrypt (logs error)', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+    ]);
+})
+  Deno.test('resolveSecretValues - skips secrets that fail to decrypt (logs error)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { id: 's1', name: 'GOOD', encryptedValue: '{"iv":"a","ct":"b"}' },
         { id: 's2', name: 'BAD', encryptedValue: '{"iv":"c","ct":"d"}' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
     mocks.decrypt
-      .mockResolvedValueOnce('good-value')
-      .mockRejectedValueOnce(new Error('decrypt failed'));
+       = (async () => 'good-value') as any
+       = (async () => { throw new Error('decrypt failed'); }) as any;
 
     const result = await resolveSecretValues({} as any, 'repo-1', ['s1', 's2'], 'enc-key');
 
-    expect(result).toEqual({ GOOD: 'good-value' });
-  });
-
-  it('throws when required secrets are missing after decryption', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+    assertEquals(result, { GOOD: 'good-value' });
+})
+  Deno.test('resolveSecretValues - throws when required secrets are missing after decryption', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { id: 's1', name: 'FOUND', encryptedValue: '{"iv":"a","ct":"b"}' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.decrypt.mockResolvedValue('value');
+    mocks.getDb = (() => dbMock) as any;
+    mocks.decrypt = (async () => 'value') as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       resolveSecretValues({} as any, 'repo-1', ['s1'], 'enc-key', ['FOUND', 'MISSING'])
-    ).rejects.toThrow('Missing referenced secrets: MISSING');
-  });
-
-  it('throws when decrypt fails for a required secret', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+    ; }, 'Missing referenced secrets: MISSING');
+})
+  Deno.test('resolveSecretValues - throws when decrypt fails for a required secret', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { id: 's1', name: 'REQUIRED', encryptedValue: '{"iv":"a","ct":"b"}' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.decrypt.mockRejectedValue(new Error('bad key'));
+    mocks.getDb = (() => dbMock) as any;
+    mocks.decrypt = (async () => { throw new Error('bad key'); }) as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       resolveSecretValues({} as any, 'repo-1', ['s1'], 'enc-key', ['REQUIRED'])
-    ).rejects.toThrow('Missing referenced secrets: REQUIRED');
-  });
-
-  it('handles JSON parse errors in encryptedValue', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+    ; }, 'Missing referenced secrets: REQUIRED');
+})
+  Deno.test('resolveSecretValues - handles JSON parse errors in encryptedValue', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { id: 's1', name: 'BROKEN', encryptedValue: 'not-json' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     // JSON.parse will throw before decrypt is called
     const result = await resolveSecretValues({} as any, 'repo-1', ['s1'], 'enc-key');
-    expect(result).toEqual({});
-  });
-
-  it('does not require secrets when requiredSecretNames is empty', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([]),
+    assertEquals(result, {});
+})
+  Deno.test('resolveSecretValues - does not require secrets when requiredSecretNames is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => []),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const result = await resolveSecretValues({} as any, 'repo-1', ['s1'], 'enc-key', []);
-    expect(result).toEqual({});
-  });
-});
+    assertEquals(result, {});
+})

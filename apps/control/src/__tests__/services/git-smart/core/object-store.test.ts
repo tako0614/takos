@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { MockR2Bucket } from '../../../../../test/integration/setup';
 import {
   putBlob,
@@ -18,6 +17,8 @@ import {
 } from '@/services/git-smart/core/object-store';
 import type { TreeEntry, GitSignature } from '@/services/git-smart/types';
 
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -25,66 +26,67 @@ function makeSig(name = 'Test User', email = 'test@example.com'): GitSignature {
   return { name, email, timestamp: 1700000000, tzOffset: '+0900' };
 }
 
-describe('object-store', () => {
-  let bucket: MockR2Bucket;
 
-  beforeEach(() => {
-    bucket = new MockR2Bucket();
-  });
+  let bucket: MockR2Bucket;
 
   // ---- 1. putBlob -> getBlob roundtrip ----
-  describe('putBlob / getBlob roundtrip', () => {
-    it('stores and retrieves blob content', async () => {
-      const content = encoder.encode('hello world');
+  
+    Deno.test('object-store - putBlob / getBlob roundtrip - stores and retrieves blob content', async () => {
+  bucket = new MockR2Bucket();
+  const content = encoder.encode('hello world');
       const sha = await putBlob(bucket as any, content);
 
-      expect(sha).toMatch(/^[0-9a-f]{40}$/);
+      assert(/^[0-9a-f]{40}$/.test(sha));
 
       const retrieved = await getBlob(bucket as any, sha);
-      expect(retrieved).not.toBeNull();
-      expect(decoder.decode(retrieved!)).toBe('hello world');
-    });
-  });
+      assertNotEquals(retrieved, null);
+      assertEquals(decoder.decode(retrieved!), 'hello world');
+})
+  
 
   // ---- 2. putBlob idempotent (head check) ----
-  describe('putBlob idempotency', () => {
-    it('returns the same SHA for identical content and does not re-upload', async () => {
-      const content = encoder.encode('duplicate');
+  
+    Deno.test('object-store - putBlob idempotency - returns the same SHA for identical content and does not re-upload', async () => {
+  bucket = new MockR2Bucket();
+  const content = encoder.encode('duplicate');
       const sha1 = await putBlob(bucket as any, content);
       const sha2 = await putBlob(bucket as any, content);
 
-      expect(sha1).toBe(sha2);
-    });
+      assertEquals(sha1, sha2);
+})
 
-    it('returns different SHAs for different content', async () => {
-      const sha1 = await putBlob(bucket as any, encoder.encode('aaa'));
+    Deno.test('object-store - putBlob idempotency - returns different SHAs for different content', async () => {
+  bucket = new MockR2Bucket();
+  const sha1 = await putBlob(bucket as any, encoder.encode('aaa'));
       const sha2 = await putBlob(bucket as any, encoder.encode('bbb'));
 
-      expect(sha1).not.toBe(sha2);
-    });
-  });
+      assertNotEquals(sha1, sha2);
+})
+  
 
   // ---- 3. putTree -> getTreeEntries roundtrip ----
-  describe('putTree / getTreeEntries roundtrip', () => {
-    it('stores and retrieves tree entries', async () => {
-      const blobSha = await putBlob(bucket as any, encoder.encode('file content'));
+  
+    Deno.test('object-store - putTree / getTreeEntries roundtrip - stores and retrieves tree entries', async () => {
+  bucket = new MockR2Bucket();
+  const blobSha = await putBlob(bucket as any, encoder.encode('file content'));
       const entries: TreeEntry[] = [
         { mode: '100644', name: 'README.md', sha: blobSha },
       ];
 
       const treeSha = await putTree(bucket as any, entries);
-      expect(treeSha).toMatch(/^[0-9a-f]{40}$/);
+      assert(/^[0-9a-f]{40}$/.test(treeSha));
 
       const retrieved = await getTreeEntries(bucket as any, treeSha);
-      expect(retrieved).not.toBeNull();
-      expect(retrieved).toHaveLength(1);
-      expect(retrieved![0].mode).toBe('100644');
-      expect(retrieved![0].name).toBe('README.md');
-      expect(retrieved![0].sha).toBe(blobSha);
-    });
+      assertNotEquals(retrieved, null);
+      assertEquals(retrieved.length, 1);
+      assertEquals(retrieved![0].mode, '100644');
+      assertEquals(retrieved![0].name, 'README.md');
+      assertEquals(retrieved![0].sha, blobSha);
+})
 
-    it('handles multiple entries', async () => {
-      const sha1 = await putBlob(bucket as any, encoder.encode('a'));
+    Deno.test('object-store - putTree / getTreeEntries roundtrip - handles multiple entries', async () => {
+  bucket = new MockR2Bucket();
+  const sha1 = await putBlob(bucket as any, encoder.encode('a'));
       const sha2 = await putBlob(bucket as any, encoder.encode('b'));
       const entries: TreeEntry[] = [
         { mode: '100644', name: 'a.txt', sha: sha1 },
@@ -94,16 +96,17 @@ describe('object-store', () => {
       const treeSha = await putTree(bucket as any, entries);
       const retrieved = await getTreeEntries(bucket as any, treeSha);
 
-      expect(retrieved).toHaveLength(2);
+      assertEquals(retrieved.length, 2);
       const names = retrieved!.map((e) => e.name).sort();
-      expect(names).toEqual(['a.txt', 'b.sh']);
-    });
-  });
+      assertEquals(names, ['a.txt', 'b.sh']);
+})
+  
 
   // ---- 4. putCommit -> getCommitData roundtrip ----
-  describe('putCommit / getCommitData roundtrip', () => {
-    it('stores and retrieves commit data', async () => {
-      const blobSha = await putBlob(bucket as any, encoder.encode('init'));
+  
+    Deno.test('object-store - putCommit / getCommitData roundtrip - stores and retrieves commit data', async () => {
+  bucket = new MockR2Bucket();
+  const blobSha = await putBlob(bucket as any, encoder.encode('init'));
       const treeSha = await putTree(bucket as any, [
         { mode: '100644', name: 'file.txt', sha: blobSha },
       ]);
@@ -119,21 +122,22 @@ describe('object-store', () => {
         message: 'initial commit\n',
       });
 
-      expect(commitSha).toMatch(/^[0-9a-f]{40}$/);
+      assert(/^[0-9a-f]{40}$/.test(commitSha));
 
       const retrieved = await getCommitData(bucket as any, commitSha);
-      expect(retrieved).not.toBeNull();
-      expect(retrieved!.sha).toBe(commitSha);
-      expect(retrieved!.tree).toBe(treeSha);
-      expect(retrieved!.parents).toEqual([]);
-      expect(retrieved!.author.name).toBe('Author');
-      expect(retrieved!.author.email).toBe('author@test.com');
-      expect(retrieved!.committer.name).toBe('Committer');
-      expect(retrieved!.message).toContain('initial commit');
-    });
+      assertNotEquals(retrieved, null);
+      assertEquals(retrieved!.sha, commitSha);
+      assertEquals(retrieved!.tree, treeSha);
+      assertEquals(retrieved!.parents, []);
+      assertEquals(retrieved!.author.name, 'Author');
+      assertEquals(retrieved!.author.email, 'author@test.com');
+      assertEquals(retrieved!.committer.name, 'Committer');
+      assertStringIncludes(retrieved!.message, 'initial commit');
+})
 
-    it('stores commit with parents', async () => {
-      const blobSha = await putBlob(bucket as any, encoder.encode('v1'));
+    Deno.test('object-store - putCommit / getCommitData roundtrip - stores commit with parents', async () => {
+  bucket = new MockR2Bucket();
+  const blobSha = await putBlob(bucket as any, encoder.encode('v1'));
       const treeSha = await putTree(bucket as any, [
         { mode: '100644', name: 'f.txt', sha: blobSha },
       ]);
@@ -161,14 +165,15 @@ describe('object-store', () => {
       });
 
       const retrieved = await getCommitData(bucket as any, child);
-      expect(retrieved!.parents).toEqual([parent]);
-    });
-  });
+      assertEquals(retrieved!.parents, [parent]);
+})
+  
 
   // ---- 5. putRawObject -> getRawObject roundtrip ----
-  describe('putRawObject / getRawObject roundtrip', () => {
-    it('stores and retrieves a raw git object', async () => {
-      // Construct a raw blob object: "blob <size>\0<content>"
+  
+    Deno.test('object-store - putRawObject / getRawObject roundtrip - stores and retrieves a raw git object', async () => {
+  bucket = new MockR2Bucket();
+  // Construct a raw blob object: "blob <size>\0<content>"
       const content = encoder.encode('raw content');
       const header = encoder.encode(`blob ${content.length}\0`);
       const raw = new Uint8Array(header.length + content.length);
@@ -176,129 +181,144 @@ describe('object-store', () => {
       raw.set(content, header.length);
 
       const sha = await putRawObject(bucket as any, raw);
-      expect(sha).toMatch(/^[0-9a-f]{40}$/);
+      assert(/^[0-9a-f]{40}$/.test(sha));
 
       const retrieved = await getRawObject(bucket as any, sha);
-      expect(retrieved).not.toBeNull();
-      expect(decoder.decode(retrieved!)).toBe(`blob ${content.length}\0raw content`);
-    });
-  });
+      assertNotEquals(retrieved, null);
+      assertEquals(decoder.decode(retrieved!), `blob ${content.length}\0raw content`);
+})
+  
 
   // ---- 6. getObject with invalid SHA -> null ----
-  describe('getObject with invalid SHA', () => {
-    it('returns null for a non-hex SHA', async () => {
-      const result = await getObject(bucket as any, 'not-a-valid-sha');
-      expect(result).toBeNull();
-    });
+  
+    Deno.test('object-store - getObject with invalid SHA - returns null for a non-hex SHA', async () => {
+  bucket = new MockR2Bucket();
+  const result = await getObject(bucket as any, 'not-a-valid-sha');
+      assertEquals(result, null);
+})
 
-    it('returns null for a too-short SHA', async () => {
-      const result = await getObject(bucket as any, 'abcd1234');
-      expect(result).toBeNull();
-    });
+    Deno.test('object-store - getObject with invalid SHA - returns null for a too-short SHA', async () => {
+  bucket = new MockR2Bucket();
+  const result = await getObject(bucket as any, 'abcd1234');
+      assertEquals(result, null);
+})
 
-    it('returns null for an empty string', async () => {
-      const result = await getObject(bucket as any, '');
-      expect(result).toBeNull();
-    });
-  });
+    Deno.test('object-store - getObject with invalid SHA - returns null for an empty string', async () => {
+  bucket = new MockR2Bucket();
+  const result = await getObject(bucket as any, '');
+      assertEquals(result, null);
+})
+  
 
   // ---- 7. getObject with nonexistent SHA -> null ----
-  describe('getObject with nonexistent SHA', () => {
-    it('returns null for a valid but nonexistent SHA', async () => {
-      const fakeSha = 'a'.repeat(40);
+  
+    Deno.test('object-store - getObject with nonexistent SHA - returns null for a valid but nonexistent SHA', async () => {
+  bucket = new MockR2Bucket();
+  const fakeSha = 'a'.repeat(40);
       const result = await getObject(bucket as any, fakeSha);
-      expect(result).toBeNull();
-    });
-  });
+      assertEquals(result, null);
+})
+  
 
   // ---- 8. objectExists true/false ----
-  describe('objectExists', () => {
-    it('returns true for an existing object', async () => {
-      const sha = await putBlob(bucket as any, encoder.encode('exists'));
-      expect(await objectExists(bucket as any, sha)).toBe(true);
-    });
+  
+    Deno.test('object-store - objectExists - returns true for an existing object', async () => {
+  bucket = new MockR2Bucket();
+  const sha = await putBlob(bucket as any, encoder.encode('exists'));
+      assertEquals(await objectExists(bucket as any, sha), true);
+})
 
-    it('returns false for a nonexistent object', async () => {
-      const fakeSha = 'b'.repeat(40);
-      expect(await objectExists(bucket as any, fakeSha)).toBe(false);
-    });
+    Deno.test('object-store - objectExists - returns false for a nonexistent object', async () => {
+  bucket = new MockR2Bucket();
+  const fakeSha = 'b'.repeat(40);
+      assertEquals(await objectExists(bucket as any, fakeSha), false);
+})
 
-    it('returns false for an invalid SHA', async () => {
-      expect(await objectExists(bucket as any, 'invalid')).toBe(false);
-    });
-  });
+    Deno.test('object-store - objectExists - returns false for an invalid SHA', async () => {
+  bucket = new MockR2Bucket();
+  assertEquals(await objectExists(bucket as any, 'invalid'), false);
+})
+  
 
   // ---- 9. deleteObject removes the object ----
-  describe('deleteObject', () => {
-    it('removes a stored object', async () => {
-      const sha = await putBlob(bucket as any, encoder.encode('to-delete'));
-      expect(await objectExists(bucket as any, sha)).toBe(true);
+  
+    Deno.test('object-store - deleteObject - removes a stored object', async () => {
+  bucket = new MockR2Bucket();
+  const sha = await putBlob(bucket as any, encoder.encode('to-delete'));
+      assertEquals(await objectExists(bucket as any, sha), true);
 
       await deleteObject(bucket as any, sha);
-      expect(await objectExists(bucket as any, sha)).toBe(false);
-      expect(await getBlob(bucket as any, sha)).toBeNull();
-    });
+      assertEquals(await objectExists(bucket as any, sha), false);
+      assertEquals(await getBlob(bucket as any, sha), null);
+})
 
-    it('is a no-op for an invalid SHA', async () => {
-      // Should not throw
+    Deno.test('object-store - deleteObject - is a no-op for an invalid SHA', async () => {
+  bucket = new MockR2Bucket();
+  // Should not throw
       await deleteObject(bucket as any, 'invalid-sha');
-    });
-  });
+})
+  
 
   // ---- 10. getCompressedObject returns inflatable data ----
-  describe('getCompressedObject', () => {
-    it('returns compressed data that can be inflated back to the raw object', async () => {
-      const content = encoder.encode('compress me');
+  
+    Deno.test('object-store - getCompressedObject - returns compressed data that can be inflated back to the raw object', async () => {
+  bucket = new MockR2Bucket();
+  const content = encoder.encode('compress me');
       const sha = await putBlob(bucket as any, content);
 
       const compressed = await getCompressedObject(bucket as any, sha);
-      expect(compressed).not.toBeNull();
-      expect(compressed!.length).toBeGreaterThan(0);
+      assertNotEquals(compressed, null);
+      assert(compressed!.length > 0);
 
       // Inflate and verify it produces a valid raw object
       const inflated = await inflate(compressed!);
       const text = decoder.decode(inflated);
-      expect(text).toContain('blob ');
-      expect(text).toContain('compress me');
-    });
+      assertStringIncludes(text, 'blob ');
+      assertStringIncludes(text, 'compress me');
+})
 
-    it('returns null for a nonexistent SHA', async () => {
-      const result = await getCompressedObject(bucket as any, 'c'.repeat(40));
-      expect(result).toBeNull();
-    });
+    Deno.test('object-store - getCompressedObject - returns null for a nonexistent SHA', async () => {
+  bucket = new MockR2Bucket();
+  const result = await getCompressedObject(bucket as any, 'c'.repeat(40));
+      assertEquals(result, null);
+})
 
-    it('returns null for an invalid SHA', async () => {
-      const result = await getCompressedObject(bucket as any, 'bad');
-      expect(result).toBeNull();
-    });
-  });
+    Deno.test('object-store - getCompressedObject - returns null for an invalid SHA', async () => {
+  bucket = new MockR2Bucket();
+  const result = await getCompressedObject(bucket as any, 'bad');
+      assertEquals(result, null);
+})
+  
 
   // ---- 11. deflate -> inflate roundtrip ----
-  describe('deflate / inflate roundtrip', () => {
-    it('roundtrips arbitrary data', async () => {
-      const original = encoder.encode('The quick brown fox jumps over the lazy dog');
+  
+    Deno.test('object-store - deflate / inflate roundtrip - roundtrips arbitrary data', async () => {
+  bucket = new MockR2Bucket();
+  const original = encoder.encode('The quick brown fox jumps over the lazy dog');
       const compressed = await deflate(original);
 
-      expect(compressed.length).toBeGreaterThan(0);
+      assert(compressed.length > 0);
       // Compressed should generally differ from original
-      expect(compressed).not.toEqual(original);
+      assertNotEquals(compressed, original);
 
       const decompressed = await inflate(compressed);
-      expect(decoder.decode(decompressed)).toBe('The quick brown fox jumps over the lazy dog');
-    });
+      assertEquals(decoder.decode(decompressed), 'The quick brown fox jumps over the lazy dog');
+})
 
-    it('roundtrips empty data', async () => {
-      const original = new Uint8Array(0);
+    Deno.test('object-store - deflate / inflate roundtrip - roundtrips empty data', async () => {
+  bucket = new MockR2Bucket();
+  const original = new Uint8Array(0);
       const compressed = await deflate(original);
       const decompressed = await inflate(compressed);
-      expect(decompressed.length).toBe(0);
-    });
+      assertEquals(decompressed.length, 0);
+})
 
-    it('roundtrips binary data', async () => {
-      const original = new Uint8Array([0, 1, 2, 255, 254, 128, 0, 0, 42]);
+    Deno.test('object-store - deflate / inflate roundtrip - roundtrips binary data', async () => {
+  bucket = new MockR2Bucket();
+  const original = new Uint8Array([0, 1, 2, 255, 254, 128, 0, 0, 42]);
       const compressed = await deflate(original);
       const decompressed = await inflate(compressed);
-      expect(decompressed).toEqual(original);
-    });
-  });
-});
+      assertEquals(decompressed, original);
+})
+  
+

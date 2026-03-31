@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
 import { rpc, rpcJson } from '../../lib/rpc';
@@ -16,25 +16,31 @@ export function SettingsBilling({ user }: { user: User | null }) {
   const { t, lang } = useI18n();
   const { showToast } = useToast();
 
-  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
-  const [billingInvoices, setBillingInvoices] = useState<BillingInvoice[]>([]);
-  const [billingLoading, setBillingLoading] = useState(true);
-  const [billingError, setBillingError] = useState<string | null>(null);
-  const [billingReloadNonce, setBillingReloadNonce] = useState(0);
-  const [billingAction, setBillingAction] = useState<string | null>(null);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
-  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [billingSummary, setBillingSummary] = createSignal<BillingSummary | null>(null);
+  const [billingInvoices, setBillingInvoices] = createSignal<BillingInvoice[]>([]);
+  const [billingLoading, setBillingLoading] = createSignal(true);
+  const [billingError, setBillingError] = createSignal<string | null>(null);
+  const [billingReloadNonce, setBillingReloadNonce] = createSignal(0);
+  const [billingAction, setBillingAction] = createSignal<string | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = createSignal(false);
+  const [invoiceError, setInvoiceError] = createSignal<string | null>(null);
 
-  const sortedTopupPacks = billingSummary ? sortBillingTopupPacks(billingSummary.topup_packs) : [];
-  const billingModeLabel = billingSummary
-    ? billingSummary.billing_mode === 'plus_subscription'
-      ? t('billingModePlus')
-      : billingSummary.billing_mode === 'pro_prepaid'
-        ? t('billingModePro')
-        : t('billingModeFree')
-    : '';
+  const sortedTopupPacks = () => {
+    const bs = billingSummary();
+    return bs ? sortBillingTopupPacks(bs.topup_packs) : [];
+  };
+  const billingModeLabel = () => {
+    const bs = billingSummary();
+    return bs
+      ? bs.billing_mode === 'plus_subscription'
+        ? t('billingModePlus')
+        : bs.billing_mode === 'pro_prepaid'
+          ? t('billingModePro')
+          : t('billingModeFree')
+      : '';
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     if (!user) {
       setBillingSummary(null);
       setBillingInvoices([]);
@@ -104,10 +110,10 @@ export function SettingsBilling({ user }: { user: User | null }) {
 
     void loadBilling();
 
-    return () => {
+    onCleanup(() => {
       cancelled = true;
-    };
-  }, [billingReloadNonce, t, user?.email]);
+    });
+  });
 
   const handleSubscribePlus = async () => {
     setBillingAction('subscribe_plus');
@@ -167,22 +173,22 @@ export function SettingsBilling({ user }: { user: User | null }) {
   };
 
   // Hide billing section entirely when billing is disabled
-  if (!billingLoading && !billingError && !billingSummary) {
+  if (!billingLoading() && !billingError() && !billingSummary()) {
     return null;
   }
 
   return (
     <Section title={t('billingTitle')}>
-      {billingLoading && (
-        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-          <Icons.Loader className="h-4 w-4 animate-spin" />
+      {billingLoading() && (
+        <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <Icons.Loader class="h-4 w-4 animate-spin" />
           <span>{t('loading')}</span>
         </div>
       )}
 
-      {!billingLoading && billingError && (
-        <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-          <p>{billingError}</p>
+      {!billingLoading() && billingError() && (
+        <div class="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          <p>{billingError()}</p>
           <Button
             variant="secondary"
             size="sm"
@@ -193,125 +199,126 @@ export function SettingsBilling({ user }: { user: User | null }) {
         </div>
       )}
 
-      {!billingLoading && !billingError && billingSummary && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      {!billingLoading() && !billingError() && billingSummary() && (() => {
+        const bs = billingSummary()!;
+        return (
+        <div class="space-y-4">
+          <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-sm text-zinc-500 dark:text-zinc-400">
+                <div class="text-sm text-zinc-500 dark:text-zinc-400">
                   {t('billingCurrentPlan')}
                 </div>
-                <div className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  {billingSummary.plan.display_name}
+                <div class="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                  {bs.plan.display_name}
                 </div>
               </div>
-              <div className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-                {billingModeLabel}
+              <div class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                {billingModeLabel()}
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-zinc-600 dark:text-zinc-300 sm:grid-cols-2">
+            <div class="grid gap-3 text-sm text-zinc-600 dark:text-zinc-300 sm:grid-cols-2">
               <div>
-                <div className="text-zinc-500 dark:text-zinc-400">{t('billingStatus')}</div>
-                <div className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">{billingSummary.status}</div>
+                <div class="text-zinc-500 dark:text-zinc-400">{t('billingStatus')}</div>
+                <div class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">{bs.status}</div>
               </div>
               <div>
-                <div className="text-zinc-500 dark:text-zinc-400">{t('billingBalance')}</div>
-                <div className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
-                  {formatBillingCurrency(billingSummary.balance_cents, lang)}
+                <div class="text-zinc-500 dark:text-zinc-400">{t('billingBalance')}</div>
+                <div class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
+                  {formatBillingCurrency(bs.balance_cents, lang)}
                 </div>
               </div>
               <div>
-                <div className="text-zinc-500 dark:text-zinc-400">{t('billingPeriodEnd')}</div>
-                <div className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
-                  {formatBillingDate(billingSummary.subscription_period_end, lang)}
+                <div class="text-zinc-500 dark:text-zinc-400">{t('billingPeriodEnd')}</div>
+                <div class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
+                  {formatBillingDate(bs.subscription_period_end, lang)}
                 </div>
               </div>
               <div>
-                <div className="text-zinc-500 dark:text-zinc-400">{t('billingRuntimeLimit')}</div>
-                <div className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
+                <div class="text-zinc-500 dark:text-zinc-400">{t('billingRuntimeLimit')}</div>
+                <div class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
                   {t('billingRuntimeLimitValue', {
-                    hours: String(Math.round(billingSummary.runtime_limit_7d_seconds / 3600)),
+                    hours: String(Math.round(bs.runtime_limit_7d_seconds / 3600)),
                   })}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="mb-3">
-              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingPlans')}</div>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <div class="mb-3">
+              <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingPlans')}</div>
+              <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingPlansHint')}
               </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className={`rounded-2xl border p-4 ${billingSummary.plan_tier === 'free' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
-                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanFreeTitle')}</div>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanFreeDesc')}</p>
-                <div className="mt-4 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  {billingSummary.plan_tier === 'free' ? t('billingCurrentBadge') : t('billingIncludedBadge')}
+            <div class="grid gap-3 md:grid-cols-3">
+              <div class={`rounded-2xl border p-4 ${bs.plan_tier === 'free' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
+                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanFreeTitle')}</div>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanFreeDesc')}</p>
+                <div class="mt-4 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  {bs.plan_tier === 'free' ? t('billingCurrentBadge') : t('billingIncludedBadge')}
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-4 ${billingSummary.plan_tier === 'plus' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
-                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanPlusTitle')}</div>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanPlusDesc')}</p>
-                <div className="mt-4">
-                  {billingSummary.available_actions.subscribe_plus ? (
+              <div class={`rounded-2xl border p-4 ${bs.plan_tier === 'plus' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
+                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanPlusTitle')}</div>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanPlusDesc')}</p>
+                <div class="mt-4">
+                  {bs.available_actions.subscribe_plus ? (
                     <Button
                       size="sm"
                       onClick={() => void handleSubscribePlus()}
-                      isLoading={billingAction === 'subscribe_plus'}
+                      isLoading={billingAction() === 'subscribe_plus'}
                     >
                       {t('billingSubscribePlus')}
                     </Button>
-                  ) : billingSummary.available_actions.manage_subscription ? (
+                  ) : bs.available_actions.manage_subscription ? (
                     <Button
                       size="sm"
                       variant="secondary"
                       onClick={() => void handleManageSubscription()}
-                      isLoading={billingAction === 'manage_subscription'}
+                      isLoading={billingAction() === 'manage_subscription'}
                     >
                       {t('billingManageSubscription')}
                     </Button>
                   ) : (
-                    <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      {billingSummary.plan_tier === 'plus' ? t('billingCurrentBadge') : t('billingUnavailable')}
+                    <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      {bs.plan_tier === 'plus' ? t('billingCurrentBadge') : t('billingUnavailable')}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-4 ${billingSummary.plan_tier === 'pro' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
-                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanProTitle')}</div>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanProDesc')}</p>
-                <div className="mt-4 space-y-2">
-                  {sortedTopupPacks.map((pack) => (
+              <div class={`rounded-2xl border p-4 ${bs.plan_tier === 'pro' ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
+                <div class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('billingPlanProTitle')}</div>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('billingPlanProDesc')}</p>
+                <div class="mt-4 space-y-2">
+                  {sortedTopupPacks().map((pack) => (
                     <div
-                      key={pack.id}
-                      className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+                      class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div class="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                             {pack.label}
                           </div>
-                          <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          <div class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                             {formatBillingCurrency(pack.credits_cents, lang)}
                           </div>
                         </div>
                         {pack.badge && (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                          <span class="rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                             {pack.badge}
                           </span>
                         )}
                       </div>
-                      <div className="mt-3">
+                      <div class="mt-3">
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={!billingSummary.available_actions.top_up_pro}
-                          isLoading={billingAction === `topup:${pack.id}`}
+                          disabled={!bs.available_actions.top_up_pro}
+                          isLoading={billingAction() === `topup:${pack.id}`}
                           onClick={() => void handleTopupCheckout(pack.id)}
                         >
                           {t('billingTopupPack')}
@@ -319,8 +326,8 @@ export function SettingsBilling({ user }: { user: User | null }) {
                       </div>
                     </div>
                   ))}
-                  {!billingSummary.available_actions.top_up_pro && (
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {!bs.available_actions.top_up_pro && (
+                    <div class="text-xs text-zinc-500 dark:text-zinc-400">
                       {t('billingTopupBlocked')}
                     </div>
                   )}
@@ -329,64 +336,63 @@ export function SettingsBilling({ user }: { user: User | null }) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingCredits')}</div>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingCredits')}</div>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               {t('billingCreditsHint')}
             </p>
-            <div className="mt-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              {formatBillingCurrency(billingSummary.balance_cents, lang)}
+            <div class="mt-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              {formatBillingCurrency(bs.balance_cents, lang)}
             </div>
-            {billingSummary.plan_tier === 'plus' && billingSummary.balance_cents > 0 && (
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            {bs.plan_tier === 'plus' && bs.balance_cents > 0 && (
+              <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingDormantBalanceNote')}
               </p>
             )}
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="mb-3">
-              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingInvoices')}</div>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <div class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <div class="mb-3">
+              <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('billingInvoices')}</div>
+              <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingInvoicesHint')}
               </p>
             </div>
 
-            {!billingSummary.stripe_customer_id && (
-              <div className="text-sm text-zinc-500 dark:text-zinc-400">
+            {!bs.stripe_customer_id && (
+              <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoCustomer')}
               </div>
             )}
 
-            {billingSummary.stripe_customer_id && invoiceLoading && (
-              <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                <Icons.Loader className="h-4 w-4 animate-spin" />
+            {bs.stripe_customer_id && invoiceLoading() && (
+              <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+                <Icons.Loader class="h-4 w-4 animate-spin" />
                 <span>{t('loading')}</span>
               </div>
             )}
 
-            {billingSummary.stripe_customer_id && !invoiceLoading && invoiceError && (
-              <div className="text-sm text-amber-700 dark:text-amber-300">{invoiceError}</div>
+            {bs.stripe_customer_id && !invoiceLoading() && invoiceError() && (
+              <div class="text-sm text-amber-700 dark:text-amber-300">{invoiceError()}</div>
             )}
 
-            {billingSummary.stripe_customer_id && !invoiceLoading && !invoiceError && billingInvoices.length === 0 && (
-              <div className="text-sm text-zinc-500 dark:text-zinc-400">
+            {bs.stripe_customer_id && !invoiceLoading() && !invoiceError() && billingInvoices().length === 0 && (
+              <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoInvoices')}
               </div>
             )}
 
-            {billingSummary.stripe_customer_id && !invoiceLoading && billingInvoices.length > 0 && (
-              <div className="space-y-3">
-                {billingInvoices.map((invoice) => (
+            {bs.stripe_customer_id && !invoiceLoading() && billingInvoices().length > 0 && (
+              <div class="space-y-3">
+                {billingInvoices().map((invoice: BillingInvoice) => (
                   <div
-                    key={invoice.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-zinc-200 p-3 dark:border-zinc-800 md:flex-row md:items-center md:justify-between"
+                    class="flex flex-col gap-3 rounded-2xl border border-zinc-200 p-3 dark:border-zinc-800 md:flex-row md:items-center md:justify-between"
                   >
                     <div>
-                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                         {invoice.number || invoice.id}
                       </div>
-                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                         {formatBillingDate(invoice.created, lang)}
                         {' · '}
                         {invoice.status || t('unknown')}
@@ -394,7 +400,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
                         {formatBillingCurrency(invoice.total ?? invoice.amount_paid ?? 0, lang, (invoice.currency || 'usd').toUpperCase())}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div class="flex flex-wrap gap-2">
                       <Button
                         size="sm"
                         variant="secondary"
@@ -406,7 +412,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
                         size="sm"
                         variant="secondary"
                         onClick={() => void handleSendInvoice(invoice.id)}
-                        isLoading={billingAction === `send:${invoice.id}`}
+                        isLoading={billingAction() === `send:${invoice.id}`}
                       >
                         {t('billingSendInvoice')}
                       </Button>
@@ -417,7 +423,8 @@ export function SettingsBilling({ user }: { user: User | null }) {
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </Section>
   );
 }

@@ -9,27 +9,27 @@ export interface ChatExportModalProps {
   onExport: (format: 'markdown' | 'json' | 'pdf') => void;
 }
 
-export function ChatExportModal({ isOpen, onClose, onExport }: ChatExportModalProps) {
+export function ChatExportModal(props: ChatExportModalProps) {
   const { t } = useI18n();
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
+      isOpen={props.isOpen}
+      onClose={props.onClose}
       title={t('download')}
       size="md"
     >
-      <div className="space-y-3">
-        <Button variant="secondary" onClick={() => onExport('markdown')} leftIcon={<Icons.Download className="w-4 h-4" />}>
+      <div class="space-y-3">
+        <Button variant="secondary" onClick={() => props.onExport('markdown')} leftIcon={<Icons.Download class="w-4 h-4" />}>
           Markdown
         </Button>
-        <Button variant="secondary" onClick={() => onExport('json')} leftIcon={<Icons.Download className="w-4 h-4" />}>
+        <Button variant="secondary" onClick={() => props.onExport('json')} leftIcon={<Icons.Download class="w-4 h-4" />}>
           JSON
         </Button>
-        <Button variant="secondary" onClick={() => onExport('pdf')} leftIcon={<Icons.Download className="w-4 h-4" />}>
+        <Button variant="secondary" onClick={() => props.onExport('pdf')} leftIcon={<Icons.Download class="w-4 h-4" />}>
           PDF
         </Button>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div class="text-xs text-zinc-500 dark:text-zinc-400">
           {t('download')}
         </div>
       </div>

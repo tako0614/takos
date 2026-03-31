@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import type { Env } from '@/types';
 
@@ -6,32 +5,20 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mocks = vi.hoisted(() => ({
-  consumePending: vi.fn(),
-  completeFlow: vi.fn(),
-  listServers: vi.fn(),
-  deleteServer: vi.fn(),
-  updateServer: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-}));
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
-vi.mock('@/services/platform/mcp', () => ({
-  consumeMcpOAuthPending: mocks.consumePending,
-  completeMcpOAuthFlow: mocks.completeFlow,
-  listMcpServers: mocks.listServers,
-  deleteMcpServer: mocks.deleteServer,
-  updateMcpServer: mocks.updateServer,
-}));
-
-// Mock requireSpaceAccess helper
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  consumePending: ((..._args: any[]) => undefined) as any,
+  completeFlow: ((..._args: any[]) => undefined) as any,
+  listServers: ((..._args: any[]) => undefined) as any,
+  deleteServer: ((..._args: any[]) => undefined) as any,
+  updateServer: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/mcp'
+// Mock requireSpaceAccess helper
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 import mcpRoutes from '@/routes/mcp';
 
 // ---------------------------------------------------------------------------
@@ -63,37 +50,33 @@ function makeEnv(): Partial<Env> {
 // OAuth Callback
 // ---------------------------------------------------------------------------
 
-describe('GET /mcp/oauth/callback', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns 400 when error param is present', async () => {
-    const app = createApp();
+  
+  Deno.test('GET /mcp/oauth/callback - returns 400 when error param is present', async () => {
+  const app = createApp();
     const res = await app.request('/mcp/oauth/callback?error=access_denied', {}, makeEnv());
-    expect(res.status).toBe(400);
+    assertEquals(res.status, 400);
     const text = await res.text();
-    expect(text).toContain('Authorization Failed');
-  });
-
-  it('returns 400 when code or state missing', async () => {
-    const app = createApp();
+    assertStringIncludes(text, 'Authorization Failed');
+})
+  Deno.test('GET /mcp/oauth/callback - returns 400 when code or state missing', async () => {
+  const app = createApp();
     const res = await app.request('/mcp/oauth/callback?code=abc', {}, makeEnv());
-    expect(res.status).toBe(400);
+    assertEquals(res.status, 400);
     const text = await res.text();
-    expect(text).toContain('Missing code or state');
-  });
-
-  it('returns 400 when state is invalid (not found)', async () => {
-    mocks.consumePending.mockResolvedValue(null);
+    assertStringIncludes(text, 'Missing code or state');
+})
+  Deno.test('GET /mcp/oauth/callback - returns 400 when state is invalid (not found)', async () => {
+  mocks.consumePending = (async () => null) as any;
 
     const app = createApp();
     const res = await app.request('/mcp/oauth/callback?code=abc&state=bad_state', {}, makeEnv());
-    expect(res.status).toBe(400);
+    assertEquals(res.status, 400);
     const text = await res.text();
-    expect(text).toContain('Invalid or expired');
-  });
-
-  it('returns success HTML when callback completes', async () => {
-    mocks.consumePending.mockResolvedValue({
+    assertStringIncludes(text, 'Invalid or expired');
+})
+  Deno.test('GET /mcp/oauth/callback - returns success HTML when callback completes', async () => {
+  mocks.consumePending = (async () => ({
       id: 'p1',
       spaceId: 'ws1',
       serverName: 'my_server',
@@ -102,8 +85,8 @@ describe('GET /mcp/oauth/callback', () => {
       codeVerifier: 'verifier',
       tokenEndpoint: 'https://auth.example.com/token',
       scope: null,
-    });
-    mocks.completeFlow.mockResolvedValue({ serverId: 's1' });
+    })) as any;
+    mocks.completeFlow = (async () => ({ serverId: 's1' })) as any;
 
     const app = createApp();
     const res = await app.request(
@@ -112,14 +95,13 @@ describe('GET /mcp/oauth/callback', () => {
       makeEnv(),
     );
 
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
     const text = await res.text();
-    expect(text).toContain('Connected');
-    expect(text).toContain('my_server');
-  });
-
-  it('returns 500 when completeMcpOAuthFlow throws', async () => {
-    mocks.consumePending.mockResolvedValue({
+    assertStringIncludes(text, 'Connected');
+    assertStringIncludes(text, 'my_server');
+})
+  Deno.test('GET /mcp/oauth/callback - returns 500 when completeMcpOAuthFlow throws', async () => {
+  mocks.consumePending = (async () => ({
       id: 'p1',
       spaceId: 'ws1',
       serverName: 'srv',
@@ -128,8 +110,8 @@ describe('GET /mcp/oauth/callback', () => {
       codeVerifier: 'verifier',
       tokenEndpoint: 'https://auth.example.com/token',
       scope: null,
-    });
-    mocks.completeFlow.mockRejectedValue(new Error('token exchange error'));
+    })) as any;
+    mocks.completeFlow = (async () => { throw new Error('token exchange error'); }) as any;
 
     const app = createApp();
     const res = await app.request(
@@ -138,14 +120,13 @@ describe('GET /mcp/oauth/callback', () => {
       makeEnv(),
     );
 
-    expect(res.status).toBe(500);
+    assertEquals(res.status, 500);
     const text = await res.text();
-    expect(text).toContain('Failed to exchange');
-  });
-
-  it('prevents replay: consumeMcpOAuthPending returns null on second call', async () => {
-    // First call: valid
-    mocks.consumePending.mockResolvedValueOnce({
+    assertStringIncludes(text, 'Failed to exchange');
+})
+  Deno.test('GET /mcp/oauth/callback - prevents replay: consumeMcpOAuthPending returns null on second call', async () => {
+  // First call: valid
+    mocks.consumePending = (async () => ({
       id: 'p1',
       spaceId: 'ws1',
       serverName: 'srv',
@@ -154,46 +135,45 @@ describe('GET /mcp/oauth/callback', () => {
       codeVerifier: 'verifier',
       tokenEndpoint: 'https://auth.example.com/token',
       scope: null,
-    });
-    mocks.completeFlow.mockResolvedValue({ serverId: 's1' });
+    })) as any;
+    mocks.completeFlow = (async () => ({ serverId: 's1' })) as any;
 
     const app = createApp();
 
     const res1 = await app.request('/mcp/oauth/callback?code=c&state=st', {}, makeEnv());
-    expect(res1.status).toBe(200);
+    assertEquals(res1.status, 200);
 
     // Second call: replay returns null (already consumed)
-    mocks.consumePending.mockResolvedValueOnce(null);
+    mocks.consumePending = (async () => null) as any;
     const res2 = await app.request('/mcp/oauth/callback?code=c&state=st', {}, makeEnv());
-    expect(res2.status).toBe(400);
-  });
-});
-
+    assertEquals(res2.status, 400);
+})
 // ---------------------------------------------------------------------------
 // GET /mcp/servers
 // ---------------------------------------------------------------------------
 
-describe('GET /mcp/servers', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
-    mocks.listServers.mockResolvedValue([]);
-  });
 
-  it('returns 401 when unauthenticated', async () => {
-    const app = createApp(); // no user
+  Deno.test('GET /mcp/servers - returns 401 when unauthenticated', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+    mocks.listServers = (async () => []) as any;
+  const app = createApp(); // no user
     const res = await app.request('/mcp/servers?spaceId=ws1', {}, makeEnv());
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 400 when spaceId missing', async () => {
-    const app = createApp({ id: 'user1' });
+    assertEquals(res.status, 401);
+})
+  Deno.test('GET /mcp/servers - returns 400 when spaceId missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+    mocks.listServers = (async () => []) as any;
+  const app = createApp({ id: 'user1' });
     const res = await app.request('/mcp/servers', {}, makeEnv());
-    expect(res.status).toBe(400);
-  });
-
-  it('returns server list for authorized user', async () => {
-    mocks.listServers.mockResolvedValue([
+    assertEquals(res.status, 400);
+})
+  Deno.test('GET /mcp/servers - returns server list for authorized user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+    mocks.listServers = (async () => []) as any;
+  mocks.listServers = (async () => [
       {
         id: 's1',
         spaceId: 'ws1',
@@ -211,31 +191,26 @@ describe('GET /mcp/servers', () => {
         createdAt: '2025-01-01T00:00:00.000Z',
         updatedAt: '2025-01-01T00:00:00.000Z',
       },
-    ]);
+    ]) as any;
 
     const app = createApp({ id: 'user1' });
     const res = await app.request('/mcp/servers?spaceId=ws1', {}, makeEnv());
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
 
     const body = await res.json() as { data: Array<{ name: string; bundle_deployment_id: string | null }> };
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0].name).toBe('my_mcp');
-    expect(body.data[0].bundle_deployment_id).toBeNull();
-  });
-});
-
+    assertEquals(body.data.length, 1);
+    assertEquals(body.data[0].name, 'my_mcp');
+    assertEquals(body.data[0].bundle_deployment_id, null);
+})
 // ---------------------------------------------------------------------------
 // DELETE /mcp/servers/:id
 // ---------------------------------------------------------------------------
 
-describe('DELETE /mcp/servers/:id', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
-  });
 
-  it('returns 404 when server not found', async () => {
-    mocks.deleteServer.mockResolvedValue(false);
+  Deno.test('DELETE /mcp/servers/:id - returns 404 when server not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+  mocks.deleteServer = (async () => false) as any;
 
     const app = createApp({ id: 'user1' });
     const res = await app.request(
@@ -243,11 +218,12 @@ describe('DELETE /mcp/servers/:id', () => {
       { method: 'DELETE' },
       makeEnv(),
     );
-    expect(res.status).toBe(404);
-  });
-
-  it('deletes and returns success', async () => {
-    mocks.deleteServer.mockResolvedValue(true);
+    assertEquals(res.status, 404);
+})
+  Deno.test('DELETE /mcp/servers/:id - deletes and returns success', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+  mocks.deleteServer = (async () => true) as any;
 
     const app = createApp({ id: 'user1' });
     const res = await app.request(
@@ -255,24 +231,19 @@ describe('DELETE /mcp/servers/:id', () => {
       { method: 'DELETE' },
       makeEnv(),
     );
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
     const body = await res.json() as { success: boolean };
-    expect(body.success).toBe(true);
-  });
-});
-
+    assertEquals(body.success, true);
+})
 // ---------------------------------------------------------------------------
 // PATCH /mcp/servers/:id
 // ---------------------------------------------------------------------------
 
-describe('PATCH /mcp/servers/:id', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws1' } });
-  });
 
-  it('returns 404 when server not found', async () => {
-    mocks.updateServer.mockResolvedValue(null);
+  Deno.test('PATCH /mcp/servers/:id - returns 404 when server not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+  mocks.updateServer = (async () => null) as any;
 
     const app = createApp({ id: 'user1' });
     const res = await app.request(
@@ -284,11 +255,12 @@ describe('PATCH /mcp/servers/:id', () => {
       },
       makeEnv(),
     );
-    expect(res.status).toBe(404);
-  });
-
-  it('updates server and returns updated record', async () => {
-    mocks.updateServer.mockResolvedValue({
+    assertEquals(res.status, 404);
+})
+  Deno.test('PATCH /mcp/servers/:id - updates server and returns updated record', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws1' } })) as any;
+  mocks.updateServer = (async () => ({
       id: 's1',
       spaceId: 'ws1',
       name: 'my_mcp',
@@ -304,7 +276,7 @@ describe('PATCH /mcp/servers/:id', () => {
       enabled: false,
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-02T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = createApp({ id: 'user1' });
     const res = await app.request(
@@ -316,10 +288,9 @@ describe('PATCH /mcp/servers/:id', () => {
       },
       makeEnv(),
     );
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
 
     const body = await res.json() as { data: { enabled: boolean; bundle_deployment_id: string | null } };
-    expect(body.data.enabled).toBe(false);
-    expect(body.data.bundle_deployment_id).toBeNull();
-  });
-});
+    assertEquals(body.data.enabled, false);
+    assertEquals(body.data.bundle_deployment_id, null);
+})

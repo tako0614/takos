@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { assertNotEquals, assert } from 'jsr:@std/assert';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -19,20 +20,18 @@ function extractTranslation(source: string, key: string): string | null {
   return match?.[1] ?? null;
 }
 
-describe('i18n regression (issue 090)', () => {
+
   const criticalKeys = ['skillsEmptyHint', 'tasksEmptyHint', 'workspaceSlug'] as const;
   const ja = readTranslationSource('ja');
   const en = readTranslationSource('en');
 
   for (const key of criticalKeys) {
-    it(`resolves ${key} in ja/en without returning raw key`, () => {
-      const jaText = extractTranslation(ja, key);
+    Deno.test('i18n regression (issue 090) - resolves ${key} in ja/en without returning raw key', () => {
+  const jaText = extractTranslation(ja, key);
       const enText = extractTranslation(en, key);
 
-      expect(jaText).not.toBe(key);
-      expect(enText).not.toBe(key);
-      expect(jaText?.length ?? 0).toBeGreaterThan(0);
-      expect(enText?.length ?? 0).toBeGreaterThan(0);
-    });
-  }
-});
+      assertNotEquals(jaText, key);
+      assertNotEquals(enText, key);
+      assert(jaText?.length ?? 0 > 0);
+      assert(enText?.length ?? 0 > 0);
+})  }

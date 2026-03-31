@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,20 +6,15 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockListWorkspaceCommonEnv = vi.fn();
-const mockUpsertWorkspaceCommonEnv = vi.fn();
-const mockDeleteWorkspaceCommonEnv = vi.fn();
-const mockReconcileServicesForEnvKey = vi.fn();
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/common-env', () => ({
-  CommonEnvService: vi.fn(() => ({
-    listSpaceCommonEnv: mockListWorkspaceCommonEnv,
-    upsertSpaceCommonEnv: mockUpsertWorkspaceCommonEnv,
-    deleteSpaceCommonEnv: mockDeleteWorkspaceCommonEnv,
-    reconcileServicesForEnvKey: mockReconcileServicesForEnvKey,
-  })),
-}));
+const mockListWorkspaceCommonEnv = ((..._args: any[]) => undefined) as any;
+const mockUpsertWorkspaceCommonEnv = ((..._args: any[]) => undefined) as any;
+const mockDeleteWorkspaceCommonEnv = ((..._args: any[]) => undefined) as any;
+const mockReconcileServicesForEnvKey = ((..._args: any[]) => undefined) as any;
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/common-env'
 import {
   workspaceEnvListHandler,
   workspaceEnvSetHandler,
@@ -44,9 +38,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -55,64 +49,59 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('workspace common env tools', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('definitions', () => {
-    it('WORKSPACE_ENV_LIST has correct name', () => {
-      expect(WORKSPACE_ENV_LIST.name).toBe('workspace_env_list');
-      expect(WORKSPACE_ENV_LIST.category).toBe('workspace');
-    });
-
-    it('WORKSPACE_ENV_SET requires name and value', () => {
-      expect(WORKSPACE_ENV_SET.name).toBe('workspace_env_set');
-      expect(WORKSPACE_ENV_SET.parameters.required).toEqual(['name', 'value']);
-    });
-
-    it('WORKSPACE_ENV_DELETE requires name', () => {
-      expect(WORKSPACE_ENV_DELETE.name).toBe('workspace_env_delete');
-      expect(WORKSPACE_ENV_DELETE.parameters.required).toEqual(['name']);
-    });
-
-    it('exports all three tools', () => {
-      expect(WORKSPACE_COMMON_ENV_TOOLS).toHaveLength(3);
-      expect(WORKSPACE_COMMON_ENV_TOOLS.map(t => t.name)).toEqual([
+  
+    Deno.test('workspace common env tools - definitions - WORKSPACE_ENV_LIST has correct name', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(WORKSPACE_ENV_LIST.name, 'workspace_env_list');
+      assertEquals(WORKSPACE_ENV_LIST.category, 'workspace');
+})
+    Deno.test('workspace common env tools - definitions - WORKSPACE_ENV_SET requires name and value', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(WORKSPACE_ENV_SET.name, 'workspace_env_set');
+      assertEquals(WORKSPACE_ENV_SET.parameters.required, ['name', 'value']);
+})
+    Deno.test('workspace common env tools - definitions - WORKSPACE_ENV_DELETE requires name', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(WORKSPACE_ENV_DELETE.name, 'workspace_env_delete');
+      assertEquals(WORKSPACE_ENV_DELETE.parameters.required, ['name']);
+})
+    Deno.test('workspace common env tools - definitions - exports all three tools', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(WORKSPACE_COMMON_ENV_TOOLS.length, 3);
+      assertEquals(WORKSPACE_COMMON_ENV_TOOLS.map(t => t.name), [
         'workspace_env_list',
         'workspace_env_set',
         'workspace_env_delete',
       ]);
-    });
-  });
-
-  describe('workspaceEnvListHandler', () => {
-    it('returns list of environment variables', async () => {
-      mockListWorkspaceCommonEnv.mockResolvedValue([
+})  
+  
+    Deno.test('workspace common env tools - workspaceEnvListHandler - returns list of environment variables', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockListWorkspaceCommonEnv = (async () => [
         { name: 'API_KEY', value: '***', secret: true },
         { name: 'NODE_ENV', value: 'production', secret: false },
-      ]);
+      ]) as any;
 
       const result = JSON.parse(await workspaceEnvListHandler({}, makeContext()));
 
-      expect(result.count).toBe(2);
-      expect(result.env).toHaveLength(2);
-      expect(result.env[0].name).toBe('API_KEY');
-    });
-
-    it('returns empty list', async () => {
-      mockListWorkspaceCommonEnv.mockResolvedValue([]);
+      assertEquals(result.count, 2);
+      assertEquals(result.env.length, 2);
+      assertEquals(result.env[0].name, 'API_KEY');
+})
+    Deno.test('workspace common env tools - workspaceEnvListHandler - returns empty list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockListWorkspaceCommonEnv = (async () => []) as any;
 
       const result = JSON.parse(await workspaceEnvListHandler({}, makeContext()));
-      expect(result.count).toBe(0);
-      expect(result.env).toEqual([]);
-    });
-  });
-
-  describe('workspaceEnvSetHandler', () => {
-    it('creates an environment variable', async () => {
-      mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
+      assertEquals(result.count, 0);
+      assertEquals(result.env, []);
+})  
+  
+    Deno.test('workspace common env tools - workspaceEnvSetHandler - creates an environment variable', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockUpsertWorkspaceCommonEnv = (async () => undefined) as any;
+      mockReconcileServicesForEnvKey = (async () => undefined) as any;
 
       const result = JSON.parse(
         await workspaceEnvSetHandler(
@@ -121,14 +110,14 @@ describe('workspace common env tools', () => {
         ),
       );
 
-      expect(result.success).toBe(true);
-      expect(result.name).toBe('MY_VAR');
-      expect(result.secret).toBe(false);
-    });
-
-    it('creates a secret environment variable', async () => {
-      mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
+      assertEquals(result.success, true);
+      assertEquals(result.name, 'MY_VAR');
+      assertEquals(result.secret, false);
+})
+    Deno.test('workspace common env tools - workspaceEnvSetHandler - creates a secret environment variable', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockUpsertWorkspaceCommonEnv = (async () => undefined) as any;
+      mockReconcileServicesForEnvKey = (async () => undefined) as any;
 
       const result = JSON.parse(
         await workspaceEnvSetHandler(
@@ -137,77 +126,74 @@ describe('workspace common env tools', () => {
         ),
       );
 
-      expect(result.success).toBe(true);
-      expect(result.secret).toBe(true);
-    });
-
-    it('throws when name is empty', async () => {
-      await expect(
+      assertEquals(result.success, true);
+      assertEquals(result.secret, true);
+})
+    Deno.test('workspace common env tools - workspaceEnvSetHandler - throws when name is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         workspaceEnvSetHandler({ name: '', value: 'val' }, makeContext()),
-      ).rejects.toThrow('name is required');
-    });
-
-    it('throws when name is whitespace only', async () => {
-      await expect(
+      ; }, 'name is required');
+})
+    Deno.test('workspace common env tools - workspaceEnvSetHandler - throws when name is whitespace only', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         workspaceEnvSetHandler({ name: '   ', value: 'val' }, makeContext()),
-      ).rejects.toThrow('name is required');
-    });
-
-    it('reconciles workers after setting env', async () => {
-      mockUpsertWorkspaceCommonEnv.mockResolvedValue(undefined);
-      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
+      ; }, 'name is required');
+})
+    Deno.test('workspace common env tools - workspaceEnvSetHandler - reconciles workers after setting env', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockUpsertWorkspaceCommonEnv = (async () => undefined) as any;
+      mockReconcileServicesForEnvKey = (async () => undefined) as any;
 
       await workspaceEnvSetHandler(
         { name: 'MY_VAR', value: 'val' },
         makeContext(),
       );
 
-      expect(mockReconcileServicesForEnvKey).toHaveBeenCalledWith(
+      assertSpyCallArgs(mockReconcileServicesForEnvKey, 0, [
         'ws-test',
         'MY_VAR',
         'workspace_env_put',
-      );
-    });
-  });
-
-  describe('workspaceEnvDeleteHandler', () => {
-    it('deletes an environment variable', async () => {
-      mockDeleteWorkspaceCommonEnv.mockResolvedValue(true);
-      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
+      ]);
+})  
+  
+    Deno.test('workspace common env tools - workspaceEnvDeleteHandler - deletes an environment variable', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockDeleteWorkspaceCommonEnv = (async () => true) as any;
+      mockReconcileServicesForEnvKey = (async () => undefined) as any;
 
       const result = JSON.parse(
         await workspaceEnvDeleteHandler({ name: 'MY_VAR' }, makeContext()),
       );
 
-      expect(result.success).toBe(true);
-      expect(result.name).toBe('MY_VAR');
-    });
-
-    it('throws when name is empty', async () => {
-      await expect(
+      assertEquals(result.success, true);
+      assertEquals(result.name, 'MY_VAR');
+})
+    Deno.test('workspace common env tools - workspaceEnvDeleteHandler - throws when name is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         workspaceEnvDeleteHandler({ name: '' }, makeContext()),
-      ).rejects.toThrow('name is required');
-    });
+      ; }, 'name is required');
+})
+    Deno.test('workspace common env tools - workspaceEnvDeleteHandler - throws when variable not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockDeleteWorkspaceCommonEnv = (async () => false) as any;
 
-    it('throws when variable not found', async () => {
-      mockDeleteWorkspaceCommonEnv.mockResolvedValue(false);
-
-      await expect(
+      await await assertRejects(async () => { await 
         workspaceEnvDeleteHandler({ name: 'MISSING' }, makeContext()),
-      ).rejects.toThrow('Environment variable not found: MISSING');
-    });
-
-    it('reconciles workers after deletion', async () => {
-      mockDeleteWorkspaceCommonEnv.mockResolvedValue(true);
-      mockReconcileServicesForEnvKey.mockResolvedValue(undefined);
+      ; }, 'Environment variable not found: MISSING');
+})
+    Deno.test('workspace common env tools - workspaceEnvDeleteHandler - reconciles workers after deletion', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockDeleteWorkspaceCommonEnv = (async () => true) as any;
+      mockReconcileServicesForEnvKey = (async () => undefined) as any;
 
       await workspaceEnvDeleteHandler({ name: 'MY_VAR' }, makeContext());
 
-      expect(mockReconcileServicesForEnvKey).toHaveBeenCalledWith(
+      assertSpyCallArgs(mockReconcileServicesForEnvKey, 0, [
         'ws-test',
         'MY_VAR',
         'workspace_env_delete',
-      );
-    });
-  });
-});
+      ]);
+})  

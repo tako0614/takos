@@ -1,60 +1,47 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTestApp, testRequest } from '../setup.js';
+import { createTestApp, testRequest } from '../setup.ts';
 
-vi.hoisted(() => {
+import { assertEquals, assert, assertObjectMatch } from 'jsr:@std/assert';
+
+{
   process.env.TAKOS_API_URL = 'https://takos.example.test';
+};
+
+const { executeRunMock, executeActionMock, capturedStepEnvs } = ({
+  executeRunMock: ((..._args: any[]) => undefined) as any,
+  executeActionMock: ((..._args: any[]) => undefined) as any,
+  capturedStepEnvs: [] as Array<Record<string, string>>,
 });
 
-const { executeRunMock, executeActionMock, capturedStepEnvs } = vi.hoisted(() => ({
-  executeRunMock: vi.fn(),
-  executeActionMock: vi.fn(),
-  capturedStepEnvs: [] as Array<Record<string, string>>,
-}));
+// [Deno] vi.mock removed - manually stub imports from '../../runtime/actions/executor.ts'
+import actionsRoutes from '../../routes/actions/index.ts';
 
-vi.mock('../../runtime/actions/executor.js', () => ({
-  StepExecutor: class {
-    constructor(_workspacePath: string, env: Record<string, string>) {
-      capturedStepEnvs.push(env);
-    }
 
-    executeRun = executeRunMock;
-
-    executeAction = executeActionMock;
-  },
-}));
-
-import actionsRoutes from '../../routes/actions/index.js';
-
-describe('actions step behavior', () => {
-  beforeEach(() => {
-    executeRunMock.mockResolvedValue({
+  Deno.test('actions step behavior - keeps secrets masked for printenv-like commands without custom warnings field', async () => {
+  executeRunMock = (async () => ({
       exitCode: 0,
       stdout: 'ok',
       stderr: '',
       outputs: {},
       conclusion: 'success',
-    });
-    executeActionMock.mockResolvedValue({
+    })) as any;
+    executeActionMock = (async () => ({
       exitCode: 0,
       stdout: '',
       stderr: '',
       outputs: {},
       conclusion: 'success',
-    });
+    })) as any;
     capturedStepEnvs.length = 0;
-  });
-
-  it('keeps secrets masked for printenv-like commands without custom warnings field', async () => {
-    const app = createTestApp();
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
-    executeRunMock.mockResolvedValue({
+    executeRunMock = (async () => ({
       exitCode: 0,
       stdout: 'token=s3cr3t',
       stderr: '',
       outputs: {},
       conclusion: 'success',
-    });
+    })) as any;
 
     const jobId = `step-mask-${Date.now()}`;
 
@@ -76,7 +63,7 @@ describe('actions step behavior', () => {
         },
       });
 
-      expect(startResponse.status).toBe(200);
+      assertEquals(startResponse.status, 200);
 
       const stepResponse = await testRequest(app, {
         method: 'POST',
@@ -87,31 +74,45 @@ describe('actions step behavior', () => {
         },
       });
 
-      expect(stepResponse.status).toBe(200);
-      expect(stepResponse.body).toMatchObject({
+      assertEquals(stepResponse.status, 200);
+      assertObjectMatch(stepResponse.body, {
         conclusion: 'success',
         stdout: 'token=***',
       });
-      expect(stepResponse.body).not.toHaveProperty('warnings');
+      assert(!('warnings' in stepResponse.body));
 
       const logsResponse = await testRequest(app, {
         method: 'GET',
         path: `/actions/jobs/${jobId}/logs`,
       });
       const logsBody = logsResponse.body as { logs: string[] };
-      expect(logsResponse.status).toBe(200);
-      expect(logsBody.logs.some((line) => line.includes('token=***'))).toBe(true);
-      expect(logsBody.logs.some((line) => line.includes('s3cr3t'))).toBe(false);
+      assertEquals(logsResponse.status, 200);
+      assertEquals(logsBody.logs.some((line) => line.includes('token=***')), true);
+      assertEquals(logsBody.logs.some((line) => line.includes('s3cr3t')), false);
     } finally {
       await testRequest(app, {
         method: 'DELETE',
         path: `/actions/jobs/${jobId}`,
       });
     }
-  });
-
-  it('always sets GITHUB_RUN_ID to jobId', async () => {
-    const app = createTestApp();
+})
+  Deno.test('actions step behavior - always sets GITHUB_RUN_ID to jobId', async () => {
+  executeRunMock = (async () => ({
+      exitCode: 0,
+      stdout: 'ok',
+      stderr: '',
+      outputs: {},
+      conclusion: 'success',
+    })) as any;
+    executeActionMock = (async () => ({
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+      outputs: {},
+      conclusion: 'success',
+    })) as any;
+    capturedStepEnvs.length = 0;
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
     const jobId = `with-run-id-${Date.now()}`;
@@ -130,7 +131,7 @@ describe('actions step behavior', () => {
           steps: [{ name: 'step-1', run: 'echo hello' }],
         },
       });
-      expect(startResponse.status).toBe(200);
+      assertEquals(startResponse.status, 200);
 
       const stepResponse = await testRequest(app, {
         method: 'POST',
@@ -141,18 +142,32 @@ describe('actions step behavior', () => {
         },
       });
 
-      expect(stepResponse.status).toBe(200);
-      expect(capturedStepEnvs.at(-1)?.GITHUB_RUN_ID).toBe(jobId);
+      assertEquals(stepResponse.status, 200);
+      assertEquals(capturedStepEnvs.at(-1)?.GITHUB_RUN_ID, jobId);
     } finally {
       await testRequest(app, {
         method: 'DELETE',
         path: `/actions/jobs/${jobId}`,
       });
     }
-  });
-
-  it('falls back to jobId for GITHUB_RUN_ID when runId is omitted', async () => {
-    const app = createTestApp();
+})
+  Deno.test('actions step behavior - falls back to jobId for GITHUB_RUN_ID when runId is omitted', async () => {
+  executeRunMock = (async () => ({
+      exitCode: 0,
+      stdout: 'ok',
+      stderr: '',
+      outputs: {},
+      conclusion: 'success',
+    })) as any;
+    executeActionMock = (async () => ({
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+      outputs: {},
+      conclusion: 'success',
+    })) as any;
+    capturedStepEnvs.length = 0;
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
     const jobId = `fallback-run-id-${Date.now()}`;
@@ -171,7 +186,7 @@ describe('actions step behavior', () => {
           steps: [{ name: 'step-1', run: 'echo hello' }],
         },
       });
-      expect(startResponse.status).toBe(200);
+      assertEquals(startResponse.status, 200);
 
       const stepResponse = await testRequest(app, {
         method: 'POST',
@@ -182,13 +197,12 @@ describe('actions step behavior', () => {
         },
       });
 
-      expect(stepResponse.status).toBe(200);
-      expect(capturedStepEnvs.at(-1)?.GITHUB_RUN_ID).toBe(jobId);
+      assertEquals(stepResponse.status, 200);
+      assertEquals(capturedStepEnvs.at(-1)?.GITHUB_RUN_ID, jobId);
     } finally {
       await testRequest(app, {
         method: 'DELETE',
         path: `/actions/jobs/${jobId}`,
       });
     }
-  });
-});
+})

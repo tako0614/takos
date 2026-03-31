@@ -1,9 +1,9 @@
 import * as fs from 'fs/promises';
-import { type ActionContext } from '../executor.js';
-import { pushLog } from '../../logging.js';
-import { runGitCommand, cloneAndCheckout } from '../../git.js';
-import { resolvePathWithin } from '../../paths.js';
-import { GIT_ENDPOINT_URL } from '../../../shared/config.js';
+import { type ActionContext } from '../executor.ts';
+import { pushLog } from '../../logging.ts';
+import { runGitCommand, cloneAndCheckout } from '../../git.ts';
+import { resolvePathWithin } from '../../paths.ts';
+import { GIT_ENDPOINT_URL } from '../../../shared/config.ts';
 
 export async function checkout(
   inputs: {

@@ -1,35 +1,28 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { getTakopackRatingStats, getTakopackRatingSummary } from '@/services/source/explore-packages';
 
-describe('getTakopackRatingStats', () => {
-  it('returns default stats for all repo IDs', async () => {
-    const result = await getTakopackRatingStats({} as any, ['repo-1', 'repo-2']);
 
-    expect(result.size).toBe(2);
-    expect(result.get('repo-1')).toEqual({ rating_avg: null, rating_count: 0 });
-    expect(result.get('repo-2')).toEqual({ rating_avg: null, rating_count: 0 });
-  });
+  Deno.test('getTakopackRatingStats - returns default stats for all repo IDs', async () => {
+  const result = await getTakopackRatingStats({} as any, ['repo-1', 'repo-2']);
 
-  it('returns empty map for empty input', async () => {
-    const result = await getTakopackRatingStats({} as any, []);
-    expect(result.size).toBe(0);
-  });
-});
+    assertEquals(result.size, 2);
+    assertEquals(result.get('repo-1'), { rating_avg: null, rating_count: 0 });
+    assertEquals(result.get('repo-2'), { rating_avg: null, rating_count: 0 });
+})
+  Deno.test('getTakopackRatingStats - returns empty map for empty input', async () => {
+  const result = await getTakopackRatingStats({} as any, []);
+    assertEquals(result.size, 0);
+})
 
-describe('getTakopackRatingSummary', () => {
-  it('returns default summary', async () => {
-    const result = await getTakopackRatingSummary({} as any, 'repo-1');
-    expect(result).toEqual({ rating_avg: null, rating_count: 0 });
-  });
-});
+  Deno.test('getTakopackRatingSummary - returns default summary', async () => {
+  const result = await getTakopackRatingSummary({} as any, 'repo-1');
+    assertEquals(result, { rating_avg: null, rating_count: 0 });
+})

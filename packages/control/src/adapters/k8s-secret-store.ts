@@ -26,20 +26,20 @@ async function readTextIfExists(filePath: string): Promise<string | null> {
 
 async function resolveApiConfig(config: K8sSecretStoreConfig): Promise<K8sApiConfig> {
   const apiServer = config.apiServer
-    ?? (process.env.K8S_API_SERVER?.trim() || '')
+    ?? (Deno.env.get('K8S_API_SERVER')?.trim() || '')
     ?? '';
   const bearerToken = config.bearerToken
-    ?? (process.env.K8S_BEARER_TOKEN?.trim() || '')
+    ?? (Deno.env.get('K8S_BEARER_TOKEN')?.trim() || '')
     ?? '';
   const namespace = config.namespace
-    ?? (process.env.K8S_NAMESPACE?.trim() || '')
+    ?? (Deno.env.get('K8S_NAMESPACE')?.trim() || '')
     ?? '';
   const caFilePath = config.caFilePath
-    ?? process.env.K8S_CA_CERT_FILE?.trim()
+    ?? Deno.env.get('K8S_CA_CERT_FILE')?.trim()
     ?? '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt';
 
-  const serviceHost = process.env.KUBERNETES_SERVICE_HOST?.trim();
-  const servicePort = process.env.KUBERNETES_SERVICE_PORT_HTTPS?.trim() || '443';
+  const serviceHost = Deno.env.get('KUBERNETES_SERVICE_HOST')?.trim();
+  const servicePort = Deno.env.get('KUBERNETES_SERVICE_PORT_HTTPS')?.trim() || '443';
   const resolvedApiServer = apiServer || (serviceHost ? `https://${serviceHost}:${servicePort}` : '');
   const resolvedToken = bearerToken || await readTextIfExists('/var/run/secrets/kubernetes.io/serviceaccount/token') || '';
   const resolvedNamespace = namespace || await readTextIfExists('/var/run/secrets/kubernetes.io/serviceaccount/namespace') || '';

@@ -1,16 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getOrCreatePersonalWorkspace: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/services/identity/spaces', () => ({
-  getOrCreatePersonalWorkspace: mocks.getOrCreatePersonalWorkspace,
-}));
+const mocks = ({
+  getOrCreatePersonalWorkspace: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
 import meRoutes from '@/routes/me';
 
 type TestEnv = {
@@ -45,13 +43,10 @@ function createApp(user: User) {
   return app;
 }
 
-describe('me personal-space route', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns the canonical space payload', async () => {
-    mocks.getOrCreatePersonalWorkspace.mockResolvedValue({
+  Deno.test('me personal-space route - returns the canonical space payload', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getOrCreatePersonalWorkspace = (async () => ({
       id: 'user-1',
       kind: 'user',
       name: 'User One',
@@ -59,7 +54,7 @@ describe('me personal-space route', () => {
       owner_principal_id: 'user-1',
       created_at: '2026-03-01T00:00:00.000Z',
       updated_at: '2026-03-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const response = await createApp(createUser()).fetch(
       new Request('http://localhost/api/me/personal-space'),
@@ -67,8 +62,8 @@ describe('me personal-space route', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       space: {
         id: 'user-1',
         slug: 'user1',
@@ -79,5 +74,4 @@ describe('me personal-space route', () => {
         updated_at: '2026-03-01T00:00:00.000Z',
       },
     });
-  });
-});
+})

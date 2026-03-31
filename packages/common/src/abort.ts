@@ -4,7 +4,7 @@
  * Takos の各サービス横断で AbortSignal を扱うための共通ヘルパー。
  */
 
-import { AppError } from './errors.js';
+import { AppError } from './errors.ts';
 
 /**
  * 指定したシグナルが中断済みなら `AppError` を投げる。

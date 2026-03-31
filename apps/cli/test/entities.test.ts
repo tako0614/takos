@@ -1,18 +1,14 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.js';
-import type { TakosState } from '../src/lib/state/state-types.js';
+import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.ts';
+import type { TakosState } from '../src/lib/state/state-types.ts';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+
 const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
-});
-
 async function makeTempDir(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-entities-'));
   tempDirs.push(dir);
@@ -38,9 +34,10 @@ function makeState(overrides: Partial<TakosState> = {}): TakosState {
 
 // ── entities/resource ───────────────────────────────────────────────────────
 
-describe('entities/resource', () => {
-  it('createResource updates state', async () => {
-    const dir = await makeTempDir();
+
+  Deno.test('entities/resource - createResource updates state', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState();
     await writeState(dir, 'default', state);
 
@@ -59,15 +56,18 @@ describe('entities/resource', () => {
     await writeState(dir, 'default', updated);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
-    expect(loaded!.resources['main-db']).toBeDefined();
-    expect(loaded!.resources['main-db'].type).toBe('d1');
-    expect(loaded!.resources['main-db'].id).toBe('d1-uuid-001');
-    expect(loaded!.resources['main-db'].binding).toBe('DB');
-  });
-
-  it('listResources returns state entries', async () => {
-    const dir = await makeTempDir();
+    assertNotEquals(loaded, null);
+    assert(loaded!.resources['main-db'] !== undefined);
+    assertEquals(loaded!.resources['main-db'].type, 'd1');
+    assertEquals(loaded!.resources['main-db'].id, 'd1-uuid-001');
+    assertEquals(loaded!.resources['main-db'].binding, 'DB');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('entities/resource - listResources returns state entries', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState({
       resources: {
         db: { type: 'd1', id: 'abc123', binding: 'DB', createdAt: '2026-01-01T00:00:00Z' },
@@ -78,14 +78,17 @@ describe('entities/resource', () => {
     await writeState(dir, 'default', state);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
+    assertNotEquals(loaded, null);
     const resourceNames = Object.keys(loaded!.resources);
-    expect(resourceNames).toEqual(['db', 'cache', 'storage']);
-    expect(resourceNames).toHaveLength(3);
-  });
-
-  it('deleteResource removes from state', async () => {
-    const dir = await makeTempDir();
+    assertEquals(resourceNames, ['db', 'cache', 'storage']);
+    assertEquals(resourceNames.length, 3);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('entities/resource - deleteResource removes from state', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState({
       resources: {
         db: { type: 'd1', id: 'abc123', binding: 'DB', createdAt: '2026-01-01T00:00:00Z' },
@@ -102,18 +105,20 @@ describe('entities/resource', () => {
     await writeState(dir, 'default', updated);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
-    expect(loaded!.resources['db']).toBeUndefined();
-    expect(loaded!.resources['cache']).toBeDefined();
-    expect(Object.keys(loaded!.resources)).toHaveLength(1);
-  });
-});
-
+    assertNotEquals(loaded, null);
+    assertEquals(loaded!.resources['db'], undefined);
+    assert(loaded!.resources['cache'] !== undefined);
+    assertEquals(Object.keys(loaded!.resources).length, 1);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
 // ── entities/worker ─────────────────────────────────────────────────────────
 
-describe('entities/worker', () => {
-  it('deployWorker updates state', async () => {
-    const dir = await makeTempDir();
+
+  Deno.test('entities/worker - deployWorker updates state', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState();
     await writeState(dir, 'default', state);
 
@@ -131,14 +136,17 @@ describe('entities/worker', () => {
     await writeState(dir, 'default', updated);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
-    expect(loaded!.workers['web']).toBeDefined();
-    expect(loaded!.workers['web'].scriptName).toBe('test-group-production-web');
-    expect(loaded!.workers['web'].codeHash).toBe('sha256:abc123');
-  });
-
-  it('deleteWorker removes from state', async () => {
-    const dir = await makeTempDir();
+    assertNotEquals(loaded, null);
+    assert(loaded!.workers['web'] !== undefined);
+    assertEquals(loaded!.workers['web'].scriptName, 'test-group-production-web');
+    assertEquals(loaded!.workers['web'].codeHash, 'sha256:abc123');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('entities/worker - deleteWorker removes from state', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState({
       workers: {
         web: { scriptName: 'test-web', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:aaa' },
@@ -155,14 +163,17 @@ describe('entities/worker', () => {
     await writeState(dir, 'default', updated);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
-    expect(loaded!.workers['web']).toBeUndefined();
-    expect(loaded!.workers['api']).toBeDefined();
-    expect(Object.keys(loaded!.workers)).toHaveLength(1);
-  });
-
-  it('updateWorker changes codeHash and deployedAt', async () => {
-    const dir = await makeTempDir();
+    assertNotEquals(loaded, null);
+    assertEquals(loaded!.workers['web'], undefined);
+    assert(loaded!.workers['api'] !== undefined);
+    assertEquals(Object.keys(loaded!.workers).length, 1);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('entities/worker - updateWorker changes codeHash and deployedAt', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState({
       workers: {
         web: { scriptName: 'test-web', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:old' },
@@ -185,10 +196,12 @@ describe('entities/worker', () => {
     await writeState(dir, 'default', updated);
 
     const loaded = await readState(dir, 'default');
-    expect(loaded).not.toBeNull();
-    expect(loaded!.workers['web'].codeHash).toBe('sha256:new');
-    expect(loaded!.workers['web'].deployedAt).toBe(newDeployedAt);
+    assertNotEquals(loaded, null);
+    assertEquals(loaded!.workers['web'].codeHash, 'sha256:new');
+    assertEquals(loaded!.workers['web'].deployedAt, newDeployedAt);
     // scriptName should not change
-    expect(loaded!.workers['web'].scriptName).toBe('test-web');
-  });
-});
+    assertEquals(loaded!.workers['web'].scriptName, 'test-web');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})

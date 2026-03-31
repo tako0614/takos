@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -18,15 +17,18 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 const mockRegistry = {
-  search: vi.fn(),
-  families: vi.fn(),
-  get: vi.fn(),
+  search: ((..._args: any[]) => undefined) as any,
+  families: ((..._args: any[]) => undefined) as any,
+  get: ((..._args: any[]) => undefined) as any,
   size: 42,
 };
 
 const mockExecutor = {
-  execute: vi.fn(),
+  execute: ((..._args: any[]) => undefined) as any,
 };
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
@@ -38,9 +40,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     capabilityRegistry: mockRegistry as any,
     ...overrides,
   };
@@ -56,57 +58,48 @@ function makeContextWithExecutor(overrides: Partial<ToolContext> = {}): ToolCont
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('discovery tool definitions', () => {
-  it('defines three tools', () => {
-    expect(DISCOVERY_TOOLS).toHaveLength(3);
+
+  Deno.test('discovery tool definitions - defines three tools', () => {
+  assertEquals(DISCOVERY_TOOLS.length, 3);
     const names = DISCOVERY_TOOLS.map((t) => t.name);
-    expect(names).toContain('capability_search');
-    expect(names).toContain('capability_families');
-    expect(names).toContain('capability_invoke');
-  });
-
-  it('all tools have workspace category', () => {
-    for (const def of DISCOVERY_TOOLS) {
-      expect(def.category).toBe('workspace');
+    assertStringIncludes(names, 'capability_search');
+    assertStringIncludes(names, 'capability_families');
+    assertStringIncludes(names, 'capability_invoke');
+})
+  Deno.test('discovery tool definitions - all tools have workspace category', () => {
+  for (const def of DISCOVERY_TOOLS) {
+      assertEquals(def.category, 'workspace');
     }
-  });
-
-  it('DISCOVERY_HANDLERS maps all tools', () => {
-    for (const def of DISCOVERY_TOOLS) {
-      expect(DISCOVERY_HANDLERS).toHaveProperty(def.name);
+})
+  Deno.test('discovery tool definitions - DISCOVERY_HANDLERS maps all tools', () => {
+  for (const def of DISCOVERY_TOOLS) {
+      assert(def.name in DISCOVERY_HANDLERS);
     }
-  });
-
-  it('capability_search requires query', () => {
-    expect(CAPABILITY_SEARCH.parameters.required).toEqual(['query']);
-  });
-
-  it('capability_families has no required params', () => {
-    expect(CAPABILITY_FAMILIES.parameters.required).toBeUndefined();
-  });
-
-  it('capability_invoke requires tool_name', () => {
-    expect(CAPABILITY_INVOKE.parameters.required).toEqual(['tool_name']);
-  });
-});
-
+})
+  Deno.test('discovery tool definitions - capability_search requires query', () => {
+  assertEquals(CAPABILITY_SEARCH.parameters.required, ['query']);
+})
+  Deno.test('discovery tool definitions - capability_families has no required params', () => {
+  assertEquals(CAPABILITY_FAMILIES.parameters.required, undefined);
+})
+  Deno.test('discovery tool definitions - capability_invoke requires tool_name', () => {
+  assertEquals(CAPABILITY_INVOKE.parameters.required, ['tool_name']);
+})
 // ---------------------------------------------------------------------------
 // capabilitySearchHandler
 // ---------------------------------------------------------------------------
 
-describe('capabilitySearchHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns error when no registry is available', async () => {
-    const ctx = makeContext({ capabilityRegistry: undefined });
+  
+  Deno.test('capabilitySearchHandler - returns error when no registry is available', async () => {
+  const ctx = makeContext({ capabilityRegistry: undefined });
 
     const result = JSON.parse(await capabilitySearchHandler({ query: 'test' }, ctx));
 
-    expect(result.error).toContain('All tools are already available');
-  });
-
-  it('searches registry and returns discoverable results', async () => {
-    mockRegistry.search.mockReturnValue([
+    assertStringIncludes(result.error, 'All tools are already available');
+})
+  Deno.test('capabilitySearchHandler - searches registry and returns discoverable results', async () => {
+  mockRegistry.search = (() => [
       {
         id: 'tool:file_read',
         kind: 'tool',
@@ -127,180 +120,162 @@ describe('capabilitySearchHandler', () => {
         risk_level: 'high',
         discoverable: false,
       },
-    ]);
+    ]) as any;
 
     const result = JSON.parse(
       await capabilitySearchHandler({ query: 'file' }, makeContext()),
     );
 
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0].name).toBe('file_read');
-    expect(result.total_available).toBe(42);
-    expect(result.hint).toContain('capability_invoke');
-  });
-
-  it('uses custom limit', async () => {
-    mockRegistry.search.mockReturnValue([]);
+    assertEquals(result.results.length, 1);
+    assertEquals(result.results[0].name, 'file_read');
+    assertEquals(result.total_available, 42);
+    assertStringIncludes(result.hint, 'capability_invoke');
+})
+  Deno.test('capabilitySearchHandler - uses custom limit', async () => {
+  mockRegistry.search = (() => []) as any;
 
     await capabilitySearchHandler({ query: 'test', limit: 5 }, makeContext());
 
-    expect(mockRegistry.search).toHaveBeenCalledWith('test', { limit: 5 });
-  });
-
-  it('defaults limit to 10', async () => {
-    mockRegistry.search.mockReturnValue([]);
+    assertSpyCallArgs(mockRegistry.search, 0, ['test', { limit: 5 }]);
+})
+  Deno.test('capabilitySearchHandler - defaults limit to 10', async () => {
+  mockRegistry.search = (() => []) as any;
 
     await capabilitySearchHandler({ query: 'test' }, makeContext());
 
-    expect(mockRegistry.search).toHaveBeenCalledWith('test', { limit: 10 });
-  });
-});
-
+    assertSpyCallArgs(mockRegistry.search, 0, ['test', { limit: 10 }]);
+})
 // ---------------------------------------------------------------------------
 // capabilityFamiliesHandler
 // ---------------------------------------------------------------------------
 
-describe('capabilityFamiliesHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns error when no registry is available', async () => {
-    const ctx = makeContext({ capabilityRegistry: undefined });
+  
+  Deno.test('capabilityFamiliesHandler - returns error when no registry is available', async () => {
+  const ctx = makeContext({ capabilityRegistry: undefined });
 
     const result = JSON.parse(await capabilityFamiliesHandler({}, ctx));
-    expect(result.error).toContain('All tools are already available');
-  });
-
-  it('returns families and total count', async () => {
-    mockRegistry.families.mockReturnValue([
+    assertStringIncludes(result.error, 'All tools are already available');
+})
+  Deno.test('capabilityFamiliesHandler - returns families and total count', async () => {
+  mockRegistry.families = (() => [
       { family: 'file', count: 8 },
       { family: 'storage', count: 12 },
-    ]);
+    ]) as any;
 
     const result = JSON.parse(await capabilityFamiliesHandler({}, makeContext()));
 
-    expect(result.families).toHaveLength(2);
-    expect(result.families[0].family).toBe('file');
-    expect(result.total_capabilities).toBe(42);
-  });
-});
-
+    assertEquals(result.families.length, 2);
+    assertEquals(result.families[0].family, 'file');
+    assertEquals(result.total_capabilities, 42);
+})
 // ---------------------------------------------------------------------------
 // capabilityInvokeHandler
 // ---------------------------------------------------------------------------
 
-describe('capabilityInvokeHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when tool_name is empty', async () => {
-    await expect(
+  
+  Deno.test('capabilityInvokeHandler - throws when tool_name is empty', async () => {
+  await await assertRejects(async () => { await 
       capabilityInvokeHandler({ tool_name: '' }, makeContextWithExecutor()),
-    ).rejects.toThrow('tool_name is required');
-  });
-
-  it('throws when trying to invoke itself', async () => {
-    await expect(
+    ; }, 'tool_name is required');
+})
+  Deno.test('capabilityInvokeHandler - throws when trying to invoke itself', async () => {
+  await await assertRejects(async () => { await 
       capabilityInvokeHandler(
         { tool_name: 'capability_invoke' },
         makeContextWithExecutor(),
       ),
-    ).rejects.toThrow('cannot invoke itself');
-  });
+    ; }, 'cannot invoke itself');
+})
+  Deno.test('capabilityInvokeHandler - throws when tool is not discoverable', async () => {
+  mockRegistry.get = (() => ({ discoverable: false })) as any;
 
-  it('throws when tool is not discoverable', async () => {
-    mockRegistry.get.mockReturnValue({ discoverable: false });
-
-    await expect(
+    await await assertRejects(async () => { await 
       capabilityInvokeHandler(
         { tool_name: 'secret_tool' },
         makeContextWithExecutor(),
       ),
-    ).rejects.toThrow('not available for invocation');
-  });
+    ; }, 'not available for invocation');
+})
+  Deno.test('capabilityInvokeHandler - throws when tool executor is not available', async () => {
+  const ctx = makeContext(); // no _toolExecutor
+    mockRegistry.get = (() => ({ discoverable: true })) as any;
 
-  it('throws when tool executor is not available', async () => {
-    const ctx = makeContext(); // no _toolExecutor
-    mockRegistry.get.mockReturnValue({ discoverable: true });
-
-    await expect(
+    await await assertRejects(async () => { await 
       capabilityInvokeHandler({ tool_name: 'file_read' }, ctx),
-    ).rejects.toThrow('Tool executor not available');
-  });
-
-  it('executes a tool and returns output', async () => {
-    mockRegistry.get.mockReturnValue({ discoverable: true });
-    mockExecutor.execute.mockResolvedValue({
+    ; }, 'Tool executor not available');
+})
+  Deno.test('capabilityInvokeHandler - executes a tool and returns output', async () => {
+  mockRegistry.get = (() => ({ discoverable: true })) as any;
+    mockExecutor.execute = (async () => ({
       output: 'file content here',
-    });
+    })) as any;
 
     const result = await capabilityInvokeHandler(
       { tool_name: 'file_read', arguments: { path: 'test.ts' } },
       makeContextWithExecutor(),
     );
 
-    expect(result).toBe('file content here');
-    expect(mockExecutor.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertEquals(result, 'file content here');
+    assertSpyCallArgs(mockExecutor.execute, 0, [
+      ({
         name: 'file_read',
         arguments: { path: 'test.ts' },
       }),
-    );
-  });
-
-  it('throws when execution returns an error', async () => {
-    mockRegistry.get.mockReturnValue({ discoverable: true });
-    mockExecutor.execute.mockResolvedValue({
+    ]);
+})
+  Deno.test('capabilityInvokeHandler - throws when execution returns an error', async () => {
+  mockRegistry.get = (() => ({ discoverable: true })) as any;
+    mockExecutor.execute = (async () => ({
       output: '',
       error: 'permission denied',
-    });
+    })) as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       capabilityInvokeHandler(
         { tool_name: 'file_read', arguments: { path: '/etc/shadow' } },
         makeContextWithExecutor(),
       ),
-    ).rejects.toThrow('permission denied');
-  });
-
-  it('handles missing arguments gracefully', async () => {
-    mockRegistry.get.mockReturnValue({ discoverable: true });
-    mockExecutor.execute.mockResolvedValue({ output: 'ok' });
+    ; }, 'permission denied');
+})
+  Deno.test('capabilityInvokeHandler - handles missing arguments gracefully', async () => {
+  mockRegistry.get = (() => ({ discoverable: true })) as any;
+    mockExecutor.execute = (async () => ({ output: 'ok' })) as any;
 
     const result = await capabilityInvokeHandler(
       { tool_name: 'some_tool' },
       makeContextWithExecutor(),
     );
 
-    expect(result).toBe('ok');
-    expect(mockExecutor.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertEquals(result, 'ok');
+    assertSpyCallArgs(mockExecutor.execute, 0, [
+      ({
         name: 'some_tool',
         arguments: {},
       }),
-    );
-  });
+    ]);
+})
+  Deno.test('capabilityInvokeHandler - allows invocation when registry does not have descriptor', async () => {
+  mockRegistry.get = (() => undefined) as any; // no descriptor found
 
-  it('allows invocation when registry does not have descriptor', async () => {
-    mockRegistry.get.mockReturnValue(undefined); // no descriptor found
-
-    mockExecutor.execute.mockResolvedValue({ output: 'result' });
+    mockExecutor.execute = (async () => ({ output: 'result' })) as any;
 
     const result = await capabilityInvokeHandler(
       { tool_name: 'unknown_tool' },
       makeContextWithExecutor(),
     );
 
-    expect(result).toBe('result');
-  });
-
-  it('allows invocation when no registry is present', async () => {
-    const ctx = makeContextWithExecutor({ capabilityRegistry: undefined });
-    mockExecutor.execute.mockResolvedValue({ output: 'no-reg-result' });
+    assertEquals(result, 'result');
+})
+  Deno.test('capabilityInvokeHandler - allows invocation when no registry is present', async () => {
+  const ctx = makeContextWithExecutor({ capabilityRegistry: undefined });
+    mockExecutor.execute = (async () => ({ output: 'no-reg-result' })) as any;
 
     const result = await capabilityInvokeHandler(
       { tool_name: 'some_tool' },
       ctx,
     );
 
-    expect(result).toBe('no-reg-result');
-  });
-});
+    assertEquals(result, 'no-reg-result');
+})

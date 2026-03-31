@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
-import { useSetAtom } from 'jotai';
+import type { JSX } from 'solid-js';
+import { Show } from 'solid-js';
+import { useSetAtom } from 'solid-jotai';
 import { UnifiedSidebar } from '../navigation/UnifiedSidebar';
-import { SidebarProvider, type SidebarCallbacks } from '../navigation/SidebarContext';
+import { SidebarContext, type SidebarCallbacks } from '../navigation/SidebarContext';
 import { MobileBottomNav, type NavItem } from './MobileBottomNav';
 import { MobileDrawer } from './MobileDrawer';
 import { MobileHeader } from './MobileHeader';
@@ -25,7 +26,7 @@ function getMobileActiveItem(view: View): NavItem {
   }
 }
 
-export function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+export function AuthenticatedLayout(props: { children: JSX.Element }) {
   const { t } = useI18n();
   const { isMobile } = useBreakpoint();
   const { user, handleLogout: authLogout } = useAuth();
@@ -74,7 +75,7 @@ export function AuthenticatedLayout({ children }: { children: React.ReactNode })
     }
   };
 
-  const sidebarCallbacks = useMemo<SidebarCallbacks>(() => ({
+  const sidebarCallbacks: SidebarCallbacks = {
     onNewChat: () => runSidebarAction(() => { handleNewThread(); }),
     onNavigateStorage: () => runSidebarAction(() => {
       navigate({ view: 'storage', spaceId: selectedSpaceId ?? undefined });
@@ -134,16 +135,10 @@ export function AuthenticatedLayout({ children }: { children: React.ReactNode })
       if (!sidebarSpace) return;
       navigate({ view: 'space-settings', spaceId: getSpaceIdentifier(sidebarSpace) });
     }),
-  }), [
-    runSidebarAction, handleNewThread, navigate, selectedSpaceId,
-    setShowSearch, setShowCreateSpace, handleSelectThread,
-    handleDeleteThread, toggleArchiveThread, setShowAgentModal,
-    handleLogout, handleEnterSpace, handleExitSpace,
-    sidebarSpace,
-  ]);
+  };
 
   const sidebar = (
-    <SidebarProvider value={sidebarCallbacks}>
+    <SidebarContext.Provider value={sidebarCallbacks}>
       <UnifiedSidebar
         activeView={route.view}
         spaceId={selectedSpaceId}
@@ -154,13 +149,13 @@ export function AuthenticatedLayout({ children }: { children: React.ReactNode })
         user={user}
         sidebarSpace={sidebarSpace}
       />
-    </SidebarProvider>
+    </SidebarContext.Provider>
   );
 
   return (
-    <div className="flex flex-row h-[100dvh] w-screen overflow-hidden bg-white dark:bg-zinc-900">
-      {!isMobile && sidebar}
-      {isMobile && (
+    <div class="flex flex-row h-[100dvh] w-screen overflow-hidden bg-white dark:bg-zinc-900">
+      <Show when={!isMobile}>{sidebar}</Show>
+      <Show when={isMobile}>
         <MobileDrawer
           isOpen={showMobileNavDrawer}
           onClose={() => setShowMobileNavDrawer(false)}
@@ -169,24 +164,24 @@ export function AuthenticatedLayout({ children }: { children: React.ReactNode })
         >
           {sidebar}
         </MobileDrawer>
-      )}
-      {isMobile && (
+      </Show>
+      <Show when={isMobile}>
         <MobileHeader
           onOpenMenu={() => setShowMobileNavDrawer(true)}
           isMenuOpen={showMobileNavDrawer}
           menuControlsId={mobileNavDrawerId}
           menuAriaLabel={t('openMenu')}
         />
-      )}
-      <div className={`flex-1 flex flex-col min-h-0 ${isMobile ? 'pb-[calc(var(--nav-height-mobile)+var(--spacing-safe-bottom))] pt-[calc(48px+var(--spacing-safe-top,0px))]' : ''}`}>
-        {children}
+      </Show>
+      <div class={`flex-1 flex flex-col min-h-0 ${isMobile ? 'pb-[calc(var(--nav-height-mobile)+var(--spacing-safe-bottom))] pt-[calc(48px+var(--spacing-safe-top,0px))]' : ''}`}>
+        {props.children}
       </div>
-      {isMobile && (
+      <Show when={isMobile}>
         <MobileBottomNav
           activeItem={getMobileActiveItem(route.view)}
           onNavigate={handleMobileNavigate}
         />
-      )}
+      </Show>
     </div>
   );
 }

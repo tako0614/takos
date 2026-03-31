@@ -1,21 +1,17 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import type { AppManifest } from '../src/lib/app-manifest.js';
-import { computeDiff, computeWorkerDiff } from '../src/lib/state/diff.js';
-import { formatPlan } from '../src/lib/state/plan.js';
-import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.js';
-import type { TakosState } from '../src/lib/state/state-types.js';
+import type { AppManifest } from '../src/lib/app-manifest.ts';
+import { computeDiff, computeWorkerDiff } from '../src/lib/state/diff.ts';
+import { formatPlan } from '../src/lib/state/plan.ts';
+import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.ts';
+import type { TakosState } from '../src/lib/state/state-types.ts';
 
 // ── helpers ──
 
+import { assertEquals, assert, assertThrows, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+
 const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
-});
-
 async function makeTempDir(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-state-'));
   tempDirs.push(dir);
@@ -66,15 +62,19 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
 
 // ── state-file tests ──
 
-describe('state-file', () => {
-  it('readState returns null when state file does not exist', async () => {
-    const dir = await makeTempDir();
-    const result = await readState(dir, 'default');
-    expect(result).toBeNull();
-  });
 
-  it('writeState + readState roundtrip', async () => {
-    const dir = await makeTempDir();
+  Deno.test('state-file - readState returns null when state file does not exist', async () => {
+  try {
+  const dir = await makeTempDir();
+    const result = await readState(dir, 'default');
+    assertEquals(result, null);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('state-file - writeState + readState roundtrip', async () => {
+  try {
+  const dir = await makeTempDir();
     const state = makeState({
       resources: {
         db: { type: 'd1', id: 'abc123', binding: 'DB', createdAt: '2026-01-01T00:00:00Z' },
@@ -86,33 +86,41 @@ describe('state-file', () => {
 
     await writeState(dir, 'default', state);
     const loaded = await readState(dir, 'default');
-    expect(loaded).toEqual(state);
-  });
-
-  it('writeState creates directory if missing', async () => {
-    const dir = await makeTempDir();
+    assertEquals(loaded, state);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('state-file - writeState creates directory if missing', async () => {
+  try {
+  const dir = await makeTempDir();
     const nested = path.join(dir, 'nested', 'deep');
     const state = makeState();
 
     await writeState(nested, 'default', state);
     const loaded = await readState(nested, 'default');
-    expect(loaded).toEqual(state);
-  });
-
-  it('readState propagates non-ENOENT errors', async () => {
-    // 存在するがディレクトリなので JSON パースエラーになる
+    assertEquals(loaded, state);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('state-file - readState propagates non-ENOENT errors', async () => {
+  try {
+  // 存在するがディレクトリなので JSON パースエラーになる
     const dir = await makeTempDir();
     const stateFilePath = path.join(dir, 'state.default.json');
     await fs.mkdir(stateFilePath, { recursive: true }); // ファイルではなくディレクトリ
-    await expect(readState(dir, 'default')).rejects.toThrow();
-  });
-});
-
+    await await assertRejects(async () => { await readState(dir, 'default'); });
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
 // ── diff tests ──
 
-describe('computeDiff', () => {
-  it('initial deploy (current = null) marks everything as create', () => {
-    const manifest = makeManifest({
+
+  Deno.test('computeDiff - initial deploy (current = null) marks everything as create', () => {
+  try {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
         cache: { type: 'kv' },
@@ -121,14 +129,14 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, null);
 
-    expect(result.hasChanges).toBe(true);
-    expect(result.summary.create).toBe(3); // 2 resources + 1 worker
-    expect(result.summary.update).toBe(0);
-    expect(result.summary.delete).toBe(0);
-    expect(result.summary.unchanged).toBe(0);
+    assertEquals(result.hasChanges, true);
+    assertEquals(result.summary.create, 3); // 2 resources + 1 worker
+    assertEquals(result.summary.update, 0);
+    assertEquals(result.summary.delete, 0);
+    assertEquals(result.summary.unchanged, 0);
 
     const dbEntry = result.entries.find((e) => e.name === 'db');
-    expect(dbEntry).toEqual({
+    assertEquals(dbEntry, {
       name: 'db',
       category: 'resource',
       action: 'create',
@@ -137,17 +145,20 @@ describe('computeDiff', () => {
     });
 
     const workerEntry = result.entries.find((e) => e.name === 'web');
-    expect(workerEntry).toEqual({
+    assertEquals(workerEntry, {
       name: 'web',
       category: 'worker',
       action: 'create',
       type: 'worker',
       reason: 'new',
     });
-  });
-
-  it('unchanged resources and workers', () => {
-    const manifest = makeManifest({
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - unchanged resources and workers', () => {
+  try {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
       },
@@ -164,13 +175,16 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, current);
 
-    expect(result.hasChanges).toBe(false);
-    expect(result.summary.unchanged).toBe(2);
-    expect(result.entries.every((e) => e.action === 'unchanged')).toBe(true);
-  });
-
-  it('detects deleted resources and workers', () => {
-    const manifest = makeManifest({
+    assertEquals(result.hasChanges, false);
+    assertEquals(result.summary.unchanged, 2);
+    assertEquals(result.entries.every((e) => e.action === 'unchanged'), true);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - detects deleted resources and workers', () => {
+  try {
+  const manifest = makeManifest({
       resources: {},
       workers: {},
     });
@@ -186,20 +200,23 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, current);
 
-    expect(result.hasChanges).toBe(true);
-    expect(result.summary.delete).toBe(2);
+    assertEquals(result.hasChanges, true);
+    assertEquals(result.summary.delete, 2);
 
     const dbDel = result.entries.find((e) => e.name === 'db');
-    expect(dbDel?.action).toBe('delete');
-    expect(dbDel?.reason).toBe('removed from manifest');
+    assertEquals(dbDel?.action, 'delete');
+    assertEquals(dbDel?.reason, 'removed from manifest');
 
     const workerDel = result.entries.find((e) => e.name === 'old');
-    expect(workerDel?.action).toBe('delete');
-    expect(workerDel?.reason).toBe('removed from manifest');
-  });
-
-  it('throws on resource type change', () => {
-    const manifest = makeManifest({
+    assertEquals(workerDel?.action, 'delete');
+    assertEquals(workerDel?.reason, 'removed from manifest');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - throws on resource type change', () => {
+  try {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'r2' }, // was d1
       },
@@ -211,13 +228,16 @@ describe('computeDiff', () => {
       },
     });
 
-    expect(() => computeDiff(manifest, current)).toThrow(
+    assertThrows(() => { () => computeDiff(manifest, current); }, 
       /Resource "db" type changed from "d1" to "r2"/,
     );
-  });
-
-  it('handles mixed create, unchanged, delete', () => {
-    const manifest = makeManifest({
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - handles mixed create, unchanged, delete', () => {
+  try {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },       // unchanged
         newcache: { type: 'kv' },                 // create
@@ -260,18 +280,21 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, current);
 
-    expect(result.hasChanges).toBe(true);
-    expect(result.summary).toEqual({ create: 2, update: 0, delete: 1, unchanged: 2 });
+    assertEquals(result.hasChanges, true);
+    assertEquals(result.summary, { create: 2, update: 0, delete: 1, unchanged: 2 });
 
-    expect(result.entries.find((e) => e.name === 'newcache')?.action).toBe('create');
-    expect(result.entries.find((e) => e.name === 'api')?.action).toBe('create');
-    expect(result.entries.find((e) => e.name === 'oldqueue')?.action).toBe('delete');
-    expect(result.entries.find((e) => e.name === 'db')?.action).toBe('unchanged');
-    expect(result.entries.find((e) => e.name === 'web')?.action).toBe('unchanged');
-  });
-
-  it('handles containers and services in extended manifest', () => {
-    // containers / services は CLI の AppManifest 型には未定義だが、
+    assertEquals(result.entries.find((e) => e.name === 'newcache')?.action, 'create');
+    assertEquals(result.entries.find((e) => e.name === 'api')?.action, 'create');
+    assertEquals(result.entries.find((e) => e.name === 'oldqueue')?.action, 'delete');
+    assertEquals(result.entries.find((e) => e.name === 'db')?.action, 'unchanged');
+    assertEquals(result.entries.find((e) => e.name === 'web')?.action, 'unchanged');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - handles containers and services in extended manifest', () => {
+  try {
+  // containers / services は CLI の AppManifest 型には未定義だが、
     // GroupDeployOptions 経由の manifest には存在しうる
     const manifest = makeManifest() as AppManifest & {
       spec: AppManifest['spec'] & {
@@ -284,24 +307,27 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, null);
 
-    expect(result.entries.find((e) => e.name === 'runner')).toEqual({
+    assertEquals(result.entries.find((e) => e.name === 'runner'), {
       name: 'runner',
       category: 'container',
       action: 'create',
       type: 'container',
       reason: 'new',
     });
-    expect(result.entries.find((e) => e.name === 'backend')).toEqual({
+    assertEquals(result.entries.find((e) => e.name === 'backend'), {
       name: 'backend',
       category: 'service',
       action: 'create',
       type: 'service',
       reason: 'new',
     });
-  });
-
-  it('detects deleted containers and services', () => {
-    const manifest = makeManifest();
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeDiff - detects deleted containers and services', () => {
+  try {
+  const manifest = makeManifest();
 
     const current = makeState({
       containers: {
@@ -314,56 +340,69 @@ describe('computeDiff', () => {
 
     const result = computeDiff(manifest, current);
 
-    expect(result.entries.find((e) => e.name === 'runner')?.action).toBe('delete');
-    expect(result.entries.find((e) => e.name === 'backend')?.action).toBe('delete');
-  });
-});
-
+    assertEquals(result.entries.find((e) => e.name === 'runner')?.action, 'delete');
+    assertEquals(result.entries.find((e) => e.name === 'backend')?.action, 'delete');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
 // ── computeWorkerDiff tests ──
 
-describe('computeWorkerDiff', () => {
-  it('returns create for new worker', () => {
-    const entry = computeWorkerDiff('api', 'sha256:new', null);
-    expect(entry.action).toBe('create');
-    expect(entry.reason).toBe('new');
-  });
 
-  it('returns update when codeHash differs', () => {
-    const current = makeState({
+  Deno.test('computeWorkerDiff - returns create for new worker', () => {
+  try {
+  const entry = computeWorkerDiff('api', 'sha256:new', null);
+    assertEquals(entry.action, 'create');
+    assertEquals(entry.reason, 'new');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeWorkerDiff - returns update when codeHash differs', () => {
+  try {
+  const current = makeState({
       workers: {
         api: { scriptName: 'api', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:old' },
       },
     });
     const entry = computeWorkerDiff('api', 'sha256:new', current);
-    expect(entry.action).toBe('update');
-    expect(entry.reason).toBe('code changed');
-  });
-
-  it('returns unchanged when codeHash matches', () => {
-    const current = makeState({
+    assertEquals(entry.action, 'update');
+    assertEquals(entry.reason, 'code changed');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('computeWorkerDiff - returns unchanged when codeHash matches', () => {
+  try {
+  const current = makeState({
       workers: {
         api: { scriptName: 'api', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:same' },
       },
     });
     const entry = computeWorkerDiff('api', 'sha256:same', current);
-    expect(entry.action).toBe('unchanged');
-  });
-});
-
+    assertEquals(entry.action, 'unchanged');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
 // ── formatPlan tests ──
 
-describe('formatPlan', () => {
-  it('returns "no changes" message when entries are empty', () => {
-    const result = formatPlan({
+
+  Deno.test('formatPlan - returns "no changes" message when entries are empty', () => {
+  try {
+  const result = formatPlan({
       entries: [],
       hasChanges: false,
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     });
-    expect(result).toBe('変更はありません。');
-  });
-
-  it('formats entries with correct symbols', () => {
-    const result = formatPlan({
+    assertEquals(result, '変更はありません。');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('formatPlan - formats entries with correct symbols', () => {
+  try {
+  const result = formatPlan({
       entries: [
         { name: 'db', category: 'resource', action: 'create', type: 'd1', reason: 'new' },
         { name: 'web', category: 'worker', action: 'update', type: 'worker', reason: 'code changed' },
@@ -375,32 +414,35 @@ describe('formatPlan', () => {
     });
 
     const lines = result.split('\n');
-    expect(lines[0]).toContain('+ db');
-    expect(lines[0]).toContain('d1');
-    expect(lines[0]).toContain('new');
+    assertStringIncludes(lines[0], '+ db');
+    assertStringIncludes(lines[0], 'd1');
+    assertStringIncludes(lines[0], 'new');
 
-    expect(lines[1]).toContain('~ web');
-    expect(lines[1]).toContain('worker');
-    expect(lines[1]).toContain('code changed');
+    assertStringIncludes(lines[1], '~ web');
+    assertStringIncludes(lines[1], 'worker');
+    assertStringIncludes(lines[1], 'code changed');
 
-    expect(lines[2]).toContain('- old');
-    expect(lines[2]).toContain('worker');
-    expect(lines[2]).toContain('removed from manifest');
+    assertStringIncludes(lines[2], '- old');
+    assertStringIncludes(lines[2], 'worker');
+    assertStringIncludes(lines[2], 'removed from manifest');
 
-    expect(lines[3]).toContain('= cache');
-    expect(lines[3]).toContain('kv');
-    expect(lines[3]).toContain('変更なし');
+    assertStringIncludes(lines[3], '= cache');
+    assertStringIncludes(lines[3], 'kv');
+    assertStringIncludes(lines[3], '変更なし');
 
     // summary line
     const summaryLine = lines[lines.length - 1];
-    expect(summaryLine).toContain('作成: 1');
-    expect(summaryLine).toContain('更新: 1');
-    expect(summaryLine).toContain('削除: 1');
-    expect(summaryLine).toContain('変更なし: 1');
-  });
-
-  it('omits zero counts from summary', () => {
-    const result = formatPlan({
+    assertStringIncludes(summaryLine, '作成: 1');
+    assertStringIncludes(summaryLine, '更新: 1');
+    assertStringIncludes(summaryLine, '削除: 1');
+    assertStringIncludes(summaryLine, '変更なし: 1');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('formatPlan - omits zero counts from summary', () => {
+  try {
+  const result = formatPlan({
       entries: [
         { name: 'db', category: 'resource', action: 'create', type: 'd1', reason: 'new' },
       ],
@@ -409,9 +451,11 @@ describe('formatPlan', () => {
     });
 
     const summaryLine = result.split('\n').pop()!;
-    expect(summaryLine).toBe('作成: 1');
-    expect(summaryLine).not.toContain('更新');
-    expect(summaryLine).not.toContain('削除');
-    expect(summaryLine).not.toContain('変更なし');
-  });
-});
+    assertEquals(summaryLine, '作成: 1');
+    assert(!(summaryLine).includes('更新'));
+    assert(!(summaryLine).includes('削除'));
+    assert(!(summaryLine).includes('変更なし'));
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})

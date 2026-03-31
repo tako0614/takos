@@ -39,7 +39,7 @@ export function splitSpaces(spaces: Space[], personalLabel?: string): {
 /** Returns "me" for user spaces, otherwise the space slug. */
 export function getSpaceIdentifier(space: Space): string {
   if (space.kind === 'user' || space.is_personal) return 'me';
-  return space.slug;
+  return space.slug ?? '';
 }
 
 export function findSpaceByIdentifier(

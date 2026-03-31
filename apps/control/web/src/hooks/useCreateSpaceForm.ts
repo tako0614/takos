@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { createSignal } from 'solid-js';
 import { getErrorMessage } from 'takos-common/errors';
 
 interface UseCreateSpaceFormOptions {
@@ -12,10 +12,10 @@ export function useCreateSpaceForm({
   nameRequiredMessage,
   failedToCreateMessage,
 }: UseCreateSpaceFormOptions) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = createSignal('');
+  const [description, setDescription] = createSignal('');
+  const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
 
   const clearError = () => setError(null);
 
@@ -26,9 +26,9 @@ export function useCreateSpaceForm({
     setError(null);
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: Event & { currentTarget: HTMLFormElement; target: HTMLFormElement }) => {
     e.preventDefault();
-    if (!name.trim()) {
+    if (!name().trim()) {
       setError(nameRequiredMessage);
       return;
     }
@@ -36,7 +36,7 @@ export function useCreateSpaceForm({
     setLoading(true);
     setError(null);
     try {
-      await onCreate(name, description);
+      await onCreate(name(), description());
     } catch (err: unknown) {
       setError(getErrorMessage(err, failedToCreateMessage));
     } finally {

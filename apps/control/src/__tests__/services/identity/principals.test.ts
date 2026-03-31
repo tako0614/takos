@@ -1,149 +1,148 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
+import { assertEquals } from 'jsr:@std/assert';
+
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
     get: getMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   resolveUserPrincipalId,
   resolveActorPrincipalId,
   getPrincipalById,
 } from '@/services/identity/principals';
 
-describe('principals service (Account-backed)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  describe('resolveUserPrincipalId', () => {
-    it('returns the account id when the user exists', async () => {
-      db._.get.mockResolvedValueOnce({ id: 'user-1' });
+  
+    Deno.test('principals service (Account-backed) - resolveUserPrincipalId - returns the account id when the user exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ id: 'user-1' })) as any;
 
       const result = await resolveUserPrincipalId({} as D1Database, 'user-1');
-      expect(result).toBe('user-1');
-    });
-
-    it('returns null when the user is not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
+      assertEquals(result, 'user-1');
+})
+    Deno.test('principals service (Account-backed) - resolveUserPrincipalId - returns null when the user is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const result = await resolveUserPrincipalId({} as D1Database, 'nonexistent');
-      expect(result).toBeNull();
-    });
-
-    it('returns null when the row has a falsy id', async () => {
-      db._.get.mockResolvedValueOnce({ id: '' });
+      assertEquals(result, null);
+})
+    Deno.test('principals service (Account-backed) - resolveUserPrincipalId - returns null when the row has a falsy id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ id: '' })) as any;
 
       const result = await resolveUserPrincipalId({} as D1Database, 'user-1');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('resolveActorPrincipalId', () => {
-    it('returns the account id when the actor exists', async () => {
-      db._.get.mockResolvedValueOnce({ id: 'actor-1' });
+      assertEquals(result, null);
+})  
+  
+    Deno.test('principals service (Account-backed) - resolveActorPrincipalId - returns the account id when the actor exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ id: 'actor-1' })) as any;
 
       const result = await resolveActorPrincipalId({} as D1Database, 'actor-1');
-      expect(result).toBe('actor-1');
-    });
-
-    it('returns null when the actor is not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
+      assertEquals(result, 'actor-1');
+})
+    Deno.test('principals service (Account-backed) - resolveActorPrincipalId - returns null when the actor is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const result = await resolveActorPrincipalId({} as D1Database, 'nonexistent');
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getPrincipalById', () => {
-    it('returns a mapped Principal when the account exists', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(result, null);
+})  
+  
+    Deno.test('principals service (Account-backed) - getPrincipalById - returns a mapped Principal when the account exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'user-1',
         type: 'user',
         name: 'Test User',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-02T00:00:00.000Z',
-      });
+      })) as any;
 
       const result = await getPrincipalById({} as D1Database, 'user-1');
-      expect(result).toEqual({
+      assertEquals(result, {
         id: 'user-1',
         type: 'user',
         display_name: 'Test User',
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-02T00:00:00.000Z',
       });
-    });
-
-    it('returns null when account does not exist', async () => {
-      db._.get.mockResolvedValueOnce(null);
+})
+    Deno.test('principals service (Account-backed) - getPrincipalById - returns null when account does not exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const result = await getPrincipalById({} as D1Database, 'nonexistent');
-      expect(result).toBeNull();
-    });
-
-    it('normalizes unknown type to service', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(result, null);
+})
+    Deno.test('principals service (Account-backed) - getPrincipalById - normalizes unknown type to service', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'svc-1',
         type: 'unknown_type',
         name: 'Service',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const result = await getPrincipalById({} as D1Database, 'svc-1');
-      expect(result?.type).toBe('service');
-    });
-
-    it('normalizes null type to service', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(result?.type, 'service');
+})
+    Deno.test('principals service (Account-backed) - getPrincipalById - normalizes null type to service', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'svc-2',
         type: null,
         name: 'Null Type',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const result = await getPrincipalById({} as D1Database, 'svc-2');
-      expect(result?.type).toBe('service');
-    });
-
-    it('maps known principal kinds correctly', async () => {
-      const knownKinds = ['user', 'space_agent', 'service', 'system', 'tenant_worker'];
+      assertEquals(result?.type, 'service');
+})
+    Deno.test('principals service (Account-backed) - getPrincipalById - maps known principal kinds correctly', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const knownKinds = ['user', 'space_agent', 'service', 'system', 'tenant_worker'];
 
       for (const kind of knownKinds) {
-        db._.get.mockResolvedValueOnce({
+        db._.get = (async () => ({
           id: `test-${kind}`,
           type: kind,
           name: `Test ${kind}`,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
-        });
+        })) as any;
 
         const result = await getPrincipalById({} as D1Database, `test-${kind}`);
-        expect(result?.type).toBe(kind);
+        assertEquals(result?.type, kind);
       }
-    });
-  });
-});
+})  

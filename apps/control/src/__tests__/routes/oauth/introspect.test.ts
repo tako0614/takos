@@ -1,17 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => {
-  const validateClientCredentials = vi.fn();
-  const verifyAccessToken = vi.fn();
-  const isAccessTokenValid = vi.fn();
-  const getRefreshToken = vi.fn();
-  const oauthRateLimiter = vi.fn(() => ({
-    middleware: vi.fn(() => async (_c: unknown, next: () => Promise<void>) => {
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = {
+  const validateClientCredentials = ((..._args: any[]) => undefined) as any;
+  const verifyAccessToken = ((..._args: any[]) => undefined) as any;
+  const isAccessTokenValid = ((..._args: any[]) => undefined) as any;
+  const getRefreshToken = ((..._args: any[]) => undefined) as any;
+  const oauthRateLimiter = () => ({
+    middleware: () => async (_c: unknown, next: () => Promise<void>) => {
       await next();
-    }),
-  }));
+    },
+  });
 
   return {
     validateClientCredentials,
@@ -20,25 +22,11 @@ const mocks = vi.hoisted(() => {
     getRefreshToken,
     oauthRateLimiter,
   };
-});
+};
 
-vi.mock('@/services/oauth/client', () => ({
-  validateClientCredentials: mocks.validateClientCredentials,
-}));
-
-vi.mock('@/services/oauth/token', () => ({
-  verifyAccessToken: mocks.verifyAccessToken,
-  isAccessTokenValid: mocks.isAccessTokenValid,
-  getRefreshToken: mocks.getRefreshToken,
-}));
-
-vi.mock('@/utils/rate-limiter', () => ({
-  RateLimiters: {
-    oauth: mocks.oauthRateLimiter,
-    oauthToken: mocks.oauthRateLimiter,
-  },
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/token'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/rate-limiter'
 import oauthIntrospect from '@/routes/oauth/introspect';
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -75,17 +63,14 @@ async function callIntrospect(
   );
 }
 
-describe('oauth introspect client ownership regression (issue 009)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.validateClientCredentials.mockResolvedValue({ valid: true });
-    mocks.verifyAccessToken.mockResolvedValue(null);
-    mocks.isAccessTokenValid.mockResolvedValue(false);
-    mocks.getRefreshToken.mockResolvedValue(null);
-  });
 
-  it('returns active:false when access token belongs to another client', async () => {
-    mocks.verifyAccessToken.mockResolvedValue({
+  Deno.test('oauth introspect client ownership regression (issue 009) - returns active:false when access token belongs to another client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.isAccessTokenValid = (async () => false) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+  mocks.verifyAccessToken = (async () => ({
       iss: 'https://admin.takos.test',
       sub: 'user-1',
       aud: 'client-a',
@@ -94,7 +79,7 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       jti: 'jti-1',
       scope: 'openid profile',
       client_id: 'client-a',
-    });
+    })) as any;
 
     const response = await callIntrospect({
       token: 'access-token',
@@ -102,20 +87,24 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       client_secret: 'secret-b',
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ active: false });
-    expect(mocks.verifyAccessToken).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), { active: false });
+    assertSpyCallArgs(mocks.verifyAccessToken, 0, [
+      ({
         expectedAudience: 'client-b',
       })
-    );
-    expect(mocks.isAccessTokenValid).not.toHaveBeenCalled();
-    expect(mocks.getRefreshToken).not.toHaveBeenCalled();
-  });
-
-  it('returns active:false when refresh token belongs to another client', async () => {
-    mocks.verifyAccessToken.mockResolvedValue(null);
-    mocks.getRefreshToken.mockResolvedValue({
+    ]);
+    assertSpyCalls(mocks.isAccessTokenValid, 0);
+    assertSpyCalls(mocks.getRefreshToken, 0);
+})
+  Deno.test('oauth introspect client ownership regression (issue 009) - returns active:false when refresh token belongs to another client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.isAccessTokenValid = (async () => false) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+  mocks.verifyAccessToken = (async () => null) as any;
+    mocks.getRefreshToken = (async () => ({
       id: 'rt-1',
       token_type: 'refresh',
       token_hash: 'hash-1',
@@ -130,7 +119,7 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       token_family: null,
       expires_at: '2099-01-01T00:00:00.000Z',
       created_at: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const response = await callIntrospect({
       token: 'refresh-token',
@@ -138,13 +127,17 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       client_secret: 'secret-b',
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ active: false });
-    expect(mocks.isAccessTokenValid).not.toHaveBeenCalled();
-  });
-
-  it('can return active:true when access token belongs to the authenticated client', async () => {
-    mocks.verifyAccessToken.mockResolvedValue({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), { active: false });
+    assertSpyCalls(mocks.isAccessTokenValid, 0);
+})
+  Deno.test('oauth introspect client ownership regression (issue 009) - can return active:true when access token belongs to the authenticated client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.isAccessTokenValid = (async () => false) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+  mocks.verifyAccessToken = (async () => ({
       iss: 'https://admin.takos.test',
       sub: 'user-1',
       aud: 'client-a',
@@ -153,8 +146,8 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       jti: 'jti-1',
       scope: 'openid profile',
       client_id: 'client-a',
-    });
-    mocks.isAccessTokenValid.mockResolvedValue(true);
+    })) as any;
+    mocks.isAccessTokenValid = (async () => true) as any;
 
     const response = await callIntrospect({
       token: 'access-token',
@@ -162,8 +155,8 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       client_secret: 'secret-a',
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       active: true,
       client_id: 'client-a',
       token_type: 'Bearer',
@@ -171,6 +164,5 @@ describe('oauth introspect client ownership regression (issue 009)', () => {
       scope: 'openid profile',
       jti: 'jti-1',
     });
-    expect(mocks.getRefreshToken).not.toHaveBeenCalled();
-  });
-});
+    assertSpyCalls(mocks.getRefreshToken, 0);
+})

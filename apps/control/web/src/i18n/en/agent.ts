@@ -85,6 +85,11 @@ export const agent = {
     'workHistoryFilter.subagents': 'Sub-agents',
     'workHistoryFilter.artifacts': 'Artifacts',
 
+    // Official / Custom skills
+    officialSkills: 'Official Skills',
+    officialSkillsHint: 'Built-in skills maintained by the team',
+    customSkills: 'Custom Skills',
+
     // Model Settings
     modelProvider: 'Provider',
     saveModelSettings: 'Save Model Settings',

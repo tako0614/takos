@@ -15,19 +15,19 @@
 import type { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import chalk from 'chalk';
-import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.js';
-import { cliExit } from '../lib/command-exit.js';
-import { confirmPrompt, resolveSpaceId } from '../lib/cli-utils.js';
-import { api } from '../lib/api.js';
-import { formatPlan } from '../lib/state/plan.js';
-import { DEFAULT_COMPATIBILITY_DATE } from '../lib/constants.js';
-import { printApplyResult } from '../lib/apply/result-formatter.js';
-import type { ApplyResult } from '../lib/apply/coordinator.js';
-import type { DiffEntry, DiffResult } from '../lib/state/diff.js';
-import type { TakosState } from '../lib/state/state-types.js';
-import type { AppManifest } from '../lib/app-manifest.js';
-import { printTranslationReport, type TranslationReport } from '../lib/translation-report.js';
+import { bold, cyan, dim, green, red, yellow } from '@std/fmt/colors';
+import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.ts';
+import { cliExit } from '../lib/command-exit.ts';
+import { confirmPrompt, resolveSpaceId } from '../lib/cli-utils.ts';
+import { api } from '../lib/api.ts';
+import { formatPlan } from '../lib/state/plan.ts';
+import { DEFAULT_COMPATIBILITY_DATE } from '../lib/constants.ts';
+import { printApplyResult } from '../lib/apply/result-formatter.ts';
+import type { ApplyResult } from '../lib/apply/coordinator.ts';
+import type { DiffEntry, DiffResult } from '../lib/state/diff.ts';
+import type { TakosState } from '../lib/state/state-types.ts';
+import type { AppManifest } from '../lib/app-manifest.ts';
+import { printTranslationReport, type TranslationReport } from '../lib/translation-report.ts';
 
 type PlanByNameResponse = {
   group: { id: string; name: string };
@@ -143,10 +143,10 @@ async function handleApplyOffline(
   manifestPath: string,
   options: ApplyCommandOptions,
 ): Promise<void> {
-  const { readState, getStateDir } = await import('../lib/state/state-file.js');
-  const { computeDiff } = await import('../lib/state/diff.js');
-  const { applyDiff } = await import('../lib/apply/coordinator.js');
-  const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
+  const { readState, getStateDir } = await import('../lib/state/state-file.ts');
+  const { computeDiff } = await import('../lib/state/diff.ts');
+  const { applyDiff } = await import('../lib/apply/coordinator.ts');
+  const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
 
   const accountId = resolveAccountId(options.accountId);
   const apiToken = resolveApiToken(options.apiToken);
@@ -165,7 +165,7 @@ async function handleApplyOffline(
   const diff = filterDiffByTargets(fullDiff, targets);
 
   console.log('');
-  console.log(chalk.bold(`Apply: ${manifest.metadata.name}`));
+  console.log(bold(`Apply: ${manifest.metadata.name}`));
   console.log(`  Environment: ${options.env}`);
   console.log(`  Manifest:    ${manifestPath}`);
   console.log(`  Mode:        offline`);
@@ -179,27 +179,27 @@ async function handleApplyOffline(
 
   const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
   if (totalChanges === 0) {
-    console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
+    console.log(green('No changes. Infrastructure is up-to-date.'));
     return;
   }
 
-  console.log(chalk.yellow(`${totalChanges} change(s) to apply.`));
+  console.log(yellow(`${totalChanges} change(s) to apply.`));
   console.log('');
 
   if (!options.autoApprove) {
     const hasDeletes = diff.entries.some(d => d.action === 'delete');
     const promptMessage = hasDeletes
-      ? chalk.red.bold('This will DELETE resources. Continue?')
+      ? bold(red('This will DELETE resources. Continue?'))
       : 'Do you want to apply these changes?';
     const confirmed = await confirmPrompt(promptMessage);
     if (!confirmed) {
-      console.log(chalk.dim('Apply cancelled.'));
+      console.log(dim('Apply cancelled.'));
       return;
     }
   }
 
   console.log('');
-  console.log(chalk.cyan('Applying changes...'));
+  console.log(cyan('Applying changes...'));
   console.log('');
 
   const groupName = options.group || manifest.metadata.name;
@@ -267,7 +267,7 @@ export function registerApplyCommand(program: Command): void {
           ? options.manifest
           : await resolveAppManifestPath(process.cwd());
       } catch {
-        console.log(chalk.red('No .takos/app.yml found. Specify --manifest or run from a project root.'));
+        console.log(red('No .takos/app.yml found. Specify --manifest or run from a project root.'));
         cliExit(1);
       }
 
@@ -276,7 +276,7 @@ export function registerApplyCommand(program: Command): void {
         manifest = await loadAppManifest(manifestPath);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Invalid manifest: ${message}`));
+        console.log(red(`Invalid manifest: ${message}`));
         cliExit(1);
       }
 
@@ -284,7 +284,7 @@ export function registerApplyCommand(program: Command): void {
       try {
         provider = parseGroupProvider(options.provider);
       } catch (error) {
-        console.log(chalk.red(error instanceof Error ? error.message : 'Invalid provider'));
+        console.log(red(error instanceof Error ? error.message : 'Invalid provider'));
         cliExit(1);
       }
 
@@ -310,7 +310,7 @@ export function registerApplyCommand(program: Command): void {
       });
 
       if (!planRes.ok) {
-        console.log(chalk.red(`Error: ${planRes.error}`));
+        console.log(red(`Error: ${planRes.error}`));
         cliExit(1);
       }
 
@@ -319,7 +319,7 @@ export function registerApplyCommand(program: Command): void {
 
       // Step 3: Display plan
       console.log('');
-      console.log(chalk.bold(`Apply: ${manifest.metadata.name}`));
+      console.log(bold(`Apply: ${manifest.metadata.name}`));
       console.log(`  Environment: ${options.env}`);
       console.log(`  Manifest:    ${manifestPath}`);
       if (targets.length > 0) {
@@ -337,30 +337,30 @@ export function registerApplyCommand(program: Command): void {
       console.log(planOutput);
 
       if (!diff.hasChanges) {
-        console.log(chalk.green('No changes. Infrastructure is up-to-date.'));
+        console.log(green('No changes. Infrastructure is up-to-date.'));
         return;
       }
 
       const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
-      console.log(chalk.yellow(`${totalChanges} change(s) to apply.`));
+      console.log(yellow(`${totalChanges} change(s) to apply.`));
       console.log('');
 
       // Step 4: Confirmation
       if (!options.autoApprove) {
         const hasDeletes = diff.entries.some(d => d.action === 'delete');
         const promptMessage = hasDeletes
-          ? chalk.red.bold('This will DELETE resources. Continue?')
+          ? bold(red('This will DELETE resources. Continue?'))
           : 'Do you want to apply these changes?';
         const confirmed = await confirmPrompt(promptMessage);
         if (!confirmed) {
-          console.log(chalk.dim('Apply cancelled.'));
+          console.log(dim('Apply cancelled.'));
           return;
         }
       }
 
       // Step 5: Apply via API
       console.log('');
-      console.log(chalk.cyan('Applying changes...'));
+      console.log(cyan('Applying changes...'));
       console.log('');
 
       let artifacts: Record<string, ApplyArtifactInput> = {};
@@ -368,7 +368,7 @@ export function registerApplyCommand(program: Command): void {
         artifacts = await collectApplyArtifacts(manifest, manifestPath, targets);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(message));
+        console.log(red(message));
         cliExit(1);
       }
 
@@ -386,7 +386,7 @@ export function registerApplyCommand(program: Command): void {
       });
 
       if (!applyRes.ok) {
-        console.log(chalk.red(`Error: ${applyRes.error}`));
+        console.log(red(`Error: ${applyRes.error}`));
         cliExit(1);
       }
 

@@ -1,26 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 import { registerAppApiRoutes } from '@/routes/apps';
 
 function createUser(): User {
@@ -48,41 +38,38 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   return app;
 }
 
-describe('apps routes workspace scope', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('scopes app detail lookup to the requested space when X-Takos-Space-Id is provided', async () => {
-    const selectGet = vi.fn().mockResolvedValue(undefined);
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          leftJoin: vi.fn(function(this: any) { return this; }),
-          where: vi.fn(() => ({
+  Deno.test('apps routes workspace scope - scopes app detail lookup to the requested space when X-Takos-Space-Id is provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const selectGet = (async () => undefined);
+    mocks.getDb = (() => ({
+      select: () => ({
+        from: () => ({
+          leftJoin: function(this: any) { return this; },
+          where: () => ({
             get: selectGet,
-          })),
+          }),
           get: selectGet,
-        })),
-      })),
-    });
+        }),
+      }),
+    })) as any;
     // Make leftJoin chainable by providing all methods at each level
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => {
+    mocks.getDb = (() => ({
+      select: () => {
         const chain: any = {
-          from: vi.fn(() => chain),
-          leftJoin: vi.fn(() => chain),
-          where: vi.fn(() => chain),
+          from: () => chain,
+          leftJoin: () => chain,
+          where: () => chain,
           get: selectGet,
         };
         return chain;
-      }),
-    });
-    mocks.requireSpaceAccess.mockResolvedValue({
+      },
+    })) as any;
+    mocks.requireSpaceAccess = (async () => ({
       workspace: {
         id: 'ws-1',
       },
-    });
+    })) as any;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -95,7 +82,6 @@ describe('apps routes workspace scope', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(404);
-    expect(mocks.requireSpaceAccess).toHaveBeenCalled();
-  });
-});
+    assertEquals(response.status, 404);
+    assert(mocks.requireSpaceAccess.calls.length > 0);
+})

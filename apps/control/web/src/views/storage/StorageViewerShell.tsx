@@ -1,3 +1,5 @@
+import { Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { formatFileSize, formatDateTime } from '../../lib/format';
 import { Icons } from '../../lib/Icons';
 import { Button } from '../../components/ui/Button';
@@ -6,20 +8,7 @@ import type { ResolvedHandler } from './storageUtils';
 import { handlerDisplayName } from './storageUtils';
 import { StorageHandlerDropdown } from './StorageHandlerPicker';
 
-export function StorageViewerShell({
-  file,
-  downloadUrl,
-  allHandlers,
-  activeHandler,
-  showHandlerMenu,
-  setShowHandlerMenu,
-  onSelectHandler,
-  onClearDefault,
-  onClose,
-  t,
-  extraButtons,
-  children,
-}: {
+export function StorageViewerShell(props: {
   file: StorageFile;
   downloadUrl: string | null;
   allHandlers: ResolvedHandler[];
@@ -29,77 +18,77 @@ export function StorageViewerShell({
   onSelectHandler: (h: ResolvedHandler, asDefault: boolean) => void;
   onClearDefault: () => void;
   onClose: () => void;
-  t: (key: string) => string;
-  extraButtons?: React.ReactNode;
-  children: React.ReactNode;
+  t: (key: any) => string;
+  extraButtons?: JSX.Element;
+  children: JSX.Element;
 }) {
-  const hasAlternatives = allHandlers.length > 1;
+  const hasAlternatives = () => props.allHandlers.length > 1;
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-900">
+    <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      <div class="flex-shrink-0 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title={t('back')}
+            onClick={props.onClose}
+            class="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title={props.t('back')}
           >
-            <Icons.ArrowLeft className="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+            <Icons.ArrowLeft class="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
           </button>
-          <div className="min-w-0">
-            <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-              {file.name}
+          <div class="min-w-0">
+            <h2 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+              {props.file.name}
             </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-              {file.path} &middot; {formatFileSize(file.size)} &middot; {formatDateTime(file.updated_at)}
+            <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+              {props.file.path} &middot; {formatFileSize(props.file.size)} &middot; {formatDateTime(props.file.updated_at)}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {extraButtons}
+        <div class="flex items-center gap-2 flex-shrink-0">
+          {props.extraButtons}
 
           {/* Handler switcher */}
-          {hasAlternatives && (
-            <div className="relative">
+          <Show when={hasAlternatives()}>
+            <div class="relative">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setShowHandlerMenu(!showHandlerMenu)}
+                onClick={() => props.setShowHandlerMenu(!props.showHandlerMenu)}
               >
-                {handlerDisplayName(activeHandler, t)}
-                <Icons.ChevronDown className="w-3 h-3 ml-1" />
+                {handlerDisplayName(props.activeHandler, props.t)}
+                <Icons.ChevronDown class="w-3 h-3 ml-1" />
               </Button>
-              {showHandlerMenu && (
+              <Show when={props.showHandlerMenu}>
                 <StorageHandlerDropdown
-                  handlers={allHandlers}
-                  activeHandler={activeHandler}
-                  onSelect={(h) => onSelectHandler(h, false)}
-                  onSetDefault={(h) => onSelectHandler(h, true)}
-                  onClearDefault={onClearDefault}
-                  onClose={() => setShowHandlerMenu(false)}
-                  t={t}
+                  handlers={props.allHandlers}
+                  activeHandler={props.activeHandler}
+                  onSelect={(h) => props.onSelectHandler(h, false)}
+                  onSetDefault={(h) => props.onSelectHandler(h, true)}
+                  onClearDefault={props.onClearDefault}
+                  onClose={() => props.setShowHandlerMenu(false)}
+                  t={props.t}
                 />
-              )}
+              </Show>
             </div>
-          )}
+          </Show>
 
-          {downloadUrl && (
+          <Show when={props.downloadUrl}>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => window.open(downloadUrl, '_blank', 'noopener,noreferrer')}
-              leftIcon={<Icons.Download className="w-4 h-4" />}
+              onClick={() => window.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
+              leftIcon={<Icons.Download class="w-4 h-4" />}
             >
-              {t('download')}
+              {props.t('download')}
             </Button>
-          )}
+          </Show>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {children}
+      <div class="flex-1 overflow-hidden">
+        {props.children}
       </div>
     </div>
   );

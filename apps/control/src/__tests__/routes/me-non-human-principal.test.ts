@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 import meRoutes from '@/routes/me';
 
 type TestEnv = {
+import { assertEquals } from 'jsr:@std/assert';
+
   Bindings: Env;
   Variables: {
     user: User;
@@ -37,9 +38,9 @@ function createApp(user: User) {
   return app;
 }
 
-describe('non-human principal me route guard', () => {
-  it('blocks non-human principals from the me surface', async () => {
-    const app = createApp(createSpaceAgentPrincipal());
+
+  Deno.test('non-human principal me route guard - blocks non-human principals from the me surface', async () => {
+  const app = createApp(createSpaceAgentPrincipal());
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -48,15 +49,14 @@ describe('non-human principal me route guard', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 403);
+    await assertEquals(await response.json(), {
       code: 'FORBIDDEN',
       error: '/api/me is only available to human accounts',
     });
-  });
-
-  it('blocks non-human principals from minting personal access tokens', async () => {
-    const app = createApp(createSpaceAgentPrincipal());
+})
+  Deno.test('non-human principal me route guard - blocks non-human principals from minting personal access tokens', async () => {
+  const app = createApp(createSpaceAgentPrincipal());
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -72,10 +72,9 @@ describe('non-human principal me route guard', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 403);
+    await assertEquals(await response.json(), {
       code: 'FORBIDDEN',
       error: '/api/me is only available to human accounts',
     });
-  });
-});
+})

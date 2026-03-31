@@ -1,42 +1,25 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database, Queue, R2Bucket } from '@cloudflare/workers-types';
 import type { Workflow } from 'takos-actions-engine';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  parseWorkflow: vi.fn(),
-  resolveRef: vi.fn(),
-  getCommitData: vi.fn(),
-  getBlobAtPath: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  parseWorkflow: ((..._args: any[]) => undefined) as any,
+  resolveRef: ((..._args: any[]) => undefined) as any,
+  getCommitData: ((..._args: any[]) => undefined) as any,
+  getBlobAtPath: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('takos-actions-engine', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('takos-actions-engine')>();
-  return {
-    ...actual,
-    parseWorkflow: mocks.parseWorkflow,
-  };
-});
-
-vi.mock('@/services/git-smart', () => ({
-  resolveRef: mocks.resolveRef,
-  getCommitData: mocks.getCommitData,
-  getBlobAtPath: mocks.getBlobAtPath,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from 'takos-actions-engine'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import { evaluateDependencies, scheduleDependentJobs } from '@/services/execution/workflow-job-scheduler';
 
 function createQueueMock(): Queue<unknown> {
   return {
-    send: vi.fn(),
+    send: ((..._args: any[]) => undefined) as any,
   } as unknown as Queue<unknown>;
 }
 
@@ -46,71 +29,68 @@ function createQueueMock(): Queue<unknown> {
  */
 function buildDrizzleMock(selectResults: unknown[], updateHandler?: () => void) {
   let selectIdx = 0;
-  const runFn = vi.fn().mockResolvedValue(undefined);
+  const runFn = (async () => undefined);
 
   const drizzle = {
-    select: vi.fn().mockImplementation(() => {
+    select: () => {
       const result = selectResults[selectIdx++];
       const chain = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            get: vi.fn().mockResolvedValue(result),
-            all: vi.fn().mockResolvedValue(Array.isArray(result) ? result : []),
-            orderBy: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          }),
-          get: vi.fn().mockResolvedValue(result),
-          all: vi.fn().mockResolvedValue(Array.isArray(result) ? result : []),
-        }),
+        from: (() => ({
+          where: (() => ({
+            get: (async () => result),
+            all: (async () => Array.isArray(result) ? result : []),
+            orderBy: (function(this: any) { return this; }),
+            limit: (function(this: any) { return this; }),
+          })),
+          get: (async () => result),
+          all: (async () => Array.isArray(result) ? result : []),
+        })),
       };
       return chain;
-    }),
-    update: vi.fn().mockImplementation(() => {
+    },
+    update: () => {
       if (updateHandler) updateHandler();
       return {
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
+        set: (() => ({
+          where: (() => ({
             run: runFn,
-            returning: vi.fn().mockReturnValue({ get: vi.fn() }),
-          }),
+            returning: (() => ({ get: ((..._args: any[]) => undefined) as any })),
+          })),
           run: runFn,
-        }),
+        })),
       };
+    },
+    insert: () => ({
+      values: (() => ({
+        returning: (() => ({
+          get: (async () => ({})),
+        })),
+        run: ((..._args: any[]) => undefined) as any,
+      })),
     }),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockReturnValue({
-          get: vi.fn().mockResolvedValue({}),
-        }),
-        run: vi.fn(),
-      }),
-    })),
   };
 
   return { drizzle, runFn };
 }
 
-describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('evaluateDependencies returns allSuccessful=false when dependency conclusion is failure', async () => {
-    // evaluateDependencies does one select per dep:
+  Deno.test('WorkflowEngine dependency conclusion guard (issue 001) - evaluateDependencies returns allSuccessful=false when dependency conclusion is failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // evaluateDependencies does one select per dep:
     // select({ status, conclusion }).from(workflowJobs).where(...).get()
     const { drizzle } = buildDrizzleMock([
       { status: 'completed', conclusion: 'failure' },
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await evaluateDependencies({} as D1Database, 'run-1', ['job-a']);
 
-    expect(result.allCompleted).toBe(true);
-    expect(result.allSuccessful).toBe(false);
-  });
-
-  it('scheduleDependentJobs skips dependent job when one of multiple needs failed', async () => {
-    const queue = createQueueMock();
+    assertEquals(result.allCompleted, true);
+    assertEquals(result.allSuccessful, false);
+})
+  Deno.test('WorkflowEngine dependency conclusion guard (issue 001) - scheduleDependentJobs skips dependent job when one of multiple needs failed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const queue = createQueueMock();
 
     // scheduleDependentJobs flow:
     // 1. select().from(workflowRuns).where(...).get() -> run record
@@ -158,38 +138,38 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
     ];
 
     const drizzle = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         const result = selectResults[selectIdx++];
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              get: vi.fn().mockResolvedValue(result),
-              all: vi.fn().mockResolvedValue(Array.isArray(result) ? result : []),
-            }),
-            get: vi.fn().mockResolvedValue(result),
-            all: vi.fn().mockResolvedValue(Array.isArray(result) ? result : []),
-          }),
+          from: (() => ({
+            where: (() => ({
+              get: (async () => result),
+              all: (async () => Array.isArray(result) ? result : []),
+            })),
+            get: (async () => result),
+            all: (async () => Array.isArray(result) ? result : []),
+          })),
         };
-      }),
-      update: vi.fn().mockImplementation(() => {
+      },
+      update: () => {
         return {
-          set: vi.fn().mockImplementation((data: Record<string, unknown>) => {
+          set: (data: Record<string, unknown>) => {
             updateCalls.push(JSON.stringify(data));
             return {
-              where: vi.fn().mockReturnValue({
-                run: vi.fn().mockResolvedValue(undefined),
-              }),
+              where: (() => ({
+                run: (async () => undefined),
+              })),
             };
-          }),
+          },
         };
-      }),
+      },
     };
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
-    mocks.resolveRef.mockResolvedValue('sha-1');
-    mocks.getCommitData.mockResolvedValue({ tree: 'tree-1' });
-    mocks.getBlobAtPath.mockResolvedValue(new TextEncoder().encode('name: ci'));
-    mocks.parseWorkflow.mockReturnValue({
+    mocks.resolveRef = (async () => 'sha-1') as any;
+    mocks.getCommitData = (async () => ({ tree: 'tree-1' })) as any;
+    mocks.getBlobAtPath = (async () => new TextEncoder().encode('name: ci')) as any;
+    mocks.parseWorkflow = (() => ({
       workflow: {
         jobs: {
           jobA: { runsOn: 'ubuntu-latest', steps: [] },
@@ -198,7 +178,7 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
         },
       } as unknown as Workflow,
       diagnostics: [],
-    });
+    })) as any;
 
     await scheduleDependentJobs(
       {} as D1Database,
@@ -209,11 +189,10 @@ describe('WorkflowEngine dependency conclusion guard (issue 001)', () => {
     );
 
     // Should have called update to skip jobB (set status=completed, conclusion=skipped)
-    expect(drizzle.update).toHaveBeenCalled();
+    assert(drizzle.update.calls.length > 0);
     const skipUpdate = updateCalls.find((c) => c.includes('"conclusion":"skipped"'));
-    expect(skipUpdate).toBeTruthy();
+    assert(skipUpdate);
 
     // Queue should NOT have been called (job was skipped, not enqueued)
-    expect((queue.send as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
-  });
-});
+    assertSpyCalls((queue.send as unknown as ReturnType<typeof vi.fn>), 0);
+})

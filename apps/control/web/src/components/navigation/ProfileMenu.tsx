@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { useSidebarCallbacks } from './SidebarContext';
@@ -15,13 +15,13 @@ interface ProfileMenuProps {
   user: User | null;
 }
 
-export function ProfileMenu({ user }: ProfileMenuProps) {
+export function ProfileMenu(props: ProfileMenuProps) {
   const { t } = useI18n();
   const { onOpenSettings, onLogout } = useSidebarCallbacks();
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = createSignal(false);
 
-  useEffect(() => {
-    if (!showProfileMenu) return;
+  createEffect(() => {
+    if (!showProfileMenu()) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (e.target instanceof Element && !e.target.closest('.unified-profile-menu')) {
         setShowProfileMenu(false);
@@ -34,45 +34,45 @@ export function ProfileMenu({ user }: ProfileMenuProps) {
     };
     document.addEventListener('click', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
-    };
-  }, [showProfileMenu]);
+    });
+  });
 
   return (
-    <div className="relative unified-profile-menu">
+    <div class="relative unified-profile-menu">
       <button
-        className={ROW_DEFAULT}
+        class={ROW_DEFAULT}
         onClick={(e) => {
           e.stopPropagation();
-          setShowProfileMenu(!showProfileMenu);
+          setShowProfileMenu(!showProfileMenu());
         }}
         aria-label={t('profileMenu')}
-        aria-expanded={showProfileMenu}
+        aria-expanded={showProfileMenu()}
         aria-haspopup="menu"
       >
-        {user?.picture ? (
-          <img
-            src={user.picture}
-            alt={(user?.name || user?.username || '') + "'s avatar"}
-            className="w-5 h-5 rounded-full object-cover shrink-0"
-          />
-        ) : (
-          <div className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-xs font-semibold shrink-0">
-            {user?.name?.charAt(0).toUpperCase()}
+        <Show when={props.user?.picture} fallback={
+          <div class="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 text-xs font-semibold shrink-0">
+            {props.user?.name?.charAt(0).toUpperCase()}
           </div>
-        )}
-        <span className="truncate min-w-0 text-zinc-700 dark:text-zinc-300">
-          {user?.username
-            ? `@${user.username}`
-            : user?.name || user?.email || '-'}
+        }>
+          <img
+            src={props.user!.picture!}
+            alt={(props.user?.name || props.user?.username || '') + "'s avatar"}
+            class="w-5 h-5 rounded-full object-cover shrink-0"
+          />
+        </Show>
+        <span class="truncate min-w-0 text-zinc-700 dark:text-zinc-300">
+          {props.user?.username
+            ? `@${props.user.username}`
+            : props.user?.name || props.user?.email || '-'}
         </span>
       </button>
 
-      {showProfileMenu && (
+      <Show when={showProfileMenu()}>
         <div
-          className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50"
+          class="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50"
           onClick={(e) => e.stopPropagation()}
           role="menu"
           aria-label={t('profileMenu')}
@@ -83,45 +83,45 @@ export function ProfileMenu({ user }: ProfileMenuProps) {
             }
           }}
         >
-          <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-700">
-            <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              {user?.username ? `@${user.username}` : '-'}
+          <div class="px-4 py-2 border-b border-zinc-100 dark:border-zinc-700">
+            <span class="block text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+              {props.user?.username ? `@${props.user.username}` : '-'}
             </span>
-            {user?.name && (
-              <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {user.name}
+            <Show when={props.user?.name}>
+              <span class="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                {props.user!.name}
               </span>
-            )}
-            {user?.email && (
-              <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {user.email}
+            </Show>
+            <Show when={props.user?.email}>
+              <span class="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                {props.user!.email}
               </span>
-            )}
+            </Show>
           </div>
           <button
-            className={PROFILE_MENU_BTN}
+            class={PROFILE_MENU_BTN}
             role="menuitem"
             onClick={() => {
               setShowProfileMenu(false);
               onOpenSettings();
             }}
           >
-            <Icons.Settings className="w-4 h-4" />
+            <Icons.Settings class="w-4 h-4" />
             <span>{t('accountSettings')}</span>
           </button>
           <button
-            className={PROFILE_MENU_BTN}
+            class={PROFILE_MENU_BTN}
             role="menuitem"
             onClick={() => {
               setShowProfileMenu(false);
               onLogout();
             }}
           >
-            <Icons.X className="w-4 h-4" />
+            <Icons.X class="w-4 h-4" />
             <span>{t('logout')}</span>
           </button>
         </div>
-      )}
+      </Show>
     </div>
   );
 }

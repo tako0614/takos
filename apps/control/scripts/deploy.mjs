@@ -58,7 +58,7 @@ Examples:
   node scripts/deploy.mjs dispatch staging
   node scripts/deploy.mjs runtime-host production
 `);
-  process.exit(1);
+  Deno.exit(1);
 }
 
 // ---------------------------------------------------------------------------

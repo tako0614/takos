@@ -1,34 +1,36 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => {
-  const validateAuthorizationRequest = vi.fn();
-  const generateAuthorizationCode = vi.fn();
-  const buildErrorRedirect = vi.fn();
-  const buildSuccessRedirect = vi.fn();
-  const hasFullConsent = vi.fn();
-  const getNewScopes = vi.fn();
-  const grantConsent = vi.fn();
-  const getClientById = vi.fn();
-  const getSession = vi.fn();
-  const getSessionIdFromCookie = vi.fn();
-  const userFindUnique = vi.fn();
-  const getDb = vi.fn(() => {
+import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = {
+  const validateAuthorizationRequest = ((..._args: any[]) => undefined) as any;
+  const generateAuthorizationCode = ((..._args: any[]) => undefined) as any;
+  const buildErrorRedirect = ((..._args: any[]) => undefined) as any;
+  const buildSuccessRedirect = ((..._args: any[]) => undefined) as any;
+  const hasFullConsent = ((..._args: any[]) => undefined) as any;
+  const getNewScopes = ((..._args: any[]) => undefined) as any;
+  const grantConsent = ((..._args: any[]) => undefined) as any;
+  const getClientById = ((..._args: any[]) => undefined) as any;
+  const getSession = ((..._args: any[]) => undefined) as any;
+  const getSessionIdFromCookie = ((..._args: any[]) => undefined) as any;
+  const userFindUnique = ((..._args: any[]) => undefined) as any;
+  const getDb = () => {
     const chain: Record<string, unknown> = {};
-    chain.from = vi.fn().mockReturnValue(chain);
-    chain.where = vi.fn().mockReturnValue(chain);
-    chain.get = vi.fn(async () => userFindUnique());
-    chain.all = vi.fn().mockResolvedValue([]);
+    chain.from = (() => chain);
+    chain.where = (() => chain);
+    chain.get = async () => userFindUnique();
+    chain.all = (async () => []);
     return {
-      select: vi.fn().mockReturnValue(chain),
+      select: (() => chain),
     };
-  });
-  const oauthAuthorizeRateLimiter = vi.fn(() => ({
-    middleware: vi.fn(() => async (_c: unknown, next: () => Promise<void>) => {
+  };
+  const oauthAuthorizeRateLimiter = () => ({
+    middleware: () => async (_c: unknown, next: () => Promise<void>) => {
       await next();
-    }),
-  }));
+    },
+  });
 
   return {
     validateAuthorizationRequest,
@@ -45,40 +47,14 @@ const mocks = vi.hoisted(() => {
     getDb,
     oauthAuthorizeRateLimiter,
   };
-});
+};
 
-vi.mock('@/services/oauth/authorization', () => ({
-  validateAuthorizationRequest: mocks.validateAuthorizationRequest,
-  generateAuthorizationCode: mocks.generateAuthorizationCode,
-  buildErrorRedirect: mocks.buildErrorRedirect,
-  buildSuccessRedirect: mocks.buildSuccessRedirect,
-}));
-
-vi.mock('@/services/oauth/consent', () => ({
-  hasFullConsent: mocks.hasFullConsent,
-  getNewScopes: mocks.getNewScopes,
-  grantConsent: mocks.grantConsent,
-}));
-
-vi.mock('@/services/oauth/client', () => ({
-  getClientById: mocks.getClientById,
-}));
-
-vi.mock('@/services/identity/session', () => ({
-  getSession: mocks.getSession,
-  getSessionIdFromCookie: mocks.getSessionIdFromCookie,
-}));
-
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/utils/rate-limiter', () => ({
-  RateLimiters: {
-    oauthAuthorize: mocks.oauthAuthorizeRateLimiter,
-  },
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/authorization'
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/consent'
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/session'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/rate-limiter'
 import oauthAuthorize from '@/routes/oauth/authorize';
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -115,7 +91,7 @@ async function callAuthorize(
   );
 }
 
-describe('oauth authorize POST revalidation (issue 007)', () => {
+
   const userRecord = {
     id: 'user-1',
     trustTier: 'normal',
@@ -138,97 +114,143 @@ describe('oauth authorize POST revalidation (issue 007)', () => {
     code_challenge_method: 'S256',
     action: 'allow',
   };
+  Deno.test('oauth authorize POST revalidation (issue 007) - returns 400 JSON when POST validation fails without redirect context', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    mocks.getSessionIdFromCookie.mockReturnValue('session-1');
-    mocks.getSession.mockResolvedValue({
+    mocks.getSessionIdFromCookie = (() => 'session-1') as any;
+    mocks.getSession = (async () => ({
       id: 'session-1',
       user_id: 'user-1',
       expires_at: 4102444800000,
       created_at: 1700000000000,
-    });
-    mocks.userFindUnique.mockResolvedValue(userRecord);
+    })) as any;
+    mocks.userFindUnique = (async () => userRecord) as any;
     // getDb mock is already configured in hoisted mocks to return Drizzle chain
     // that delegates .get() to userFindUnique
-    mocks.getClientById.mockResolvedValue({
+    mocks.getClientById = (async () => ({
       client_id: 'client-id-default',
-    });
-    mocks.hasFullConsent.mockResolvedValue(false);
-    mocks.getNewScopes.mockResolvedValue([]);
-    mocks.grantConsent.mockResolvedValue(undefined);
-    mocks.generateAuthorizationCode.mockResolvedValue('code-default');
-    mocks.buildErrorRedirect.mockReturnValue('https://client.example/callback?error=invalid_request');
-    mocks.buildSuccessRedirect.mockReturnValue('https://client.example/callback?code=code-default&state=raw-state');
-    mocks.validateAuthorizationRequest.mockResolvedValue({
+    })) as any;
+    mocks.hasFullConsent = (async () => false) as any;
+    mocks.getNewScopes = (async () => []) as any;
+    mocks.grantConsent = (async () => undefined) as any;
+    mocks.generateAuthorizationCode = (async () => 'code-default') as any;
+    mocks.buildErrorRedirect = (() => 'https://client.example/callback?error=invalid_request') as any;
+    mocks.buildSuccessRedirect = (() => 'https://client.example/callback?code=code-default&state=raw-state') as any;
+    mocks.validateAuthorizationRequest = (async () => ({
       valid: true,
       client: { client_id: 'client-id-default' },
       redirectUri: 'https://client.example/callback',
-    });
-  });
-
-  it('returns 400 JSON when POST validation fails without redirect context', async () => {
-    mocks.validateAuthorizationRequest.mockResolvedValue({
+    })) as any;
+  mocks.validateAuthorizationRequest = (async () => ({
       valid: false,
       error: 'invalid_request',
       errorDescription: 'tampered authorization payload',
-    });
+    })) as any;
 
     const response = await callAuthorize(baseBody);
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 400);
+    await assertEquals(await response.json(), {
       error: 'invalid_request',
       error_description: 'tampered authorization payload',
     });
-    expect(mocks.buildErrorRedirect).not.toHaveBeenCalled();
-    expect(mocks.grantConsent).not.toHaveBeenCalled();
-    expect(mocks.generateAuthorizationCode).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(mocks.buildErrorRedirect, 0);
+    assertSpyCalls(mocks.grantConsent, 0);
+    assertSpyCalls(mocks.generateAuthorizationCode, 0);
+})
+  Deno.test('oauth authorize POST revalidation (issue 007) - redirects with OAuth error when POST validation fails with redirect context', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('redirects with OAuth error when POST validation fails with redirect context', async () => {
-    const errorRedirect = 'https://client.example/callback?error=invalid_scope&state=raw-state';
-    mocks.validateAuthorizationRequest.mockResolvedValue({
+    mocks.getSessionIdFromCookie = (() => 'session-1') as any;
+    mocks.getSession = (async () => ({
+      id: 'session-1',
+      user_id: 'user-1',
+      expires_at: 4102444800000,
+      created_at: 1700000000000,
+    })) as any;
+    mocks.userFindUnique = (async () => userRecord) as any;
+    // getDb mock is already configured in hoisted mocks to return Drizzle chain
+    // that delegates .get() to userFindUnique
+    mocks.getClientById = (async () => ({
+      client_id: 'client-id-default',
+    })) as any;
+    mocks.hasFullConsent = (async () => false) as any;
+    mocks.getNewScopes = (async () => []) as any;
+    mocks.grantConsent = (async () => undefined) as any;
+    mocks.generateAuthorizationCode = (async () => 'code-default') as any;
+    mocks.buildErrorRedirect = (() => 'https://client.example/callback?error=invalid_request') as any;
+    mocks.buildSuccessRedirect = (() => 'https://client.example/callback?code=code-default&state=raw-state') as any;
+    mocks.validateAuthorizationRequest = (async () => ({
+      valid: true,
+      client: { client_id: 'client-id-default' },
+      redirectUri: 'https://client.example/callback',
+    })) as any;
+  const errorRedirect = 'https://client.example/callback?error=invalid_scope&state=raw-state';
+    mocks.validateAuthorizationRequest = (async () => ({
       valid: false,
       redirectUri: 'https://client.example/callback',
       error: 'invalid_scope',
       errorDescription: 'scope mismatch',
-    });
-    mocks.buildErrorRedirect.mockReturnValue(errorRedirect);
+    })) as any;
+    mocks.buildErrorRedirect = (() => errorRedirect) as any;
 
     const response = await callAuthorize(baseBody);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe(errorRedirect);
-    expect(mocks.buildErrorRedirect).toHaveBeenCalledWith(
+    assertEquals(response.status, 302);
+    assertEquals(response.headers.get('location'), errorRedirect);
+    assertSpyCallArgs(mocks.buildErrorRedirect, 0, [
       'https://client.example/callback',
       'raw-state',
       'invalid_scope',
       'scope mismatch'
-    );
-    expect(mocks.grantConsent).not.toHaveBeenCalled();
-    expect(mocks.generateAuthorizationCode).not.toHaveBeenCalled();
-  });
+    ]);
+    assertSpyCalls(mocks.grantConsent, 0);
+    assertSpyCalls(mocks.generateAuthorizationCode, 0);
+})
+  Deno.test('oauth authorize POST revalidation (issue 007) - uses validated normalized values for approve code issuance', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('uses validated normalized values for approve code issuance', async () => {
-    const env = createEnv();
+    mocks.getSessionIdFromCookie = (() => 'session-1') as any;
+    mocks.getSession = (async () => ({
+      id: 'session-1',
+      user_id: 'user-1',
+      expires_at: 4102444800000,
+      created_at: 1700000000000,
+    })) as any;
+    mocks.userFindUnique = (async () => userRecord) as any;
+    // getDb mock is already configured in hoisted mocks to return Drizzle chain
+    // that delegates .get() to userFindUnique
+    mocks.getClientById = (async () => ({
+      client_id: 'client-id-default',
+    })) as any;
+    mocks.hasFullConsent = (async () => false) as any;
+    mocks.getNewScopes = (async () => []) as any;
+    mocks.grantConsent = (async () => undefined) as any;
+    mocks.generateAuthorizationCode = (async () => 'code-default') as any;
+    mocks.buildErrorRedirect = (() => 'https://client.example/callback?error=invalid_request') as any;
+    mocks.buildSuccessRedirect = (() => 'https://client.example/callback?code=code-default&state=raw-state') as any;
+    mocks.validateAuthorizationRequest = (async () => ({
+      valid: true,
+      client: { client_id: 'client-id-default' },
+      redirectUri: 'https://client.example/callback',
+    })) as any;
+  const env = createEnv();
     const successRedirect = 'https://trusted.example/callback?code=code-123&state=raw-state';
 
-    mocks.validateAuthorizationRequest.mockResolvedValue({
+    mocks.validateAuthorizationRequest = (async () => ({
       valid: true,
       client: { client_id: 'client-normalized' },
       redirectUri: 'https://trusted.example/callback',
-    });
-    mocks.generateAuthorizationCode.mockResolvedValue('code-123');
-    mocks.buildSuccessRedirect.mockReturnValue(successRedirect);
+    })) as any;
+    mocks.generateAuthorizationCode = (async () => 'code-123') as any;
+    mocks.buildSuccessRedirect = (() => successRedirect) as any;
 
     const response = await callAuthorize(baseBody, env);
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe(successRedirect);
+    assertEquals(response.status, 302);
+    assertEquals(response.headers.get('location'), successRedirect);
 
-    expect(mocks.validateAuthorizationRequest).toHaveBeenCalledWith(env.DB, {
+    assertSpyCallArgs(mocks.validateAuthorizationRequest, 0, [env.DB, {
       response_type: 'code',
       client_id: 'tampered-client',
       redirect_uri: 'https://attacker.example/callback',
@@ -236,32 +258,31 @@ describe('oauth authorize POST revalidation (issue 007)', () => {
       state: 'raw-state',
       code_challenge: 'raw-challenge',
       code_challenge_method: 'S256',
-    });
+    }]);
 
-    expect(mocks.grantConsent).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.grantConsent, 0, [
       env.DB,
       'user-1',
       'client-normalized',
       ['openid', 'profile']
-    );
+    ]);
 
-    expect(mocks.generateAuthorizationCode).toHaveBeenCalledWith(env.DB, {
+    assertSpyCallArgs(mocks.generateAuthorizationCode, 0, [env.DB, {
       clientId: 'client-normalized',
       userId: 'user-1',
       redirectUri: 'https://trusted.example/callback',
       scope: 'openid profile',
       codeChallenge: 'raw-challenge',
       codeChallengeMethod: 'S256',
-    });
+    }]);
 
-    expect(mocks.buildSuccessRedirect).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.buildSuccessRedirect, 0, [
       'https://trusted.example/callback',
       'raw-state',
       'code-123'
-    );
+    ]);
 
-    const issued = mocks.generateAuthorizationCode.mock.calls[0]?.[1];
-    expect(issued.clientId).not.toBe(baseBody.client_id);
-    expect(issued.redirectUri).not.toBe(baseBody.redirect_uri);
-  });
-});
+    const issued = mocks.generateAuthorizationCode.calls[0]?.[1];
+    assertNotEquals(issued.clientId, baseBody.client_id);
+    assertNotEquals(issued.redirectUri, baseBody.redirect_uri);
+})

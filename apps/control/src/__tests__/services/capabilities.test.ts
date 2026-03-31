@@ -1,46 +1,39 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  resolveActorPrincipalId: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  resolveActorPrincipalId: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/identity/principals', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/services/identity/principals')>()),
-  resolveActorPrincipalId: mocks.resolveActorPrincipalId,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/principals'
 import { resolveAllowedCapabilities } from '@/services/platform/capabilities';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
     get: getMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock },
   };
 }
 
-describe('capabilities service', () => {
-  it('derives restricted egress posture from the workspace record', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.resolveActorPrincipalId.mockResolvedValue('principal-1');
+
+  Deno.test('capabilities service - derives restricted egress posture from the workspace record', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
+    mocks.resolveActorPrincipalId = (async () => 'principal-1') as any;
 
     drizzle._.get
-      .mockResolvedValueOnce({ ownerAccountId: 'owner-2' })
-      .mockResolvedValueOnce({ role: 'editor' })
-      .mockResolvedValueOnce({ securityPosture: 'restricted_egress' });
+       = (async () => ({ ownerAccountId: 'owner-2' })) as any
+       = (async () => ({ role: 'editor' })) as any
+       = (async () => ({ securityPosture: 'restricted_egress' })) as any;
 
     const result = await resolveAllowedCapabilities({
       db: {} as D1Database,
@@ -48,20 +41,19 @@ describe('capabilities service', () => {
       userId: 'user-1',
     });
 
-    expect(result.ctx.role).toBe('editor');
-    expect(result.ctx.securityPosture).toBe('restricted_egress');
-    expect(result.allowed.has('egress.http')).toBe(false);
-  });
-
-  it('applies an admin floor when requested for agent execution', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.resolveActorPrincipalId.mockResolvedValue('principal-1');
+    assertEquals(result.ctx.role, 'editor');
+    assertEquals(result.ctx.securityPosture, 'restricted_egress');
+    assertEquals(result.allowed.has('egress.http'), false);
+})
+  Deno.test('capabilities service - applies an admin floor when requested for agent execution', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
+    mocks.resolveActorPrincipalId = (async () => 'principal-1') as any;
 
     drizzle._.get
-      .mockResolvedValueOnce({ ownerAccountId: 'owner-2' })
-      .mockResolvedValueOnce({ role: 'viewer' })
-      .mockResolvedValueOnce({ securityPosture: 'standard' });
+       = (async () => ({ ownerAccountId: 'owner-2' })) as any
+       = (async () => ({ role: 'viewer' })) as any
+       = (async () => ({ securityPosture: 'standard' })) as any;
 
     const result = await resolveAllowedCapabilities({
       db: {} as D1Database,
@@ -70,20 +62,19 @@ describe('capabilities service', () => {
       minimumRole: 'admin',
     });
 
-    expect(result.ctx.role).toBe('admin');
-    expect(result.allowed.has('repo.write')).toBe(true);
-    expect(result.allowed.has('storage.write')).toBe(true);
-    expect(result.allowed.has('egress.http')).toBe(true);
-  });
-
-  it('preserves owner when the resolved role exceeds the admin floor', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.resolveActorPrincipalId.mockResolvedValue('principal-owner');
+    assertEquals(result.ctx.role, 'admin');
+    assertEquals(result.allowed.has('repo.write'), true);
+    assertEquals(result.allowed.has('storage.write'), true);
+    assertEquals(result.allowed.has('egress.http'), true);
+})
+  Deno.test('capabilities service - preserves owner when the resolved role exceeds the admin floor', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
+    mocks.resolveActorPrincipalId = (async () => 'principal-owner') as any;
 
     drizzle._.get
-      .mockResolvedValueOnce({ ownerAccountId: 'principal-owner' })
-      .mockResolvedValueOnce({ securityPosture: 'standard' });
+       = (async () => ({ ownerAccountId: 'principal-owner' })) as any
+       = (async () => ({ securityPosture: 'standard' })) as any;
 
     const result = await resolveAllowedCapabilities({
       db: {} as D1Database,
@@ -92,6 +83,5 @@ describe('capabilities service', () => {
       minimumRole: 'admin',
     });
 
-    expect(result.ctx.role).toBe('owner');
-  });
-});
+    assertEquals(result.ctx.role, 'owner');
+})

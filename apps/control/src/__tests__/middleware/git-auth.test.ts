@@ -1,31 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getCachedUser: vi.fn(),
-  isValidUserId: vi.fn(),
-  validateTakosPersonalAccessToken: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/utils/user-cache', async () => {
-  const actual = await vi.importActual<typeof import('@/utils/user-cache')>('@/utils/user-cache');
-  return {
-    ...actual,
-    getCachedUser: mocks.getCachedUser,
-    isValidUserId: mocks.isValidUserId,
-  };
+const mocks = ({
+  getCachedUser: ((..._args: any[]) => undefined) as any,
+  isValidUserId: ((..._args: any[]) => undefined) as any,
+  validateTakosPersonalAccessToken: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/identity/takos-access-tokens', async () => {
-  const actual = await vi.importActual<typeof import('@/services/identity/takos-access-tokens')>('@/services/identity/takos-access-tokens');
-  return {
-    ...actual,
-    validateTakosPersonalAccessToken: mocks.validateTakosPersonalAccessToken,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/utils/user-cache'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/takos-access-tokens'
 import { optionalGitAuth, requireGitAuth } from '@/middleware/git-auth';
 
 type TestVars = { user?: User };
@@ -49,23 +36,20 @@ function createOptionalApp() {
   return app;
 }
 
-describe('git auth PAT hardening', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getCachedUser.mockResolvedValue(null);
-    mocks.isValidUserId.mockReturnValue(true);
-    mocks.validateTakosPersonalAccessToken.mockResolvedValue(null);
-  });
 
-  it('accepts personal access tokens', async () => {
-    const env = createMockEnv();
+  Deno.test('git auth PAT hardening - accepts personal access tokens', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getCachedUser = (async () => null) as any;
+    mocks.isValidUserId = (() => true) as any;
+    mocks.validateTakosPersonalAccessToken = (async () => null) as any;
+  const env = createMockEnv();
     const app = createProtectedApp();
-    mocks.validateTakosPersonalAccessToken.mockResolvedValue({
+    mocks.validateTakosPersonalAccessToken = (async () => ({
       userId: 'user-1',
       scopes: ['repos:write'],
       tokenKind: 'personal',
-    });
-    mocks.getCachedUser.mockResolvedValue({
+    })) as any;
+    mocks.getCachedUser = (async () => ({
       id: 'user-1',
       email: 'user1@example.com',
       name: 'User1',
@@ -76,7 +60,7 @@ describe('git auth PAT hardening', () => {
       setup_completed: true,
       created_at: '2026-02-13T00:00:00.000Z',
       updated_at: '2026-02-13T00:00:00.000Z',
-    } satisfies User);
+    } satisfies User)) as any;
 
     const response = await app.fetch(
       new Request('https://takos.jp/git/repo.git/git-receive-pack', {
@@ -86,13 +70,16 @@ describe('git auth PAT hardening', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('user-1');
-    expect(mocks.validateTakosPersonalAccessToken).toHaveBeenCalledWith(env.DB, 'tak_pat_personal_1234567890');
-  });
-
-  it('rejects managed built-in tokens', async () => {
-    const env = createMockEnv();
+    assertEquals(response.status, 200);
+    await assertEquals(await response.text(), 'user-1');
+    assertSpyCallArgs(mocks.validateTakosPersonalAccessToken, 0, [env.DB, 'tak_pat_personal_1234567890']);
+})
+  Deno.test('git auth PAT hardening - rejects managed built-in tokens', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getCachedUser = (async () => null) as any;
+    mocks.isValidUserId = (() => true) as any;
+    mocks.validateTakosPersonalAccessToken = (async () => null) as any;
+  const env = createMockEnv();
     const app = createProtectedApp();
 
     const response = await app.fetch(
@@ -103,14 +90,17 @@ describe('git auth PAT hardening', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(403);
-    await expect(response.text()).resolves.toBe('Access denied\n');
-    expect(mocks.validateTakosPersonalAccessToken).toHaveBeenCalledWith(env.DB, 'tak_pat_managed_token_1234567890');
-    expect(mocks.getCachedUser).not.toHaveBeenCalled();
-  });
-
-  it('optional git auth keeps anonymous when only managed token is presented', async () => {
-    const env = createMockEnv();
+    assertEquals(response.status, 403);
+    await assertEquals(await response.text(), 'Access denied\n');
+    assertSpyCallArgs(mocks.validateTakosPersonalAccessToken, 0, [env.DB, 'tak_pat_managed_token_1234567890']);
+    assertSpyCalls(mocks.getCachedUser, 0);
+})
+  Deno.test('git auth PAT hardening - optional git auth keeps anonymous when only managed token is presented', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getCachedUser = (async () => null) as any;
+    mocks.isValidUserId = (() => true) as any;
+    mocks.validateTakosPersonalAccessToken = (async () => null) as any;
+  const env = createMockEnv();
     const app = createOptionalApp();
 
     const response = await app.fetch(
@@ -121,9 +111,8 @@ describe('git auth PAT hardening', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('anonymous');
-    expect(mocks.validateTakosPersonalAccessToken).toHaveBeenCalledWith(env.DB, 'tak_pat_managed_token_1234567890');
-    expect(mocks.getCachedUser).not.toHaveBeenCalled();
-  });
-});
+    assertEquals(response.status, 200);
+    await assertEquals(await response.text(), 'anonymous');
+    assertSpyCallArgs(mocks.validateTakosPersonalAccessToken, 0, [env.DB, 'tak_pat_managed_token_1234567890']);
+    assertSpyCalls(mocks.getCachedUser, 0);
+})

@@ -1,5 +1,5 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback } from 'react';
+import { atom } from 'jotai/vanilla';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
 import type { Toast } from '../types';
 
 export const toastsAtom = atom<Toast[]>([]);
@@ -36,14 +36,8 @@ export function useToast() {
   const dispatch = useSetAtom(showToastAtom);
   const dismiss = useSetAtom(dismissToastAtom);
 
-  const showToast = useCallback(
-    (type: Toast['type'], message: string) => dispatch({ type, message }),
-    [dispatch],
-  );
-  const dismissToast = useCallback(
-    (id: string) => dismiss(id),
-    [dismiss],
-  );
+  const showToast = (type: Toast['type'], message: string) => dispatch({ type, message });
+  const dismissToast = (id: string) => dismiss(id);
 
-  return { toasts, showToast, dismissToast };
+  return { get toasts() { return toasts(); }, showToast, dismissToast };
 }

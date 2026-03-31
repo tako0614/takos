@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
 /**
@@ -6,52 +5,48 @@ import type { D1Database } from '@cloudflare/workers-types';
  * Supports chained calls: select().from().where().get() and
  * insert().values().returning().get(), update().set().where().
  */
+import { assertEquals } from 'jsr:@std/assert';
+
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
     get: getMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
     _: { get: getMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { ensureUserSettings, getUserSettings, updateUserSettings } from '@/services/identity/user-settings';
 
-describe('user-settings service (Drizzle)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('getUserSettings returns null when row is not found', async () => {
-    db._.get.mockResolvedValueOnce(null);
+  Deno.test('user-settings service (Drizzle) - getUserSettings returns null when row is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
     const result = await getUserSettings({} as D1Database, 'user-1');
-    expect(result).toBeNull();
-  });
-
-  it('getUserSettings returns mapped settings when row exists', async () => {
-    db._.get.mockResolvedValueOnce({
+    assertEquals(result, null);
+})
+  Deno.test('user-settings service (Drizzle) - getUserSettings returns mapped settings when row exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       accountId: 'user-1',
       setupCompleted: true,
       autoUpdateEnabled: true,
@@ -59,10 +54,10 @@ describe('user-settings service (Drizzle)', () => {
       activityVisibility: 'public',
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await getUserSettings({} as D1Database, 'user-1');
-    expect(result).toEqual({
+    assertEquals(result, {
       userId: 'user-1',
       setupCompleted: true,
       autoUpdateEnabled: true,
@@ -72,13 +67,14 @@ describe('user-settings service (Drizzle)', () => {
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
     });
-  });
-
-  it('ensureUserSettings creates row when not found', async () => {
-    // First select returns null (row not found)
-    db._.get.mockResolvedValueOnce(null);
+})
+  Deno.test('user-settings service (Drizzle) - ensureUserSettings creates row when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  // First select returns null (row not found)
+    db._.get = (async () => null) as any;
     // Insert returns the new row
-    db._.get.mockResolvedValueOnce({
+    db._.get = (async () => ({
       accountId: 'user-1',
       setupCompleted: false,
       autoUpdateEnabled: true,
@@ -86,10 +82,10 @@ describe('user-settings service (Drizzle)', () => {
       activityVisibility: 'public',
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await ensureUserSettings({} as D1Database, 'user-1');
-    expect(result).toEqual({
+    assertEquals(result, {
       userId: 'user-1',
       setupCompleted: false,
       autoUpdateEnabled: true,
@@ -99,11 +95,12 @@ describe('user-settings service (Drizzle)', () => {
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
     });
-  });
-
-  it('updateUserSettings updates and returns refreshed settings', async () => {
-    // ensureUserSettings: select finds existing row
-    db._.get.mockResolvedValueOnce({
+})
+  Deno.test('user-settings service (Drizzle) - updateUserSettings updates and returns refreshed settings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  // ensureUserSettings: select finds existing row
+    db._.get = (async () => ({
       accountId: 'user-1',
       setupCompleted: false,
       autoUpdateEnabled: true,
@@ -111,9 +108,9 @@ describe('user-settings service (Drizzle)', () => {
       activityVisibility: 'public',
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
-    });
+    })) as any;
     // getUserSettings: select returns updated row
-    db._.get.mockResolvedValueOnce({
+    db._.get = (async () => ({
       accountId: 'user-1',
       setupCompleted: true,
       autoUpdateEnabled: true,
@@ -121,10 +118,10 @@ describe('user-settings service (Drizzle)', () => {
       activityVisibility: 'public',
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await updateUserSettings({} as D1Database, 'user-1', { setup_completed: true });
-    expect(result).toEqual({
+    assertEquals(result, {
       userId: 'user-1',
       setupCompleted: true,
       autoUpdateEnabled: true,
@@ -134,5 +131,4 @@ describe('user-settings service (Drizzle)', () => {
       createdAt: '2026-02-13T00:00:00.000Z',
       updatedAt: '2026-02-13T00:00:00.000Z',
     });
-  });
-});
+})

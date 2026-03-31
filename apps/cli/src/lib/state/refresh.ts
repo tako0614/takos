@@ -7,7 +7,7 @@
  * and reported as warnings.
  */
 
-import type { TakosState } from './state-types.js';
+import type { TakosState } from './state-types.ts';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -225,7 +225,7 @@ services:
 
 #### Executor
 
-- **イメージ**: takos-computer または takos-private から提供
+- **イメージ**: takos-agent または takos-private から提供
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
 - **役割**: エージェント実行コンテナ
 

@@ -1,156 +1,152 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  getResourceById: vi.fn(),
-  getPortableSecretValue: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  getResourceById: ((..._args: any[]) => undefined) as any,
+  getPortableSecretValue: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/resources/store', () => ({
-  getResourceById: mocks.getResourceById,
-}));
-
-vi.mock('@/services/resources/portable-runtime', () => ({
-  getPortableSecretValue: mocks.getPortableSecretValue,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources/store'
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources/portable-runtime'
 import { buildBindingFromResource } from '@/services/resources/bindings';
 
-describe('buildBindingFromResource', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getPortableSecretValue.mockResolvedValue('portable-secret-value');
-  });
 
-  it('returns null when resource not found', async () => {
-    mocks.getResourceById.mockResolvedValue(null);
+  Deno.test('buildBindingFromResource - returns null when resource not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => null) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when resource is not active', async () => {
-    mocks.getResourceById.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('buildBindingFromResource - returns null when resource is not active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'd1',
       status: 'deleting',
       provider_resource_id: 'cf-123',
       provider_resource_name: 'my-db',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
-    expect(result).toBeNull();
-  });
-
-  it('builds D1 binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('buildBindingFromResource - builds D1 binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'd1',
       status: 'active',
       provider_resource_id: 'cf-d1-123',
       provider_resource_name: 'my-d1-db',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'd1',
       name: 'MY_DB',
       id: 'cf-d1-123',
     });
-  });
-
-  it('builds R2 binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds R2 binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'r2',
       status: 'active',
       provider_resource_id: null,
       provider_resource_name: 'my-bucket',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_BUCKET');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'r2',
       name: 'MY_BUCKET',
       bucket_name: 'my-bucket',
     });
-  });
-
-  it('builds KV binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds KV binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'kv',
       status: 'active',
       provider_resource_id: 'kv-namespace-id',
       provider_resource_name: 'my-kv',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_KV');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'kv',
       name: 'MY_KV',
       namespace_id: 'kv-namespace-id',
     });
-  });
-
-  it('builds Vectorize binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds Vectorize binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'vectorize',
       status: 'active',
       provider_resource_id: null,
       provider_resource_name: 'my-vectorize-index',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_VECTORS');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'vectorize',
       name: 'MY_VECTORS',
       index_name: 'my-vectorize-index',
     });
-  });
-
-  it('builds Queue binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds Queue binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'queue',
       status: 'active',
       provider_resource_id: 'queue-id-123',
       provider_resource_name: 'my-queue',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_QUEUE');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'queue',
       name: 'MY_QUEUE',
       queue_name: 'my-queue',
     });
-  });
-
-  it('builds provider-backed Queue binding metadata', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds provider-backed Queue binding metadata', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'queue',
       status: 'active',
       provider_name: 'aws',
       provider_resource_id: 'https://sqs.us-east-1.amazonaws.com/123/my-queue',
       provider_resource_name: 'my-queue',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_QUEUE');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'queue',
       name: 'MY_QUEUE',
       queue_name: 'my-queue',
@@ -158,71 +154,75 @@ describe('buildBindingFromResource', () => {
       queue_url: 'https://sqs.us-east-1.amazonaws.com/123/my-queue',
       provider_name: 'aws',
     });
-  });
-
-  it('builds Analytics Engine binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds Analytics Engine binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'analyticsEngine',
       status: 'active',
       provider_resource_id: null,
       provider_resource_name: 'events-dataset',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'ANALYTICS');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'analytics_engine',
       name: 'ANALYTICS',
       dataset: 'events-dataset',
     });
-  });
-
-  it('builds Secret binding', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds Secret binding', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'secretRef',
       status: 'active',
       provider_resource_id: 'secret-value',
       provider_resource_name: 'my-secret',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'AUTH_SECRET');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'secret_text',
       name: 'AUTH_SECRET',
       text: 'secret-value',
     });
-  });
-
-  it('resolves provider-backed Secret binding values on demand', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - resolves provider-backed Secret binding values on demand', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'secretRef',
       status: 'active',
       provider_name: 'aws',
       provider_resource_id: 'secret-ref',
       provider_resource_name: 'my-secret',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'AUTH_SECRET');
 
-    expect(mocks.getPortableSecretValue).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(mocks.getPortableSecretValue, 0, [({
       id: 'res-1',
       provider_name: 'aws',
       provider_resource_id: 'secret-ref',
       provider_resource_name: 'my-secret',
-    }));
-    expect(result).toEqual({
+    })]);
+    assertEquals(result, {
       type: 'secret_text',
       name: 'AUTH_SECRET',
       text: 'portable-secret-value',
     });
-  });
-
-  it('builds Durable Object binding from nested config', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - builds Durable Object binding from nested config', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'durableObject',
       status: 'active',
@@ -234,46 +234,47 @@ describe('buildBindingFromResource', () => {
           scriptName: 'edge-worker',
         },
       }),
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'COUNTER');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'durable_object_namespace',
       name: 'COUNTER',
       class_name: 'Counter',
       script_name: 'edge-worker',
     });
-  });
-
-  it('returns null for unknown resource type', async () => {
-    mocks.getResourceById.mockResolvedValue({
+})
+  Deno.test('buildBindingFromResource - returns null for unknown resource type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'unknown',
       status: 'active',
       provider_resource_id: null,
       provider_resource_name: 'test',
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_BINDING');
-    expect(result).toBeNull();
-  });
-
-  it('handles null provider resource fields', async () => {
-    mocks.getResourceById.mockResolvedValue({
+    assertEquals(result, null);
+})
+  Deno.test('buildBindingFromResource - handles null provider resource fields', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+  mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'd1',
       status: 'active',
       provider_resource_id: null,
       provider_resource_name: null,
-    });
+    })) as any;
 
     const result = await buildBindingFromResource({} as D1Database, 'res-1', 'MY_DB');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       type: 'd1',
       name: 'MY_DB',
       id: undefined,
     });
-  });
-});
+})

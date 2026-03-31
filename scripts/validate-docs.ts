@@ -185,7 +185,7 @@ function isDirectory(targetPath: string): boolean {
 }
 
 function resolveTakosRepoRoot(): string {
-  const configured = process.env.TAKOS_REPO_DIR;
+  const configured = Deno.env.get('TAKOS_REPO_DIR');
   const candidates = [
     configured,
     path.resolve(process.cwd(), ".."),
@@ -1106,7 +1106,7 @@ function main(): void {
     for (const error of result.errors) {
       console.error(error);
     }
-    process.exitCode = 1;
+    Deno.exitCode = 1;
     return;
   }
 

@@ -1,131 +1,114 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('gen-id-1'),
-  now: vi.fn().mockReturnValue('2026-03-24T00:00:00.000Z'),
-}));
+import { assertEquals, assert, assertThrows, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'gen-id-1'),
+  now: (() => '2026-03-24T00:00:00.000Z'),
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import { normalizeDistPath, deployFrontendFromWorkspace } from '@/services/source/apps';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
-describe('normalizeDistPath', () => {
-  it('trims whitespace and normalizes slashes', () => {
-    expect(normalizeDistPath('  dist/output  ')).toBe('dist/output');
-  });
 
-  it('strips leading and trailing slashes', () => {
-    expect(normalizeDistPath('/dist/output/')).toBe('dist/output');
-  });
+  Deno.test('normalizeDistPath - trims whitespace and normalizes slashes', () => {
+  assertEquals(normalizeDistPath('  dist/output  '), 'dist/output');
+})
+  Deno.test('normalizeDistPath - strips leading and trailing slashes', () => {
+  assertEquals(normalizeDistPath('/dist/output/'), 'dist/output');
+})
+  Deno.test('normalizeDistPath - converts backslashes to forward slashes', () => {
+  assertEquals(normalizeDistPath('dist\\output\\files'), 'dist/output/files');
+})
+  Deno.test('normalizeDistPath - rejects empty paths', () => {
+  assertThrows(() => { () => normalizeDistPath(''); }, 'Invalid dist_path');
+})
+  Deno.test('normalizeDistPath - rejects paths with double dots', () => {
+  assertThrows(() => { () => normalizeDistPath('../etc/passwd'); }, 'Invalid dist_path');
+})
+  Deno.test('normalizeDistPath - handles single directory name', () => {
+  assertEquals(normalizeDistPath('dist'), 'dist');
+})
 
-  it('converts backslashes to forward slashes', () => {
-    expect(normalizeDistPath('dist\\output\\files')).toBe('dist/output/files');
-  });
-
-  it('rejects empty paths', () => {
-    expect(() => normalizeDistPath('')).toThrow('Invalid dist_path');
-  });
-
-  it('rejects paths with double dots', () => {
-    expect(() => normalizeDistPath('../etc/passwd')).toThrow('Invalid dist_path');
-  });
-
-  it('handles single directory name', () => {
-    expect(normalizeDistPath('dist')).toBe('dist');
-  });
-});
-
-describe('deployFrontendFromWorkspace', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('throws when app_name is empty', async () => {
-    const env = { DB: {} as D1Database, TENANT_SOURCE: {} } as any;
-    await expect(
+  Deno.test('deployFrontendFromWorkspace - throws when app_name is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = { DB: {} as D1Database, TENANT_SOURCE: {} } as any;
+    await await assertRejects(async () => { await 
       deployFrontendFromWorkspace(env, { spaceId: 'ws-1', appName: '', distPath: 'dist' }),
-    ).rejects.toThrow('app_name is required');
-  });
-
-  it('throws when app_name format is invalid', async () => {
-    const env = { DB: {} as D1Database, TENANT_SOURCE: {} } as any;
-    await expect(
+    ; }, 'app_name is required');
+})
+  Deno.test('deployFrontendFromWorkspace - throws when app_name format is invalid', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = { DB: {} as D1Database, TENANT_SOURCE: {} } as any;
+    await await assertRejects(async () => { await 
       deployFrontendFromWorkspace(env, { spaceId: 'ws-1', appName: 'AB', distPath: 'dist' }),
-    ).rejects.toThrow('app_name must be 3-64 chars');
-  });
-
-  it('throws when TENANT_SOURCE is not configured', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+    ; }, 'app_name must be 3-64 chars');
+})
+  Deno.test('deployFrontendFromWorkspace - throws when TENANT_SOURCE is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
     const env = { DB: {} as D1Database, TENANT_SOURCE: undefined } as any;
-    await expect(
+    await await assertRejects(async () => { await 
       deployFrontendFromWorkspace(env, { spaceId: 'ws-1', appName: 'my-app', distPath: 'dist' }),
-    ).rejects.toThrow('TENANT_SOURCE is not configured');
-  });
-
-  it('throws when no files found under dist path', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]); // no files found
-    mocks.getDb.mockReturnValue(drizzle);
+    ; }, 'TENANT_SOURCE is not configured');
+})
+  Deno.test('deployFrontendFromWorkspace - throws when no files found under dist path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any; // no files found
+    mocks.getDb = (() => drizzle) as any;
     const env = {
       DB: {} as D1Database,
-      TENANT_SOURCE: { list: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn() },
+      TENANT_SOURCE: { list: ((..._args: any[]) => undefined) as any, get: ((..._args: any[]) => undefined) as any, put: ((..._args: any[]) => undefined) as any, delete: ((..._args: any[]) => undefined) as any },
     } as any;
-    await expect(
+    await await assertRejects(async () => { await 
       deployFrontendFromWorkspace(env, { spaceId: 'ws-1', appName: 'my-app', distPath: 'dist' }),
-    ).rejects.toThrow('No files found under dist/');
-  });
-
-  it('uploads files and creates app record for new app', async () => {
-    const drizzle = createDrizzleMock();
+    ; }, 'No files found under dist/');
+})
+  Deno.test('deployFrontendFromWorkspace - uploads files and creates app record for new app', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
     // files query
-    drizzle._.all.mockResolvedValueOnce([
+    drizzle._.all = (async () => [
       { id: 'file-1', path: 'dist/index.html' },
       { id: 'file-2', path: 'dist/app.js' },
-    ]);
+    ]) as any;
     // existing app check
-    drizzle._.get.mockResolvedValueOnce(null);
-    mocks.getDb.mockReturnValue(drizzle);
+    drizzle._.get = (async () => null) as any;
+    mocks.getDb = (() => drizzle) as any;
 
-    const bucketGet = vi.fn().mockResolvedValue({ body: 'content' });
-    const bucketPut = vi.fn().mockResolvedValue(undefined);
-    const bucket = { list: vi.fn(), get: bucketGet, put: bucketPut, delete: vi.fn() };
+    const bucketGet = (async () => ({ body: 'content' }));
+    const bucketPut = (async () => undefined);
+    const bucket = { list: ((..._args: any[]) => undefined) as any, get: bucketGet, put: bucketPut, delete: ((..._args: any[]) => undefined) as any };
     const env = { DB: {} as D1Database, TENANT_SOURCE: bucket } as any;
 
     const result = await deployFrontendFromWorkspace(env, {
@@ -134,20 +117,20 @@ describe('deployFrontendFromWorkspace', () => {
       distPath: 'dist',
     });
 
-    expect(result.appName).toBe('my-app');
-    expect(result.uploaded).toBe(2);
-    expect(result.url).toBe('/apps/my-app/');
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
+    assertEquals(result.appName, 'my-app');
+    assertEquals(result.uploaded, 2);
+    assertEquals(result.url, '/apps/my-app/');
+    assert(drizzle.insert.calls.length > 0);
+})
+  Deno.test('deployFrontendFromWorkspace - updates existing app record on re-deploy', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [{ id: 'file-1', path: 'dist/index.html' }]) as any;
+    drizzle._.get = (async () => ({ id: 'app-1' })) as any; // existing app
+    mocks.getDb = (() => drizzle) as any;
 
-  it('updates existing app record on re-deploy', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([{ id: 'file-1', path: 'dist/index.html' }]);
-    drizzle._.get.mockResolvedValueOnce({ id: 'app-1' }); // existing app
-    mocks.getDb.mockReturnValue(drizzle);
-
-    const bucketGet = vi.fn().mockResolvedValue({ body: 'content' });
-    const bucket = { list: vi.fn(), get: bucketGet, put: vi.fn(), delete: vi.fn() };
+    const bucketGet = (async () => ({ body: 'content' }));
+    const bucket = { list: ((..._args: any[]) => undefined) as any, get: bucketGet, put: ((..._args: any[]) => undefined) as any, delete: ((..._args: any[]) => undefined) as any };
     const env = { DB: {} as D1Database, TENANT_SOURCE: bucket } as any;
 
     const result = await deployFrontendFromWorkspace(env, {
@@ -156,23 +139,23 @@ describe('deployFrontendFromWorkspace', () => {
       distPath: 'dist',
     });
 
-    expect(result.uploaded).toBe(1);
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-
-  it('clears existing objects when clear=true', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([{ id: 'file-1', path: 'dist/index.html' }]);
-    drizzle._.get.mockResolvedValueOnce(null);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.uploaded, 1);
+    assert(drizzle.update.calls.length > 0);
+})
+  Deno.test('deployFrontendFromWorkspace - clears existing objects when clear=true', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [{ id: 'file-1', path: 'dist/index.html' }]) as any;
+    drizzle._.get = (async () => null) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const existingObjs = { objects: [{ key: 'apps/my-app/old.js' }] };
-    const bucketList = vi.fn().mockResolvedValue(existingObjs);
-    const bucketDelete = vi.fn().mockResolvedValue(undefined);
+    const bucketList = (async () => existingObjs);
+    const bucketDelete = (async () => undefined);
     const bucket = {
       list: bucketList,
-      get: vi.fn().mockResolvedValue({ body: 'content' }),
-      put: vi.fn(),
+      get: (async () => ({ body: 'content' })),
+      put: ((..._args: any[]) => undefined) as any,
       delete: bucketDelete,
     };
     const env = { DB: {} as D1Database, TENANT_SOURCE: bucket } as any;
@@ -184,6 +167,5 @@ describe('deployFrontendFromWorkspace', () => {
       clear: true,
     });
 
-    expect(bucketDelete).toHaveBeenCalledWith(['apps/my-app/old.js']);
-  });
-});
+    assertSpyCallArgs(bucketDelete, 0, [['apps/my-app/old.js']]);
+})

@@ -1,33 +1,33 @@
-import { describe, expect, it } from 'vitest';
-
-import { createBaseContext } from '../../context.js';
+import { createBaseContext } from '../../context.ts';
 import type {
   ExecutionContext,
   JobResult,
   Step,
   StepResult,
   Workflow,
-} from '../../workflow-models.js';
-import { JobScheduler } from '../../scheduler/job.js';
-import { StepRunner, type ShellExecutor, type StepRunMetadata } from '../../scheduler/step.js';
+} from '../../workflow-models.ts';
+import { JobScheduler } from '../../scheduler/job.ts';
+import { StepRunner, type ShellExecutor, type StepRunMetadata } from '../../scheduler/step.ts';
+
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
 
 function expectStoredAndEventResultSnapshots(
   eventResult: JobResult | undefined,
   storedResultAtEmit: JobResult | undefined,
   runResult: JobResult
 ): void {
-  expect(eventResult).toBeDefined();
-  expect(storedResultAtEmit).toBeDefined();
-  expect(storedResultAtEmit).not.toBe(eventResult);
-  expect(storedResultAtEmit).not.toBe(runResult);
-  expect(eventResult).not.toBe(runResult);
-  expect(storedResultAtEmit).toEqual(runResult);
-  expect(eventResult).toEqual(runResult);
+  assert(eventResult !== undefined);
+  assert(storedResultAtEmit !== undefined);
+  assertNotEquals(storedResultAtEmit, eventResult);
+  assertNotEquals(storedResultAtEmit, runResult);
+  assertNotEquals(eventResult, runResult);
+  assertEquals(storedResultAtEmit, runResult);
+  assertEquals(eventResult, runResult);
 }
 
-describe('JobScheduler fail-fast behavior', () => {
-  it('stops later phases and preserves cancelled results when fail-fast is enabled', async () => {
-    const executedCommands: string[] = [];
+
+  Deno.test('JobScheduler fail-fast behavior - stops later phases and preserves cancelled results when fail-fast is enabled', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
 
@@ -84,18 +84,17 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(executedCommands).toContain('setup');
-    expect(executedCommands).toContain('fail');
-    expect(executedCommands).not.toContain('next');
-    expect(startedPhases).toEqual([0]);
-    expect(results.fail.conclusion).toBe('failure');
-    expect(results.next.conclusion).toBe('cancelled');
-    expect(completedJobs.sort()).toEqual(['fail', 'next', 'setup']);
-    expect(scheduler.getConclusion()).toBe('failure');
-  });
-
-  it('stops remaining steps after a failed step even when fail-fast is disabled', async () => {
-    const executedCommands: string[] = [];
+    assertStringIncludes(executedCommands, 'setup');
+    assertStringIncludes(executedCommands, 'fail');
+    assert(!(executedCommands).includes('next'));
+    assertEquals(startedPhases, [0]);
+    assertEquals(results.fail.conclusion, 'failure');
+    assertEquals(results.next.conclusion, 'cancelled');
+    assertEquals(completedJobs.sort(), ['fail', 'next', 'setup']);
+    assertEquals(scheduler.getConclusion(), 'failure');
+})
+  Deno.test('JobScheduler fail-fast behavior - stops remaining steps after a failed step even when fail-fast is disabled', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
 
@@ -132,13 +131,12 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(executedCommands).toEqual(['fail']);
-    expect(results.build.steps).toHaveLength(1);
-    expect(results.build.conclusion).toBe('failure');
-  });
-
-  it('continues independent jobs and skips only dependency-failed jobs when fail-fast is disabled', async () => {
-    const executedCommands: string[] = [];
+    assertEquals(executedCommands, ['fail']);
+    assertEquals(results.build.steps.length, 1);
+    assertEquals(results.build.conclusion, 'failure');
+})
+  Deno.test('JobScheduler fail-fast behavior - continues independent jobs and skips only dependency-failed jobs when fail-fast is disabled', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
 
@@ -184,16 +182,15 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(results.build.conclusion).toBe('failure');
-    expect(results.lint.conclusion).toBe('success');
-    expect(results.deploy.conclusion).toBe('skipped');
-    expect(executedCommands).toContain('build');
-    expect(executedCommands).toContain('lint');
-    expect(executedCommands).not.toContain('deploy');
-  });
-
-  it('preserves continue-on-error semantics when fail-fast is disabled', async () => {
-    const executedCommands: string[] = [];
+    assertEquals(results.build.conclusion, 'failure');
+    assertEquals(results.lint.conclusion, 'success');
+    assertEquals(results.deploy.conclusion, 'skipped');
+    assertStringIncludes(executedCommands, 'build');
+    assertStringIncludes(executedCommands, 'lint');
+    assert(!(executedCommands).includes('deploy'));
+})
+  Deno.test('JobScheduler fail-fast behavior - preserves continue-on-error semantics when fail-fast is disabled', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
 
@@ -233,13 +230,12 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(executedCommands).toEqual(['allowed-fail', 'after-continue']);
-    expect(results.build.steps).toHaveLength(2);
-    expect(results.build.conclusion).toBe('success');
-  });
-
-  it('propagates fail-fast cancellation within phase chunks', async () => {
-    const executedCommands: string[] = [];
+    assertEquals(executedCommands, ['allowed-fail', 'after-continue']);
+    assertEquals(results.build.steps.length, 2);
+    assertEquals(results.build.conclusion, 'success');
+})
+  Deno.test('JobScheduler fail-fast behavior - propagates fail-fast cancellation within phase chunks', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
 
@@ -289,17 +285,16 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(executedCommands).toContain('fail');
-    expect(executedCommands).toContain('work-1');
-    expect(executedCommands).not.toContain('work-2');
-    expect(executedCommands).not.toContain('later');
-    expect(results['a-fail'].conclusion).toBe('failure');
-    expect(results['b-work'].conclusion).toBe('cancelled');
-    expect(results['c-later'].conclusion).toBe('cancelled');
-  });
-
-  it('does not execute a job that is already marked as cancelled', async () => {
-    const shellExecutor: ShellExecutor = async () => {
+    assertStringIncludes(executedCommands, 'fail');
+    assertStringIncludes(executedCommands, 'work-1');
+    assert(!(executedCommands).includes('work-2'));
+    assert(!(executedCommands).includes('later'));
+    assertEquals(results['a-fail'].conclusion, 'failure');
+    assertEquals(results['b-work'].conclusion, 'cancelled');
+    assertEquals(results['c-later'].conclusion, 'cancelled');
+})
+  Deno.test('JobScheduler fail-fast behavior - does not execute a job that is already marked as cancelled', async () => {
+  const shellExecutor: ShellExecutor = async () => {
       throw new Error('shell executor should not be called');
     };
 
@@ -337,12 +332,11 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const result = await internalScheduler.runJob('guarded', createBaseContext());
 
-    expect(result).not.toBe(cancelledResult);
-    expect(result).toEqual(cancelledResult);
-  });
-
-  it('prioritizes cancellation over condition-based skipping when scheduler is cancelled', async () => {
-    const shellExecutor: ShellExecutor = async () => {
+    assertNotEquals(result, cancelledResult);
+    assertEquals(result, cancelledResult);
+})
+  Deno.test('JobScheduler fail-fast behavior - prioritizes cancellation over condition-based skipping when scheduler is cancelled', async () => {
+  const shellExecutor: ShellExecutor = async () => {
       throw new Error('shell executor should not be called');
     };
 
@@ -370,12 +364,11 @@ describe('JobScheduler fail-fast behavior', () => {
     };
 
     const result = await internalScheduler.runJob('guarded', createBaseContext());
-    expect(result.conclusion).toBe('cancelled');
-    expect(result.status).toBe('completed');
-  });
-
-  it('stores a finalized result before emitting job:complete', async () => {
-    const workflow: Workflow = {
+    assertEquals(result.conclusion, 'cancelled');
+    assertEquals(result.status, 'completed');
+})
+  Deno.test('JobScheduler fail-fast behavior - stores a finalized result before emitting job:complete', async () => {
+  const workflow: Workflow = {
       name: 'complete-event-observation',
       on: 'push',
       jobs: {
@@ -419,20 +412,19 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(completeEventCount).toBe(1);
+    assertEquals(completeEventCount, 1);
     expectStoredAndEventResultSnapshots(
       emittedResult,
       storedResultAtEmit,
       results.build
     );
-    expect(storedResultAtEmit?.status).toBe('completed');
-    expect(storedResultAtEmit?.conclusion).toBe('success');
-    expect(storedResultAtEmit?.completedAt).toBeInstanceOf(Date);
-    expect(storedResultAtEmit?.outputs).toEqual({ artifact: 'build.tar' });
-  });
-
-  it('keeps job:skip emit and stored skipped result in sync', async () => {
-    const shellExecutor: ShellExecutor = async () => {
+    assertEquals(storedResultAtEmit?.status, 'completed');
+    assertEquals(storedResultAtEmit?.conclusion, 'success');
+    assert(storedResultAtEmit?.completedAt instanceof Date);
+    assertEquals(storedResultAtEmit?.outputs, { artifact: 'build.tar' });
+})
+  Deno.test('JobScheduler fail-fast behavior - keeps job:skip emit and stored skipped result in sync', async () => {
+  const shellExecutor: ShellExecutor = async () => {
       throw new Error('shell executor should not be called');
     };
 
@@ -476,19 +468,18 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(jobEvents).toEqual(['job:skip', 'job:complete']);
-    expect(skipReason).toBe('Condition not met');
+    assertEquals(jobEvents, ['job:skip', 'job:complete']);
+    assertEquals(skipReason, 'Condition not met');
     expectStoredAndEventResultSnapshots(
       skipEventResult,
       storedResultAtSkipEmit,
       results.guarded
     );
-    expect(storedResultAtSkipEmit?.status).toBe('completed');
-    expect(storedResultAtSkipEmit?.conclusion).toBe('skipped');
-  });
-
-  it('isolates job:complete and stored results from job:skip event mutations', async () => {
-    const shellExecutor: ShellExecutor = async () => {
+    assertEquals(storedResultAtSkipEmit?.status, 'completed');
+    assertEquals(storedResultAtSkipEmit?.conclusion, 'skipped');
+})
+  Deno.test('JobScheduler fail-fast behavior - isolates job:complete and stored results from job:skip event mutations', async () => {
+  const shellExecutor: ShellExecutor = async () => {
       throw new Error('shell executor should not be called');
     };
 
@@ -529,21 +520,20 @@ describe('JobScheduler fail-fast behavior', () => {
     const results = await scheduler.run(createBaseContext());
     const storedResults = scheduler.getResults();
 
-    expect(completeEventResult).toBeDefined();
-    expect(completeEventResult?.outputs.leaked).toBeUndefined();
-    expect(
+    assert(completeEventResult !== undefined);
+    assertEquals(completeEventResult?.outputs.leaked, undefined);
+    assertEquals(
       completeEventResult?.steps.find((step) => step.id === 'skip-fake')
-    ).toBeUndefined();
-    expect(results.guarded.outputs.leaked).toBeUndefined();
-    expect(results.guarded.steps.find((step) => step.id === 'skip-fake')).toBeUndefined();
-    expect(storedResults.guarded.outputs.leaked).toBeUndefined();
-    expect(
+    , undefined);
+    assertEquals(results.guarded.outputs.leaked, undefined);
+    assertEquals(results.guarded.steps.find((step) => step.id === 'skip-fake'), undefined);
+    assertEquals(storedResults.guarded.outputs.leaked, undefined);
+    assertEquals(
       storedResults.guarded.steps.find((step) => step.id === 'skip-fake')
-    ).toBeUndefined();
-  });
-
-  it('skips dependent jobs when a needed job is skipped', async () => {
-    const executedCommands: string[] = [];
+    , undefined);
+})
+  Deno.test('JobScheduler fail-fast behavior - skips dependent jobs when a needed job is skipped', async () => {
+  const executedCommands: string[] = [];
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
       return {
@@ -583,15 +573,14 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(executedCommands).toEqual([]);
-    expect(results.setup.conclusion).toBe('skipped');
-    expect(results.build.conclusion).toBe('skipped');
-    expect(skipReasons.setup).toBe('Condition not met');
-    expect(skipReasons.build).toBe('Dependency "setup" skipped');
-  });
-
-  it('emits job:complete when a cancelled scheduler short-circuits runJob', async () => {
-    const shellExecutor: ShellExecutor = async () => {
+    assertEquals(executedCommands, []);
+    assertEquals(results.setup.conclusion, 'skipped');
+    assertEquals(results.build.conclusion, 'skipped');
+    assertEquals(skipReasons.setup, 'Condition not met');
+    assertEquals(skipReasons.build, 'Dependency "setup" skipped');
+})
+  Deno.test('JobScheduler fail-fast behavior - emits job:complete when a cancelled scheduler short-circuits runJob', async () => {
+  const shellExecutor: ShellExecutor = async () => {
       throw new Error('shell executor should not be called');
     };
 
@@ -628,15 +617,14 @@ describe('JobScheduler fail-fast behavior', () => {
     };
 
     const result = await internalScheduler.runJob('guarded', createBaseContext());
-    expect(result.conclusion).toBe('cancelled');
-    expect(result.status).toBe('completed');
-    expect(jobEvents).toEqual(['job:complete']);
-    expect(scheduler.getResults().guarded).not.toBe(result);
-    expect(scheduler.getResults().guarded).toEqual(result);
-  });
-
-  it('isolates internal results from job:complete event mutations', async () => {
-    const workflow: Workflow = {
+    assertEquals(result.conclusion, 'cancelled');
+    assertEquals(result.status, 'completed');
+    assertEquals(jobEvents, ['job:complete']);
+    assertNotEquals(scheduler.getResults().guarded, result);
+    assertEquals(scheduler.getResults().guarded, result);
+})
+  Deno.test('JobScheduler fail-fast behavior - isolates internal results from job:complete event mutations', async () => {
+  const workflow: Workflow = {
       name: 'event-result-isolation',
       on: 'push',
       jobs: {
@@ -664,12 +652,11 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(results.build.outputs.leaked).toBeUndefined();
-    expect(results.build.steps.find((step) => step.id === 'fake')).toBeUndefined();
-  });
-
-  it('isolates internal results from workflow:complete event mutations', async () => {
-    const workflow: Workflow = {
+    assertEquals(results.build.outputs.leaked, undefined);
+    assertEquals(results.build.steps.find((step) => step.id === 'fake'), undefined);
+})
+  Deno.test('JobScheduler fail-fast behavior - isolates internal results from workflow:complete event mutations', async () => {
+  const workflow: Workflow = {
       name: 'workflow-complete-result-isolation',
       on: 'push',
       jobs: {
@@ -691,12 +678,11 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(results.build.outputs.leaked).toBeUndefined();
-    expect(scheduler.getResults().build.outputs.leaked).toBeUndefined();
-  });
-
-  it('returns result snapshots that cannot mutate scheduler state', async () => {
-    const workflow: Workflow = {
+    assertEquals(results.build.outputs.leaked, undefined);
+    assertEquals(scheduler.getResults().build.outputs.leaked, undefined);
+})
+  Deno.test('JobScheduler fail-fast behavior - returns result snapshots that cannot mutate scheduler state', async () => {
+  const workflow: Workflow = {
       name: 'results-snapshot-isolation',
       on: 'push',
       jobs: {
@@ -712,7 +698,7 @@ describe('JobScheduler fail-fast behavior', () => {
     runResults.build.outputs.leaked = 'mutated-run-result';
 
     const snapshotAfterRunReturnMutation = scheduler.getResults();
-    expect(snapshotAfterRunReturnMutation.build.outputs.leaked).toBeUndefined();
+    assertEquals(snapshotAfterRunReturnMutation.build.outputs.leaked, undefined);
 
     const firstSnapshot = scheduler.getResults();
     firstSnapshot.build.outputs.leaked = 'mutated-by-caller';
@@ -724,12 +710,11 @@ describe('JobScheduler fail-fast behavior', () => {
     });
 
     const secondSnapshot = scheduler.getResults();
-    expect(secondSnapshot.build.outputs.leaked).toBeUndefined();
-    expect(secondSnapshot.build.steps.find((step) => step.id === 'fake')).toBeUndefined();
-  });
-
-  it('guards against concurrent run invocations while a run is in progress', async () => {
-    let unblockFirstRun = () => {};
+    assertEquals(secondSnapshot.build.outputs.leaked, undefined);
+    assertEquals(secondSnapshot.build.steps.find((step) => step.id === 'fake'), undefined);
+})
+  Deno.test('JobScheduler fail-fast behavior - guards against concurrent run invocations while a run is in progress', async () => {
+  let unblockFirstRun = () => {};
     const blockFirstRun = new Promise<void>((resolve) => {
       unblockFirstRun = resolve;
     });
@@ -761,19 +746,18 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const firstRunPromise = scheduler.run(createBaseContext());
 
-    await expect(scheduler.run(createBaseContext())).rejects.toThrow(
+    await await assertRejects(async () => { await scheduler.run(createBaseContext()); }, 
       'JobScheduler is already running'
     );
 
     unblockFirstRun();
     const firstRunResults = await firstRunPromise;
 
-    expect(executedCommands).toEqual(['build']);
-    expect(firstRunResults.build.conclusion).toBe('success');
-  });
-
-  it('isolates dependency outputs from needs context mutations', async () => {
-    const workflow: Workflow = {
+    assertEquals(executedCommands, ['build']);
+    assertEquals(firstRunResults.build.conclusion, 'success');
+})
+  Deno.test('JobScheduler fail-fast behavior - isolates dependency outputs from needs context mutations', async () => {
+  const workflow: Workflow = {
       name: 'needs-context-output-isolation',
       on: 'push',
       jobs: {
@@ -816,12 +800,11 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(results.setup.outputs.token).toBe('abc');
-    expect(scheduler.getResults().setup.outputs.token).toBe('abc');
-  });
-
-  it('isolates stored step outputs from steps context mutations', async () => {
-    const workflow: Workflow = {
+    assertEquals(results.setup.outputs.token, 'abc');
+    assertEquals(scheduler.getResults().setup.outputs.token, 'abc');
+})
+  Deno.test('JobScheduler fail-fast behavior - isolates stored step outputs from steps context mutations', async () => {
+  const workflow: Workflow = {
       name: 'steps-context-output-isolation',
       on: 'push',
       jobs: {
@@ -862,13 +845,12 @@ describe('JobScheduler fail-fast behavior', () => {
 
     const results = await scheduler.run(createBaseContext());
 
-    expect(results.build.steps[0].outputs.artifact).toBe('dist.tar');
-    expect(results.build.outputs.artifact).toBe('dist.tar');
-    expect(scheduler.getResults().build.outputs.artifact).toBe('dist.tar');
-  });
-
-  it('resets cancellation/results between runs while preserving listeners', async () => {
-    const executedCommands: string[] = [];
+    assertEquals(results.build.steps[0].outputs.artifact, 'dist.tar');
+    assertEquals(results.build.outputs.artifact, 'dist.tar');
+    assertEquals(scheduler.getResults().build.outputs.artifact, 'dist.tar');
+})
+  Deno.test('JobScheduler fail-fast behavior - resets cancellation/results between runs while preserving listeners', async () => {
+  const executedCommands: string[] = [];
     let failBuildOnce = true;
     const shellExecutor: ShellExecutor = async (command) => {
       executedCommands.push(command);
@@ -922,21 +904,20 @@ describe('JobScheduler fail-fast behavior', () => {
     });
 
     const firstRun = await scheduler.run(createBaseContext());
-    expect(firstRun.build.conclusion).toBe('failure');
-    expect(firstRun.deploy.conclusion).toBe('cancelled');
-    expect(scheduler.getConclusion()).toBe('failure');
+    assertEquals(firstRun.build.conclusion, 'failure');
+    assertEquals(firstRun.deploy.conclusion, 'cancelled');
+    assertEquals(scheduler.getConclusion(), 'failure');
 
     const secondRun = await scheduler.run(createBaseContext());
-    expect(secondRun.build.conclusion).toBe('success');
-    expect(secondRun.deploy.conclusion).toBe('success');
-    expect(scheduler.getConclusion()).toBe('success');
-    expect(executedCommands).toEqual(['build', 'build', 'deploy']);
-    expect(workflowStarted).toBe(2);
-    expect(workflowCompleted).toBe(2);
-  });
-
-  it('marks a job as failure when step runner throws unexpectedly', async () => {
-    const workflow: Workflow = {
+    assertEquals(secondRun.build.conclusion, 'success');
+    assertEquals(secondRun.deploy.conclusion, 'success');
+    assertEquals(scheduler.getConclusion(), 'success');
+    assertEquals(executedCommands, ['build', 'build', 'deploy']);
+    assertEquals(workflowStarted, 2);
+    assertEquals(workflowCompleted, 2);
+})
+  Deno.test('JobScheduler fail-fast behavior - marks a job as failure when step runner throws unexpectedly', async () => {
+  const workflow: Workflow = {
       name: 'step-runner-throws',
       on: 'push',
       jobs: {
@@ -958,12 +939,11 @@ describe('JobScheduler fail-fast behavior', () => {
     internalScheduler.stepRunner = new ThrowingStepRunner();
 
     const results = await scheduler.run(createBaseContext());
-    expect(results.build.conclusion).toBe('failure');
-    expect(results.build.steps).toHaveLength(0);
-  });
-
-  it('passes zero-based step index metadata to the step runner', async () => {
-    const workflow: Workflow = {
+    assertEquals(results.build.conclusion, 'failure');
+    assertEquals(results.build.steps.length, 0);
+})
+  Deno.test('JobScheduler fail-fast behavior - passes zero-based step index metadata to the step runner', async () => {
+  const workflow: Workflow = {
       name: 'step-index-metadata',
       on: 'push',
       jobs: {
@@ -1009,6 +989,5 @@ describe('JobScheduler fail-fast behavior', () => {
 
     await scheduler.run(createBaseContext());
 
-    expect(recordingRunner.indices).toEqual([0, 1, 2]);
-  });
-});
+    assertEquals(recordingRunner.indices, [0, 1, 2]);
+})

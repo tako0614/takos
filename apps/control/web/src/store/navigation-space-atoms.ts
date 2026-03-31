@@ -1,4 +1,4 @@
-import { atom } from 'jotai';
+import { atom } from 'jotai/vanilla';
 import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces';
 import { spacesAtom, spacesLoadedAtom } from './auth';
 import { routeAtom } from './navigation-route-atoms';

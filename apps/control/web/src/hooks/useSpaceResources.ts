@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { rpc, rpcJson } from '../lib/rpc';
+import { createSignal, onMount } from 'solid-js';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc';
 import { useConfirmDialog } from '../store/confirm-dialog';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
@@ -20,19 +20,20 @@ export function useSpaceResources(spaceId: string | null) {
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [loadingResources, setLoadingResources] = useState(true);
-  const [showCreateResourceModal, setShowCreateResourceModal] = useState(false);
-  const [newResourceName, setNewResourceName] = useState('');
-  const [newResourceType, setNewResourceType] = useState<Resource['type']>('d1');
-  const [creatingResource, setCreatingResource] = useState(false);
+  const [resources, setResources] = createSignal<Resource[]>([]);
+  const [loadingResources, setLoadingResources] = createSignal(true);
+  const [showCreateResourceModal, setShowCreateResourceModal] = createSignal(false);
+  const [newResourceName, setNewResourceName] = createSignal('');
+  const [newResourceType, setNewResourceType] = createSignal<Resource['type']>('d1');
+  const [creatingResource, setCreatingResource] = createSignal(false);
 
-  const refreshResources = useCallback(async () => {
+  const refreshResources = async () => {
     setLoadingResources(true);
     try {
-      const res = await rpc.resources.$get({
+      const res = await rpcPath(rpc, 'resources').$get({
+        param: {},
         query: spaceId ? { space_id: spaceId } : {},
-      });
+      }) as Response;
       const data = await rpcJson<{ resources?: Resource[]; owned?: Resource[]; shared?: Resource[] }>(res);
       if (data.resources) {
         setResources(data.resources);
@@ -44,20 +45,21 @@ export function useSpaceResources(spaceId: string | null) {
     } finally {
       setLoadingResources(false);
     }
-  }, [spaceId]);
+  };
 
-  useEffect(() => {
+  onMount(() => {
     refreshResources();
-  }, [refreshResources]);
+  });
 
-  const createResource = useCallback(async () => {
-    if (!newResourceName.trim()) return false;
+  const createResource = async () => {
+    if (!newResourceName().trim()) return false;
     setCreatingResource(true);
     try {
-      const res = await rpc.resources.$post({
+      const res = await rpcPath(rpc, 'resources').$post({
+        param: {},
         json: {
-          name: newResourceName.trim(),
-          type: newResourceType,
+          name: newResourceName().trim(),
+          type: newResourceType(),
           space_id: spaceId || undefined,
         },
       });
@@ -73,9 +75,9 @@ export function useSpaceResources(spaceId: string | null) {
     } finally {
       setCreatingResource(false);
     }
-  }, [newResourceName, newResourceType, refreshResources, showToast, t, spaceId]);
+  };
 
-  const deleteResource = useCallback(async (resource: Resource) => {
+  const deleteResource = async (resource: Resource) => {
     const baseMessage = t('confirmDeleteResource');
     const warning = isYurucommuResource(resource)
       ? `${baseMessage}\n\nWarning: This resource is linked to Yurucommu. Deleting it may break your Yurucommu instance.`
@@ -88,7 +90,7 @@ export function useSpaceResources(spaceId: string | null) {
     });
     if (!confirmed) return false;
     try {
-      const res = await rpc.resources['by-name'][':name'].$delete({ param: { name: resource.name } });
+      const res = await rpcPath(rpc, 'resources', 'by-name', ':name').$delete({ param: { name: resource.name } }) as Response;
       await rpcJson(res);
       showToast('success', t('deleted'));
       await refreshResources();
@@ -97,7 +99,7 @@ export function useSpaceResources(spaceId: string | null) {
       showToast('error', t('failedToDelete'));
       return false;
     }
-  }, [confirm, refreshResources, showToast, t]);
+  };
 
   return {
     resources,

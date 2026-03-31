@@ -1,165 +1,82 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 // ---------------------------------------------------------------------------
 // Hoisted mocks — declared before any import so vi.mock factories can
 // reference them. Everything that the DeploymentService touches at the
 // module boundary is intercepted here.
 // ---------------------------------------------------------------------------
-const mocks = vi.hoisted(() => ({
+import { assertEquals, assert, assertThrows, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = ({
   // store
-  getDeploymentById: vi.fn(),
-  getDeploymentByIdempotencyKey: vi.fn(),
-  getDeploymentEvents: vi.fn(),
-  getDeploymentHistory: vi.fn(),
-  getServiceDeploymentBasics: vi.fn(),
-  getServiceRollbackInfo: vi.fn(),
-  findDeploymentByServiceVersion: vi.fn(),
-  createDeploymentWithVersion: vi.fn(),
-  logDeploymentEvent: vi.fn(),
-  updateServiceDeploymentPointers: vi.fn(),
-  updateDeploymentRecord: vi.fn(),
-  getDb: vi.fn(),
+  getDeploymentById: ((..._args: any[]) => undefined) as any,
+  getDeploymentByIdempotencyKey: ((..._args: any[]) => undefined) as any,
+  getDeploymentEvents: ((..._args: any[]) => undefined) as any,
+  getDeploymentHistory: ((..._args: any[]) => undefined) as any,
+  getServiceDeploymentBasics: ((..._args: any[]) => undefined) as any,
+  getServiceRollbackInfo: ((..._args: any[]) => undefined) as any,
+  findDeploymentByServiceVersion: ((..._args: any[]) => undefined) as any,
+  createDeploymentWithVersion: ((..._args: any[]) => undefined) as any,
+  logDeploymentEvent: ((..._args: any[]) => undefined) as any,
+  updateServiceDeploymentPointers: ((..._args: any[]) => undefined) as any,
+  updateDeploymentRecord: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
 
   // state
-  executeDeploymentStep: vi.fn(),
-  updateDeploymentState: vi.fn(),
-  detectStuckDeployments: vi.fn(),
-  resetStuckDeployment: vi.fn(),
+  executeDeploymentStep: ((..._args: any[]) => undefined) as any,
+  updateDeploymentState: ((..._args: any[]) => undefined) as any,
+  detectStuckDeployments: ((..._args: any[]) => undefined) as any,
+  resetStuckDeployment: ((..._args: any[]) => undefined) as any,
 
   // rollback module
-  rollbackDeploymentSteps: vi.fn(),
+  rollbackDeploymentSteps: ((..._args: any[]) => undefined) as any,
 
   // routing
-  applyRoutingDbUpdates: vi.fn(),
-  applyRoutingToHostnames: vi.fn(),
-  buildRoutingTarget: vi.fn(),
-  collectHostnames: vi.fn(),
-  fetchServiceWithDomains: vi.fn(),
-  snapshotRouting: vi.fn(),
-  restoreRoutingSnapshot: vi.fn(),
+  applyRoutingDbUpdates: ((..._args: any[]) => undefined) as any,
+  applyRoutingToHostnames: ((..._args: any[]) => undefined) as any,
+  buildRoutingTarget: ((..._args: any[]) => undefined) as any,
+  collectHostnames: ((..._args: any[]) => undefined) as any,
+  fetchServiceWithDomains: ((..._args: any[]) => undefined) as any,
+  snapshotRouting: ((..._args: any[]) => undefined) as any,
+  restoreRoutingSnapshot: ((..._args: any[]) => undefined) as any,
 
   // provider
-  createDeploymentProvider: vi.fn(),
-  parseDeploymentTargetConfig: vi.fn(),
-  serializeDeploymentTarget: vi.fn(),
+  createDeploymentProvider: ((..._args: any[]) => undefined) as any,
+  parseDeploymentTargetConfig: ((..._args: any[]) => undefined) as any,
+  serializeDeploymentTarget: ((..._args: any[]) => undefined) as any,
 
   // platform
-  ServiceDesiredStateService: vi.fn(),
-  reconcileManagedWorkerMcpServer: vi.fn(),
+  ServiceDesiredStateService: ((..._args: any[]) => undefined) as any,
+  reconcileManagedWorkerMcpServer: ((..._args: any[]) => undefined) as any,
 
   // shared utils
-  generateId: vi.fn(),
-  computeSHA256: vi.fn(),
-  constantTimeEqual: vi.fn(),
-  encrypt: vi.fn(),
-  decrypt: vi.fn(),
-  encryptEnvVars: vi.fn(),
-  decryptEnvVars: vi.fn(),
-  maskEnvVars: vi.fn(),
-}));
+  generateId: ((..._args: any[]) => undefined) as any,
+  computeSHA256: ((..._args: any[]) => undefined) as any,
+  constantTimeEqual: ((..._args: any[]) => undefined) as any,
+  encrypt: ((..._args: any[]) => undefined) as any,
+  decrypt: ((..._args: any[]) => undefined) as any,
+  encryptEnvVars: ((..._args: any[]) => undefined) as any,
+  decryptEnvVars: ((..._args: any[]) => undefined) as any,
+  maskEnvVars: ((..._args: any[]) => undefined) as any,
+});
 
 // ---------------------------------------------------------------------------
 // vi.mock declarations
 // ---------------------------------------------------------------------------
-vi.mock('@/services/deployment/store', () => ({
-  getDeploymentById: mocks.getDeploymentById,
-  getDeploymentByIdempotencyKey: mocks.getDeploymentByIdempotencyKey,
-  getDeploymentEvents: mocks.getDeploymentEvents,
-  getDeploymentHistory: mocks.getDeploymentHistory,
-  getServiceDeploymentBasics: mocks.getServiceDeploymentBasics,
-  getServiceRollbackInfo: mocks.getServiceRollbackInfo,
-  findDeploymentByServiceVersion: mocks.findDeploymentByServiceVersion,
-  createDeploymentWithVersion: mocks.createDeploymentWithVersion,
-  logDeploymentEvent: mocks.logDeploymentEvent,
-  updateServiceDeploymentPointers: mocks.updateServiceDeploymentPointers,
-  updateDeploymentRecord: mocks.updateDeploymentRecord,
-  getDeploymentServiceId: (deployment: { service_id?: string; worker_id: string }) =>
-    deployment.service_id || deployment.worker_id,
-}));
-
-vi.mock('@/db', () => ({
-  getDb: mocks.getDb,
-  deployments: { id: 'id', routingStatus: 'routingStatus', routingWeight: 'routingWeight', updatedAt: 'updatedAt' },
-  serviceDeployments: { serviceId: 'serviceId' },
-  services: { id: 'id', status: 'status', updatedAt: 'updatedAt' },
-}));
-
-vi.mock('@/services/deployment/state', () => ({
-  executeDeploymentStep: mocks.executeDeploymentStep,
-  updateDeploymentState: mocks.updateDeploymentState,
-  detectStuckDeployments: mocks.detectStuckDeployments,
-  resetStuckDeployment: mocks.resetStuckDeployment,
-}));
-
-vi.mock('@/services/deployment/rollback', () => ({
-  rollbackDeploymentSteps: mocks.rollbackDeploymentSteps,
-}));
-
-vi.mock('@/services/deployment/routing', () => ({
-  applyRoutingDbUpdates: mocks.applyRoutingDbUpdates,
-  applyRoutingToHostnames: mocks.applyRoutingToHostnames,
-  buildRoutingTarget: mocks.buildRoutingTarget,
-  collectHostnames: mocks.collectHostnames,
-  fetchServiceWithDomains: mocks.fetchServiceWithDomains,
-  snapshotRouting: mocks.snapshotRouting,
-  restoreRoutingSnapshot: mocks.restoreRoutingSnapshot,
-}));
-
-vi.mock('@/services/deployment/provider', () => ({
-  createDeploymentProvider: mocks.createDeploymentProvider,
-  parseDeploymentTargetConfig: mocks.parseDeploymentTargetConfig,
-  serializeDeploymentTarget: mocks.serializeDeploymentTarget,
-}));
-
-vi.mock('@/services/platform/worker-desired-state', () => ({
-  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
-}));
-
-vi.mock('@/services/platform/mcp', () => ({
-  reconcileManagedWorkerMcpServer: mocks.reconcileManagedWorkerMcpServer,
-}));
-
-vi.mock('@/shared/utils', () => ({
-  generateId: mocks.generateId,
-  safeJsonParseOrDefault: (raw: string | null | undefined, fallback: unknown) => {
-    if (raw == null) return fallback;
-    try { return JSON.parse(raw); } catch { return fallback; }
-  },
-}));
-
-vi.mock('@/shared/utils/hash', () => ({
-  computeSHA256: mocks.computeSHA256,
-  constantTimeEqual: mocks.constantTimeEqual,
-}));
-
-vi.mock('@/shared/utils/crypto', () => ({
-  encrypt: mocks.encrypt,
-  decrypt: mocks.decrypt,
-  encryptEnvVars: mocks.encryptEnvVars,
-  decryptEnvVars: mocks.decryptEnvVars,
-  maskEnvVars: mocks.maskEnvVars,
-}));
-
-vi.mock('@/shared/utils/logger', () => ({
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-}));
-
-vi.mock('@/shared/constants', () => ({
-  CF_COMPATIBILITY_DATE: '2024-01-01',
-}));
-
-vi.mock('@/services/routing', () => ({
-  deleteHostnameRouting: vi.fn(),
-}));
-
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((...args: unknown[]) => args),
-  and: vi.fn((...args: unknown[]) => args),
-  ne: vi.fn((...args: unknown[]) => args),
-  inArray: vi.fn((...args: unknown[]) => args),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/store'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/state'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/rollback'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/routing'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/provider'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/mcp'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/hash'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/crypto'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/constants'
+// [Deno] vi.mock removed - manually stub imports from '@/services/routing'
+// [Deno] vi.mock removed - manually stub imports from 'drizzle-orm'
 import {
   DeploymentService,
   buildDeploymentArtifactRef,
@@ -222,9 +139,9 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
     ENCRYPTION_KEY: 'my-secret-key-for-testing-purposes',
     HOSTNAME_ROUTING: {} as any,
     WORKER_BUNDLES: {
-      get: vi.fn().mockResolvedValue(null),
-      put: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
+      get: (async () => null),
+      put: (async () => undefined),
+      delete: (async () => undefined),
     },
     ...overrides,
   } as any;
@@ -232,9 +149,9 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
 
 function makeDbUpdateChain() {
   const chain = {
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    run: vi.fn().mockResolvedValue(undefined),
+    set: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    run: (async () => undefined),
   };
   return chain;
 }
@@ -248,24 +165,20 @@ function makeService(envOverrides?: Record<string, unknown>) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('buildDeploymentArtifactRef', () => {
-  it('builds artifact ref from base ref and version', () => {
-    expect(buildDeploymentArtifactRef('my-worker', 1)).toBe('my-worker-v1');
-    expect(buildDeploymentArtifactRef('worker-abc', 42)).toBe('worker-abc-v42');
-  });
 
-  it('handles empty base ref', () => {
-    expect(buildDeploymentArtifactRef('', 1)).toBe('-v1');
-  });
+  Deno.test('buildDeploymentArtifactRef - builds artifact ref from base ref and version', () => {
+  assertEquals(buildDeploymentArtifactRef('my-worker', 1), 'my-worker-v1');
+    assertEquals(buildDeploymentArtifactRef('worker-abc', 42), 'worker-abc-v42');
+})
+  Deno.test('buildDeploymentArtifactRef - handles empty base ref', () => {
+  assertEquals(buildDeploymentArtifactRef('', 1), '-v1');
+})
+  Deno.test('buildDeploymentArtifactRef - handles large version numbers', () => {
+  assertEquals(buildDeploymentArtifactRef('svc', 9999), 'svc-v9999');
+})
 
-  it('handles large version numbers', () => {
-    expect(buildDeploymentArtifactRef('svc', 9999)).toBe('svc-v9999');
-  });
-});
-
-describe('DeploymentService constructor', () => {
-  it('throws when ENCRYPTION_KEY is not set', () => {
-    const env = {
+  Deno.test('DeploymentService constructor - throws when ENCRYPTION_KEY is not set', () => {
+  const env = {
       DB: {} as any,
       CF_ACCOUNT_ID: 'test',
       CF_API_TOKEN: 'test',
@@ -274,106 +187,89 @@ describe('DeploymentService constructor', () => {
       HOSTNAME_ROUTING: {} as any,
     } as any;
 
-    expect(() => new DeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
-  });
-
-  it('throws when ENCRYPTION_KEY is empty string', () => {
-    const env = makeEnv({ ENCRYPTION_KEY: '' });
-    expect(() => new DeploymentService(env)).toThrow('ENCRYPTION_KEY must be set');
-  });
-
-  it('creates a service when ENCRYPTION_KEY is set', () => {
-    const env = makeEnv();
+    assertThrows(() => { () => new DeploymentService(env); }, 'ENCRYPTION_KEY must be set');
+})
+  Deno.test('DeploymentService constructor - throws when ENCRYPTION_KEY is empty string', () => {
+  const env = makeEnv({ ENCRYPTION_KEY: '' });
+    assertThrows(() => { () => new DeploymentService(env); }, 'ENCRYPTION_KEY must be set');
+})
+  Deno.test('DeploymentService constructor - creates a service when ENCRYPTION_KEY is set', () => {
+  const env = makeEnv();
     const service = new DeploymentService(env);
-    expect(service).toBeDefined();
-    expect(service).toBeInstanceOf(DeploymentService);
-  });
-});
-
+    assert(service !== undefined);
+    assert(service instanceof DeploymentService);
+})
 // ---------------------------------------------------------------------------
 // getDeploymentById
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.getDeploymentById', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns a deployment when found', async () => {
-    const dep = createBaseDeployment();
-    mocks.getDeploymentById.mockResolvedValue(dep);
+  Deno.test('DeploymentService.getDeploymentById - returns a deployment when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment();
+    mocks.getDeploymentById = (async () => dep) as any;
 
     const { service } = makeService();
     const result = await service.getDeploymentById('dep-1');
 
-    expect(result).toEqual(dep);
-    expect(mocks.getDeploymentById).toHaveBeenCalledWith(expect.anything(), 'dep-1');
-  });
-
-  it('returns null when deployment not found', async () => {
-    mocks.getDeploymentById.mockResolvedValue(null);
+    assertEquals(result, dep);
+    assertSpyCallArgs(mocks.getDeploymentById, 0, [expect.anything(), 'dep-1']);
+})
+  Deno.test('DeploymentService.getDeploymentById - returns null when deployment not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getDeploymentById = (async () => null) as any;
 
     const { service } = makeService();
     const result = await service.getDeploymentById('nonexistent');
 
-    expect(result).toBeNull();
-  });
-});
-
+    assertEquals(result, null);
+})
 // ---------------------------------------------------------------------------
 // getDeploymentHistory
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.getDeploymentHistory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns deployment history for a service', async () => {
-    const deps = [
+  Deno.test('DeploymentService.getDeploymentHistory - returns deployment history for a service', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = [
       createBaseDeployment({ id: 'dep-2', version: 2 }),
       createBaseDeployment({ id: 'dep-1', version: 1 }),
     ];
-    mocks.getDeploymentHistory.mockResolvedValue(deps);
+    mocks.getDeploymentHistory = (async () => deps) as any;
 
     const { service } = makeService();
     const result = await service.getDeploymentHistory('w-1');
 
-    expect(result).toHaveLength(2);
-    expect(result[0].id).toBe('dep-2');
-    expect(mocks.getDeploymentHistory).toHaveBeenCalledWith(expect.anything(), 'w-1', 10);
-  });
-
-  it('uses custom limit', async () => {
-    mocks.getDeploymentHistory.mockResolvedValue([]);
+    assertEquals(result.length, 2);
+    assertEquals(result[0].id, 'dep-2');
+    assertSpyCallArgs(mocks.getDeploymentHistory, 0, [expect.anything(), 'w-1', 10]);
+})
+  Deno.test('DeploymentService.getDeploymentHistory - uses custom limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getDeploymentHistory = (async () => []) as any;
 
     const { service } = makeService();
     await service.getDeploymentHistory('w-1', 5);
 
-    expect(mocks.getDeploymentHistory).toHaveBeenCalledWith(expect.anything(), 'w-1', 5);
-  });
-
-  it('returns empty array when no deployments exist', async () => {
-    mocks.getDeploymentHistory.mockResolvedValue([]);
+    assertSpyCallArgs(mocks.getDeploymentHistory, 0, [expect.anything(), 'w-1', 5]);
+})
+  Deno.test('DeploymentService.getDeploymentHistory - returns empty array when no deployments exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getDeploymentHistory = (async () => []) as any;
 
     const { service } = makeService();
     const result = await service.getDeploymentHistory('w-new');
 
-    expect(result).toEqual([]);
-  });
-});
-
+    assertEquals(result, []);
+})
 // ---------------------------------------------------------------------------
 // getDeploymentEvents
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.getDeploymentEvents', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns events for a deployment', async () => {
-    const events: DeploymentEvent[] = [
+  Deno.test('DeploymentService.getDeploymentEvents - returns events for a deployment', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const events: DeploymentEvent[] = [
       {
         id: 1,
         deployment_id: 'dep-1',
@@ -385,37 +281,35 @@ describe('DeploymentService.getDeploymentEvents', () => {
         created_at: '2026-01-01T00:00:00.000Z',
       },
     ];
-    mocks.getDeploymentEvents.mockResolvedValue(events);
+    mocks.getDeploymentEvents = (async () => events) as any;
 
     const { service } = makeService();
     const result = await service.getDeploymentEvents('dep-1');
 
-    expect(result).toEqual(events);
-    expect(mocks.getDeploymentEvents).toHaveBeenCalledWith(expect.anything(), 'dep-1');
-  });
-});
-
+    assertEquals(result, events);
+    assertSpyCallArgs(mocks.getDeploymentEvents, 0, [expect.anything(), 'dep-1']);
+})
 // ---------------------------------------------------------------------------
 // createDeployment
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.createDeployment', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
 
-    mocks.generateId.mockReturnValue('new-dep-id');
-    mocks.computeSHA256.mockResolvedValue('sha256-hash');
-    mocks.serializeDeploymentTarget.mockReturnValue({
+  Deno.test('DeploymentService.createDeployment - throws when the worker does not exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
       providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
-    });
-    mocks.parseDeploymentTargetConfig.mockReturnValue({});
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-    mocks.encryptEnvVars.mockResolvedValue('encrypted-env-vars');
-    mocks.encrypt.mockResolvedValue({ ciphertext: 'ct', iv: 'iv' });
-    mocks.ServiceDesiredStateService.mockReturnValue({
-      resolveDeploymentState: vi.fn().mockResolvedValue({
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
         envVars: {},
         bindings: [],
         runtimeConfig: {
@@ -425,40 +319,87 @@ describe('DeploymentService.createDeployment', () => {
           mcp_server: undefined,
           updated_at: null,
         },
-      }),
-    });
-  });
-
-  it('throws when the worker does not exist', async () => {
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: false });
+      })),
+    })) as any;
+  mocks.getServiceDeploymentBasics = (async () => ({ exists: false })) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.createDeployment({
         serviceId: 'w-unknown',
         spaceId: 'space-1',
         bundleContent: 'console.log("hi")',
       }),
-    ).rejects.toThrow('Worker not found');
-  });
+    ; }, 'Worker not found');
+})
+  Deno.test('DeploymentService.createDeployment - throws when no service identifier is provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('throws when no service identifier is provided', async () => {
-    const { service } = makeService();
-    await expect(
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const { service } = makeService();
+    await await assertRejects(async () => { await 
       service.createDeployment({
         spaceId: 'space-1',
         bundleContent: 'console.log("hi")',
       }),
-    ).rejects.toThrow('Deployment requires a service identifier');
-  });
+    ; }, 'Deployment requires a service identifier');
+})
+  Deno.test('DeploymentService.createDeployment - creates a deployment successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('creates a deployment successfully', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 3,
-    });
+    })) as any;
 
     const { service } = makeService();
     const result = await service.createDeployment({
@@ -468,30 +409,55 @@ describe('DeploymentService.createDeployment', () => {
       deployMessage: 'Initial deploy',
     });
 
-    expect(result.id).toBe('new-dep-id');
-    expect(mocks.createDeploymentWithVersion).toHaveBeenCalled();
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    assertEquals(result.id, 'new-dep-id');
+    assert(mocks.createDeploymentWithVersion.calls.length > 0);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(),
       'new-dep-id',
       'started',
       null,
       'Deployment created',
-      expect.any(Object),
-    );
-  });
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
+  Deno.test('DeploymentService.createDeployment - defaults worker deployments to runtime-host when WFP env is unavailable', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('defaults worker deployments to runtime-host when WFP env is unavailable', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3, provider_name: 'runtime-host' as any });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 3, provider_name: 'runtime-host' as any });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'test.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 3,
-    });
-    mocks.serializeDeploymentTarget.mockReturnValue({
+    })) as any;
+    mocks.serializeDeploymentTarget = (() => ({
       providerName: 'runtime-host',
       targetJson: '{}',
       providerStateJson: '{}',
-    });
+    })) as any;
 
     const { service } = makeService({
       CF_ACCOUNT_ID: undefined,
@@ -504,18 +470,43 @@ describe('DeploymentService.createDeployment', () => {
       bundleContent: 'console.log("hi")',
     });
 
-    expect(mocks.serializeDeploymentTarget).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(mocks.serializeDeploymentTarget, 0, [({
       provider: { name: 'runtime-host' },
-    }));
-  });
+    })]);
+})
+  Deno.test('DeploymentService.createDeployment - uploads bundle to R2 when WORKER_BUNDLES is present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('uploads bundle to R2 when WORKER_BUNDLES is present', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 1,
-    });
+    })) as any;
 
     const env = makeEnv();
     const service = new DeploymentService(env, 'test-key');
@@ -526,21 +517,46 @@ describe('DeploymentService.createDeployment', () => {
       bundleContent: 'console.log("hello")',
     });
 
-    expect(env.WORKER_BUNDLES.put).toHaveBeenCalledWith(
+    assertSpyCallArgs(env.WORKER_BUNDLES.put, 0, [
       'deployments/w-1/1/bundle.js',
       'console.log("hello")',
-    );
-  });
+    ]);
+})
+  Deno.test('DeploymentService.createDeployment - encrypts env vars snapshot when present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('encrypts env vars snapshot when present', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 1,
-    });
-    mocks.ServiceDesiredStateService.mockReturnValue({
-      resolveDeploymentState: vi.fn().mockResolvedValue({
+    })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
         envVars: { SECRET: 'value' },
         bindings: [],
         runtimeConfig: {
@@ -549,8 +565,8 @@ describe('DeploymentService.createDeployment', () => {
           limits: {},
           updated_at: null,
         },
-      }),
-    });
+      })),
+    })) as any;
 
     const { service } = makeService();
     await service.createDeployment({
@@ -559,22 +575,47 @@ describe('DeploymentService.createDeployment', () => {
       bundleContent: 'code',
     });
 
-    expect(mocks.encryptEnvVars).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.encryptEnvVars, 0, [
       { SECRET: 'value' },
       'test-encryption-key',
       'new-dep-id',
-    );
-  });
+    ]);
+})
+  Deno.test('DeploymentService.createDeployment - encrypts bindings snapshot when present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('encrypts bindings snapshot when present', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 1,
-    });
-    mocks.ServiceDesiredStateService.mockReturnValue({
-      resolveDeploymentState: vi.fn().mockResolvedValue({
+    })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
         envVars: {},
         bindings: [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }],
         runtimeConfig: {
@@ -583,8 +624,8 @@ describe('DeploymentService.createDeployment', () => {
           limits: {},
           updated_at: null,
         },
-      }),
-    });
+      })),
+    })) as any;
 
     const { service } = makeService();
     await service.createDeployment({
@@ -593,18 +634,43 @@ describe('DeploymentService.createDeployment', () => {
       bundleContent: 'code',
     });
 
-    expect(mocks.encrypt).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.encrypt, 0, [
       JSON.stringify([{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }]),
       'test-encryption-key',
       'new-dep-id',
-    );
-  });
+    ]);
+})
+  Deno.test('DeploymentService.createDeployment - returns existing deployment for matching idempotency key', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns existing deployment for matching idempotency key', async () => {
-    // bundle_size must match new TextEncoder().encode('console.log("hi")').byteLength = 17
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  // bundle_size must match new TextEncoder().encode('console.log("hi")').byteLength = 17
     const existing = createBaseDeployment({ id: 'existing-dep', bundle_hash: 'sha256-hash', bundle_size: 17 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true });
-    mocks.getDeploymentByIdempotencyKey.mockResolvedValue(existing);
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true })) as any;
+    mocks.getDeploymentByIdempotencyKey = (async () => existing) as any;
 
     const { service } = makeService();
     const result = await service.createDeployment({
@@ -614,40 +680,90 @@ describe('DeploymentService.createDeployment', () => {
       idempotencyKey: 'idem-123',
     });
 
-    expect(result.id).toBe('existing-dep');
-    expect(mocks.createDeploymentWithVersion).not.toHaveBeenCalled();
-  });
+    assertEquals(result.id, 'existing-dep');
+    assertSpyCalls(mocks.createDeploymentWithVersion, 0);
+})
+  Deno.test('DeploymentService.createDeployment - throws when idempotency key reuse does not match original request', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('throws when idempotency key reuse does not match original request', async () => {
-    const existing = createBaseDeployment({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const existing = createBaseDeployment({
       id: 'existing-dep',
       bundle_hash: 'different-hash',
       bundle_size: 99,
     });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true });
-    mocks.getDeploymentByIdempotencyKey.mockResolvedValue(existing);
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true })) as any;
+    mocks.getDeploymentByIdempotencyKey = (async () => existing) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.createDeployment({
         serviceId: 'w-1',
         spaceId: 'space-1',
         bundleContent: 'console.log("hi")',
         idempotencyKey: 'idem-123',
       }),
-    ).rejects.toThrow('Idempotency-Key reuse does not match');
-  });
+    ; }, 'Idempotency-Key reuse does not match');
+})
+  Deno.test('DeploymentService.createDeployment - uses snapshotOverride when provided instead of resolving state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('uses snapshotOverride when provided instead of resolving state', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 1,
-    });
+    })) as any;
 
-    const resolveDeploymentState = vi.fn();
-    mocks.ServiceDesiredStateService.mockReturnValue({ resolveDeploymentState });
+    const resolveDeploymentState = ((..._args: any[]) => undefined) as any;
+    mocks.ServiceDesiredStateService = (() => ({ resolveDeploymentState })) as any;
 
     const { service } = makeService();
     await service.createDeployment({
@@ -662,44 +778,94 @@ describe('DeploymentService.createDeployment', () => {
     });
 
     // resolveDeploymentState should NOT be called when snapshot override is provided
-    expect(resolveDeploymentState).not.toHaveBeenCalled();
-    expect(mocks.encryptEnvVars).toHaveBeenCalledWith(
+    assertSpyCalls(resolveDeploymentState, 0);
+    assertSpyCallArgs(mocks.encryptEnvVars, 0, [
       { KEY: 'val' },
       'test-encryption-key',
       'new-dep-id',
-    );
-  });
+    ]);
+})
+  Deno.test('DeploymentService.createDeployment - cleans up R2 artifacts on creation failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('cleans up R2 artifacts on creation failure', async () => {
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createBaseDeployment({ id: 'new-dep-id', version: 1 }),
       version: 1,
-    });
+    })) as any;
     // Simulate logDeploymentEvent failing (after R2 put succeeds)
-    mocks.logDeploymentEvent.mockRejectedValueOnce(new Error('db write error'));
+    mocks.logDeploymentEvent = (async () => { throw new Error('db write error'); }) as any;
 
     const env = makeEnv();
     const service = new DeploymentService(env, 'test-key');
 
-    await expect(
+    await await assertRejects(async () => { await 
       service.createDeployment({
         serviceId: 'w-1',
         spaceId: 'space-1',
         bundleContent: 'code',
       }),
-    ).rejects.toThrow('db write error');
+    ; }, 'db write error');
 
-    expect(env.WORKER_BUNDLES.delete).toHaveBeenCalled();
-  });
+    assert(env.WORKER_BUNDLES.delete.calls.length > 0);
+})
+  Deno.test('DeploymentService.createDeployment - falls back to workerId when serviceId is not provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('falls back to workerId when serviceId is not provided', async () => {
-    const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
-    mocks.getServiceDeploymentBasics.mockResolvedValue({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' });
-    mocks.createDeploymentWithVersion.mockResolvedValue({
+    mocks.generateId = (() => 'new-dep-id') as any;
+    mocks.computeSHA256 = (async () => 'sha256-hash') as any;
+    mocks.serializeDeploymentTarget = (() => ({
+      providerName: 'workers-dispatch',
+      targetJson: '{}',
+      providerStateJson: '{}',
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.encryptEnvVars = (async () => 'encrypted-env-vars') as any;
+    mocks.encrypt = (async () => ({ ciphertext: 'ct', iv: 'iv' })) as any;
+    mocks.ServiceDesiredStateService = (() => ({
+      resolveDeploymentState: (async () => ({
+        envVars: {},
+        bindings: [],
+        runtimeConfig: {
+          compatibility_date: '2024-01-01',
+          compatibility_flags: [],
+          limits: {},
+          mcp_server: undefined,
+          updated_at: null,
+        },
+      })),
+    })) as any;
+  const createdDeployment = createBaseDeployment({ id: 'new-dep-id', version: 1 });
+    mocks.getServiceDeploymentBasics = (async () => ({ exists: true, hostname: 'h.example.com', workloadKind: 'worker-bundle' })) as any;
+    mocks.createDeploymentWithVersion = (async () => ({
       deployment: createdDeployment,
       version: 1,
-    });
+    })) as any;
 
     const { service } = makeService();
     await service.createDeployment({
@@ -708,124 +874,143 @@ describe('DeploymentService.createDeployment', () => {
       bundleContent: 'code',
     });
 
-    expect(mocks.getServiceDeploymentBasics).toHaveBeenCalledWith(expect.anything(), 'legacy-w-1');
-  });
-});
-
+    assertSpyCallArgs(mocks.getServiceDeploymentBasics, 0, [expect.anything(), 'legacy-w-1']);
+})
 // ---------------------------------------------------------------------------
 // executeDeployment
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.executeDeployment', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-    mocks.updateDeploymentState.mockResolvedValue(undefined);
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-    mocks.rollbackDeploymentSteps.mockResolvedValue(undefined);
-    mocks.parseDeploymentTargetConfig.mockReturnValue({});
-    mocks.reconcileManagedWorkerMcpServer.mockResolvedValue(undefined);
-  });
 
-  it('throws when deployment not found', async () => {
-    mocks.getDeploymentById.mockResolvedValue(null);
+  Deno.test('DeploymentService.executeDeployment - throws when deployment not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  mocks.getDeploymentById = (async () => null) as any;
 
     const { service } = makeService();
-    await expect(service.executeDeployment('nonexistent')).rejects.toThrow(
+    await await assertRejects(async () => { await service.executeDeployment('nonexistent'); }, 
       'Deployment nonexistent not found',
     );
-  });
-
-  it('returns immediately for already-succeeded deployments', async () => {
-    const dep = createBaseDeployment({ status: 'success' });
-    mocks.getDeploymentById.mockResolvedValue(dep);
-
-    const { service } = makeService();
-    const result = await service.executeDeployment('dep-1');
-
-    expect(result.status).toBe('success');
-    expect(mocks.updateDeploymentState).not.toHaveBeenCalled();
-  });
-
-  it('returns immediately for rolled-back deployments', async () => {
-    const dep = createBaseDeployment({ status: 'rolled_back' });
-    mocks.getDeploymentById.mockResolvedValue(dep);
+})
+  Deno.test('DeploymentService.executeDeployment - returns immediately for already-succeeded deployments', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const dep = createBaseDeployment({ status: 'success' });
+    mocks.getDeploymentById = (async () => dep) as any;
 
     const { service } = makeService();
     const result = await service.executeDeployment('dep-1');
 
-    expect(result.status).toBe('rolled_back');
-    expect(mocks.updateDeploymentState).not.toHaveBeenCalled();
-  });
+    assertEquals(result.status, 'success');
+    assertSpyCalls(mocks.updateDeploymentState, 0);
+})
+  Deno.test('DeploymentService.executeDeployment - returns immediately for rolled-back deployments', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const dep = createBaseDeployment({ status: 'rolled_back' });
+    mocks.getDeploymentById = (async () => dep) as any;
 
-  it('executes deployment steps and returns completed deployment', async () => {
-    const bundleContent = 'console.log("hi")';
+    const { service } = makeService();
+    const result = await service.executeDeployment('dep-1');
+
+    assertEquals(result.status, 'rolled_back');
+    assertSpyCalls(mocks.updateDeploymentState, 0);
+})
+  Deno.test('DeploymentService.executeDeployment - executes deployment steps and returns completed deployment', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const bundleContent = 'console.log("hi")';
     const dep = createBaseDeployment({ bundle_hash: 'sha256-hash', bundle_size: new TextEncoder().encode(bundleContent).byteLength });
     const completedDep = createBaseDeployment({ status: 'success', deploy_state: 'completed' });
 
     mocks.getDeploymentById
-      .mockResolvedValueOnce(dep)     // initial fetch
-      .mockResolvedValueOnce(completedDep); // final fetch
+       = (async () => dep) as any     // initial fetch
+       = (async () => completedDep) as any; // final fetch
 
-    mocks.getDeploymentEvents.mockResolvedValue([]);
-    mocks.getServiceDeploymentBasics.mockResolvedValue({
+    mocks.getDeploymentEvents = (async () => []) as any;
+    mocks.getServiceDeploymentBasics = (async () => ({
       exists: true,
       hostname: 'test.example.com',
       activeDeploymentId: null,
-    });
-    mocks.constantTimeEqual.mockReturnValue(true);
-    mocks.createDeploymentProvider.mockReturnValue({
+    })) as any;
+    mocks.constantTimeEqual = (() => true) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn(),
-    });
-    mocks.executeDeploymentStep.mockImplementation(async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
+    mocks.executeDeploymentStep = async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
       await action();
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+    } as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: null,
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue(['test.example.com']);
-    mocks.snapshotRouting.mockResolvedValue([]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    })) as any;
+    mocks.collectHostnames = (() => ['test.example.com']) as any;
+    mocks.snapshotRouting = (async () => []) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
-    mocks.applyRoutingToHostnames.mockResolvedValue(undefined);
-    mocks.applyRoutingDbUpdates.mockResolvedValue(undefined);
+    })) as any;
+    mocks.applyRoutingToHostnames = (async () => undefined) as any;
+    mocks.applyRoutingDbUpdates = (async () => undefined) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => ({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        get: vi.fn().mockResolvedValue(null),
-      })),
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      select: () => ({
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        get: (async () => null),
+      }),
+      update: () => dbChain,
+    })) as any;
 
     const env = makeEnv();
-    env.WORKER_BUNDLES.get.mockResolvedValue({
+    env.WORKER_BUNDLES.get = (async () => ({
       text: () => Promise.resolve(bundleContent),
-    });
-    env.WORKER_BUNDLES.delete.mockResolvedValue(undefined);
+    })) as any;
+    env.WORKER_BUNDLES.delete = (async () => undefined) as any;
     const service = new DeploymentService(env, 'test-key');
     const result = await service.executeDeployment('dep-1');
 
-    expect(result.status).toBe('success');
-    expect(mocks.updateDeploymentState).toHaveBeenCalledWith(
+    assertEquals(result.status, 'success');
+    assertSpyCallArgs(mocks.updateDeploymentState, 0, [
       expect.anything(),
       'dep-1',
       'in_progress',
       'pending',
-    );
-  });
-
-  it('passes env-derived provider registry into deployment execution', async () => {
-    const dep = createBaseDeployment({
+    ]);
+})
+  Deno.test('DeploymentService.executeDeployment - passes env-derived provider registry into deployment execution', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const dep = createBaseDeployment({
       artifact_kind: 'container-image',
       provider_name: 'ecs',
       target_json: JSON.stringify({
@@ -843,52 +1028,52 @@ describe('DeploymentService.executeDeployment', () => {
     });
 
     mocks.getDeploymentById
-      .mockResolvedValueOnce(dep)
-      .mockResolvedValueOnce(completedDep);
-    mocks.getDeploymentEvents.mockResolvedValue([]);
-    mocks.getServiceDeploymentBasics.mockResolvedValue({
+       = (async () => dep) as any
+       = (async () => completedDep) as any;
+    mocks.getDeploymentEvents = (async () => []) as any;
+    mocks.getServiceDeploymentBasics = (async () => ({
       exists: true,
       hostname: 'test.example.com',
       activeDeploymentId: null,
-    });
-    mocks.parseDeploymentTargetConfig.mockReturnValue({
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({
       route_ref: 'takos-worker',
       artifact: {
         image_ref: 'ghcr.io/takos/worker:latest',
       },
-    });
-    mocks.createDeploymentProvider.mockReturnValue({
+    })) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'ecs',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn(),
-    });
-    mocks.executeDeploymentStep.mockImplementation(async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
+    mocks.executeDeploymentStep = async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
       await action();
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+    } as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: null,
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue(['test.example.com']);
-    mocks.snapshotRouting.mockResolvedValue([]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    })) as any;
+    mocks.collectHostnames = (() => ['test.example.com']) as any;
+    mocks.snapshotRouting = (async () => []) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
-    mocks.applyRoutingToHostnames.mockResolvedValue(undefined);
-    mocks.applyRoutingDbUpdates.mockResolvedValue(undefined);
+    })) as any;
+    mocks.applyRoutingToHostnames = (async () => undefined) as any;
+    mocks.applyRoutingDbUpdates = (async () => undefined) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => ({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        get: vi.fn().mockResolvedValue(null),
-      })),
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      select: () => ({
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        get: (async () => null),
+      }),
+      update: () => dbChain,
+    })) as any;
 
     const env = makeEnv({
       OCI_ORCHESTRATOR_URL: 'http://orchestrator.internal',
@@ -899,17 +1084,17 @@ describe('DeploymentService.executeDeployment', () => {
     const service = new DeploymentService(env, 'test-key');
     await service.executeDeployment('dep-1');
 
-    expect(mocks.createDeploymentProvider).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.createDeploymentProvider, 0, [
       dep,
-      expect.objectContaining({
+      ({
         orchestratorUrl: 'http://orchestrator.internal',
-        providerRegistry: expect.objectContaining({
+        providerRegistry: ({
           defaultName: 'workers-dispatch',
         }),
       }),
-    );
-    const createDeploymentProviderCall = mocks.createDeploymentProvider.mock.calls[0]?.[1];
-    expect(createDeploymentProviderCall.providerRegistry.get('ecs')).toEqual({
+    ]);
+    const createDeploymentProviderCall = mocks.createDeploymentProvider.calls[0]?.[1];
+    assertEquals(createDeploymentProviderCall.providerRegistry.get('ecs'), {
       name: 'ecs',
       config: {
         region: 'us-east-1',
@@ -917,45 +1102,57 @@ describe('DeploymentService.executeDeployment', () => {
         taskDefinitionFamily: 'takos-worker',
       },
     });
-  });
-
-  it('handles deployment failure — rolls back steps and marks as failed', async () => {
-    const dep = createBaseDeployment({ worker_id: 'w-1', service_id: 'w-1' });
-    mocks.getDeploymentById.mockResolvedValue(dep);
-    mocks.getDeploymentEvents.mockResolvedValue([]);
+})
+  Deno.test('DeploymentService.executeDeployment - handles deployment failure — rolls back steps and marks as failed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const dep = createBaseDeployment({ worker_id: 'w-1', service_id: 'w-1' });
+    mocks.getDeploymentById = (async () => dep) as any;
+    mocks.getDeploymentEvents = (async () => []) as any;
     // getServiceDeploymentBasics is called twice: once in the try block (returns false)
     // and once in the catch block to check activeDeploymentId
     mocks.getServiceDeploymentBasics
-      .mockResolvedValue({ exists: false, id: 'w-1', hostname: null, activeDeploymentId: null });
-    mocks.createDeploymentProvider.mockReturnValue({
+       = (async () => ({ exists: false, id: 'w-1', hostname: null, activeDeploymentId: null })) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn(),
-    });
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
 
     const { service } = makeService();
-    await expect(service.executeDeployment('dep-1')).rejects.toThrow('Worker not found');
+    await await assertRejects(async () => { await service.executeDeployment('dep-1'); }, 'Worker not found');
 
-    expect(mocks.rollbackDeploymentSteps).toHaveBeenCalled();
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    assert(mocks.rollbackDeploymentSteps.calls.length > 0);
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({
+      ({
         deployState: 'failed',
         status: 'failed',
       }),
-    );
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(),
       'dep-1',
       'failed',
       null,
       'Worker not found',
-    );
-  });
-
-  it('skips already-completed steps during resume', async () => {
-    const bundleContent = 'console.log("hi")';
+    ]);
+})
+  Deno.test('DeploymentService.executeDeployment - skips already-completed steps during resume', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
+  const bundleContent = 'console.log("hi")';
     const dep = createBaseDeployment({
       deploy_state: 'routing',
       bundle_hash: 'sha256-hash',
@@ -964,209 +1161,215 @@ describe('DeploymentService.executeDeployment', () => {
     const completedDep = createBaseDeployment({ status: 'success', deploy_state: 'completed' });
 
     mocks.getDeploymentById
-      .mockResolvedValueOnce(dep)
-      .mockResolvedValueOnce(completedDep);
+       = (async () => dep) as any
+       = (async () => completedDep) as any;
 
-    mocks.getDeploymentEvents.mockResolvedValue([
+    mocks.getDeploymentEvents = (async () => [
       { event_type: 'step_completed', step_name: 'deploy_worker' },
-    ]);
-    mocks.getServiceDeploymentBasics.mockResolvedValue({
+    ]) as any;
+    mocks.getServiceDeploymentBasics = (async () => ({
       exists: true,
       hostname: 'test.example.com',
       activeDeploymentId: null,
-    });
-    mocks.constantTimeEqual.mockReturnValue(true);
-    mocks.createDeploymentProvider.mockReturnValue({
+    })) as any;
+    mocks.constantTimeEqual = (() => true) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn(),
-    });
-    mocks.executeDeploymentStep.mockImplementation(async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
+    mocks.executeDeploymentStep = async (_db: any, _id: any, _state: any, _step: any, action: () => Promise<void>) => {
       await action();
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+    } as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: null,
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue(['test.example.com']);
-    mocks.snapshotRouting.mockResolvedValue([]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    })) as any;
+    mocks.collectHostnames = (() => ['test.example.com']) as any;
+    mocks.snapshotRouting = (async () => []) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
-    mocks.applyRoutingToHostnames.mockResolvedValue(undefined);
-    mocks.applyRoutingDbUpdates.mockResolvedValue(undefined);
-    mocks.reconcileManagedWorkerMcpServer.mockResolvedValue(undefined);
+    })) as any;
+    mocks.applyRoutingToHostnames = (async () => undefined) as any;
+    mocks.applyRoutingDbUpdates = (async () => undefined) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => ({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        get: vi.fn().mockResolvedValue(null),
-      })),
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      select: () => ({
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        get: (async () => null),
+      }),
+      update: () => dbChain,
+    })) as any;
 
     const env = makeEnv();
-    env.WORKER_BUNDLES.delete.mockResolvedValue(undefined);
+    env.WORKER_BUNDLES.delete = (async () => undefined) as any;
     const service = new DeploymentService(env, 'test-key');
     const result = await service.executeDeployment('dep-1');
 
-    expect(result.status).toBe('success');
+    assertEquals(result.status, 'success');
     // deploy_worker step should be called only for update_routing (once, not twice)
-    expect(mocks.executeDeploymentStep).toHaveBeenCalledTimes(1);
-    expect(mocks.executeDeploymentStep).toHaveBeenCalledWith(
+    assertSpyCalls(mocks.executeDeploymentStep, 1);
+    assertSpyCallArgs(mocks.executeDeploymentStep, 0, [
       expect.anything(),
       'dep-1',
       'routing',
       'update_routing',
-      expect.any(Function),
-    );
-  });
-});
-
+      /* expect.any(Function) */ {} as any,
+    ]);
+})
 // ---------------------------------------------------------------------------
 // rollback
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.rollback', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-    mocks.updateServiceDeploymentPointers.mockResolvedValue(undefined);
-    mocks.parseDeploymentTargetConfig.mockReturnValue({});
-  });
 
-  it('throws when worker not found', async () => {
-    mocks.getServiceRollbackInfo.mockResolvedValue(null);
+  Deno.test('DeploymentService.rollback - throws when worker not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  mocks.getServiceRollbackInfo = (async () => null) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.rollback({ serviceId: 'w-missing', userId: 'user-1' }),
-    ).rejects.toThrow('Worker w-missing not found');
-  });
-
-  it('throws when no valid deployment found for rollback', async () => {
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    ; }, 'Worker w-missing not found');
+})
+  Deno.test('DeploymentService.rollback - throws when no valid deployment found for rollback', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: 'dep-2',
       fallbackDeploymentId: null,
-    });
+    })) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.rollback({ serviceId: 'w-1', userId: 'user-1' }),
-    ).rejects.toThrow('No valid deployment found for rollback');
-  });
-
-  it('throws when target deployment is already active', async () => {
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    ; }, 'No valid deployment found for rollback');
+})
+  Deno.test('DeploymentService.rollback - throws when target deployment is already active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       activeDeploymentId: 'dep-1',
       fallbackDeploymentId: 'dep-1',
-    });
-    mocks.getDeploymentById.mockResolvedValue(
-      createBaseDeployment({ id: 'dep-1', worker_id: 'w-1' }),
-    );
+    })) as any;
+    mocks.getDeploymentById = (async () => createBaseDeployment({ id: 'dep-1', worker_id: 'w-1' }),) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.rollback({ serviceId: 'w-1', userId: 'user-1' }),
-    ).rejects.toThrow('Target deployment is already active');
-  });
-
-  it('throws when target has no artifact_ref', async () => {
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    ; }, 'Target deployment is already active');
+})
+  Deno.test('DeploymentService.rollback - throws when target has no artifact_ref', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       activeDeploymentId: 'dep-2',
       fallbackDeploymentId: 'dep-1',
-    });
-    mocks.getDeploymentById.mockResolvedValue(
-      createBaseDeployment({ id: 'dep-1', worker_id: 'w-1', artifact_ref: null }),
-    );
+    })) as any;
+    mocks.getDeploymentById = (async () => createBaseDeployment({ id: 'dep-1', worker_id: 'w-1', artifact_ref: null }),) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.rollback({ serviceId: 'w-1', userId: 'user-1' }),
-    ).rejects.toThrow('Rollback target has no artifact_ref');
-  });
-
-  it('performs rollback to fallback deployment successfully', async () => {
-    const targetDep = createBaseDeployment({
+    ; }, 'Rollback target has no artifact_ref');
+})
+  Deno.test('DeploymentService.rollback - performs rollback to fallback deployment successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  const targetDep = createBaseDeployment({
       id: 'dep-1',
       worker_id: 'w-1',
       version: 1,
       artifact_ref: 'worker-w-1-v1',
     });
 
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       activeDeploymentId: 'dep-2',
       fallbackDeploymentId: 'dep-1',
       activeDeploymentVersion: 2,
-    });
+    })) as any;
     mocks.getDeploymentById
-      .mockResolvedValueOnce(targetDep) // find fallback target
-      .mockResolvedValueOnce(targetDep); // final fetch
-    mocks.createDeploymentProvider.mockReturnValue({
+       = (async () => targetDep) as any // find fallback target
+       = (async () => targetDep) as any; // final fetch
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: (async () => undefined),
+    })) as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: 'dep-2',
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue(['test.example.com']);
-    mocks.snapshotRouting.mockResolvedValue([
+    })) as any;
+    mocks.collectHostnames = (() => ['test.example.com']) as any;
+    mocks.snapshotRouting = (async () => [
       { hostname: 'test.example.com', target: null },
-    ]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    ]) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
-    mocks.applyRoutingToHostnames.mockResolvedValue(undefined);
+    })) as any;
+    mocks.applyRoutingToHostnames = (async () => undefined) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      update: () => dbChain,
+    })) as any;
 
     const env = makeEnv();
     const service = new DeploymentService(env, 'test-key');
     const result = await service.rollback({ serviceId: 'w-1', userId: 'user-1' });
 
-    expect(result.id).toBe('dep-1');
-    expect(mocks.updateServiceDeploymentPointers).toHaveBeenCalledWith(
+    assertEquals(result.id, 'dep-1');
+    assertSpyCallArgs(mocks.updateServiceDeploymentPointers, 0, [
       expect.anything(),
       'w-1',
-      expect.objectContaining({
+      ({
         activeDeploymentId: 'dep-1',
         fallbackDeploymentId: 'dep-2',
       }),
-    );
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(),
       'dep-1',
       'rollback_pointer',
       null,
-      expect.any(String),
-      expect.any(Object),
-    );
-  });
-
-  it('passes env-derived provider registry into rollback execution', async () => {
-    const targetDep = createBaseDeployment({
+      /* expect.any(String) */ {} as any,
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
+  Deno.test('DeploymentService.rollback - passes env-derived provider registry into rollback execution', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  const targetDep = createBaseDeployment({
       id: 'dep-1',
       worker_id: 'w-1',
       artifact_kind: 'container-image',
@@ -1179,44 +1382,44 @@ describe('DeploymentService.rollback', () => {
       }),
     });
 
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       activeDeploymentId: 'dep-2',
       fallbackDeploymentId: 'dep-1',
       activeDeploymentVersion: 2,
-    });
+    })) as any;
     mocks.getDeploymentById
-      .mockResolvedValueOnce(targetDep)
-      .mockResolvedValueOnce(targetDep);
-    mocks.createDeploymentProvider.mockReturnValue({
+       = (async () => targetDep) as any
+       = (async () => targetDep) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'k8s',
-      deploy: vi.fn().mockResolvedValue(undefined),
-      assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+      deploy: (async () => undefined),
+      assertRollbackTarget: (async () => undefined),
+    })) as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: 'dep-2',
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue([]);
-    mocks.snapshotRouting.mockResolvedValue([]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    })) as any;
+    mocks.collectHostnames = (() => []) as any;
+    mocks.snapshotRouting = (async () => []) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
-    mocks.parseDeploymentTargetConfig.mockReturnValue({
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({
       route_ref: 'takos-worker',
       artifact: {
         image_ref: 'ghcr.io/takos/worker:latest',
       },
-    });
+    })) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      update: () => dbChain,
+    })) as any;
 
     const env = makeEnv({
       OCI_ORCHESTRATOR_URL: 'http://orchestrator.internal',
@@ -1226,62 +1429,65 @@ describe('DeploymentService.rollback', () => {
     const service = new DeploymentService(env, 'test-key');
     await service.rollback({ serviceId: 'w-1', userId: 'user-1' });
 
-    expect(mocks.createDeploymentProvider).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.createDeploymentProvider, 0, [
       targetDep,
-      expect.objectContaining({
+      ({
         orchestratorUrl: 'http://orchestrator.internal',
-        providerRegistry: expect.any(Object),
+        providerRegistry: /* expect.any(Object) */ {} as any,
       }),
-    );
-    const rollbackCreateCall = mocks.createDeploymentProvider.mock.calls[0]?.[1];
-    expect(rollbackCreateCall.providerRegistry.get('k8s')).toEqual({
+    ]);
+    const rollbackCreateCall = mocks.createDeploymentProvider.calls[0]?.[1];
+    assertEquals(rollbackCreateCall.providerRegistry.get('k8s'), {
       name: 'k8s',
       config: {
         namespace: 'takos',
         deploymentName: 'takos-worker',
       },
     });
-  });
-
-  it('rolls back to specific target version', async () => {
-    const targetDep = createBaseDeployment({
+})
+  Deno.test('DeploymentService.rollback - rolls back to specific target version', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.updateServiceDeploymentPointers = (async () => undefined) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+  const targetDep = createBaseDeployment({
       id: 'dep-v3',
       worker_id: 'w-1',
       version: 3,
       artifact_ref: 'worker-w-1-v3',
     });
 
-    mocks.getServiceRollbackInfo.mockResolvedValue({
+    mocks.getServiceRollbackInfo = (async () => ({
       exists: true,
       id: 'w-1',
       activeDeploymentId: 'dep-v5',
       fallbackDeploymentId: 'dep-v4',
       activeDeploymentVersion: 5,
-    });
-    mocks.findDeploymentByServiceVersion.mockResolvedValue(targetDep);
-    mocks.getDeploymentById.mockResolvedValue(targetDep);
-    mocks.createDeploymentProvider.mockReturnValue({
+    })) as any;
+    mocks.findDeploymentByServiceVersion = (async () => targetDep) as any;
+    mocks.getDeploymentById = (async () => targetDep) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: (async () => undefined),
+    })) as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: 'dep-v5',
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue([]);
-    mocks.snapshotRouting.mockResolvedValue([]);
-    mocks.buildRoutingTarget.mockReturnValue({
+    })) as any;
+    mocks.collectHostnames = (() => []) as any;
+    mocks.snapshotRouting = (async () => []) as any;
+    mocks.buildRoutingTarget = (() => ({
       target: { type: 'deployments', deployments: [] },
       auditDetails: {},
-    });
+    })) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      update: () => dbChain,
+    })) as any;
 
     const { service } = makeService();
     const result = await service.rollback({
@@ -1290,254 +1496,226 @@ describe('DeploymentService.rollback', () => {
       targetVersion: 3,
     });
 
-    expect(result.id).toBe('dep-v3');
-    expect(mocks.findDeploymentByServiceVersion).toHaveBeenCalledWith(
+    assertEquals(result.id, 'dep-v3');
+    assertSpyCallArgs(mocks.findDeploymentByServiceVersion, 0, [
       expect.anything(),
       'w-1',
       3,
-    );
-  });
-});
-
+    ]);
+})
 // ---------------------------------------------------------------------------
 // rollbackWorker (convenience wrapper)
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.rollbackWorker', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('delegates to rollback with the correct parameters', async () => {
-    mocks.getServiceRollbackInfo.mockResolvedValue(null);
+  Deno.test('DeploymentService.rollbackWorker - delegates to rollback with the correct parameters', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getServiceRollbackInfo = (async () => null) as any;
 
     const { service } = makeService();
-    await expect(
+    await await assertRejects(async () => { await 
       service.rollbackWorker('w-1', 'user-1', 2),
-    ).rejects.toThrow('Worker w-1 not found');
+    ; }, 'Worker w-1 not found');
 
-    expect(mocks.getServiceRollbackInfo).toHaveBeenCalledWith(expect.anything(), 'w-1');
-  });
-});
-
+    assertSpyCallArgs(mocks.getServiceRollbackInfo, 0, [expect.anything(), 'w-1']);
+})
 // ---------------------------------------------------------------------------
 // resumeDeployment
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.resumeDeployment', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-  });
 
-  it('throws when deployment not found', async () => {
-    mocks.getDeploymentById.mockResolvedValue(null);
+  Deno.test('DeploymentService.resumeDeployment - throws when deployment not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+  mocks.getDeploymentById = (async () => null) as any;
 
     const { service } = makeService();
-    await expect(service.resumeDeployment('nonexistent')).rejects.toThrow(
+    await await assertRejects(async () => { await service.resumeDeployment('nonexistent'); }, 
       'Deployment nonexistent not found',
     );
-  });
-
-  it('returns immediately for already-succeeded deployments', async () => {
-    const dep = createBaseDeployment({ status: 'success' });
-    mocks.getDeploymentById.mockResolvedValue(dep);
+})
+  Deno.test('DeploymentService.resumeDeployment - returns immediately for already-succeeded deployments', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+  const dep = createBaseDeployment({ status: 'success' });
+    mocks.getDeploymentById = (async () => dep) as any;
 
     const { service } = makeService();
     const result = await service.resumeDeployment('dep-1');
 
-    expect(result.status).toBe('success');
-    expect(mocks.updateDeploymentRecord).not.toHaveBeenCalled();
-  });
-
-  it('clears step error before re-executing', async () => {
-    const dep = createBaseDeployment({ status: 'failed', step_error: 'some error' });
+    assertEquals(result.status, 'success');
+    assertSpyCalls(mocks.updateDeploymentRecord, 0);
+})
+  Deno.test('DeploymentService.resumeDeployment - clears step error before re-executing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+  const dep = createBaseDeployment({ status: 'failed', step_error: 'some error' });
     // first call is for resume, second will be for executeDeployment, which throws
     mocks.getDeploymentById
-      .mockResolvedValueOnce(dep) // resumeDeployment fetch
-      .mockResolvedValueOnce(null); // executeDeployment will throw
+       = (async () => dep) as any // resumeDeployment fetch
+       = (async () => null) as any; // executeDeployment will throw
 
     const { service } = makeService();
-    await expect(service.resumeDeployment('dep-1')).rejects.toThrow();
+    await await assertRejects(async () => { await service.resumeDeployment('dep-1'); });
 
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({
+      ({
         stepError: null,
         currentStep: null,
       }),
-    );
-  });
-});
-
+    ]);
+})
 // ---------------------------------------------------------------------------
 // getEnvVars / getMaskedEnvVars / getBindings
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.getEnvVars', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns empty object when no encrypted env vars', async () => {
-    const dep = createBaseDeployment({ env_vars_snapshot_encrypted: null });
+  Deno.test('DeploymentService.getEnvVars - returns empty object when no encrypted env vars', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ env_vars_snapshot_encrypted: null });
 
     const { service } = makeService();
     const result = await service.getEnvVars(dep);
 
-    expect(result).toEqual({});
-    expect(mocks.decryptEnvVars).not.toHaveBeenCalled();
-  });
-
-  it('decrypts env vars when present', async () => {
-    const dep = createBaseDeployment({ env_vars_snapshot_encrypted: 'encrypted-data' });
-    mocks.decryptEnvVars.mockResolvedValue({ MY_SECRET: 'value' });
+    assertEquals(result, {});
+    assertSpyCalls(mocks.decryptEnvVars, 0);
+})
+  Deno.test('DeploymentService.getEnvVars - decrypts env vars when present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ env_vars_snapshot_encrypted: 'encrypted-data' });
+    mocks.decryptEnvVars = (async () => ({ MY_SECRET: 'value' })) as any;
 
     const { service } = makeService();
     const result = await service.getEnvVars(dep);
 
-    expect(result).toEqual({ MY_SECRET: 'value' });
-    expect(mocks.decryptEnvVars).toHaveBeenCalledWith(
+    assertEquals(result, { MY_SECRET: 'value' });
+    assertSpyCallArgs(mocks.decryptEnvVars, 0, [
       'encrypted-data',
       'test-encryption-key',
       'dep-1',
-    );
-  });
-});
+    ]);
+})
 
-describe('DeploymentService.getMaskedEnvVars', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns masked env vars', async () => {
-    const dep = createBaseDeployment({ env_vars_snapshot_encrypted: 'encrypted-data' });
-    mocks.decryptEnvVars.mockResolvedValue({ TOKEN: 'secret-value' });
-    mocks.maskEnvVars.mockReturnValue({ TOKEN: '***' });
+  Deno.test('DeploymentService.getMaskedEnvVars - returns masked env vars', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ env_vars_snapshot_encrypted: 'encrypted-data' });
+    mocks.decryptEnvVars = (async () => ({ TOKEN: 'secret-value' })) as any;
+    mocks.maskEnvVars = (() => ({ TOKEN: '***' })) as any;
 
     const { service } = makeService();
     const result = await service.getMaskedEnvVars(dep);
 
-    expect(result).toEqual({ TOKEN: '***' });
-    expect(mocks.maskEnvVars).toHaveBeenCalledWith({ TOKEN: 'secret-value' });
-  });
-});
+    assertEquals(result, { TOKEN: '***' });
+    assertSpyCallArgs(mocks.maskEnvVars, 0, [{ TOKEN: 'secret-value' }]);
+})
 
-describe('DeploymentService.getBindings', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty array when no bindings', async () => {
-    const dep = createBaseDeployment({ bindings_snapshot_encrypted: null });
+  Deno.test('DeploymentService.getBindings - returns empty array when no bindings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ bindings_snapshot_encrypted: null });
 
     const { service } = makeService();
     const result = await service.getBindings(dep);
 
-    expect(result).toEqual([]);
-  });
-
-  it('decrypts and returns bindings', async () => {
-    const bindings = [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }];
+    assertEquals(result, []);
+})
+  Deno.test('DeploymentService.getBindings - decrypts and returns bindings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const bindings = [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }];
     const encrypted = JSON.stringify({ ciphertext: 'ct', iv: 'iv' });
     const dep = createBaseDeployment({ bindings_snapshot_encrypted: encrypted });
-    mocks.decrypt.mockResolvedValue(JSON.stringify(bindings));
+    mocks.decrypt = (async () => JSON.stringify(bindings)) as any;
 
     const { service } = makeService();
     const result = await service.getBindings(dep);
 
-    expect(result).toEqual([{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }]);
-  });
-
-  it('throws on invalid encrypted data structure', async () => {
-    const dep = createBaseDeployment({ bindings_snapshot_encrypted: '{"invalid": true}' });
-
-    const { service } = makeService();
-    await expect(service.getBindings(dep)).rejects.toThrow('Invalid encrypted data structure');
-  });
-
-  it('throws on malformed JSON in bindings_snapshot_encrypted', async () => {
-    const dep = createBaseDeployment({ bindings_snapshot_encrypted: 'not-json' });
+    assertEquals(result, [{ type: 'kv', name: 'MY_KV', providerResourceId: 'ns-1' }]);
+})
+  Deno.test('DeploymentService.getBindings - throws on invalid encrypted data structure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ bindings_snapshot_encrypted: '{"invalid": true}' });
 
     const { service } = makeService();
-    await expect(service.getBindings(dep)).rejects.toThrow('Failed to parse bindings_snapshot_encrypted');
-  });
+    await await assertRejects(async () => { await service.getBindings(dep); }, 'Invalid encrypted data structure');
+})
+  Deno.test('DeploymentService.getBindings - throws on malformed JSON in bindings_snapshot_encrypted', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dep = createBaseDeployment({ bindings_snapshot_encrypted: 'not-json' });
 
-  it('throws when decrypted bindings is not an array', async () => {
-    const encrypted = JSON.stringify({ ciphertext: 'ct', iv: 'iv' });
+    const { service } = makeService();
+    await await assertRejects(async () => { await service.getBindings(dep); }, 'Failed to parse bindings_snapshot_encrypted');
+})
+  Deno.test('DeploymentService.getBindings - throws when decrypted bindings is not an array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const encrypted = JSON.stringify({ ciphertext: 'ct', iv: 'iv' });
     const dep = createBaseDeployment({ bindings_snapshot_encrypted: encrypted });
-    mocks.decrypt.mockResolvedValue('"not-an-array"');
+    mocks.decrypt = (async () => '"not-an-array"') as any;
 
     const { service } = makeService();
-    await expect(service.getBindings(dep)).rejects.toThrow('is not an array');
-  });
-});
-
+    await await assertRejects(async () => { await service.getBindings(dep); }, 'is not an array');
+})
 // ---------------------------------------------------------------------------
 // cleanupStuckDeployments
 // ---------------------------------------------------------------------------
 
-describe('DeploymentService.cleanupStuckDeployments', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.resetStuckDeployment.mockResolvedValue(undefined);
-  });
 
-  it('returns 0 when no stuck deployments', async () => {
-    mocks.detectStuckDeployments.mockResolvedValue([]);
+  Deno.test('DeploymentService.cleanupStuckDeployments - returns 0 when no stuck deployments', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.resetStuckDeployment = (async () => undefined) as any;
+  mocks.detectStuckDeployments = (async () => []) as any;
 
     const { service } = makeService();
     const count = await service.cleanupStuckDeployments();
 
-    expect(count).toBe(0);
-    expect(mocks.resetStuckDeployment).not.toHaveBeenCalled();
-  });
-
-  it('resets stuck deployments and returns count', async () => {
-    const stuck = [
+    assertEquals(count, 0);
+    assertSpyCalls(mocks.resetStuckDeployment, 0);
+})
+  Deno.test('DeploymentService.cleanupStuckDeployments - resets stuck deployments and returns count', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.resetStuckDeployment = (async () => undefined) as any;
+  const stuck = [
       createBaseDeployment({ id: 'stuck-1', current_step: 'deploy_worker' }),
       createBaseDeployment({ id: 'stuck-2', current_step: 'routing' }),
     ];
-    mocks.detectStuckDeployments.mockResolvedValue(stuck);
+    mocks.detectStuckDeployments = (async () => stuck) as any;
 
     const { service } = makeService();
     const count = await service.cleanupStuckDeployments();
 
-    expect(count).toBe(2);
-    expect(mocks.resetStuckDeployment).toHaveBeenCalledTimes(2);
-    expect(mocks.resetStuckDeployment).toHaveBeenCalledWith(
+    assertEquals(count, 2);
+    assertSpyCalls(mocks.resetStuckDeployment, 2);
+    assertSpyCallArgs(mocks.resetStuckDeployment, 0, [
       expect.anything(),
       'stuck-1',
       expect.stringContaining('deploy_worker'),
-    );
-    expect(mocks.resetStuckDeployment).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.resetStuckDeployment, 0, [
       expect.anything(),
       'stuck-2',
       expect.stringContaining('routing'),
-    );
-  });
-
-  it('passes custom timeout', async () => {
-    mocks.detectStuckDeployments.mockResolvedValue([]);
+    ]);
+})
+  Deno.test('DeploymentService.cleanupStuckDeployments - passes custom timeout', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.resetStuckDeployment = (async () => undefined) as any;
+  mocks.detectStuckDeployments = (async () => []) as any;
 
     const { service } = makeService();
     await service.cleanupStuckDeployments(300000);
 
-    expect(mocks.detectStuckDeployments).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.detectStuckDeployments, 0, [
       expect.anything(),
       300000,
-    );
-  });
-});
-
+    ]);
+})
 // ---------------------------------------------------------------------------
 // resolveDeploymentArtifactRef (tested indirectly through the service)
 // ---------------------------------------------------------------------------
 
-describe('resolveDeploymentArtifactRef logic', () => {
-  it('prefers persisted artifact_ref when present', async () => {
-    const bundleContent = 'code';
+
+  Deno.test('resolveDeploymentArtifactRef logic - prefers persisted artifact_ref when present', async () => {
+  const bundleContent = 'code';
     const dep = createBaseDeployment({
       artifact_ref: 'custom-persisted-ref',
       version: 5,
@@ -1547,54 +1725,54 @@ describe('resolveDeploymentArtifactRef logic', () => {
     const completedDep = createBaseDeployment({ status: 'success', deploy_state: 'completed' });
 
     mocks.getDeploymentById
-      .mockResolvedValueOnce(dep)
-      .mockResolvedValueOnce(completedDep);
-    mocks.getDeploymentEvents.mockResolvedValue([]);
-    mocks.getServiceDeploymentBasics.mockResolvedValue({
+       = (async () => dep) as any
+       = (async () => completedDep) as any;
+    mocks.getDeploymentEvents = (async () => []) as any;
+    mocks.getServiceDeploymentBasics = (async () => ({
       exists: true,
       hostname: 'test.example.com',
-    });
-    mocks.createDeploymentProvider.mockReturnValue({
+    })) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
-      deploy: vi.fn(),
-      assertRollbackTarget: vi.fn(),
-    });
-    mocks.parseDeploymentTargetConfig.mockReturnValue({});
-    mocks.updateDeploymentState.mockResolvedValue(undefined);
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-    mocks.rollbackDeploymentSteps.mockResolvedValue(undefined);
-    mocks.reconcileManagedWorkerMcpServer.mockResolvedValue(undefined);
+      deploy: ((..._args: any[]) => undefined) as any,
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
+    mocks.parseDeploymentTargetConfig = (() => ({})) as any;
+    mocks.updateDeploymentState = (async () => undefined) as any;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.rollbackDeploymentSteps = (async () => undefined) as any;
+    mocks.reconcileManagedWorkerMcpServer = (async () => undefined) as any;
 
     // The deploy step will try to read bundle — mock to fail so we test
     // artifact ref resolution
-    mocks.executeDeploymentStep.mockImplementation(async (_db: any, _id: any, _state: any, stepName: string, action: () => Promise<void>) => {
+    mocks.executeDeploymentStep = async (_db: any, _id: any, _state: any, stepName: string, action: () => Promise<void>) => {
       await action();
-    });
-    mocks.fetchServiceWithDomains.mockResolvedValue({
+    } as any;
+    mocks.fetchServiceWithDomains = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: null,
       customDomains: [],
-    });
-    mocks.collectHostnames.mockReturnValue([]);
+    })) as any;
+    mocks.collectHostnames = (() => []) as any;
 
     const env = makeEnv();
-    env.WORKER_BUNDLES.get.mockResolvedValue({
+    env.WORKER_BUNDLES.get = (async () => ({
       text: () => Promise.resolve('code'),
-    });
-    mocks.computeSHA256.mockResolvedValue('sha256-abc');
-    mocks.constantTimeEqual.mockReturnValue(true);
+    })) as any;
+    mocks.computeSHA256 = (async () => 'sha256-abc') as any;
+    mocks.constantTimeEqual = (() => true) as any;
 
     const dbChain = makeDbUpdateChain();
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => ({
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        get: vi.fn().mockResolvedValue(null),
-      })),
-      update: vi.fn(() => dbChain),
-    });
+    mocks.getDb = (() => ({
+      select: () => ({
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        get: (async () => null),
+      }),
+      update: () => dbChain,
+    })) as any;
 
     const service = new DeploymentService(env, 'test-key');
 
@@ -1602,21 +1780,20 @@ describe('resolveDeploymentArtifactRef logic', () => {
     // rather than computing one from serviceId + version.
     // We verify this by checking the call to the provider's deploy was made
     // with the correct artifactRef.
-    const deployFn = vi.fn();
-    mocks.createDeploymentProvider.mockReturnValue({
+    const deployFn = ((..._args: any[]) => undefined) as any;
+    mocks.createDeploymentProvider = (() => ({
       name: 'workers-dispatch',
       deploy: deployFn,
-      assertRollbackTarget: vi.fn(),
-    });
+      assertRollbackTarget: ((..._args: any[]) => undefined) as any,
+    })) as any;
 
     const result = await service.executeDeployment('dep-1');
-    expect(result.status).toBe('success');
+    assertEquals(result.status, 'success');
 
     // The provider's deploy function should have been called with
     // artifactRef = 'custom-persisted-ref', meaning the persisted
     // artifact ref was used.
-    if (deployFn.mock.calls.length > 0) {
-      expect(deployFn.mock.calls[0][0].artifactRef).toBe('custom-persisted-ref');
+    if (deployFn.calls.length > 0) {
+      assertEquals(deployFn.calls[0][0].artifactRef, 'custom-persisted-ref');
     }
-  });
-});
+})

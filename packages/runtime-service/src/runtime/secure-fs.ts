@@ -5,8 +5,8 @@ import {
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
   verifyPathWithinBeforeCreate,
-} from './paths.js';
-import { SymlinkNotAllowedError, SymlinkWriteError } from '../shared/errors.js';
+} from './paths.ts';
+import { SymlinkNotAllowedError, SymlinkWriteError } from '../shared/errors.ts';
 
 class SpaceFileTooLargeError extends Error {
   code = 'FILE_TOO_LARGE' as const;

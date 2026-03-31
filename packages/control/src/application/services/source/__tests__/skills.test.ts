@@ -1,49 +1,24 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('skill-new'),
-  now: vi.fn().mockReturnValue('2026-03-24T00:00:00.000Z'),
-  listMcpServers: vi.fn().mockResolvedValue([]),
-  listSkillTemplates: vi.fn().mockReturnValue([]),
-  hasSkillTemplate: vi.fn().mockReturnValue(true),
-  validateCustomSkillMetadata: vi.fn().mockReturnValue({ normalized: {}, fieldErrors: {} }),
-  normalizeCustomSkillMetadata: vi.fn((v: unknown) => v || {}),
-}));
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'skill-new'),
+  now: (() => '2026-03-24T00:00:00.000Z'),
+  listMcpServers: (async () => []),
+  listSkillTemplates: (() => []),
+  hasSkillTemplate: (() => true),
+  validateCustomSkillMetadata: (() => ({ normalized: {}, fieldErrors: {} })),
+  normalizeCustomSkillMetadata: (v: unknown) => v || {},
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
-vi.mock('@/services/platform/mcp', () => ({
-  listMcpServers: mocks.listMcpServers,
-}));
-
-vi.mock('@/services/agent/skill-templates', () => ({
-  listSkillTemplates: mocks.listSkillTemplates,
-  hasSkillTemplate: mocks.hasSkillTemplate,
-}));
-
-vi.mock('@/services/agent/official-skills', () => ({
-  validateCustomSkillMetadata: mocks.validateCustomSkillMetadata,
-  normalizeCustomSkillMetadata: mocks.normalizeCustomSkillMetadata,
-  listLocalizedOfficialSkills: vi.fn().mockReturnValue([]),
-  getOfficialSkillById: vi.fn().mockReturnValue(null),
-  resolveSkillLocale: vi.fn().mockReturnValue('en'),
-}));
-
-vi.mock('@/services/agent/skills', () => ({
-  applySkillAvailability: vi.fn((skills: any[]) => skills),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/mcp'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/skill-templates'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/official-skills'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/skills'
 import {
   parseTriggers,
   parseSkillMetadata,
@@ -59,69 +34,60 @@ import {
 } from '@/services/source/skills';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock },
   };
 }
 
-describe('parseTriggers', () => {
-  it('parses comma-separated triggers', () => {
-    expect(parseTriggers('hello, world, test')).toEqual(['hello', 'world', 'test']);
-  });
 
-  it('returns empty array for null', () => {
-    expect(parseTriggers(null)).toEqual([]);
-  });
+  Deno.test('parseTriggers - parses comma-separated triggers', () => {
+  assertEquals(parseTriggers('hello, world, test'), ['hello', 'world', 'test']);
+})
+  Deno.test('parseTriggers - returns empty array for null', () => {
+  assertEquals(parseTriggers(null), []);
+})
+  Deno.test('parseTriggers - filters empty strings', () => {
+  assertEquals(parseTriggers('a,,b,'), ['a', 'b']);
+})
 
-  it('filters empty strings', () => {
-    expect(parseTriggers('a,,b,')).toEqual(['a', 'b']);
-  });
-});
-
-describe('parseSkillMetadata', () => {
-  it('returns empty object for null/undefined', () => {
-    expect(parseSkillMetadata(null)).toEqual({});
-    expect(parseSkillMetadata(undefined)).toEqual({});
-  });
-
-  it('returns empty object for empty string', () => {
-    expect(parseSkillMetadata('')).toEqual({});
-    expect(parseSkillMetadata('  ')).toEqual({});
-  });
-
-  it('returns empty object for invalid JSON', () => {
-    expect(parseSkillMetadata('not json')).toEqual({});
-  });
-
-  it('parses valid JSON metadata', () => {
-    mocks.normalizeCustomSkillMetadata.mockReturnValueOnce({ category: 'research' });
+  Deno.test('parseSkillMetadata - returns empty object for null/undefined', () => {
+  assertEquals(parseSkillMetadata(null), {});
+    assertEquals(parseSkillMetadata(undefined), {});
+})
+  Deno.test('parseSkillMetadata - returns empty object for empty string', () => {
+  assertEquals(parseSkillMetadata(''), {});
+    assertEquals(parseSkillMetadata('  '), {});
+})
+  Deno.test('parseSkillMetadata - returns empty object for invalid JSON', () => {
+  assertEquals(parseSkillMetadata('not json'), {});
+})
+  Deno.test('parseSkillMetadata - parses valid JSON metadata', () => {
+  mocks.normalizeCustomSkillMetadata = (() => ({ category: 'research' })) as any;
     const result = parseSkillMetadata('{"category":"research"}');
-    expect(result).toEqual({ category: 'research' });
-  });
-});
+    assertEquals(result, { category: 'research' });
+})
 
-describe('formatSkill', () => {
-  it('formats a skill row', () => {
-    mocks.normalizeCustomSkillMetadata.mockReturnValueOnce({});
+  Deno.test('formatSkill - formats a skill row', () => {
+  mocks.normalizeCustomSkillMetadata = (() => ({})) as any;
     const skill = {
       id: 's1',
       spaceId: 'ws-1',
@@ -136,22 +102,17 @@ describe('formatSkill', () => {
     };
 
     const result = formatSkill(skill);
-    expect(result.id).toBe('s1');
-    expect(result.name).toBe('my-skill');
-    expect(result.triggers).toEqual(['hello', 'world']);
-    expect(result.source).toBe('custom');
-    expect(result.editable).toBe(true);
-  });
-});
+    assertEquals(result.id, 's1');
+    assertEquals(result.name, 'my-skill');
+    assertEquals(result.triggers, ['hello', 'world']);
+    assertEquals(result.source, 'custom');
+    assertEquals(result.editable, true);
+})
 
-describe('listSkills', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns formatted skills', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+  Deno.test('listSkills - returns formatted skills', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 's1',
         accountId: 'ws-1',
@@ -164,34 +125,29 @@ describe('listSkills', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.normalizeCustomSkillMetadata.mockReturnValue({});
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
+    mocks.normalizeCustomSkillMetadata = (() => ({})) as any;
 
     const result = await listSkills({} as D1Database, 'ws-1');
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('skill-1');
-    expect(result[0].source).toBe('custom');
-  });
-});
+    assertEquals(result.length, 1);
+    assertEquals(result[0].name, 'skill-1');
+    assertEquals(result[0].source, 'custom');
+})
 
-describe('getSkill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getSkill - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getSkill({} as D1Database, 'ws-1', 'nonexistent');
-    expect(result).toBeNull();
-  });
-
-  it('returns skill row when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({
+    assertEquals(result, null);
+})
+  Deno.test('getSkill - returns skill row when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 's1',
       accountId: 'ws-1',
       name: 'skill-1',
@@ -202,23 +158,18 @@ describe('getSkill', () => {
       enabled: true,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getSkill({} as D1Database, 'ws-1', 's1');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('s1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 's1');
+})
 
-describe('createSkill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('creates skill with trimmed values', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({
+  Deno.test('createSkill - creates skill with trimmed values', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'skill-new',
       accountId: 'ws-1',
       name: 'new-skill',
@@ -229,9 +180,9 @@ describe('createSkill', () => {
       enabled: true,
       createdAt: '2026-03-24T00:00:00.000Z',
       updatedAt: '2026-03-24T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
-    mocks.validateCustomSkillMetadata.mockReturnValue({ normalized: {}, fieldErrors: {} });
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
+    mocks.validateCustomSkillMetadata = (() => ({ normalized: {}, fieldErrors: {} })) as any;
 
     const result = await createSkill({} as D1Database, 'ws-1', {
       name: '  new-skill  ',
@@ -240,52 +191,36 @@ describe('createSkill', () => {
       triggers: ['a', 'b'],
     });
 
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('skill-new');
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'skill-new');
+    assert(drizzle.insert.calls.length > 0);
+})
 
-describe('updateSkill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when skill not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('updateSkill - returns null when skill not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await updateSkill({} as D1Database, 'ws-1', 'nonexistent', { name: 'new' });
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
 
-describe('deleteSkill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('deletes skill by id', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('deleteSkill - deletes skill by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await deleteSkill({} as D1Database, 's1');
-    expect(drizzle.delete).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.delete.calls.length > 0);
+})
 
-describe('updateSkillEnabled', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns the new enabled state', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('updateSkillEnabled - returns the new enabled state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await updateSkillEnabled({} as D1Database, 's1', false);
-    expect(result).toBe(false);
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-});
+    assertEquals(result, false);
+    assert(drizzle.update.calls.length > 0);
+})

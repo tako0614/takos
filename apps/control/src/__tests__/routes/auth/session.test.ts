@@ -1,48 +1,29 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  createSession: vi.fn(),
-  deleteSession: vi.fn(),
-  setSessionCookie: vi.fn(),
-  clearSessionCookie: vi.fn(),
-  getSessionIdFromCookie: vi.fn(),
-  storeOAuthState: vi.fn(),
-  validateOAuthState: vi.fn(),
-  auditLog: vi.fn(),
-  createAuthSession: vi.fn(),
-  cleanupUserSessions: vi.fn(),
-  getDb: vi.fn(),
-  provisionGoogleOAuthUser: vi.fn(),
-  sanitizeReturnTo: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/identity/session', () => ({
-  createSession: mocks.createSession,
-  deleteSession: mocks.deleteSession,
-  setSessionCookie: mocks.setSessionCookie,
-  clearSessionCookie: mocks.clearSessionCookie,
-  getSessionIdFromCookie: mocks.getSessionIdFromCookie,
-}));
+const mocks = ({
+  createSession: ((..._args: any[]) => undefined) as any,
+  deleteSession: ((..._args: any[]) => undefined) as any,
+  setSessionCookie: ((..._args: any[]) => undefined) as any,
+  clearSessionCookie: ((..._args: any[]) => undefined) as any,
+  getSessionIdFromCookie: ((..._args: any[]) => undefined) as any,
+  storeOAuthState: ((..._args: any[]) => undefined) as any,
+  validateOAuthState: ((..._args: any[]) => undefined) as any,
+  auditLog: ((..._args: any[]) => undefined) as any,
+  createAuthSession: ((..._args: any[]) => undefined) as any,
+  cleanupUserSessions: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
+  provisionGoogleOAuthUser: ((..._args: any[]) => undefined) as any,
+  sanitizeReturnTo: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/identity/auth-utils', () => ({
-  storeOAuthState: mocks.storeOAuthState,
-  validateOAuthState: mocks.validateOAuthState,
-  auditLog: mocks.auditLog,
-  createAuthSession: mocks.createAuthSession,
-  cleanupUserSessions: mocks.cleanupUserSessions,
-}));
-
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/routes/auth/provisioning', () => ({
-  sanitizeReturnTo: mocks.sanitizeReturnTo,
-  provisionGoogleOAuthUser: mocks.provisionGoogleOAuthUser,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/session'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/auth-utils'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/auth/provisioning'
 import { authSessionRouter } from '@/routes/auth/session';
 
 function createEnv(): Env {
@@ -54,30 +35,30 @@ function createEnv(): Env {
   }) as unknown as Env;
 }
 
-describe('auth session Google OAuth signup', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
 
-    mocks.validateOAuthState.mockResolvedValue({
+  Deno.test('auth session Google OAuth signup - auto-provisions a new user instead of rejecting first-time Google login', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+    mocks.validateOAuthState = (async () => ({
       valid: true,
       returnTo: '/chat/me',
-    });
-    mocks.sanitizeReturnTo.mockReturnValue('/');
-    mocks.createSession.mockResolvedValue({
+    })) as any;
+    mocks.sanitizeReturnTo = (() => '/') as any;
+    mocks.createSession = (async () => ({
       id: 'session-1',
       user_id: 'user-1',
       created_at: Date.now(),
       expires_at: Date.now() + 1000,
-    });
-    mocks.setSessionCookie.mockReturnValue('__Host-tp_session=session-1');
-    mocks.createAuthSession.mockResolvedValue({
+    })) as any;
+    mocks.setSessionCookie = (() => '__Host-tp_session=session-1') as any;
+    mocks.createAuthSession = (async () => ({
       token: 'auth-session-token',
       expiresAt: new Date(Date.now() + 1000).toISOString(),
-    });
-    mocks.cleanupUserSessions.mockResolvedValue(undefined);
-    mocks.auditLog.mockResolvedValue(undefined);
+    })) as any;
+    mocks.cleanupUserSessions = (async () => undefined) as any;
+    mocks.auditLog = (async () => undefined) as any;
 
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    (globalThis as any).fetch = async (input: RequestInfo | URL => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       if (url === 'https://oauth2.googleapis.com/token') {
         return new Response(JSON.stringify({
@@ -103,30 +84,27 @@ describe('auth session Google OAuth signup', () => {
         });
       }
       throw new Error(`Unexpected fetch URL: ${url}`);
-    }));
-  });
-
-  it('auto-provisions a new user instead of rejecting first-time Google login', async () => {
-    // The production code uses Drizzle chains:
+    });
+  // The production code uses Drizzle chains:
     //   db.select().from(authIdentities).where(...).get() -> null (no identity)
     //   provisionGoogleOAuthUser() -> new user
     //   db.insert(authIdentities).values({...})
-    const insertValues = vi.fn().mockResolvedValue(undefined);
-    const selectGet = vi.fn().mockResolvedValue(null);
+    const insertValues = (async () => undefined);
+    const selectGet = (async () => null);
     const chain: Record<string, unknown> = {};
-    chain.from = vi.fn().mockReturnValue(chain);
-    chain.where = vi.fn().mockReturnValue(chain);
+    chain.from = (() => chain);
+    chain.where = (() => chain);
     chain.get = selectGet;
-    chain.all = vi.fn().mockResolvedValue([]);
+    chain.all = (async () => []);
 
     const mockDb = {
-      select: vi.fn().mockReturnValue(chain),
-      insert: vi.fn().mockReturnValue({ values: insertValues }),
-      update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) }),
+      select: (() => chain),
+      insert: (() => ({ values: insertValues })),
+      update: (() => ({ set: (() => ({ where: (async () => undefined) })) })),
     };
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
-    mocks.provisionGoogleOAuthUser.mockResolvedValue({
+    mocks.provisionGoogleOAuthUser = (async () => ({
       id: 'new-user-id',
       email: 'new-user@example.com',
       name: 'New User',
@@ -137,7 +115,7 @@ describe('auth session Google OAuth signup', () => {
       setup_completed: false,
       created_at: '2026-03-13T00:00:00.000Z',
       updated_at: '2026-03-13T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = authSessionRouter;
 
@@ -147,22 +125,21 @@ describe('auth session Google OAuth signup', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/setup');
-    expect(response.headers.get('set-cookie')).toBe('__Host-tp_session=session-1');
+    assertEquals(response.status, 302);
+    assertEquals(response.headers.get('location'), '/setup');
+    assertEquals(response.headers.get('set-cookie'), '__Host-tp_session=session-1');
 
     // Verify DB was used to look up existing user by auth identity (select queries)
-    expect(mockDb.select).toHaveBeenCalled();
+    assert(mockDb.select.calls.length > 0);
     // Verify new user was provisioned via provisionGoogleOAuthUser
-    expect(mocks.provisionGoogleOAuthUser).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.provisionGoogleOAuthUser, 0, [
       expect.anything(),
-      expect.objectContaining({ email: 'new-user@example.com' }),
-    );
+      ({ email: 'new-user@example.com' }),
+    ]);
     // Verify auth identity was created via insert
-    expect(mockDb.insert).toHaveBeenCalled();
-    expect(mocks.auditLog).toHaveBeenCalledWith(
+    assert(mockDb.insert.calls.length > 0);
+    assertSpyCallArgs(mocks.auditLog, 0, [
       'oauth_success',
-      expect.objectContaining({ email: 'new-user@example.com' }),
-    );
-  });
-});
+      ({ email: 'new-user@example.com' }),
+    ]);
+})

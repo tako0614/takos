@@ -1,31 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  createShortcut: vi.fn(),
-  deleteShortcut: vi.fn(),
-  getOrCreatePersonalWorkspace: vi.fn(),
-  listShortcuts: vi.fn(),
-  updateShortcut: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/identity/shortcuts', async () => {
-  const actual = await vi.importActual<typeof import('@/services/identity/shortcuts')>('@/services/identity/shortcuts');
-  return {
-    ...actual,
-    createShortcut: mocks.createShortcut,
-    deleteShortcut: mocks.deleteShortcut,
-    listShortcuts: mocks.listShortcuts,
-    updateShortcut: mocks.updateShortcut,
-  };
+const mocks = ({
+  createShortcut: ((..._args: any[]) => undefined) as any,
+  deleteShortcut: ((..._args: any[]) => undefined) as any,
+  getOrCreatePersonalWorkspace: ((..._args: any[]) => undefined) as any,
+  listShortcuts: ((..._args: any[]) => undefined) as any,
+  updateShortcut: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/identity/spaces', () => ({
-  getOrCreatePersonalWorkspace: mocks.getOrCreatePersonalWorkspace,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/shortcuts'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
 import shortcuts from '@/routes/shortcuts';
 
 function createApp() {
@@ -42,14 +31,11 @@ function createApp() {
   return app;
 }
 
-describe('shortcut create contract', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // No longer used since shortcuts now use user.id directly
-  });
 
-  it('rejects legacy resource types', async () => {
-    const app = createApp();
+  Deno.test('shortcut create contract - rejects legacy resource types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // No longer used since shortcuts now use user.id directly
+  const app = createApp();
     const response = await app.fetch(
       new Request('http://localhost/api/shortcuts', {
         method: 'POST',
@@ -66,16 +52,17 @@ describe('shortcut create contract', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 400);
+    await assertEquals(await response.json(), {
       code: 'BAD_REQUEST',
       error: 'Invalid resourceType. Allowed values: service, resource, link',
     });
-    expect(mocks.createShortcut).not.toHaveBeenCalled();
-  });
-
-  it('allows current worker/resource/link shortcut types', async () => {
-    mocks.createShortcut.mockResolvedValue({
+    assertSpyCalls(mocks.createShortcut, 0);
+})
+  Deno.test('shortcut create contract - allows current worker/resource/link shortcut types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // No longer used since shortcuts now use user.id directly
+  mocks.createShortcut = (async () => ({
       id: 'shortcut-1',
       user_id: 'user-1',
       space_id: 'space-personal-1',
@@ -86,7 +73,7 @@ describe('shortcut create contract', () => {
       position: 0,
       created_at: '2026-03-06T00:00:00.000Z',
       updated_at: '2026-03-06T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -105,8 +92,8 @@ describe('shortcut create contract', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(201);
-    expect(mocks.createShortcut).toHaveBeenCalledWith(
+    assertEquals(response.status, 201);
+    assertSpyCallArgs(mocks.createShortcut, 0, [
       expect.anything(),
       'user-1',
       'user-1',
@@ -115,6 +102,5 @@ describe('shortcut create contract', () => {
         resourceType: 'service',
         resourceId: 'worker-1',
       },
-    );
-  });
-});
+    ]);
+})

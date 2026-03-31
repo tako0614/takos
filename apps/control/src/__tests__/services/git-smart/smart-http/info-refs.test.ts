@@ -1,29 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleInfoRefs } from '@/services/git-smart/smart-http/info-refs';
 import { parsePktLines, pktLineText } from '@/services/git-smart/protocol/pkt-line';
 
 // Mock refs and getDefaultBranch
-vi.mock('@/services/git-smart/core/refs', () => ({
-  listAllRefs: vi.fn(),
-  getDefaultBranch: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/refs'
 
 import { listAllRefs, getDefaultBranch } from '@/services/git-smart/core/refs';
-const mockListAllRefs = vi.mocked(listAllRefs);
-const mockGetDefaultBranch = vi.mocked(getDefaultBranch);
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
+const mockListAllRefs = listAllRefs;
+const mockGetDefaultBranch = getDefaultBranch;
 
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 
-describe('handleInfoRefs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns zero-SHA capabilities line for empty repo', async () => {
-    mockListAllRefs.mockResolvedValue([]);
-    mockGetDefaultBranch.mockResolvedValue({
+
+  Deno.test('handleInfoRefs - returns zero-SHA capabilities line for empty repo', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockListAllRefs = (async () => []) as any;
+    mockGetDefaultBranch = (async () => ({
       id: '1',
       repo_id: 'repo1',
       name: 'main',
@@ -32,34 +28,35 @@ describe('handleInfoRefs', () => {
       is_protected: false,
       created_at: '',
       updated_at: '',
-    });
+    })) as any;
 
     const result = await handleInfoRefs({} as any, 'repo1', 'git-upload-pack');
     const lines = parsePktLines(result);
 
     // service announcement + flush + capabilities line + flush
-    expect(lines.length).toBeGreaterThanOrEqual(4);
+    assert(lines.length >= 4);
 
     // First data line is service announcement
-    expect(pktLineText(lines[0])).toBe('# service=git-upload-pack');
-    expect(lines[1].type).toBe('flush');
+    assertEquals(pktLineText(lines[0]), '# service=git-upload-pack');
+    assertEquals(lines[1].type, 'flush');
 
     // Capabilities line with zero SHA
     const capsLine = pktLineText(lines[2]);
-    expect(capsLine).toContain(ZERO_SHA);
-    expect(capsLine).toContain('capabilities^{}');
-    expect(capsLine).toContain('side-band-64k');
+    assertStringIncludes(capsLine, ZERO_SHA);
+    assertStringIncludes(capsLine, 'capabilities^{}');
+    assertStringIncludes(capsLine, 'side-band-64k');
 
     // Final flush
-    expect(lines[3].type).toBe('flush');
-  });
+    assertEquals(lines[3].type, 'flush');
+})
 
-  it('returns HEAD first, then sorted refs', async () => {
-    mockListAllRefs.mockResolvedValue([
+  Deno.test('handleInfoRefs - returns HEAD first, then sorted refs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockListAllRefs = (async () => [
       { name: 'refs/heads/main', target: SHA_A, type: 'branch' as const },
       { name: 'refs/heads/develop', target: SHA_B, type: 'branch' as const },
-    ]);
-    mockGetDefaultBranch.mockResolvedValue({
+    ]) as any;
+    mockGetDefaultBranch = (async () => ({
       id: '1',
       repo_id: 'repo1',
       name: 'main',
@@ -68,7 +65,7 @@ describe('handleInfoRefs', () => {
       is_protected: false,
       created_at: '',
       updated_at: '',
-    });
+    })) as any;
 
     const result = await handleInfoRefs({} as any, 'repo1', 'git-upload-pack');
     const lines = parsePktLines(result);
@@ -80,24 +77,25 @@ describe('handleInfoRefs', () => {
       .filter(t => !t.startsWith('#'));
 
     // First data line is HEAD with capabilities
-    expect(dataLines[0]).toContain(SHA_A);
-    expect(dataLines[0]).toContain('HEAD');
-    expect(dataLines[0]).toContain('side-band-64k');
+    assertStringIncludes(dataLines[0], SHA_A);
+    assertStringIncludes(dataLines[0], 'HEAD');
+    assertStringIncludes(dataLines[0], 'side-band-64k');
 
     // Remaining refs sorted by name
     const refLines = dataLines.slice(1);
     const refNames = refLines.map(l => l.split(' ')[1]);
-    expect(refNames).toEqual([...refNames].sort());
-  });
+    assertEquals(refNames, [...refNames].sort());
+})
 
-  it('uses receive-pack capabilities for git-receive-pack', async () => {
-    mockListAllRefs.mockResolvedValue([]);
-    mockGetDefaultBranch.mockResolvedValue(null);
+  Deno.test('handleInfoRefs - uses receive-pack capabilities for git-receive-pack', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockListAllRefs = (async () => []) as any;
+    mockGetDefaultBranch = (async () => null) as any;
 
     const result = await handleInfoRefs({} as any, 'repo1', 'git-receive-pack');
     const lines = parsePktLines(result);
 
     const capsLine = lines.find(l => l.type === 'data' && pktLineText(l).includes('report-status'));
-    expect(capsLine).toBeDefined();
-  });
-});
+    assert(capsLine !== undefined);
+})
+

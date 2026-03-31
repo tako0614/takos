@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { JSX } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { useConfirmDialogState, useConfirmDialogActions } from '../../store/confirm-dialog';
@@ -15,79 +15,70 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-const iconContainerStyle: CSSProperties = {
+const iconContainerStyle: JSX.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+  'align-items': 'center',
+  'justify-content': 'center',
   width: '2.5rem',
   height: '2.5rem',
-  borderRadius: 'var(--radius-full)',
-  backgroundColor: 'var(--color-surface-secondary)',
-  flexShrink: 0,
+  'border-radius': 'var(--radius-full)',
+  'background-color': 'var(--color-surface-secondary)',
+  'flex-shrink': 0,
 };
 
-const contentStyle: CSSProperties = {
+const contentStyle: JSX.CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  textAlign: 'center',
+  'flex-direction': 'column',
+  'align-items': 'center',
+  'text-align': 'center',
   gap: '1rem',
   padding: '0.5rem 0',
 };
 
-const titleStyle: CSSProperties = {
-  fontSize: '1.125rem',
-  fontWeight: 600,
+const titleStyle: JSX.CSSProperties = {
+  'font-size': '1.125rem',
+  'font-weight': 600,
   color: 'var(--color-text-primary)',
   margin: 0,
 };
 
-const messageStyle: CSSProperties = {
-  fontSize: '0.875rem',
+const messageStyle: JSX.CSSProperties = {
+  'font-size': '0.875rem',
   color: 'var(--color-text-secondary)',
   margin: 0,
-  lineHeight: 1.5,
+  'line-height': 1.5,
 };
 
-export function ConfirmDialog({
-  isOpen,
-  title,
-  message,
-  confirmText,
-  cancelText,
-  danger = false,
-  onConfirm,
-  onCancel,
-}: ConfirmDialogProps) {
+export function ConfirmDialog(props: ConfirmDialogProps) {
   const { t } = useI18n();
 
-  const iconStyle: CSSProperties = {
+  const iconStyle = (): JSX.CSSProperties => ({
     ...iconContainerStyle,
-    color: danger ? 'var(--color-error)' : 'var(--color-text-primary)',
-  };
+    color: props.danger ? 'var(--color-error)' : 'var(--color-text-primary)',
+  });
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onCancel}
+      isOpen={props.isOpen}
+      onClose={props.onCancel}
       size="sm"
       showCloseButton={false}
       closeOnOverlayClick={true}
       closeOnEscape={true}
     >
       <div style={contentStyle}>
-        <div style={iconStyle}>
+        <div style={iconStyle()}>
           <Icons.AlertTriangle style={{ width: '1.25rem', height: '1.25rem' }} />
         </div>
-        <h3 style={titleStyle}>{title}</h3>
-        <p style={messageStyle}>{message}</p>
+        <h3 style={titleStyle}>{props.title}</h3>
+        <p style={messageStyle}>{props.message}</p>
       </div>
-      <ModalFooter style={{ justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
-        <Button variant="secondary" onClick={onCancel}>
-          {cancelText || t('cancel')}
+      <ModalFooter style={{ 'justify-content': 'center', gap: '0.75rem', 'margin-top': '0.5rem' }}>
+        <Button variant="secondary" onClick={props.onCancel}>
+          {props.cancelText || t('cancel')}
         </Button>
-        <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
-          {confirmText || t('confirm')}
+        <Button variant={props.danger ? 'danger' : 'primary'} onClick={props.onConfirm}>
+          {props.confirmText || t('confirm')}
         </Button>
       </ModalFooter>
     </Modal>
@@ -104,12 +95,12 @@ export function ConfirmDialogRenderer() {
 
   return (
     <ConfirmDialog
-      isOpen={state.isOpen}
-      title={state.title}
-      message={state.message}
-      confirmText={state.confirmText}
-      cancelText={state.cancelText}
-      danger={state.danger}
+      isOpen={state().isOpen}
+      title={state().title}
+      message={state().message}
+      confirmText={state().confirmText}
+      cancelText={state().cancelText}
+      danger={state().danger}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

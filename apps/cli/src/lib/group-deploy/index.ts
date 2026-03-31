@@ -30,19 +30,19 @@ export type {
   GroupDeployOptions,
   WranglerDirectDeployOptions,
   WranglerDirectDeployResult,
-} from './deploy-models.js';
+} from './deploy-models.ts';
 
 // Re-export container helpers (exported in original)
-export { toPascalCase, generateContainerWranglerConfig, serializeContainerWranglerToml, generateContainerHostEntry } from './container.js';
+export { toPascalCase, generateContainerWranglerConfig, serializeContainerWranglerToml, generateContainerHostEntry } from './container.ts';
 
 // Re-export template helpers (exported in original)
-export { buildTemplateContext, resolveTemplateString } from './template.js';
+export { buildTemplateContext, resolveTemplateString } from './template.ts';
 
 // Re-export provider abstraction
-export type { ResourceProvider, ProvisionResult, ProviderOptions } from './resource-provider.js';
-export { resolveProvider } from './provisioner.js';
-export { CloudflareProvider, AWSProvider, GCPProvider, K8sProvider, DockerProvider } from './providers/index.js';
+export type { ResourceProvider, ProvisionResult, ProviderOptions } from './resource-provider.ts';
+export { resolveProvider } from './provisioner.ts';
+export { CloudflareProvider, AWSProvider, GCPProvider, K8sProvider, DockerProvider } from './providers/index.ts';
 
 // Re-export public API
-export { deployGroup } from './orchestrator.js';
-export { deployWranglerDirect } from './wrangler-direct.js';
+export { deployGroup } from './orchestrator.ts';
+export { deployWranglerDirect } from './wrangler-direct.ts';

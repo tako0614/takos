@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { deriveRunStatusFromTimelineEvents } from '@/routes/runs/observation';
 
-describe('deriveRunStatusFromTimelineEvents', () => {
-  it('keeps fallback status when timeline has no terminal events', () => {
-    const status = deriveRunStatusFromTimelineEvents('running', [
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('deriveRunStatusFromTimelineEvents - keeps fallback status when timeline has no terminal events', () => {
+  const status = deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'thinking',
@@ -12,67 +13,65 @@ describe('deriveRunStatusFromTimelineEvents', () => {
       },
     ]);
 
-    expect(status).toBe('running');
-  });
-
-  it('maps completion/error/cancelled packets to terminal run status', () => {
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(status, 'running');
+})
+  Deno.test('deriveRunStatusFromTimelineEvents - maps completion/error/cancelled packets to terminal run status', () => {
+  assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'completed',
         data: '{}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('completed');
+    ]), 'completed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'error',
         data: '{"error":"boom"}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('failed');
+    ]), 'failed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'run.failed',
         data: '{"error":"queue failed"}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('failed');
+    ]), 'failed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'cancelled',
         data: '{}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('cancelled');
-  });
-
-  it('maps run_status terminal payload to terminal run status', () => {
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    ]), 'cancelled');
+})
+  Deno.test('deriveRunStatusFromTimelineEvents - maps run_status terminal payload to terminal run status', () => {
+  assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'run_status',
         data: '{"status":"completed"}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('completed');
+    ]), 'completed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'run_status',
         data: '{"run":{"status":"failed"}}',
         created_at: '2026-02-27T00:00:00.000Z',
       },
-    ])).toBe('failed');
+    ]), 'failed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'run_status',
@@ -85,11 +84,10 @@ describe('deriveRunStatusFromTimelineEvents', () => {
         data: '{"run":{"status":"cancelled"}}',
         created_at: '2026-02-27T00:00:01.000Z',
       },
-    ])).toBe('cancelled');
-  });
-
-  it('uses the latest observed terminal packet when multiple exist', () => {
-    const status = deriveRunStatusFromTimelineEvents('running', [
+    ]), 'cancelled');
+})
+  Deno.test('deriveRunStatusFromTimelineEvents - uses the latest observed terminal packet when multiple exist', () => {
+  const status = deriveRunStatusFromTimelineEvents('running', [
       {
         event_id: 1,
         type: 'error',
@@ -104,6 +102,5 @@ describe('deriveRunStatusFromTimelineEvents', () => {
       },
     ]);
 
-    expect(status).toBe('cancelled');
-  });
-});
+    assertEquals(status, 'cancelled');
+})

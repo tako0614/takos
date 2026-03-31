@@ -5,15 +5,15 @@
  * ResourceProvider interface. The provider is resolved automatically
  * from the supplied options and environment variables.
  */
-import type { ProvisionedResource, ResourceProvisionResult } from './deploy-models.js';
-import { toBinding } from './cloudflare-utils.js';
-import type { ResourceProvider, ProviderOptions } from './resource-provider.js';
-import { validateResourceName } from './resource-provider.js';
-import { CloudflareProvider } from './providers/cloudflare.js';
-import { AWSProvider } from './providers/aws.js';
-import { GCPProvider } from './providers/gcp.js';
-import { K8sProvider } from './providers/kubernetes.js';
-import { DockerProvider } from './providers/docker.js';
+import type { ProvisionedResource, ResourceProvisionResult } from './deploy-models.ts';
+import { toBinding } from './cloudflare-utils.ts';
+import type { ResourceProvider, ProviderOptions } from './resource-provider.ts';
+import { validateResourceName } from './resource-provider.ts';
+import { CloudflareProvider } from './providers/cloudflare.ts';
+import { AWSProvider } from './providers/aws.ts';
+import { GCPProvider } from './providers/gcp.ts';
+import { K8sProvider } from './providers/kubernetes.ts';
+import { DockerProvider } from './providers/docker.ts';
 
 const RESOURCE_TYPE_ALIAS: Record<string, string> = {
   secret_ref: 'secretRef',
@@ -55,13 +55,13 @@ export function resolveProvider(options: ProviderOptions): ResourceProvider {
       env: options.env,
     });
   }
-  if (process.env.AWS_ACCESS_KEY_ID) {
+  if (Deno.env.get('AWS_ACCESS_KEY_ID')) {
     return new AWSProvider();
   }
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (Deno.env.get('GOOGLE_APPLICATION_CREDENTIALS')) {
     return new GCPProvider();
   }
-  if (process.env.KUBECONFIG) {
+  if (Deno.env.get('KUBECONFIG')) {
     return new K8sProvider();
   }
   return new DockerProvider();

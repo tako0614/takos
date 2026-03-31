@@ -1,4 +1,3 @@
-import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { Hono } from 'hono';
 import { generateKeyPairSync } from 'node:crypto';
 
@@ -8,58 +7,12 @@ const testServiceJwtKeys = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
 
-process.env.JWT_PUBLIC_KEY ||= testServiceJwtKeys.publicKey;
+// Set JWT_PUBLIC_KEY for tests if not already set
+if (!Deno.env.get('JWT_PUBLIC_KEY')) {
+  Deno.env.set('JWT_PUBLIC_KEY', testServiceJwtKeys.publicKey);
+}
 
-// Route tests focus on route behavior. Allow missing service-token scope to pass.
-vi.mock('../middleware/space-scope.js', async () => {
-  const actual = await vi.importActual<any>('../middleware/space-scope.js');
-  const original = actual.enforceSpaceScopeMiddleware as (getIds: any) => any;
-
-  return {
-    ...actual,
-    enforceSpaceScopeMiddleware: (getIds: any) => {
-      const middleware = original(getIds);
-      return async (c: any, next: any) => {
-        const token = c.get?.('serviceToken') as { scope_space_id?: string } | undefined;
-        if (!token?.scope_space_id) {
-          await next();
-          return;
-        }
-        return middleware(c, next);
-      };
-    },
-  };
-});
-
-// Keep pwd-based composite-action assertions deterministic across hosts.
-vi.mock('../runtime/actions/executor.js', async () => {
-  const actual = await vi.importActual<typeof import('../runtime/actions/executor.js')>('../runtime/actions/executor.js');
-  const ActualStepExecutor = actual.StepExecutor;
-
-  class PatchedStepExecutor extends ActualStepExecutor {
-    override async executeRun(
-      command: string,
-      timeoutMs?: number,
-      options?: { shell?: string; workingDirectory?: string },
-    ): Promise<import('../runtime/actions/executor.js').ExecutorStepResult> {
-      if (command.trim() === 'pwd') {
-        return {
-          exitCode: 0,
-          stdout: '',
-          stderr: '',
-          outputs: {},
-          conclusion: 'success',
-        };
-      }
-      return super.executeRun(command, timeoutMs, options);
-    }
-  }
-
-  return {
-    ...actual,
-    StepExecutor: PatchedStepExecutor,
-  };
-});
+// [Deno] vi.mock for space-scope and executor removed — tests should use manual stubs
 
 export function createTestApp(): Hono {
   return new Hono();
@@ -73,7 +26,10 @@ export type TestRequestOptions = {
   body?: unknown;
 };
 
-export async function testRequest(app: Hono, options: TestRequestOptions): Promise<{
+export async function testRequest(
+  app: Hono,
+  options: TestRequestOptions,
+): Promise<{
   status: number;
   headers: Headers;
   body: unknown;
@@ -98,9 +54,7 @@ export async function testRequest(app: Hono, options: TestRequestOptions): Promi
   });
 
   const contentType = response.headers.get('content-type') || '';
-  const parsedBody = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
+  const parsedBody = contentType.includes('application/json') ? await response.json() : await response.text();
 
   return {
     status: response.status,
@@ -108,19 +62,3 @@ export async function testRequest(app: Hono, options: TestRequestOptions): Promi
     body: parsedBody,
   };
 }
-
-beforeAll(() => {
-  if (!process.env.DEBUG) {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'info').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-  }
-});
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
-
-afterAll(() => {
-  vi.restoreAllMocks();
-});

@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest';
 import {
   appManifestToBundleDocs,
   parseAppManifestYaml,
 } from '@/services/source/app-manifest';
 
-describe('app manifest service', () => {
-  it('parses spec.services (常設コンテナ)', () => {
-    const manifest = parseAppManifestYaml(`
+
+import { assertEquals, assert, assertThrows, assertObjectMatch } from 'jsr:@std/assert';
+
+  Deno.test('app manifest service - parses spec.services (常設コンテナ)', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -28,16 +29,15 @@ spec:
           artifactPath: dist/worker.js
 `);
 
-    expect(manifest.spec.services).toBeDefined();
-    expect(manifest.spec.services!['my-api']).toEqual({
+    assert(manifest.spec.services !== undefined);
+    assertEquals(manifest.spec.services!['my-api'], {
       dockerfile: 'Dockerfile',
       port: 3000,
       ipv4: true,
     });
-  });
-
-  it('parses direct-artifact worker and image-based service forms', () => {
-    const manifest = parseAppManifestYaml(`
+})
+  Deno.test('app manifest service - parses direct-artifact worker and image-based service forms', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -59,7 +59,7 @@ spec:
         artifactRef: worker-web-v1
 `);
 
-    expect(manifest.spec.services?.api).toEqual({
+    assertEquals(manifest.spec.services?.api, {
       port: 8080,
       artifact: {
         kind: 'image',
@@ -67,17 +67,16 @@ spec:
         provider: 'k8s',
       },
     });
-    expect(manifest.spec.workers?.web).toEqual({
+    assertEquals(manifest.spec.workers?.web, {
       artifact: {
         kind: 'bundle',
         deploymentId: 'dep-web-1',
         artifactRef: 'worker-web-v1',
       },
     });
-  });
-
-  it('rejects legacy local build fields', () => {
-    expect(() => parseAppManifestYaml(`
+})
+  Deno.test('app manifest service - rejects legacy local build fields', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -89,11 +88,10 @@ spec:
       build:
         command: pnpm build
         output: dist/api.mjs
-`)).toThrow(/local build fields are not supported/);
-  });
-
-  it('parses vectorize resources and worker bindings', () => {
-    const manifest = parseAppManifestYaml(`
+`); }, /local build fields are not supported/);
+})
+  Deno.test('app manifest service - parses vectorize resources and worker bindings', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -119,7 +117,7 @@ spec:
         vectorize: [semantic-index]
 `);
 
-    expect(manifest.spec.resources?.['semantic-index']).toEqual({
+    assertEquals(manifest.spec.resources?.['semantic-index'], {
       type: 'vectorize',
       binding: 'SEARCH_INDEX',
       vectorize: {
@@ -128,11 +126,10 @@ spec:
       },
     });
     const apiWorker = manifest.spec.workers!.api;
-    expect(apiWorker.bindings?.vectorize).toEqual(['semantic-index']);
-  });
-
-  it('parses queue, analytics, workflow resources and worker triggers', () => {
-    const manifest = parseAppManifestYaml(`
+    assertEquals(apiWorker.bindings?.vectorize, ['semantic-index']);
+})
+  Deno.test('app manifest service - parses queue, analytics, workflow resources and worker triggers', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -184,7 +181,7 @@ spec:
             export: handleJob
 `);
 
-    expect(manifest.spec.resources?.jobs).toEqual({
+    assertEquals(manifest.spec.resources?.jobs, {
       type: 'queue',
       binding: 'JOBS',
       queue: {
@@ -193,14 +190,14 @@ spec:
         deadLetterQueue: 'jobs-dlq',
       },
     });
-    expect(manifest.spec.resources?.events).toEqual({
+    assertEquals(manifest.spec.resources?.events, {
       type: 'analyticsEngine',
       binding: 'ANALYTICS',
       analyticsEngine: {
         dataset: 'tenant-events',
       },
     });
-    expect(manifest.spec.resources?.onboarding).toEqual({
+    assertEquals(manifest.spec.resources?.onboarding, {
       type: 'workflow',
       binding: 'ONBOARDING_FLOW',
       workflow: {
@@ -211,19 +208,18 @@ spec:
       },
     });
     const apiWorker = manifest.spec.workers!.api;
-    expect(apiWorker.bindings).toMatchObject({
+    assertObjectMatch(apiWorker.bindings, {
       queues: ['jobs'],
       analytics: ['events'],
       workflows: ['onboarding'],
     });
-    expect(apiWorker.triggers).toEqual({
+    assertEquals(apiWorker.triggers, {
       schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
       queues: [{ queue: 'jobs', export: 'handleJob' }],
     });
-  });
-
-  it('emits vectorize resources and bundle docs for worker artifacts', () => {
-    const manifest = parseAppManifestYaml(`
+})
+  Deno.test('app manifest service - emits vectorize resources and bundle docs for worker artifacts', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -259,10 +255,10 @@ spec:
       }],
     ]));
 
-    expect(docs).toContainEqual(expect.objectContaining({
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Resource',
       metadata: { name: 'semantic-index' },
-      spec: expect.objectContaining({
+      spec: ({
         type: 'vectorize',
         binding: 'SEARCH_INDEX',
         vectorize: {
@@ -270,34 +266,33 @@ spec:
           metric: 'cosine',
         },
       }),
-    }));
-    expect(docs).toContainEqual(expect.objectContaining({
+    }))));
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Workload',
-      metadata: expect.objectContaining({ name: 'api' }),
-      spec: expect.objectContaining({
-        pluginConfig: expect.objectContaining({
-          bindings: expect.objectContaining({
+      metadata: ({ name: 'api' }),
+      spec: ({
+        pluginConfig: ({
+          bindings: ({
             services: [],
           }),
         }),
       }),
-    }));
-    expect(docs).toContainEqual(expect.objectContaining({
+    }))));
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Binding',
       metadata: { name: 'semantic-index-to-api' },
-      spec: expect.objectContaining({
+      spec: ({
         from: 'semantic-index',
         to: 'api',
-        mount: expect.objectContaining({
+        mount: ({
           as: 'SEARCH_INDEX',
           type: 'vectorize',
         }),
       }),
-    }));
-  });
-
-  it('parses worker with container references', () => {
-    const manifest = parseAppManifestYaml(`
+    }))));
+})
+  Deno.test('app manifest service - parses worker with container references', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -321,17 +316,16 @@ spec:
           artifactPath: dist/browser-host.js
 `);
 
-    expect(manifest.spec.containers!.browser).toEqual({
+    assertEquals(manifest.spec.containers!.browser, {
       dockerfile: 'packages/browser-service/Dockerfile',
       port: 8080,
       instanceType: 'standard-2',
       maxInstances: 25,
     });
-    expect(manifest.spec.workers!['browser-host'].containers).toEqual(['browser']);
-  });
-
-  it('emits worker containers into bundle docs', () => {
-    const manifest = parseAppManifestYaml(`
+    assertEquals(manifest.spec.workers!['browser-host'].containers, ['browser']);
+})
+  Deno.test('app manifest service - emits worker containers into bundle docs', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -366,12 +360,12 @@ spec:
     ]));
 
     // Worker workload should include containers in pluginConfig
-    expect(docs).toContainEqual(expect.objectContaining({
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Workload',
-      metadata: expect.objectContaining({ name: 'browser-host' }),
-      spec: expect.objectContaining({
+      metadata: ({ name: 'browser-host' }),
+      spec: ({
         type: 'cloudflare.worker',
-        pluginConfig: expect.objectContaining({
+        pluginConfig: ({
           containers: [{
             name: 'browser',
             dockerfile: 'packages/browser-service/Dockerfile',
@@ -381,13 +375,13 @@ spec:
           }],
         }),
       }),
-    }));
+    }))));
 
     // Container workload doc should be emitted
-    expect(docs).toContainEqual(expect.objectContaining({
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Workload',
       metadata: { name: 'browser-host-browser' },
-      spec: expect.objectContaining({
+      spec: ({
         type: 'container',
         parentRef: 'browser-host',
         pluginConfig: {
@@ -397,13 +391,13 @@ spec:
           maxInstances: 25,
         },
       }),
-    }));
+    }))));
 
     // Binding from container to worker should be emitted
-    expect(docs).toContainEqual(expect.objectContaining({
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Binding',
       metadata: { name: 'browser-container-to-browser-host' },
-      spec: expect.objectContaining({
+      spec: ({
         from: 'browser-host-browser',
         to: 'browser-host',
         mount: {
@@ -411,11 +405,10 @@ spec:
           type: 'durableObject',
         },
       }),
-    }));
-  });
-
-  it('emits queue, analytics, workflow resources and trigger metadata into bundle docs', () => {
-    const manifest = parseAppManifestYaml(`
+    }))));
+})
+  Deno.test('app manifest service - emits queue, analytics, workflow resources and trigger metadata into bundle docs', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -470,32 +463,32 @@ spec:
       }],
     ]));
 
-    expect(docs).toContainEqual(expect.objectContaining({
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Resource',
       metadata: { name: 'jobs' },
-      spec: expect.objectContaining({
+      spec: ({
         type: 'queue',
         binding: 'JOBS',
         queue: {
           maxRetries: 2,
         },
       }),
-    }));
-    expect(docs).toContainEqual(expect.objectContaining({
+    }))));
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Resource',
       metadata: { name: 'events' },
-      spec: expect.objectContaining({
+      spec: ({
         type: 'analyticsEngine',
         binding: 'ANALYTICS',
         analyticsEngine: {
           dataset: 'tenant-events',
         },
       }),
-    }));
-    expect(docs).toContainEqual(expect.objectContaining({
+    }))));
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Resource',
       metadata: { name: 'onboarding' },
-      spec: expect.objectContaining({
+      spec: ({
         type: 'workflow',
         binding: 'ONBOARDING_FLOW',
         workflow: {
@@ -503,13 +496,13 @@ spec:
           export: 'runOnboarding',
         },
       }),
-    }));
-    expect(docs).toContainEqual(expect.objectContaining({
+    }))));
+    assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
       kind: 'Workload',
-      metadata: { name: 'api', labels: expect.any(Object) },
-      spec: expect.objectContaining({
-        pluginConfig: expect.objectContaining({
-          bindings: expect.objectContaining({
+      metadata: { name: 'api', labels: /* expect.any(Object) */ {} as any },
+      spec: ({
+        pluginConfig: ({
+          bindings: ({
             services: [],
           }),
           triggers: {
@@ -518,16 +511,15 @@ spec:
           },
         }),
       }),
-    }));
-  });
-
+    }))));
+})
   // ============================================================
   // Containers + workers + routes
   // ============================================================
 
-  describe('containers + workers format', () => {
-    it('parses containers and workers with separated sections', () => {
-      const manifest = parseAppManifestYaml(`
+  
+    Deno.test('app manifest service - containers + workers format - parses containers and workers with separated sections', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -555,16 +547,16 @@ spec:
       path: /api
 `);
 
-      expect(manifest.spec.containers).toBeDefined();
-      expect(manifest.spec.containers!.executor).toEqual({
+      assert(manifest.spec.containers !== undefined);
+      assertEquals(manifest.spec.containers!.executor, {
         dockerfile: 'packages/executor/Dockerfile',
         port: 8080,
         instanceType: 'standard-2',
         maxInstances: 10,
       });
 
-      expect(manifest.spec.workers).toBeDefined();
-      expect(manifest.spec.workers!['browser-host']).toEqual({
+      assert(manifest.spec.workers !== undefined);
+      assertEquals(manifest.spec.workers!['browser-host'], {
         containers: ['executor'],
         build: {
           fromWorkflow: {
@@ -576,16 +568,15 @@ spec:
         },
       });
 
-      expect(manifest.spec.routes).toHaveLength(1);
-      expect(manifest.spec.routes![0]).toEqual({
+      assertEquals(manifest.spec.routes.length, 1);
+      assertEquals(manifest.spec.routes![0], {
         name: 'browser-api',
         target: 'browser-host',
         path: '/api',
       });
-    });
-
-    it('validates worker container references', () => {
-      expect(() => parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - validates worker container references', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -605,11 +596,10 @@ spec:
           job: build
           artifact: dist
           artifactPath: dist/api.js
-`)).toThrow(/references unknown container: nonexistent/);
-    });
-
-    it('validates route target references', () => {
-      expect(() => parseAppManifestYaml(`
+`); }, /references unknown container: nonexistent/);
+})
+    Deno.test('app manifest service - containers + workers format - validates route target references', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -627,11 +617,10 @@ spec:
   routes:
     - name: main
       target: nonexistent
-`)).toThrow(/references unknown worker, container, or service: nonexistent/);
-    });
-
-    it('requires name on routes', () => {
-      expect(() => parseAppManifestYaml(`
+`); }, /references unknown worker, container, or service: nonexistent/);
+})
+    Deno.test('app manifest service - containers + workers format - requires name on routes', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -648,11 +637,10 @@ spec:
           artifactPath: dist/api.js
   routes:
     - target: api
-`)).toThrow(/spec\.routes\[0\]\.name is required/);
-    });
-
-    it('parses env.inject with template variables', () => {
-      const manifest = parseAppManifestYaml(`
+`); }, /spec\.routes\[0\]\.name is required/);
+})
+    Deno.test('app manifest service - containers + workers format - parses env.inject with template variables', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -677,17 +665,16 @@ spec:
       target: browser-host
 `);
 
-      expect(manifest.spec.env).toEqual({
+      assertEquals(manifest.spec.env, {
         required: ['API_KEY'],
         inject: {
           BROWSER_URL: '{{workers.browser-host.url}}',
           ROUTE_URL: '{{routes.api.url}}',
         },
       });
-    });
-
-    it('rejects env.inject with invalid template references', () => {
-      expect(() => parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - rejects env.inject with invalid template references', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -705,11 +692,10 @@ spec:
           job: build
           artifact: dist
           artifactPath: dist/api.js
-`)).toThrow(/template errors.*worker "nonexistent" not found/);
-    });
-
-    it('rejects mcpServers that specify both route and endpoint', () => {
-      expect(() => parseAppManifestYaml(`
+`); }, /template errors.*worker "nonexistent" not found/);
+})
+    Deno.test('app manifest service - containers + workers format - rejects mcpServers that specify both route and endpoint', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -731,11 +717,10 @@ spec:
     - name: api-mcp
       route: api
       endpoint: https://example.com/mcp
-`)).toThrow(/must not specify both endpoint and route/);
-    });
-
-    it('rejects mcpServers that reference unknown routes', () => {
-      expect(() => parseAppManifestYaml(`
+`); }, /must not specify both endpoint and route/);
+})
+    Deno.test('app manifest service - containers + workers format - rejects mcpServers that reference unknown routes', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -756,11 +741,10 @@ spec:
   mcpServers:
     - name: api-mcp
       route: missing
-`)).toThrow(/route references unknown route: missing/);
-    });
-
-    it('rejects mcpServers authSecretRef that is not a secret resource', () => {
-      expect(() => parseAppManifestYaml(`
+`); }, /route references unknown route: missing/);
+})
+    Deno.test('app manifest service - containers + workers format - rejects mcpServers authSecretRef that is not a secret resource', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -786,11 +770,10 @@ spec:
     - name: api-mcp
       route: api
       authSecretRef: db
-`)).toThrow(/authSecretRef must reference a secretRef resource: db/);
-    });
-
-    it('parses workers with queue bindings and triggers', () => {
-      const manifest = parseAppManifestYaml(`
+`); }, /authSecretRef must reference a secretRef resource: db/);
+})
+    Deno.test('app manifest service - containers + workers format - parses workers with queue bindings and triggers', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -823,18 +806,17 @@ spec:
 `);
 
     const worker = manifest.spec.workers!.api;
-    expect(worker.env).toEqual({ NODE_ENV: 'production' });
-    expect(worker.bindings).toEqual({
+    assertEquals(worker.env, { NODE_ENV: 'production' });
+    assertEquals(worker.bindings, {
       queues: ['jobs'],
     });
-      expect(worker.triggers).toEqual({
+      assertEquals(worker.triggers, {
         schedules: [{ cron: '*/5 * * * *', export: 'handleCron' }],
         queues: [{ queue: 'jobs', export: 'handleJob' }],
       });
-    });
-
-    it('parses container env', () => {
-      const manifest = parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - parses container env', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -859,14 +841,13 @@ spec:
           artifactPath: dist/api.js
 `);
 
-      expect(manifest.spec.containers!.executor.env).toEqual({
+      assertEquals(manifest.spec.containers!.executor.env, {
         NODE_ENV: 'production',
         PORT: '8080',
       });
-    });
-
-    it('parses services with ipv4 and env', () => {
-      const manifest = parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - parses services with ipv4 and env', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -890,17 +871,16 @@ spec:
           artifactPath: dist/worker.js
 `);
 
-      expect(manifest.spec.services).toBeDefined();
-      expect(manifest.spec.services!['my-api']).toEqual({
+      assert(manifest.spec.services !== undefined);
+      assertEquals(manifest.spec.services!['my-api'], {
         dockerfile: 'Dockerfile',
         port: 3000,
         ipv4: true,
         env: { NODE_ENV: 'production' },
       });
-    });
-
-    it('allows routes to target services', () => {
-      const manifest = parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - allows routes to target services', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -926,16 +906,15 @@ spec:
       path: /api
 `);
 
-      expect(manifest.spec.routes).toHaveLength(1);
-      expect(manifest.spec.routes![0]).toEqual({
+      assertEquals(manifest.spec.routes.length, 1);
+      assertEquals(manifest.spec.routes![0], {
         name: 'api',
         target: 'my-api',
         path: '/api',
       });
-    });
-
-    it('emits services into bundle docs as type service', () => {
-      const manifest = parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - emits services into bundle docs as type service', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -967,10 +946,10 @@ spec:
         }],
       ]));
 
-      expect(docs).toContainEqual(expect.objectContaining({
+      assert(docs.some((item: any) => JSON.stringify(item) === JSON.stringify(({
         kind: 'Workload',
         metadata: { name: 'my-api' },
-        spec: expect.objectContaining({
+        spec: ({
           type: 'service',
           pluginConfig: {
             dockerfile: 'Dockerfile',
@@ -978,11 +957,10 @@ spec:
             ipv4: true,
           },
         }),
-      }));
-    });
-
-    it('validates env.inject with services template references', () => {
-      const manifest = parseAppManifestYaml(`
+      }))));
+})
+    Deno.test('app manifest service - containers + workers format - validates env.inject with services template references', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -1008,16 +986,15 @@ spec:
           artifactPath: dist/worker.js
 `);
 
-      expect(manifest.spec.env).toEqual({
+      assertEquals(manifest.spec.env, {
         inject: {
           API_IP: '{{services.my-api.ipv4}}',
           API_PORT: '{{services.my-api.port}}',
         },
       });
-    });
-
-    it('rejects env.inject referencing unknown service', () => {
-      expect(() => parseAppManifestYaml(`
+})
+    Deno.test('app manifest service - containers + workers format - rejects env.inject referencing unknown service', () => {
+  assertThrows(() => { () => parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -1035,10 +1012,8 @@ spec:
           job: build
           artifact: dist
           artifactPath: dist/worker.js
-`)).toThrow(/template errors.*service "nonexistent" not found/);
-    });
-  });
-
+`); }, /template errors.*service "nonexistent" not found/);
+})  
   // ============================================================
   // 7 つの新仕様テスト
   // ============================================================
@@ -1091,59 +1066,51 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
   // 1. Semver バリデーション
   // ============================================================
 
-  describe('semver validation', () => {
-    it('rejects invalid semver', () => {
-      expect(() => parseAppManifestYaml(yaml({ version: 'banana' }))).toThrow(
+  
+    Deno.test('app manifest service - semver validation - rejects invalid semver', () => {
+  assertThrows(() => { () => parseAppManifestYaml(yaml({ version: 'banana' })); }, 
         'spec.version must be valid semver',
       );
-    });
-
-    it('rejects v-prefixed version', () => {
-      expect(() => parseAppManifestYaml(yaml({ version: 'v1.0.0' }))).toThrow(
+})
+    Deno.test('app manifest service - semver validation - rejects v-prefixed version', () => {
+  assertThrows(() => { () => parseAppManifestYaml(yaml({ version: 'v1.0.0' })); }, 
         'spec.version must be valid semver',
       );
-    });
-
-    it('rejects incomplete semver', () => {
-      expect(() => parseAppManifestYaml(yaml({ version: "'1.0'" }))).toThrow(
+})
+    Deno.test('app manifest service - semver validation - rejects incomplete semver', () => {
+  assertThrows(() => { () => parseAppManifestYaml(yaml({ version: "'1.0'" })); }, 
         'spec.version must be valid semver',
       );
-    });
-
-    it('accepts semver with prerelease', () => {
-      const manifest = parseAppManifestYaml(yaml({ version: '1.0.0-beta.1' }));
-      expect(manifest.spec.version).toBe('1.0.0-beta.1');
-    });
-
-    it('accepts semver with build metadata', () => {
-      const manifest = parseAppManifestYaml(yaml({ version: '1.0.0+build.123' }));
-      expect(manifest.spec.version).toBe('1.0.0+build.123');
-    });
-
-    it('accepts standard semver', () => {
-      const manifest = parseAppManifestYaml(yaml({ version: '0.1.0' }));
-      expect(manifest.spec.version).toBe('0.1.0');
-    });
-  });
-
+})
+    Deno.test('app manifest service - semver validation - accepts semver with prerelease', () => {
+  const manifest = parseAppManifestYaml(yaml({ version: '1.0.0-beta.1' }));
+      assertEquals(manifest.spec.version, '1.0.0-beta.1');
+})
+    Deno.test('app manifest service - semver validation - accepts semver with build metadata', () => {
+  const manifest = parseAppManifestYaml(yaml({ version: '1.0.0+build.123' }));
+      assertEquals(manifest.spec.version, '1.0.0+build.123');
+})
+    Deno.test('app manifest service - semver validation - accepts standard semver', () => {
+  const manifest = parseAppManifestYaml(yaml({ version: '0.1.0' }));
+      assertEquals(manifest.spec.version, '0.1.0');
+})  
   // ============================================================
   // 2. ヘルスチェック
   // ============================================================
 
-  describe('healthCheck', () => {
-    it('parses worker healthCheck', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - healthCheck - parses worker healthCheck', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       healthCheck:
         path: /health
         intervalSeconds: 30`,
       }));
-      expect(manifest.spec.workers?.web.healthCheck?.path).toBe('/health');
-      expect(manifest.spec.workers?.web.healthCheck?.intervalSeconds).toBe(30);
-    });
-
-    it('parses worker healthCheck with all fields', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.workers?.web.healthCheck?.path, '/health');
+      assertEquals(manifest.spec.workers?.web.healthCheck?.intervalSeconds, 30);
+})
+    Deno.test('app manifest service - healthCheck - parses worker healthCheck with all fields', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       healthCheck:
         path: /healthz
@@ -1151,16 +1118,15 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
         timeoutSeconds: 5
         unhealthyThreshold: 3`,
       }));
-      expect(manifest.spec.workers?.web.healthCheck).toEqual({
+      assertEquals(manifest.spec.workers?.web.healthCheck, {
         path: '/healthz',
         intervalSeconds: 15,
         timeoutSeconds: 5,
         unhealthyThreshold: 3,
       });
-    });
-
-    it('parses service healthCheck', () => {
-      const manifest = parseAppManifestYaml(yaml({
+})
+    Deno.test('app manifest service - healthCheck - parses service healthCheck', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    my-api:
       dockerfile: Dockerfile
       port: 3000
@@ -1168,52 +1134,46 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
         path: /health
         intervalSeconds: 60`,
       }));
-      expect(manifest.spec.services!['my-api'].healthCheck?.path).toBe('/health');
-      expect(manifest.spec.services!['my-api'].healthCheck?.intervalSeconds).toBe(60);
-    });
-  });
-
+      assertEquals(manifest.spec.services!['my-api'].healthCheck?.path, '/health');
+      assertEquals(manifest.spec.services!['my-api'].healthCheck?.intervalSeconds, 60);
+})  
   // ============================================================
   // 3. ライフサイクルフック
   // ============================================================
 
-  describe('lifecycle hooks', () => {
-    it('parses lifecycle hooks', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - lifecycle hooks - parses lifecycle hooks', () => {
+  const manifest = parseAppManifestYaml(yaml({
         lifecycle: `    preApply:
       command: pnpm run migrate
       timeoutSeconds: 120
     postApply:
       command: pnpm run seed`,
       }));
-      expect(manifest.spec.lifecycle?.preApply?.command).toBe('pnpm run migrate');
-      expect(manifest.spec.lifecycle?.preApply?.timeoutSeconds).toBe(120);
-      expect(manifest.spec.lifecycle?.postApply?.command).toBe('pnpm run seed');
-      expect(manifest.spec.lifecycle?.postApply?.timeoutSeconds).toBeUndefined();
-    });
-
-    it('parses lifecycle with only preApply', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.lifecycle?.preApply?.command, 'pnpm run migrate');
+      assertEquals(manifest.spec.lifecycle?.preApply?.timeoutSeconds, 120);
+      assertEquals(manifest.spec.lifecycle?.postApply?.command, 'pnpm run seed');
+      assertEquals(manifest.spec.lifecycle?.postApply?.timeoutSeconds, undefined);
+})
+    Deno.test('app manifest service - lifecycle hooks - parses lifecycle with only preApply', () => {
+  const manifest = parseAppManifestYaml(yaml({
         lifecycle: `    preApply:
       command: pnpm run migrate`,
       }));
-      expect(manifest.spec.lifecycle?.preApply?.command).toBe('pnpm run migrate');
-      expect(manifest.spec.lifecycle?.postApply).toBeUndefined();
-    });
-
-    it('omits lifecycle when not specified', () => {
-      const manifest = parseAppManifestYaml(yaml({}));
-      expect(manifest.spec.lifecycle).toBeUndefined();
-    });
-  });
-
+      assertEquals(manifest.spec.lifecycle?.preApply?.command, 'pnpm run migrate');
+      assertEquals(manifest.spec.lifecycle?.postApply, undefined);
+})
+    Deno.test('app manifest service - lifecycle hooks - omits lifecycle when not specified', () => {
+  const manifest = parseAppManifestYaml(yaml({}));
+      assertEquals(manifest.spec.lifecycle, undefined);
+})  
   // ============================================================
   // 4. 依存バージョン制約 (service binding)
   // ============================================================
 
-  describe('service binding version constraint', () => {
-    it('parses service binding with version constraint', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - service binding version constraint - parses service binding with version constraint', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         services:
@@ -1221,23 +1181,21 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
             version: ">=2.0.0"`,
       }));
       const svc = manifest.spec.workers?.web.bindings?.services;
-      expect(svc).toHaveLength(1);
-      expect(svc![0]).toEqual({ name: 'other', version: '>=2.0.0' });
-    });
-
-    it('accepts plain string service bindings', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(svc.length, 1);
+      assertEquals(svc![0], { name: 'other', version: '>=2.0.0' });
+})
+    Deno.test('app manifest service - service binding version constraint - accepts plain string service bindings', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         services:
           - other-worker`,
       }));
       const svc = manifest.spec.workers?.web.bindings?.services;
-      expect(svc).toEqual(['other-worker']);
-    });
-
-    it('accepts mixed string and object service bindings', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(svc, ['other-worker']);
+})
+    Deno.test('app manifest service - service binding version constraint - accepts mixed string and object service bindings', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         services:
@@ -1246,90 +1204,79 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
             version: "^1.0.0"`,
       }));
       const svc = manifest.spec.workers?.web.bindings?.services;
-      expect(svc).toHaveLength(2);
-      expect(svc![0]).toBe('simple-svc');
-      expect(svc![1]).toEqual({ name: 'versioned-svc', version: '^1.0.0' });
-    });
-  });
-
+      assertEquals(svc.length, 2);
+      assertEquals(svc![0], 'simple-svc');
+      assertEquals(svc![1], { name: 'versioned-svc', version: '^1.0.0' });
+})  
   // ============================================================
   // 5. プラットフォーム最小バージョン (takos.minVersion)
   // ============================================================
 
-  describe('takos.minVersion', () => {
-    it('parses takos.minVersion', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - takos.minVersion - parses takos.minVersion', () => {
+  const manifest = parseAppManifestYaml(yaml({
         takos: `    scopes:
       - threads:read
     minVersion: '2.0.0'`,
       }));
-      expect(manifest.spec.takos?.minVersion).toBe('2.0.0');
-      expect(manifest.spec.takos?.scopes).toEqual(['threads:read']);
-    });
-
-    it('accepts takos without minVersion', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.takos?.minVersion, '2.0.0');
+      assertEquals(manifest.spec.takos?.scopes, ['threads:read']);
+})
+    Deno.test('app manifest service - takos.minVersion - accepts takos without minVersion', () => {
+  const manifest = parseAppManifestYaml(yaml({
         takos: `    scopes:
       - threads:read`,
       }));
-      expect(manifest.spec.takos?.scopes).toEqual(['threads:read']);
-      expect(manifest.spec.takos?.minVersion).toBeUndefined();
-    });
-  });
-
+      assertEquals(manifest.spec.takos?.scopes, ['threads:read']);
+      assertEquals(manifest.spec.takos?.minVersion, undefined);
+})  
   // ============================================================
   // 6. ロールバック戦略 (update)
   // ============================================================
 
-  describe('update strategy', () => {
-    it('parses update strategy', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - update strategy - parses update strategy', () => {
+  const manifest = parseAppManifestYaml(yaml({
         update: `    strategy: canary
     canaryWeight: 10
     rollbackOnFailure: true`,
       }));
-      expect(manifest.spec.update?.strategy).toBe('canary');
-      expect(manifest.spec.update?.canaryWeight).toBe(10);
-      expect(manifest.spec.update?.rollbackOnFailure).toBe(true);
-    });
-
-    it('parses blue-green strategy', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.update?.strategy, 'canary');
+      assertEquals(manifest.spec.update?.canaryWeight, 10);
+      assertEquals(manifest.spec.update?.rollbackOnFailure, true);
+})
+    Deno.test('app manifest service - update strategy - parses blue-green strategy', () => {
+  const manifest = parseAppManifestYaml(yaml({
         update: `    strategy: blue-green
     timeoutSeconds: 300`,
       }));
-      expect(manifest.spec.update?.strategy).toBe('blue-green');
-      expect(manifest.spec.update?.timeoutSeconds).toBe(300);
-    });
-
-    it('parses rolling strategy', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.update?.strategy, 'blue-green');
+      assertEquals(manifest.spec.update?.timeoutSeconds, 300);
+})
+    Deno.test('app manifest service - update strategy - parses rolling strategy', () => {
+  const manifest = parseAppManifestYaml(yaml({
         update: `    strategy: rolling`,
       }));
-      expect(manifest.spec.update?.strategy).toBe('rolling');
-    });
-
-    it('rejects invalid strategy', () => {
-      expect(() =>
+      assertEquals(manifest.spec.update?.strategy, 'rolling');
+})
+    Deno.test('app manifest service - update strategy - rejects invalid strategy', () => {
+  assertThrows(() => { () =>
         parseAppManifestYaml(yaml({
           update: `    strategy: yolo`,
         })),
-      ).toThrow('spec.update.strategy must be');
-    });
-
-    it('omits update when not specified', () => {
-      const manifest = parseAppManifestYaml(yaml({}));
-      expect(manifest.spec.update).toBeUndefined();
-    });
-  });
-
+      ; }, 'spec.update.strategy must be');
+})
+    Deno.test('app manifest service - update strategy - omits update when not specified', () => {
+  const manifest = parseAppManifestYaml(yaml({}));
+      assertEquals(manifest.spec.update, undefined);
+})  
   // ============================================================
   // 7. マイグレーション拡張 (kv resources)
   // ============================================================
 
-  describe('kv resource migrations', () => {
-    it('allows migrations on kv resources', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - kv resource migrations - allows migrations on kv resources', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         kv:
@@ -1339,13 +1286,12 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
       binding: CACHE
       migrations: .takos/migrations/cache`,
       }));
-      expect(manifest.spec.resources?.cache.migrations).toBe('.takos/migrations/cache');
-      expect(manifest.spec.resources?.cache.type).toBe('kv');
-      expect(manifest.spec.resources?.cache.binding).toBe('CACHE');
-    });
-
-    it('allows migrations with up/down on kv resources', () => {
-      const manifest = parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.resources?.cache.migrations, '.takos/migrations/cache');
+      assertEquals(manifest.spec.resources?.cache.type, 'kv');
+      assertEquals(manifest.spec.resources?.cache.binding, 'CACHE');
+})
+    Deno.test('app manifest service - kv resource migrations - allows migrations with up/down on kv resources', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         kv:
@@ -1357,22 +1303,20 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
         up: .takos/migrations/cache/up
         down: .takos/migrations/cache/down`,
       }));
-      expect(manifest.spec.resources?.cache.migrations).toEqual({
+      assertEquals(manifest.spec.resources?.cache.migrations, {
         up: '.takos/migrations/cache/up',
         down: '.takos/migrations/cache/down',
       });
-    });
-  });
-
+})  
   // ============================================================
   // 13 個の新仕様テスト
   // ============================================================
 
   // --- 1. Environment overrides ---
 
-  describe('environment overrides', () => {
-    it('parses environment overrides', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - environment overrides - parses environment overrides', () => {
+  const manifest = parseAppManifestYaml(yaml({
         overrides: `    staging:
       containers:
         browser:
@@ -1382,29 +1326,25 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
       port: 8080
       maxInstances: 10`,
       }));
-      expect(manifest.spec.overrides).toBeDefined();
-      expect(manifest.spec.overrides!.staging.containers.browser.maxInstances).toBe(2);
-    });
-  });
-
+      assert(manifest.spec.overrides !== undefined);
+      assertEquals(manifest.spec.overrides!.staging.containers.browser.maxInstances, 2);
+})  
   // --- 2. Lifecycle sandbox ---
 
-  describe('lifecycle sandbox', () => {
-    it('parses lifecycle hook sandbox flag', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - lifecycle sandbox - parses lifecycle hook sandbox flag', () => {
+  const manifest = parseAppManifestYaml(yaml({
         lifecycle: `    preApply:
       command: pnpm run migrate
       sandbox: true`,
       }));
-      expect(manifest.spec.lifecycle?.preApply?.sandbox).toBe(true);
-    });
-  });
-
+      assertEquals(manifest.spec.lifecycle?.preApply?.sandbox, true);
+})  
   // --- 3. Service bindings on services ---
 
-  describe('service bindings on services', () => {
-    it('parses service bindings on services', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - service bindings on services - parses service bindings on services', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    api:
       dockerfile: Dockerfile
       port: 3000
@@ -1412,13 +1352,11 @@ ${overrides.takos ? `  takos:\n${overrides.takos}` : ''}
         services:
           - other`,
       }));
-      expect(manifest.spec.services!.api.bindings?.services).toEqual(['other']);
-    });
-  });
-
-  describe('provider-neutral manifest syntax', () => {
-    it('parses neutral resource classes and service/container resource bindings', () => {
-      const manifest = parseAppManifestYaml(`
+      assertEquals(manifest.spec.services!.api.bindings?.services, ['other']);
+})  
+  
+    Deno.test('app manifest service - provider-neutral manifest syntax - parses neutral resource classes and service/container resource bindings', () => {
+  const manifest = parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -1458,45 +1396,41 @@ spec:
       path: /browser
 `);
 
-      expect(manifest.spec.resources?.['tenant-db']).toMatchObject({
+      assertObjectMatch(manifest.spec.resources?.['tenant-db'], {
         type: 'd1',
       });
-      expect(manifest.spec.resources?.assets).toMatchObject({
+      assertObjectMatch(manifest.spec.resources?.assets, {
         type: 'r2',
       });
-      expect(manifest.spec.services?.api.bindings).toMatchObject({
+      assertObjectMatch(manifest.spec.services?.api.bindings, {
         services: ['browser'],
       });
-      expect(manifest.spec.routes?.[0]).toMatchObject({
+      assertObjectMatch(manifest.spec.routes?.[0], {
         name: 'browser-route',
         ingress: 'edge',
         target: 'browser',
       });
-    });
-  });
-
+})  
   // --- 4. Worker scaling ---
 
-  describe('worker scaling', () => {
-    it('parses worker scaling', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - worker scaling - parses worker scaling', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       scaling:
         minInstances: 1
         maxConcurrency: 10`,
       }));
-      expect(manifest.spec.workers?.web.scaling).toEqual({
+      assertEquals(manifest.spec.workers?.web.scaling, {
         minInstances: 1,
         maxConcurrency: 10,
       });
-    });
-  });
-
+})  
   // --- 5. Volumes ---
 
-  describe('service volumes', () => {
-    it('parses service volumes', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - service volumes - parses service volumes', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    db:
       dockerfile: Dockerfile
       port: 5432
@@ -1505,17 +1439,15 @@ spec:
           mountPath: /data
           size: 10Gi`,
       }));
-      expect(manifest.spec.services!.db.volumes).toEqual([
+      assertEquals(manifest.spec.services!.db.volumes, [
         { name: 'data', mountPath: '/data', size: '10Gi' },
       ]);
-    });
-  });
-
+})  
   // --- 6. Health check types ---
 
-  describe('health check types', () => {
-    it('parses tcp health check', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - health check types - parses tcp health check', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    db:
       dockerfile: Dockerfile
       port: 5432
@@ -1523,14 +1455,13 @@ spec:
         type: tcp
         port: 5432`,
       }));
-      expect(manifest.spec.services!.db.healthCheck).toEqual({
+      assertEquals(manifest.spec.services!.db.healthCheck, {
         type: 'tcp',
         port: 5432,
       });
-    });
-
-    it('parses exec health check', () => {
-      const manifest = parseAppManifestYaml(yaml({
+})
+    Deno.test('app manifest service - health check types - parses exec health check', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    db:
       dockerfile: Dockerfile
       port: 5432
@@ -1538,28 +1469,25 @@ spec:
         type: exec
         command: pg_isready`,
       }));
-      expect(manifest.spec.services!.db.healthCheck).toEqual({
+      assertEquals(manifest.spec.services!.db.healthCheck, {
         type: 'exec',
         command: 'pg_isready',
       });
-    });
-
-    it('rejects invalid health check type', () => {
-      expect(() => parseAppManifestYaml(yaml({
+})
+    Deno.test('app manifest service - health check types - rejects invalid health check type', () => {
+  assertThrows(() => { () => parseAppManifestYaml(yaml({
         services: `    db:
       dockerfile: Dockerfile
       port: 5432
       healthCheck:
         type: grpc`,
-      }))).toThrow();
-    });
-  });
-
+      })); });
+})  
   // --- 7. Service triggers ---
 
-  describe('service triggers', () => {
-    it('parses service schedules', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - service triggers - parses service schedules', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    worker:
       dockerfile: Dockerfile
       port: 8080
@@ -1568,17 +1496,15 @@ spec:
           - cron: '*/5 * * * *'
             export: runJob`,
       }));
-      expect(manifest.spec.services!.worker.triggers?.schedules).toEqual([
+      assertEquals(manifest.spec.services!.worker.triggers?.schedules, [
         { cron: '*/5 * * * *', export: 'runJob' },
       ]);
-    });
-  });
-
+})  
   // --- 8. DependsOn ---
 
-  describe('dependsOn', () => {
-    it('parses worker dependsOn', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - dependsOn - parses worker dependsOn', () => {
+  const manifest = parseAppManifestYaml(yaml({
         services: `    api:
       dockerfile: Dockerfile
       port: 3000`,
@@ -1586,15 +1512,13 @@ spec:
       dependsOn:
         - api`,
       }));
-      expect(manifest.spec.workers?.web.dependsOn).toEqual(['api']);
-    });
-  });
-
+      assertEquals(manifest.spec.workers?.web.dependsOn, ['api']);
+})  
   // --- 9. Resource limits ---
 
-  describe('resource limits', () => {
-    it('parses resource limits', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - resource limits - parses resource limits', () => {
+  const manifest = parseAppManifestYaml(yaml({
         workers: `    web:${minWorkerYaml}
       bindings:
         d1:
@@ -1605,42 +1529,35 @@ spec:
       limits:
         maxSizeMb: 500`,
       }));
-      expect(manifest.spec.resources?.db.limits).toEqual({ maxSizeMb: 500 });
-    });
-  });
-
+      assertEquals(manifest.spec.resources?.db.limits, { maxSizeMb: 500 });
+})  
   // --- 10. Route methods ---
 
-  describe('route methods', () => {
-    it('parses route methods', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - route methods - parses route methods', () => {
+  const manifest = parseAppManifestYaml(yaml({
         routes: `    - name: api
       target: web
       methods:
         - GET
         - POST`,
       }));
-      expect(manifest.spec.routes![0].methods).toEqual(['GET', 'POST']);
-    });
-
-    it('rejects invalid route method', () => {
-      expect(() => parseAppManifestYaml(yaml({
+      assertEquals(manifest.spec.routes![0].methods, ['GET', 'POST']);
+})
+    Deno.test('app manifest service - route methods - rejects invalid route method', () => {
+  assertThrows(() => { () => parseAppManifestYaml(yaml({
         routes: `    - name: api
       target: web
       methods:
         - YOLO`,
-      }))).toThrow();
-    });
-  });
-
+      })); });
+})  
   // --- 11. Recreate strategy ---
 
-  describe('recreate strategy', () => {
-    it('accepts recreate strategy', () => {
-      const manifest = parseAppManifestYaml(yaml({
+  
+    Deno.test('app manifest service - recreate strategy - accepts recreate strategy', () => {
+  const manifest = parseAppManifestYaml(yaml({
         update: `    strategy: recreate`,
       }));
-      expect(manifest.spec.update?.strategy).toBe('recreate');
-    });
-  });
-});
+      assertEquals(manifest.spec.update?.strategy, 'recreate');
+})  

@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef, useEffect, Fragment } from 'react';
+import { createSignal, createEffect, onMount, onCleanup, For } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
 import { Icons } from '../../../lib/Icons';
 import { Button } from '../../../components/ui/Button';
-import { rpc, rpcJson } from '../../../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../../../lib/rpc';
 import type { Resource } from '../../../types';
 import { formatFileSize, formatDateTime } from '../../../lib/format';
 
@@ -26,15 +27,15 @@ function getFileIcon(key: string): JSX.Element {
   const archiveExts = ['zip', 'tar', 'gz', 'rar', '7z'];
 
   if (imageExts.includes(ext)) {
-    return <Icons.File className="w-5 h-5 text-purple-500" />;
+    return <Icons.File class="w-5 h-5 text-purple-500" />;
   }
   if (codeExts.includes(ext)) {
-    return <Icons.Code className="w-5 h-5 text-blue-500" />;
+    return <Icons.Code class="w-5 h-5 text-blue-500" />;
   }
   if (archiveExts.includes(ext)) {
-    return <Icons.Archive className="w-5 h-5 text-orange-500" />;
+    return <Icons.Archive class="w-5 h-5 text-orange-500" />;
   }
-  return <Icons.File className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />;
+  return <Icons.File class="w-5 h-5 text-zinc-500 dark:text-zinc-400" />;
 }
 
 function getDisplayName(key: string, prefix: string): string {
@@ -66,24 +67,24 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [objects, setObjects] = useState<R2Object[]>([]);
-  const [prefix, setPrefix] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [hasMore, setHasMore] = useState(false);
+  const [objects, setObjects] = createSignal<R2Object[]>([]);
+  const [prefix, setPrefix] = createSignal('');
+  const [loading, setLoading] = createSignal(false);
+  const [uploading, setUploading] = createSignal(false);
+  const [deletingKey, setDeletingKey] = createSignal<string | null>(null);
+  const [isDragOver, setIsDragOver] = createSignal(false);
+  const [cursor, setCursor] = createSignal<string | undefined>(undefined);
+  const [hasMore, setHasMore] = createSignal(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  let fileInputRef: HTMLInputElement | undefined;
 
-  const fetchObjects = useCallback(async (newPrefix: string = prefix, reset: boolean = true) => {
+  const fetchObjects = async (newPrefix: string = prefix(), reset: boolean = true) => {
     if (!resource.provider_resource_name) return;
     setLoading(true);
     try {
       const res = await rpc.resources[':id'].r2.objects.$get({
         param: { id: resource.id },
-        query: { prefix: newPrefix || undefined, cursor: reset ? undefined : cursor, limit: '100' },
+        query: { prefix: newPrefix || undefined, cursor: reset ? undefined : cursor(), limit: '100' },
       });
       const result = await rpcJson<{ objects: R2Object[]; truncated: boolean; cursor?: string }>(res);
       if (reset) setObjects(result.objects || []);
@@ -96,34 +97,34 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [resource.name, resource.provider_resource_name, prefix, cursor, showToast, t]);
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     fetchObjects('', true);
-  }, [resource.name]);
+  });
 
-  const navigateToFolder = useCallback((folderName: string) => {
-    fetchObjects(prefix + folderName, true);
-  }, [prefix, fetchObjects]);
+  const navigateToFolder = (folderName: string) => {
+    fetchObjects(prefix() + folderName, true);
+  };
 
-  const navigateUp = useCallback(() => {
-    if (!prefix) return;
-    const parts = prefix.slice(0, -1).split('/');
+  const navigateUp = () => {
+    if (!prefix()) return;
+    const parts = prefix().slice(0, -1).split('/');
     parts.pop();
     fetchObjects(parts.length > 0 ? parts.join('/') + '/' : '', true);
-  }, [prefix, fetchObjects]);
+  };
 
-  const navigateToRoot = useCallback(() => {
+  const navigateToRoot = () => {
     fetchObjects('', true);
-  }, [fetchObjects]);
+  };
 
-  const uploadFile = useCallback(async (file: File) => {
-    const key = prefix + file.name;
+  const uploadFile = async (file: File) => {
+    const key = prefix() + file.name;
     try {
-      const urlRes = await rpc.resources[':id'].r2['upload-url'].$post({
+      const urlRes = await rpcPath(rpc, 'resources', ':id', 'r2', 'upload-url').$post({
         param: { id: resource.id },
         json: { key },
-      });
+      }) as Response;
       const { url } = await rpcJson<{ url: string }>(urlRes);
       const uploadRes = await fetch(url, {
         method: 'PUT',
@@ -134,9 +135,9 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     } catch {
       return false;
     }
-  }, [resource.name, prefix]);
+  };
 
-  const handleFileSelect = useCallback(async (files: FileList | null) => {
+  const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     let success = 0, fail = 0;
@@ -147,32 +148,32 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     setUploading(false);
     if (success > 0) {
       showToast('success', t('uploadSuccess'));
-      fetchObjects(prefix, true);
+      fetchObjects(prefix(), true);
     }
     if (fail > 0) showToast('error', t('uploadFailed'));
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [uploadFile, fetchObjects, prefix, showToast, t]);
+    if (fileInputRef) fileInputRef.value = '';
+  };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-  }, []);
+  };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    handleFileSelect(e.dataTransfer.files);
-  }, [handleFileSelect]);
+    handleFileSelect(e.dataTransfer?.files ?? null);
+  };
 
-  const handleDelete = useCallback(async (key: string) => {
+  const handleDelete = async (key: string) => {
     const confirmed = await confirm({
       title: t('confirmDelete'),
       message: t('r2DeleteConfirm').replace('{key}', key),
@@ -187,74 +188,74 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
       });
       if (!res.ok) throw new Error('Delete failed');
       showToast('success', t('deleted'));
-      fetchObjects(prefix, true);
+      fetchObjects(prefix(), true);
     } catch {
       showToast('error', t('failedToDelete'));
     } finally {
       setDeletingKey(null);
     }
-  }, [resource.name, confirm, showToast, t, fetchObjects, prefix]);
+  };
 
-  const handleDownload = useCallback(async (key: string) => {
+  const handleDownload = async (key: string) => {
     try {
-      const res = await rpc.resources[':id'].r2['download-url'].$get({
+      const res = await rpcPath(rpc, 'resources', ':id', 'r2', 'download-url').$get({
         param: { id: resource.id },
         query: { key },
-      });
+      }) as Response;
       const { url } = await rpcJson<{ url: string }>(res);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       showToast('error', t('failedToLoad'));
     }
-  }, [resource.name, showToast, t]);
+  };
 
-  const breadcrumbParts = prefix ? prefix.slice(0, -1).split('/') : [];
-  const folders = getFolders(objects, prefix);
-  const files = getFiles(objects, prefix);
+  const breadcrumbParts = () => prefix() ? prefix().slice(0, -1).split('/') : [];
+  const folders = () => getFolders(objects(), prefix());
+  const files = () => getFiles(objects(), prefix());
 
   return (
     <div
-      className={'space-y-4 min-h-[400px] relative ' + (isDragOver ? 'ring-2 ring-blue-500 ring-inset rounded-lg' : '')}
+      class={'space-y-4 min-h-[400px] relative ' + (isDragOver() ? 'ring-2 ring-blue-500 ring-inset rounded-lg' : '')}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {isDragOver && (
-        <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg flex items-center justify-center z-10 pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
-            <Icons.Upload className="w-12 h-12" />
-            <span className="text-lg font-medium">{t('dragDropHint')}</span>
+      {isDragOver() && (
+        <div class="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg flex items-center justify-center z-10 pointer-events-none">
+          <div class="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
+            <Icons.Upload class="w-12 h-12" />
+            <span class="text-lg font-medium">{t('dragDropHint')}</span>
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between gap-4 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
+      <div class="flex items-center justify-between gap-4 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
           <button
             onClick={navigateToRoot}
-            className="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+            class="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
           >
-            <Icons.Bucket className="w-4 h-4" />
-            <span className="font-medium">{resource.name}</span>
+            <Icons.Bucket class="w-4 h-4" />
+            <span class="font-medium">{resource.name}</span>
           </button>
-          {breadcrumbParts.map((part, index) => (
-            <Fragment key={index}>
-              <Icons.ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-              <button
-                onClick={() => fetchObjects(breadcrumbParts.slice(0, index + 1).join('/') + '/', true)}
-                className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
-              >
-                {part}
-              </button>
-            </Fragment>
-          ))}
+          <For each={breadcrumbParts()}>{(part, index) => (
+              <>
+                <Icons.ChevronRight class="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                <button
+                  onClick={() => fetchObjects(breadcrumbParts().slice(0, index() + 1).join('/') + '/', true)}
+                  class="text-sm text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
+                >
+                  {part}
+                </button>
+              </>
+          )}</For>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => fetchObjects(prefix, true)}
-            disabled={loading}
-            leftIcon={<Icons.Refresh className={'w-4 h-4 ' + (loading ? 'animate-spin' : '')} />}
+            onClick={() => fetchObjects(prefix(), true)}
+            disabled={loading()}
+            leftIcon={<Icons.Refresh class={'w-4 h-4 ' + (loading() ? 'animate-spin' : '')} />}
           >
             {t('refresh')}
           </Button>
@@ -262,114 +263,114 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
             ref={fileInputRef}
             type="file"
             multiple
-            className="hidden"
+            class="hidden"
             onChange={(e) => handleFileSelect(e.target.files)}
           />
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            leftIcon={<Icons.Upload className="w-4 h-4" />}
-            isLoading={uploading}
+            onClick={() => fileInputRef?.click()}
+            disabled={uploading()}
+            leftIcon={<Icons.Upload class="w-4 h-4" />}
+            isLoading={uploading()}
           >
             {t('upload')}
           </Button>
         </div>
       </div>
-      <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-        {loading && objects.length === 0 ? (
-          <div className="flex items-center justify-center p-8">
-            <Icons.Loader className="w-6 h-6 animate-spin text-zinc-500 dark:text-zinc-400" />
+      <div class="rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+        {loading() && objects().length === 0 ? (
+          <div class="flex items-center justify-center p-8">
+            <Icons.Loader class="w-6 h-6 animate-spin text-zinc-500 dark:text-zinc-400" />
           </div>
-        ) : folders.length === 0 && files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-zinc-500 dark:text-zinc-400">
-            <Icons.Bucket className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-sm">{t('noObjects')}</p>
-            <p className="text-xs mt-2">{t('dragDropHint')}</p>
+        ) : folders().length === 0 && files().length === 0 ? (
+          <div class="flex flex-col items-center justify-center p-12 text-zinc-500 dark:text-zinc-400">
+            <Icons.Bucket class="w-12 h-12 mb-4 opacity-50" />
+            <p class="text-sm">{t('noObjects')}</p>
+            <p class="text-xs mt-2">{t('dragDropHint')}</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table class="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-700">
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+              <tr class="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-700">
+                <th class="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                   {t('name')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-28">
+                <th class="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-28">
                   {t('size')}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-44">
+                <th class="px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-44">
                   {t('r2LastModified')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-28">
+                <th class="px-4 py-3 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider w-28">
                   {t('actions')}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-              {prefix && (
-                <tr className="hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer" onClick={navigateUp}>
-                  <td className="px-4 py-3" colSpan={4}>
-                    <div className="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
-                      <Icons.FolderOpen className="w-5 h-5 text-amber-500" />
+            <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
+              {prefix() && (
+                <tr class="hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer" onClick={navigateUp}>
+                  <td class="px-4 py-3" colSpan={4}>
+                    <div class="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
+                      <Icons.FolderOpen class="w-5 h-5 text-amber-500" />
                       <span>..</span>
                     </div>
                   </td>
                 </tr>
               )}
-              {folders.map(folder => (
+              {folders().map(folder => (
                 <tr
-                  key={folder}
-                  className="hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer"
+
+                  class="hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer"
                   onClick={() => navigateToFolder(folder)}
                 >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
-                      <Icons.Folder className="w-5 h-5 text-amber-500" />
+                  <td class="px-4 py-3">
+                    <div class="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
+                      <Icons.Folder class="w-5 h-5 text-amber-500" />
                       <span>{folder}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">-</td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">-</td>
-                  <td className="px-4 py-3 text-right">-</td>
+                  <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">-</td>
+                  <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">-</td>
+                  <td class="px-4 py-3 text-right">-</td>
                 </tr>
               ))}
-              {files.map(obj => {
-                const displayName = getDisplayName(obj.key, prefix);
+              {files().map(obj => {
+                const displayName = getDisplayName(obj.key, prefix());
                 return (
-                  <tr key={obj.key} className="hover:bg-zinc-100 dark:hover:bg-zinc-700">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
+                  <tr class="hover:bg-zinc-100 dark:hover:bg-zinc-700">
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
                         {getFileIcon(obj.key)}
-                        <span className="truncate max-w-md" title={displayName}>
+                        <span class="truncate max-w-md" title={displayName}>
                           {displayName}
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{formatFileSize(obj.size)}</td>
-                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{formatDateTime(obj.uploaded)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                    <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">{formatFileSize(obj.size)}</td>
+                    <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">{formatDateTime(obj.uploaded)}</td>
+                    <td class="px-4 py-3">
+                      <div class="flex items-center justify-end gap-1">
                         <button
                           onClick={() => handleDownload(obj.key)}
-                          className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                          class="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                           title={t('download')}
                         >
-                          <Icons.Download className="w-4 h-4" />
+                          <Icons.Download class="w-4 h-4" />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDelete(obj.key);
                           }}
-                          disabled={deletingKey === obj.key}
-                          className="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
+                          disabled={deletingKey() === obj.key}
+                          class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
                           title={t('delete')}
                         >
-                          {deletingKey === obj.key ? (
-                            <Icons.Loader className="w-4 h-4 animate-spin" />
+                          {deletingKey() === obj.key ? (
+                            <Icons.Loader class="w-4 h-4 animate-spin" />
                           ) : (
-                            <Icons.Trash className="w-4 h-4" />
+                            <Icons.Trash class="w-4 h-4" />
                           )}
                         </button>
                       </div>
@@ -380,15 +381,15 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
             </tbody>
           </table>
         )}
-        {hasMore && (
-          <div className="p-4 border-t border-zinc-200 dark:border-zinc-700">
+        {hasMore() && (
+          <div class="p-4 border-t border-zinc-200 dark:border-zinc-700">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => fetchObjects(prefix, false)}
-              disabled={loading}
-              isLoading={loading}
-              className="w-full"
+              onClick={() => fetchObjects(prefix(), false)}
+              disabled={loading()}
+              isLoading={loading()}
+              class="w-full"
             >
               {t('r2LoadMore')}
             </Button>

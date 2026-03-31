@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, createEffect, on, onMount } from 'solid-js';
 import type { FollowUser, ProfileRepo, ProfileTab, UserProfile } from '../types/profile';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useUserRepos } from './useUserRepos';
@@ -31,14 +31,14 @@ interface BlockMuteResponse {
 }
 
 export function useUserProfile(username: string) {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('repositories');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [followLoading, setFollowLoading] = useState(false);
-  const [starringRepo, setStarringRepo] = useState<string | null>(null);
-  const [blockLoading, setBlockLoading] = useState(false);
-  const [muteLoading, setMuteLoading] = useState(false);
+  const [profile, setProfile] = createSignal<UserProfile | null>(null);
+  const [activeTab, setActiveTab] = createSignal<ProfileTab>('repositories');
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
+  const [followLoading, setFollowLoading] = createSignal(false);
+  const [starringRepo, setStarringRepo] = createSignal<string | null>(null);
+  const [blockLoading, setBlockLoading] = createSignal(false);
+  const [muteLoading, setMuteLoading] = createSignal(false);
 
   // Compose sub-hooks
   const reposHook = useUserRepos(username);
@@ -51,15 +51,15 @@ export function useUserProfile(username: string) {
   });
 
   // Derive tabLoading from the active sub-hook
-  const tabLoading =
-    reposHook.loading ||
-    starsHook.loading ||
-    followersHook.loading ||
-    followingHook.loading ||
-    activityHook.loading ||
-    followRequestsHook.loading;
+  const tabLoading = () =>
+    reposHook.loading() ||
+    starsHook.loading() ||
+    followersHook.loading() ||
+    followingHook.loading() ||
+    activityHook.loading() ||
+    followRequestsHook.loading();
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -79,64 +79,53 @@ export function useUserProfile(username: string) {
     } finally {
       setLoading(false);
     }
-  }, [username]);
+  };
 
   // Reset active tab when username changes
-  useEffect(() => {
-    setActiveTab('repositories');
-  }, [username]);
+  createEffect(on(
+    () => username,
+    () => {
+      setActiveTab('repositories');
+    },
+  ));
 
-  useEffect(() => {
+  onMount(() => {
     fetchProfile();
-  }, [fetchProfile]);
+  });
 
   // Fetch tab data on tab switch
-  useEffect(() => {
-    switch (activeTab) {
+  createEffect(() => {
+    const tab = activeTab();
+    switch (tab) {
       case 'repositories':
-        if (reposHook.repos.length === 0) reposHook.fetch(true);
+        if (reposHook.repos().length === 0) reposHook.fetch(true);
         break;
       case 'stars':
-        if (starsHook.starredRepos.length === 0) starsHook.fetch(true);
+        if (starsHook.starredRepos().length === 0) starsHook.fetch(true);
         break;
       case 'activity':
-        if (activityHook.events.length === 0 && !activityHook.error) activityHook.fetch(true);
+        if (activityHook.events().length === 0 && !activityHook.error()) activityHook.fetch(true);
         break;
       case 'followers':
-        if (followersHook.followers.length === 0) followersHook.fetch(true);
+        if (followersHook.followers().length === 0) followersHook.fetch(true);
         break;
       case 'following':
-        if (followingHook.following.length === 0) followingHook.fetch(true);
+        if (followingHook.following().length === 0) followingHook.fetch(true);
         break;
       case 'requests':
-        if (followRequestsHook.requests.length === 0) followRequestsHook.fetch(true);
+        if (followRequestsHook.requests().length === 0) followRequestsHook.fetch(true);
         break;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeTab,
-    reposHook.repos.length,
-    starsHook.starredRepos.length,
-    activityHook.events.length,
-    activityHook.error,
-    followersHook.followers.length,
-    followingHook.following.length,
-    followRequestsHook.requests.length,
-    reposHook.fetch,
-    starsHook.fetch,
-    activityHook.fetch,
-    followersHook.fetch,
-    followingHook.fetch,
-    followRequestsHook.fetch,
-  ]);
+  });
 
   const toggleFollow = async () => {
-    if (!profile || followLoading) return;
+    const p = profile();
+    if (!p || followLoading()) return;
 
     setFollowLoading(true);
     try {
       let res;
-      if (profile.is_following || profile.follow_requested) {
+      if (p.is_following || p.follow_requested) {
         res = await rpc.users[':username'].follow.$delete({ param: { username } });
       } else {
         res = await rpc.users[':username'].follow.$post({ param: { username } });
@@ -163,7 +152,7 @@ export function useUserProfile(username: string) {
   };
 
   const toggleRepoStar = async (repo: ProfileRepo) => {
-    if (starringRepo) return;
+    if (starringRepo()) return;
 
     setStarringRepo(repo.id);
     try {
@@ -213,11 +202,12 @@ export function useUserProfile(username: string) {
   };
 
   const toggleBlock = async () => {
-    if (!profile || profile.is_self || blockLoading) return;
+    const p = profile();
+    if (!p || p.is_self || blockLoading()) return;
 
     setBlockLoading(true);
     try {
-      const res = profile.is_blocking
+      const res = p.is_blocking
         ? await rpc.users[':username'].block.$delete({ param: { username } })
         : await rpc.users[':username'].block.$post({ param: { username } });
 
@@ -243,11 +233,12 @@ export function useUserProfile(username: string) {
   };
 
   const toggleMute = async () => {
-    if (!profile || profile.is_self || muteLoading) return;
+    const p = profile();
+    if (!p || p.is_self || muteLoading()) return;
 
     setMuteLoading(true);
     try {
-      const res = profile.is_muted
+      const res = p.is_muted
         ? await rpc.users[':username'].mute.$delete({ param: { username } })
         : await rpc.users[':username'].mute.$post({ param: { username } });
 
@@ -264,7 +255,7 @@ export function useUserProfile(username: string) {
   };
 
   const loadMore = () => {
-    switch (activeTab) {
+    switch (activeTab()) {
       case 'repositories':
         reposHook.fetch(false);
         break;
@@ -286,14 +277,14 @@ export function useUserProfile(username: string) {
     }
   };
 
-  const hasMore = {
-    repositories: reposHook.hasMore,
-    stars: starsHook.hasMore,
-    activity: activityHook.hasMore && !activityHook.error,
-    followers: followersHook.hasMore,
-    following: followingHook.hasMore,
-    requests: followRequestsHook.hasMore,
-  }[activeTab];
+  const hasMore = () => ({
+    repositories: reposHook.hasMore(),
+    stars: starsHook.hasMore(),
+    activity: activityHook.hasMore() && !activityHook.error(),
+    followers: followersHook.hasMore(),
+    following: followingHook.hasMore(),
+    requests: followRequestsHook.hasMore(),
+  }[activeTab()]);
 
   return {
     profile,

@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,20 +6,16 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockBrowserHostFetch = vi.fn();
-const mockGetBrowserSessionId = vi.fn();
-const mockSetBrowserSessionId = vi.fn();
-const mockClearBrowserSessionId = vi.fn();
-const mockRequireBrowserSessionId = vi.fn();
+import { assertEquals, assert, assertThrows, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/tools/builtin/browser/session', () => ({
-  getBrowserSessionId: (...args: unknown[]) => mockGetBrowserSessionId(...args),
-  setBrowserSessionId: (...args: unknown[]) => mockSetBrowserSessionId(...args),
-  clearBrowserSessionId: (...args: unknown[]) => mockClearBrowserSessionId(...args),
-  requireBrowserSessionId: (...args: unknown[]) => mockRequireBrowserSessionId(...args),
-  browserHostFetch: (...args: unknown[]) => mockBrowserHostFetch(...args),
-}));
+const mockBrowserHostFetch = ((..._args: any[]) => undefined) as any;
+const mockGetBrowserSessionId = ((..._args: any[]) => undefined) as any;
+const mockSetBrowserSessionId = ((..._args: any[]) => undefined) as any;
+const mockClearBrowserSessionId = ((..._args: any[]) => undefined) as any;
+const mockRequireBrowserSessionId = ((..._args: any[]) => undefined) as any;
 
+// [Deno] vi.mock removed - manually stub imports from '@/tools/builtin/browser/session'
 import { BROWSER_TOOLS, BROWSER_HANDLERS } from '@/tools/builtin/browser';
 import { browserOpenHandler } from '@/tools/builtin/browser/handlers/open';
 import { browserGotoHandler } from '@/tools/builtin/browser/handlers/goto';
@@ -53,12 +48,12 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     userId: 'user-1',
     capabilities: [],
     env: {
-      BROWSER_HOST: { fetch: vi.fn() },
+      BROWSER_HOST: { fetch: ((..._args: any[]) => undefined) as any },
     } as unknown as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -78,11 +73,11 @@ function makeTextResponse(text: string, status = 200): Response {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('browser tool definitions', () => {
-  it('defines all seven browser tools', () => {
-    expect(BROWSER_TOOL_DEFINITIONS).toHaveLength(7);
+
+  Deno.test('browser tool definitions - defines all seven browser tools', () => {
+  assertEquals(BROWSER_TOOL_DEFINITIONS.length, 7);
     const names = BROWSER_TOOL_DEFINITIONS.map((t) => t.name);
-    expect(names).toEqual([
+    assertEquals(names, [
       'browser_open',
       'browser_goto',
       'browser_action',
@@ -91,99 +86,84 @@ describe('browser tool definitions', () => {
       'browser_html',
       'browser_close',
     ]);
-  });
-
-  it('all tools have browser category', () => {
-    for (const def of BROWSER_TOOL_DEFINITIONS) {
-      expect(def.category).toBe('browser');
+})
+  Deno.test('browser tool definitions - all tools have browser category', () => {
+  for (const def of BROWSER_TOOL_DEFINITIONS) {
+      assertEquals(def.category, 'browser');
     }
-  });
-
-  it('browser_goto requires url parameter', () => {
-    expect(BROWSER_GOTO.parameters.required).toEqual(['url']);
-  });
-
-  it('browser_action requires action parameter', () => {
-    expect(BROWSER_ACTION.parameters.required).toEqual(['action']);
-  });
-
-  it('BROWSER_TOOLS and BROWSER_HANDLERS are consistent', () => {
-    expect(BROWSER_TOOLS).toHaveLength(7);
+})
+  Deno.test('browser tool definitions - browser_goto requires url parameter', () => {
+  assertEquals(BROWSER_GOTO.parameters.required, ['url']);
+})
+  Deno.test('browser tool definitions - browser_action requires action parameter', () => {
+  assertEquals(BROWSER_ACTION.parameters.required, ['action']);
+})
+  Deno.test('browser tool definitions - BROWSER_TOOLS and BROWSER_HANDLERS are consistent', () => {
+  assertEquals(BROWSER_TOOLS.length, 7);
     const handlerKeys = Object.keys(BROWSER_HANDLERS);
-    expect(handlerKeys).toHaveLength(7);
+    assertEquals(handlerKeys.length, 7);
     for (const def of BROWSER_TOOLS) {
-      expect(BROWSER_HANDLERS).toHaveProperty(def.name);
+      assert(def.name in BROWSER_HANDLERS);
     }
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // Session module
 // ---------------------------------------------------------------------------
 
-describe('browser session helpers', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('getBrowserSessionId returns value from mock', () => {
-    mockGetBrowserSessionId.mockReturnValue('session-abc');
+  
+  Deno.test('browser session helpers - getBrowserSessionId returns value from mock', () => {
+  mockGetBrowserSessionId = (() => 'session-abc') as any;
     const ctx = makeContext();
     const result = getBrowserSessionId(ctx);
-    expect(result).toBe('session-abc');
-  });
-
-  it('setBrowserSessionId calls mock', () => {
-    const ctx = makeContext();
+    assertEquals(result, 'session-abc');
+})
+  Deno.test('browser session helpers - setBrowserSessionId calls mock', () => {
+  const ctx = makeContext();
     setBrowserSessionId(ctx, 'session-xyz');
-    expect(mockSetBrowserSessionId).toHaveBeenCalledWith(ctx, 'session-xyz');
-  });
-
-  it('clearBrowserSessionId calls mock', () => {
-    const ctx = makeContext();
+    assertSpyCallArgs(mockSetBrowserSessionId, 0, [ctx, 'session-xyz']);
+})
+  Deno.test('browser session helpers - clearBrowserSessionId calls mock', () => {
+  const ctx = makeContext();
     clearBrowserSessionId(ctx);
-    expect(mockClearBrowserSessionId).toHaveBeenCalledWith(ctx);
-  });
-
-  it('requireBrowserSessionId throws when no session exists', () => {
-    mockRequireBrowserSessionId.mockImplementation(() => {
+    assertSpyCallArgs(mockClearBrowserSessionId, 0, [ctx]);
+})
+  Deno.test('browser session helpers - requireBrowserSessionId throws when no session exists', () => {
+  mockRequireBrowserSessionId = () => {
       throw new Error('No active browser session. Call browser_open first.');
-    });
-    expect(() => requireBrowserSessionId(makeContext())).toThrow('No active browser session');
-  });
-});
-
+    } as any;
+    assertThrows(() => { () => requireBrowserSessionId(makeContext()); }, 'No active browser session');
+})
 // ---------------------------------------------------------------------------
 // browser_open handler
 // ---------------------------------------------------------------------------
 
-describe('browserOpenHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns error JSON when a session already exists', async () => {
-    mockGetBrowserSessionId.mockReturnValue('existing-session');
+  
+  Deno.test('browserOpenHandler - returns error JSON when a session already exists', async () => {
+  mockGetBrowserSessionId = (() => 'existing-session') as any;
 
     const result = JSON.parse(await browserOpenHandler({}, makeContext()));
 
-    expect(result.error).toContain('already active');
-    expect(result.session_id).toBe('existing-session');
-  });
-
-  it('creates a new session and returns status', async () => {
-    mockGetBrowserSessionId.mockReturnValue(undefined);
-    mockBrowserHostFetch.mockResolvedValue(makeJsonResponse({ ok: true }));
+    assertStringIncludes(result.error, 'already active');
+    assertEquals(result.session_id, 'existing-session');
+})
+  Deno.test('browserOpenHandler - creates a new session and returns status', async () => {
+  mockGetBrowserSessionId = (() => undefined) as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ ok: true })) as any;
 
     const result = JSON.parse(
       await browserOpenHandler({ url: 'https://example.com' }, makeContext()),
     );
 
-    expect(result.status).toBe('active');
-    expect(result.url).toBe('https://example.com');
-    expect(result.viewport).toEqual({ width: 1280, height: 720 });
-    expect(mockSetBrowserSessionId).toHaveBeenCalled();
-  });
-
-  it('uses custom viewport dimensions', async () => {
-    mockGetBrowserSessionId.mockReturnValue(undefined);
-    mockBrowserHostFetch.mockResolvedValue(makeJsonResponse({ ok: true }));
+    assertEquals(result.status, 'active');
+    assertEquals(result.url, 'https://example.com');
+    assertEquals(result.viewport, { width: 1280, height: 720 });
+    assert(mockSetBrowserSessionId.calls.length > 0);
+})
+  Deno.test('browserOpenHandler - uses custom viewport dimensions', async () => {
+  mockGetBrowserSessionId = (() => undefined) as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ ok: true })) as any;
 
     const result = JSON.parse(
       await browserOpenHandler(
@@ -192,199 +172,163 @@ describe('browserOpenHandler', () => {
       ),
     );
 
-    expect(result.viewport).toEqual({ width: 800, height: 600 });
-    expect(result.message).toContain('Use browser_goto');
-  });
+    assertEquals(result.viewport, { width: 800, height: 600 });
+    assertStringIncludes(result.message, 'Use browser_goto');
+})
+  Deno.test('browserOpenHandler - throws when browser host returns error', async () => {
+  mockGetBrowserSessionId = (() => undefined) as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('Service unavailable', 503)) as any;
 
-  it('throws when browser host returns error', async () => {
-    mockGetBrowserSessionId.mockReturnValue(undefined);
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('Service unavailable', 503));
-
-    await expect(browserOpenHandler({}, makeContext())).rejects.toThrow(
+    await await assertRejects(async () => { await browserOpenHandler({}, makeContext()); }, 
       'Failed to open browser session',
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // browser_goto handler
 // ---------------------------------------------------------------------------
 
-describe('browserGotoHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('navigates to url and returns result', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ url: 'https://example.com', title: 'Example', status: 200 }),
-    );
+  
+  Deno.test('browserGotoHandler - navigates to url and returns result', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ url: 'https://example.com', title: 'Example', status: 200 }),) as any;
 
     const result = JSON.parse(
       await browserGotoHandler({ url: 'https://example.com' }, makeContext()),
     );
 
-    expect(result.url).toBe('https://example.com');
-    expect(result.title).toBe('Example');
-    expect(result.message).toContain('Navigated to');
-  });
+    assertEquals(result.url, 'https://example.com');
+    assertEquals(result.title, 'Example');
+    assertStringIncludes(result.message, 'Navigated to');
+})
+  Deno.test('browserGotoHandler - throws when url is missing', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
 
-  it('throws when url is missing', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
+    await await assertRejects(async () => { await browserGotoHandler({}, makeContext()); }, 'url is required');
+})
+  Deno.test('browserGotoHandler - throws when navigation fails', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('timeout', 500)) as any;
 
-    await expect(browserGotoHandler({}, makeContext())).rejects.toThrow('url is required');
-  });
-
-  it('throws when navigation fails', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('timeout', 500));
-
-    await expect(
+    await await assertRejects(async () => { await 
       browserGotoHandler({ url: 'https://example.com' }, makeContext()),
-    ).rejects.toThrow('Navigation failed');
-  });
-});
-
+    ; }, 'Navigation failed');
+})
 // ---------------------------------------------------------------------------
 // browser_action handler
 // ---------------------------------------------------------------------------
 
-describe('browserActionHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when action is missing', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(browserActionHandler({}, makeContext())).rejects.toThrow('action is required');
-  });
-
-  it('throws when click has no selector', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(
+  
+  Deno.test('browserActionHandler - throws when action is missing', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await browserActionHandler({}, makeContext()); }, 'action is required');
+})
+  Deno.test('browserActionHandler - throws when click has no selector', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'click' }, makeContext()),
-    ).rejects.toThrow('selector is required for "click" action');
-  });
-
-  it('throws when type has no text', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(
+    ; }, 'selector is required for "click" action');
+})
+  Deno.test('browserActionHandler - throws when type has no text', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'type', selector: '#input' }, makeContext()),
-    ).rejects.toThrow('text is required for "type" action');
-  });
-
-  it('throws when press has no key', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(
+    ; }, 'text is required for "type" action');
+})
+  Deno.test('browserActionHandler - throws when press has no key', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'press' }, makeContext()),
-    ).rejects.toThrow('key is required for "press" action');
-  });
-
-  it('throws when select has no value', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(
+    ; }, 'key is required for "press" action');
+})
+  Deno.test('browserActionHandler - throws when select has no value', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'select', selector: '#sel' }, makeContext()),
-    ).rejects.toThrow('value is required for "select" action');
-  });
-
-  it('throws for unknown action type', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    await expect(
+    ; }, 'value is required for "select" action');
+})
+  Deno.test('browserActionHandler - throws for unknown action type', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'zap' }, makeContext()),
-    ).rejects.toThrow('Unknown action type: zap');
-  });
-
-  it('performs click action successfully', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ ok: true, message: 'Clicked element' }),
-    );
+    ; }, 'Unknown action type: zap');
+})
+  Deno.test('browserActionHandler - performs click action successfully', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ ok: true, message: 'Clicked element' }),) as any;
 
     const result = await browserActionHandler(
       { action: 'click', selector: '#btn' },
       makeContext(),
     );
-    expect(result).toBe('Clicked element');
-  });
-
-  it('performs scroll action with defaults', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ ok: true, message: 'Scrolled down' }),
-    );
+    assertEquals(result, 'Clicked element');
+})
+  Deno.test('browserActionHandler - performs scroll action with defaults', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ ok: true, message: 'Scrolled down' }),) as any;
 
     const result = await browserActionHandler({ action: 'scroll' }, makeContext());
-    expect(result).toBe('Scrolled down');
-  });
+    assertEquals(result, 'Scrolled down');
+})
+  Deno.test('browserActionHandler - throws when action response is not ok', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('Element not found', 400)) as any;
 
-  it('throws when action response is not ok', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('Element not found', 400));
-
-    await expect(
+    await await assertRejects(async () => { await 
       browserActionHandler({ action: 'click', selector: '#missing' }, makeContext()),
-    ).rejects.toThrow('Action failed');
-  });
-
-  it('validates selector required for hover, check, uncheck, focus, clear', async () => {
-    for (const action of ['hover', 'check', 'uncheck', 'focus', 'clear']) {
-      mockRequireBrowserSessionId.mockReturnValue('sess-1');
-      await expect(
+    ; }, 'Action failed');
+})
+  Deno.test('browserActionHandler - validates selector required for hover, check, uncheck, focus, clear', async () => {
+  for (const action of ['hover', 'check', 'uncheck', 'focus', 'clear']) {
+      mockRequireBrowserSessionId = (() => 'sess-1') as any;
+      await await assertRejects(async () => { await 
         browserActionHandler({ action }, makeContext()),
-      ).rejects.toThrow(`selector is required for "${action}" action`);
+      ; }, `selector is required for "${action}" action`);
     }
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // browser_screenshot handler
 // ---------------------------------------------------------------------------
 
-describe('browserScreenshotHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns base64-encoded screenshot data', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
+  
+  Deno.test('browserScreenshotHandler - returns base64-encoded screenshot data', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
     const fakeBytes = new Uint8Array([137, 80, 78, 71]); // PNG magic bytes
-    mockBrowserHostFetch.mockResolvedValue(
-      new Response(fakeBytes, { status: 200 }),
-    );
+    mockBrowserHostFetch = (async () => new Response(fakeBytes, { status: 200 }),) as any;
 
     const result = JSON.parse(await browserScreenshotHandler({}, makeContext()));
 
-    expect(result.format).toBe('png');
-    expect(result.encoding).toBe('base64');
-    expect(result.size_bytes).toBe(4);
-    expect(result.data).toBeTruthy();
-  });
+    assertEquals(result.format, 'png');
+    assertEquals(result.encoding, 'base64');
+    assertEquals(result.size_bytes, 4);
+    assert(result.data);
+})
+  Deno.test('browserScreenshotHandler - throws when screenshot fails', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('screenshot error', 500)) as any;
 
-  it('throws when screenshot fails', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('screenshot error', 500));
-
-    await expect(browserScreenshotHandler({}, makeContext())).rejects.toThrow(
+    await await assertRejects(async () => { await browserScreenshotHandler({}, makeContext()); }, 
       'Screenshot failed',
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // browser_extract handler
 // ---------------------------------------------------------------------------
 
-describe('browserExtractHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when neither selector nor evaluate is provided', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
+  
+  Deno.test('browserExtractHandler - throws when neither selector nor evaluate is provided', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
 
-    await expect(browserExtractHandler({}, makeContext())).rejects.toThrow(
+    await await assertRejects(async () => { await browserExtractHandler({}, makeContext()); }, 
       'Either selector or evaluate must be provided',
     );
-  });
-
-  it('extracts data using a selector', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ data: ['result1', 'result2'] }),
-    );
+})
+  Deno.test('browserExtractHandler - extracts data using a selector', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ data: ['result1', 'result2'] }),) as any;
 
     const result = await browserExtractHandler(
       { selector: '.result__body' },
@@ -392,15 +336,12 @@ describe('browserExtractHandler', () => {
     );
 
     const parsed = JSON.parse(result);
-    expect(parsed).toEqual(['result1', 'result2']);
-  });
-
-  it('truncates very large outputs', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
+    assertEquals(parsed, ['result1', 'result2']);
+})
+  Deno.test('browserExtractHandler - truncates very large outputs', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
     const largeData = 'x'.repeat(60000);
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ data: largeData }),
-    );
+    mockBrowserHostFetch = (async () => makeJsonResponse({ data: largeData }),) as any;
 
     const result = await browserExtractHandler(
       { evaluate: 'document.body.textContent' },
@@ -408,92 +349,76 @@ describe('browserExtractHandler', () => {
     );
 
     // Source truncates to 50000 chars and appends '\n\n... (truncated)' (17 chars)
-    expect(result.length).toBeLessThanOrEqual(50000 + 17);
-    expect(result).toContain('... (truncated)');
-  });
+    assert(result.length <= 50000 + 17);
+    assertStringIncludes(result, '... (truncated)');
+})
+  Deno.test('browserExtractHandler - throws when extraction fails', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('extraction error', 500)) as any;
 
-  it('throws when extraction fails', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('extraction error', 500));
-
-    await expect(
+    await await assertRejects(async () => { await 
       browserExtractHandler({ selector: '.missing' }, makeContext()),
-    ).rejects.toThrow('Extraction failed');
-  });
-});
-
+    ; }, 'Extraction failed');
+})
 // ---------------------------------------------------------------------------
 // browser_html handler
 // ---------------------------------------------------------------------------
 
-describe('browserHtmlHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns page html', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ html: '<html><body>test</body></html>', url: 'https://example.com' }),
-    );
+  
+  Deno.test('browserHtmlHandler - returns page html', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ html: '<html><body>test</body></html>', url: 'https://example.com' }),) as any;
 
     const result = JSON.parse(await browserHtmlHandler({}, makeContext()));
 
-    expect(result.url).toBe('https://example.com');
-    expect(result.html).toContain('<html>');
-    expect(result.truncated).toBe(false);
-  });
-
-  it('truncates html exceeding max length', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
+    assertEquals(result.url, 'https://example.com');
+    assertStringIncludes(result.html, '<html>');
+    assertEquals(result.truncated, false);
+})
+  Deno.test('browserHtmlHandler - truncates html exceeding max length', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
     const largeHtml = '<div>' + 'a'.repeat(200000) + '</div>';
-    mockBrowserHostFetch.mockResolvedValue(
-      makeJsonResponse({ html: largeHtml, url: 'https://example.com' }),
-    );
+    mockBrowserHostFetch = (async () => makeJsonResponse({ html: largeHtml, url: 'https://example.com' }),) as any;
 
     const result = JSON.parse(await browserHtmlHandler({}, makeContext()));
 
-    expect(result.truncated).toBe(true);
-    expect(result.html.length).toBe(100000);
-  });
+    assertEquals(result.truncated, true);
+    assertEquals(result.html.length, 100000);
+})
+  Deno.test('browserHtmlHandler - throws when getting html fails', async () => {
+  mockRequireBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeTextResponse('html error', 500)) as any;
 
-  it('throws when getting html fails', async () => {
-    mockRequireBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeTextResponse('html error', 500));
-
-    await expect(browserHtmlHandler({}, makeContext())).rejects.toThrow('Failed to get HTML');
-  });
-});
-
+    await await assertRejects(async () => { await browserHtmlHandler({}, makeContext()); }, 'Failed to get HTML');
+})
 // ---------------------------------------------------------------------------
 // browser_close handler
 // ---------------------------------------------------------------------------
 
-describe('browserCloseHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns message when no session is active', async () => {
-    mockGetBrowserSessionId.mockReturnValue(undefined);
+  
+  Deno.test('browserCloseHandler - returns message when no session is active', async () => {
+  mockGetBrowserSessionId = (() => undefined) as any;
 
     const result = await browserCloseHandler({}, makeContext());
-    expect(result).toBe('No active browser session to close.');
-  });
-
-  it('closes active session', async () => {
-    mockGetBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockResolvedValue(makeJsonResponse({ ok: true }));
+    assertEquals(result, 'No active browser session to close.');
+})
+  Deno.test('browserCloseHandler - closes active session', async () => {
+  mockGetBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => makeJsonResponse({ ok: true })) as any;
 
     const result = await browserCloseHandler({}, makeContext());
 
-    expect(result).toBe('Browser session closed successfully.');
-    expect(mockClearBrowserSessionId).toHaveBeenCalled();
-  });
-
-  it('still clears session when host deletion fails', async () => {
-    mockGetBrowserSessionId.mockReturnValue('sess-1');
-    mockBrowserHostFetch.mockRejectedValue(new Error('service down'));
+    assertEquals(result, 'Browser session closed successfully.');
+    assert(mockClearBrowserSessionId.calls.length > 0);
+})
+  Deno.test('browserCloseHandler - still clears session when host deletion fails', async () => {
+  mockGetBrowserSessionId = (() => 'sess-1') as any;
+    mockBrowserHostFetch = (async () => { throw new Error('service down'); }) as any;
 
     const result = await browserCloseHandler({}, makeContext());
 
-    expect(result).toBe('Browser session closed successfully.');
-    expect(mockClearBrowserSessionId).toHaveBeenCalled();
-  });
-});
+    assertEquals(result, 'Browser session closed successfully.');
+    assert(mockClearBrowserSessionId.calls.length > 0);
+})

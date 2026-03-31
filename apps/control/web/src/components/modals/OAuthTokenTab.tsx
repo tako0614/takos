@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { createSignal, onMount, onCleanup } from 'solid-js';
+import { Show, For } from 'solid-js';
 import type { PersonalAccessToken } from './OAuthSettingsModal';
 import { formatShortDate } from '../../lib/format';
 import { Icons } from '../../lib/Icons';
@@ -12,28 +13,28 @@ interface OAuthTokenTabProps {
   onLoadingChange: (loading: boolean) => void;
 }
 
-export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) {
+export function OAuthTokenTab(props: OAuthTokenTabProps) {
   const { t } = useI18n();
-  const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
-  const [showCreateToken, setShowCreateToken] = useState(false);
-  const [newTokenName, setNewTokenName] = useState('');
-  const [creatingToken, setCreatingToken] = useState(false);
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const [deletingToken, setDeletingToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
-  const [tokenCopied, setTokenCopied] = useState(false);
-  const tokenCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tokens, setTokens] = createSignal<PersonalAccessToken[]>([]);
+  const [showCreateToken, setShowCreateToken] = createSignal(false);
+  const [newTokenName, setNewTokenName] = createSignal('');
+  const [creatingToken, setCreatingToken] = createSignal(false);
+  const [createdToken, setCreatedToken] = createSignal<string | null>(null);
+  const [deletingToken, setDeletingToken] = createSignal<string | null>(null);
+  const [tokenError, setTokenError] = createSignal<string | null>(null);
+  const [tokenCopied, setTokenCopied] = createSignal(false);
+  let tokenCopyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  useEffect(() => {
+  onMount(() => {
     fetchTokens();
-  }, []);
+  });
 
-  useEffect(() => () => {
-    if (tokenCopyTimerRef.current) clearTimeout(tokenCopyTimerRef.current);
-  }, []);
+  onCleanup(() => {
+    if (tokenCopyTimer) clearTimeout(tokenCopyTimer);
+  });
 
   async function fetchTokens(): Promise<void> {
-    onLoadingChange(true);
+    props.onLoadingChange(true);
     try {
       const res = await fetch('/api/me/personal-access-tokens');
       const data = await res.json() as { tokens: PersonalAccessToken[] };
@@ -41,12 +42,12 @@ export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) 
     } catch (err) {
       console.error('Failed to fetch tokens:', err);
     } finally {
-      onLoadingChange(false);
+      props.onLoadingChange(false);
     }
   }
 
   async function handleCreateToken(): Promise<void> {
-    if (!newTokenName.trim()) {
+    if (!newTokenName().trim()) {
       setTokenError(t('tokenNameRequired'));
       return;
     }
@@ -56,7 +57,7 @@ export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) 
       const res = await fetch('/api/me/personal-access-tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTokenName.trim() }),
+        body: JSON.stringify({ name: newTokenName().trim() }),
       });
       if (!res.ok) {
         setTokenError(t('failedToCreateToken'));
@@ -87,10 +88,10 @@ export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) 
   async function handleCopyToken(token: string): Promise<void> {
     await navigator.clipboard.writeText(token);
     setTokenCopied(true);
-    if (tokenCopyTimerRef.current) clearTimeout(tokenCopyTimerRef.current);
-    tokenCopyTimerRef.current = setTimeout(() => {
+    if (tokenCopyTimer) clearTimeout(tokenCopyTimer);
+    tokenCopyTimer = setTimeout(() => {
       setTokenCopied(false);
-      tokenCopyTimerRef.current = null;
+      tokenCopyTimer = null;
     }, 2000);
   }
 
@@ -101,113 +102,113 @@ export function OAuthTokenTab({ loading, onLoadingChange }: OAuthTokenTabProps) 
     setTokenError(null);
   }
 
-  if (loading) return null;
-
-  if (showCreateToken) {
-    if (createdToken) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <Card style={{ backgroundColor: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)' }}>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-warning)', margin: 0 }}>
-              {t('tokenCopyWarning')}
+  return (
+    <Show when={!props.loading}>
+      <Show when={showCreateToken()} fallback={
+        <div>
+          <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', 'margin-bottom': '1rem' }}>
+            <p style={{ 'font-size': '0.875rem', color: 'var(--color-text-secondary)', margin: '0' }}>
+              {t('patDescription')}
             </p>
-          </Card>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-              {t('personalAccessToken')}
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <code style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace', fontSize: '0.875rem', overflowX: 'auto' }}>
-                {createdToken}
-              </code>
-              <Button variant="secondary" size="sm" onClick={() => handleCopyToken(createdToken)}>
-                {tokenCopied ? t('copied') : t('copy')}
-              </Button>
+            <Button variant="primary" leftIcon={<Icons.Plus />} onClick={() => setShowCreateToken(true)}>
+              {t('generateNewToken')}
+            </Button>
+          </div>
+          <Show when={tokens().length > 0} fallback={
+            <div style={{ 'text-align': 'center', padding: '3rem 0', color: 'var(--color-text-tertiary)' }}>
+              <Icons.Key style={{ width: '3rem', height: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
+              <p style={{ 'font-weight': 500, color: 'var(--color-text-primary)', margin: '0' }}>{t('noPersonalAccessTokens')}</p>
+              <p style={{ 'font-size': '0.875rem', 'margin-top': '0.25rem' }}>{t('generateTokenHint')}</p>
+            </div>
+          }>
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.75rem' }}>
+              <For each={tokens()}>
+                {(token) => (
+                  <Card>
+                    <div style={{ display: 'flex', 'align-items': 'flex-start', 'justify-content': 'space-between', gap: '1rem' }}>
+                      <div style={{ flex: 1, 'min-width': '0' }}>
+                        <h4 style={{ 'font-weight': 500, color: 'var(--color-text-primary)', margin: '0' }}>{token.name}</h4>
+                        <p style={{ 'font-size': '0.75rem', color: 'var(--color-text-tertiary)', 'margin-top': '0.25rem' }}>
+                          <code style={{ padding: '0.125rem 0.25rem', 'border-radius': 'var(--radius-sm)', 'background-color': 'var(--color-surface-secondary)', 'font-family': 'monospace' }}>
+                            {token.token_prefix}...
+                          </code>
+                        </p>
+                        <Show when={token.last_used_at}>
+                          <p style={{ 'font-size': '0.75rem', color: 'var(--color-text-tertiary)', 'margin-top': '0.25rem' }}>
+                            {t('lastUsed', { date: formatShortDate(token.last_used_at!) })}
+                          </p>
+                        </Show>
+                        <p style={{ 'font-size': '0.75rem', color: 'var(--color-text-tertiary)', 'margin-top': '0.25rem' }}>
+                          {t('createdDate', { date: formatShortDate(token.created_at) })}
+                          {token.expires_at && ` · ${t('expiresDate', { date: formatShortDate(token.expires_at) })}`}
+                        </p>
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteToken(token.id)}
+                        disabled={deletingToken() === token.id}
+                        isLoading={deletingToken() === token.id}
+                      >
+                        {t('delete')}
+                      </Button>
+                    </div>
+                  </Card>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      }>
+        <Show when={createdToken()} fallback={
+          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '1rem' }}>
+            <Show when={tokenError()}>
+              <Card style={{ 'background-color': 'var(--color-error-bg)', border: '1px solid var(--color-error)' }}>
+                <p style={{ 'font-size': '0.875rem', color: 'var(--color-error)', margin: '0' }}>{tokenError()}</p>
+              </Card>
+            </Show>
+            <div>
+              <label style={{ display: 'block', 'font-size': '0.875rem', 'font-weight': 500, color: 'var(--color-text-secondary)', 'margin-bottom': '0.5rem' }}>
+                {t('tokenName')}
+              </label>
+              <Input
+                type="text"
+                value={newTokenName()}
+                onInput={e => setNewTokenName(e.currentTarget.value)}
+                placeholder={t('tokenNamePlaceholder')}
+              />
+            </div>
+            <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '0.75rem', 'padding-top': '1rem' }}>
+              <Button variant="secondary" onClick={resetCreateTokenForm}>{t('cancel')}</Button>
+              <Button variant="primary" onClick={handleCreateToken} isLoading={creatingToken()}>{t('generateToken')}</Button>
             </div>
           </div>
-          <Button variant="primary" onClick={resetCreateTokenForm}>{t('done')}</Button>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {tokenError && (
-          <Card style={{ backgroundColor: 'var(--color-error-bg)', border: '1px solid var(--color-error)' }}>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-error)', margin: 0 }}>{tokenError}</p>
-          </Card>
-        )}
-        <div>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-            {t('tokenName')}
-          </label>
-          <Input
-            type="text"
-            value={newTokenName}
-            onChange={e => setNewTokenName(e.target.value)}
-            placeholder={t('tokenNamePlaceholder')}
-          />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '1rem' }}>
-          <Button variant="secondary" onClick={resetCreateTokenForm}>{t('cancel')}</Button>
-          <Button variant="primary" onClick={handleCreateToken} isLoading={creatingToken}>{t('generateToken')}</Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>
-          {t('patDescription')}
-        </p>
-        <Button variant="primary" leftIcon={<Icons.Plus />} onClick={() => setShowCreateToken(true)}>
-          {t('generateNewToken')}
-        </Button>
-      </div>
-      {tokens.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--color-text-tertiary)' }}>
-          <Icons.Key style={{ width: '3rem', height: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
-          <p style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{t('noPersonalAccessTokens')}</p>
-          <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>{t('generateTokenHint')}</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {tokens.map(token => (
-            <Card key={token.id}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{token.name}</h4>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                    <code style={{ padding: '0.125rem 0.25rem', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--color-surface-secondary)', fontFamily: 'monospace' }}>
-                      {token.token_prefix}...
-                    </code>
-                  </p>
-                  {token.last_used_at && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                      {t('lastUsed', { date: formatShortDate(token.last_used_at) })}
-                    </p>
-                  )}
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                    {t('createdDate', { date: formatShortDate(token.created_at) })}
-                    {token.expires_at && ` · ${t('expiresDate', { date: formatShortDate(token.expires_at) })}`}
-                  </p>
+        }>
+          {(token) => (
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '1rem' }}>
+              <Card style={{ 'background-color': 'var(--color-warning-bg)', border: '1px solid var(--color-warning)' }}>
+                <p style={{ 'font-size': '0.875rem', color: 'var(--color-warning)', margin: '0' }}>
+                  {t('tokenCopyWarning')}
+                </p>
+              </Card>
+              <div>
+                <label style={{ display: 'block', 'font-size': '0.875rem', 'font-weight': 500, color: 'var(--color-text-secondary)', 'margin-bottom': '0.5rem' }}>
+                  {t('personalAccessToken')}
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <code style={{ flex: 1, padding: '0.5rem 0.75rem', 'border-radius': 'var(--radius-md)', 'background-color': 'var(--color-surface-secondary)', 'font-family': 'monospace', 'font-size': '0.875rem', 'overflow-x': 'auto' }}>
+                    {token()}
+                  </code>
+                  <Button variant="secondary" size="sm" onClick={() => handleCopyToken(token())}>
+                    {tokenCopied() ? t('copied') : t('copy')}
+                  </Button>
                 </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDeleteToken(token.id)}
-                  disabled={deletingToken === token.id}
-                  isLoading={deletingToken === token.id}
-                >
-                  {t('delete')}
-                </Button>
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+              <Button variant="primary" onClick={resetCreateTokenForm}>{t('done')}</Button>
+            </div>
+          )}
+        </Show>
+      </Show>
+    </Show>
   );
 }

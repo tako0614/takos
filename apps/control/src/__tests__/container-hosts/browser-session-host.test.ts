@@ -6,32 +6,27 @@
  * Durable Object. We test the routing layer (via app.fetch) and the
  * DO class methods independently.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-
-vi.mock('@/container-hosts/executor-proxy-config', () => ({
-  generateProxyToken: vi.fn(() => 'mock-proxy-token-abc123'),
-}));
-
-vi.mock('@/utils/hash', () => ({
-  constantTimeEqual: vi.fn((a: string, b: string) => a === b),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/container-hosts/executor-proxy-config'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/hash'
 import browserSessionHost, { BrowserSessionContainer } from '@/container-hosts/browser-session-host';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 function makeMockStorage(): any {
   const store = new Map<string, unknown>();
   return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: unknown) => {
+    get: async (key: string) => store.get(key) ?? null,
+    put: async (key: string, value: unknown) => {
       store.set(key, value);
-    }),
-    delete: vi.fn(async (key: string) => {
+    },
+    delete: async (key: string) => {
       store.delete(key);
-    }),
+    },
     _store: store,
   };
 }
@@ -45,7 +40,7 @@ function makeMockCtx(): any {
 
 function makeMockTcpPortFetcher(): any {
   return {
-    fetch: vi.fn().mockResolvedValue(new Response('{"ok":true}', {
+    fetch: (async () => new Response('{"ok":true}', {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })),
@@ -64,7 +59,7 @@ function createContainerInstance(): {
   // Wire up the internal container TCP port mock
   const tcpPortFetcher = makeMockTcpPortFetcher();
   (container as any).container = {
-    getTcpPort: vi.fn().mockReturnValue(tcpPortFetcher),
+    getTcpPort: (() => tcpPortFetcher),
   };
 
   return { container, ctx, tcpPortFetcher };
@@ -72,22 +67,20 @@ function createContainerInstance(): {
 
 function makeMockDOStub(overrides: Partial<Record<string, any>> = {}): any {
   return {
-    createSession: vi.fn().mockResolvedValue({ ok: true, proxyToken: 'tok-123' }),
-    getSessionState: vi.fn().mockResolvedValue({
+    createSession: (async () => ({ ok: true, proxyToken: 'tok-123' })),
+    getSessionState: (async () => ({
       sessionId: 'sess-1',
       spaceId: 'space-1',
       userId: 'user-1',
       status: 'active',
       createdAt: '2024-01-01T00:00:00Z',
-    }),
-    destroySession: vi.fn().mockResolvedValue(undefined),
-    forwardToContainer: vi.fn().mockResolvedValue(
-      new Response('{"result":"ok"}', {
+    })),
+    destroySession: (async () => undefined),
+    forwardToContainer: (async () => new Response('{"result":"ok"}', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
-    ),
-    verifyProxyToken: vi.fn().mockResolvedValue(null),
+      }),),
+    verifyProxyToken: (async () => null),
     ...overrides,
   };
 }
@@ -96,8 +89,8 @@ function makeBrowserHostEnv(stubOverrides: Partial<Record<string, any>> = {}): a
   const stub = makeMockDOStub(stubOverrides);
   return {
     BROWSER_CONTAINER: {
-      idFromName: vi.fn().mockReturnValue({ toString: () => 'do-id' }),
-      get: vi.fn().mockReturnValue(stub),
+      idFromName: (() => ({ toString: () => 'do-id' })),
+      get: (() => stub),
     },
     _stub: stub,
   };
@@ -107,10 +100,10 @@ function makeBrowserHostEnv(stubOverrides: Partial<Record<string, any>> = {}): a
 // BrowserSessionContainer class methods
 // ---------------------------------------------------------------------------
 
-describe('BrowserSessionContainer', () => {
-  describe('createSession', () => {
-    it('generates a proxy token and starts the container', async () => {
-      const { container, ctx, tcpPortFetcher } = createContainerInstance();
+
+  
+    Deno.test('BrowserSessionContainer - createSession - generates a proxy token and starts the container', async () => {
+  const { container, ctx, tcpPortFetcher } = createContainerInstance();
 
       const result = await container.createSession({
         sessionId: 'sess-1',
@@ -119,14 +112,13 @@ describe('BrowserSessionContainer', () => {
         url: 'https://example.com',
       });
 
-      expect(result.ok).toBe(true);
-      expect(result.proxyToken).toBe('mock-proxy-token-abc123');
+      assertEquals(result.ok, true);
+      assertEquals(result.proxyToken, 'mock-proxy-token-abc123');
       // Token persisted to storage
-      expect(ctx.storage.put).toHaveBeenCalledWith('proxyTokens', expect.any(Object));
-    });
-
-    it('sets session state to active after bootstrap', async () => {
-      const { container } = createContainerInstance();
+      assertSpyCallArgs(ctx.storage.put, 0, ['proxyTokens', /* expect.any(Object) */ {} as any]);
+})
+    Deno.test('BrowserSessionContainer - createSession - sets session state to active after bootstrap', async () => {
+  const { container } = createContainerInstance();
 
       await container.createSession({
         sessionId: 'sess-1',
@@ -135,30 +127,25 @@ describe('BrowserSessionContainer', () => {
       });
 
       const state = await container.getSessionState();
-      expect(state).not.toBeNull();
-      expect(state!.status).toBe('active');
-      expect(state!.sessionId).toBe('sess-1');
-    });
+      assertNotEquals(state, null);
+      assertEquals(state!.status, 'active');
+      assertEquals(state!.sessionId, 'sess-1');
+})
+    Deno.test('BrowserSessionContainer - createSession - throws when bootstrap fails', async () => {
+  const { container, tcpPortFetcher } = createContainerInstance();
+      tcpPortFetcher.fetch = (async () => new Response('container failed', { status: 500 }),) as any;
 
-    it('throws when bootstrap fails', async () => {
-      const { container, tcpPortFetcher } = createContainerInstance();
-      tcpPortFetcher.fetch.mockResolvedValue(
-        new Response('container failed', { status: 500 }),
-      );
-
-      await expect(
+      await await assertRejects(async () => { await 
         container.createSession({
           sessionId: 'sess-1',
           spaceId: 'space-1',
           userId: 'user-1',
         }),
-      ).rejects.toThrow('Browser bootstrap failed');
-    });
-  });
-
-  describe('verifyProxyToken', () => {
-    it('returns token info for a valid cached token', async () => {
-      const { container } = createContainerInstance();
+      ; }, 'Browser bootstrap failed');
+})  
+  
+    Deno.test('BrowserSessionContainer - verifyProxyToken - returns token info for a valid cached token', async () => {
+  const { container } = createContainerInstance();
       await container.createSession({
         sessionId: 'sess-1',
         spaceId: 'space-1',
@@ -166,13 +153,12 @@ describe('BrowserSessionContainer', () => {
       });
 
       const info = await container.verifyProxyToken('mock-proxy-token-abc123');
-      expect(info).not.toBeNull();
-      expect(info!.sessionId).toBe('sess-1');
-      expect(info!.userId).toBe('user-1');
-    });
-
-    it('returns null for an invalid token', async () => {
-      const { container } = createContainerInstance();
+      assertNotEquals(info, null);
+      assertEquals(info!.sessionId, 'sess-1');
+      assertEquals(info!.userId, 'user-1');
+})
+    Deno.test('BrowserSessionContainer - verifyProxyToken - returns null for an invalid token', async () => {
+  const { container } = createContainerInstance();
       await container.createSession({
         sessionId: 'sess-1',
         spaceId: 'space-1',
@@ -180,11 +166,10 @@ describe('BrowserSessionContainer', () => {
       });
 
       const info = await container.verifyProxyToken('wrong-token');
-      expect(info).toBeNull();
-    });
-
-    it('loads tokens from storage when cache is empty', async () => {
-      const { container, ctx } = createContainerInstance();
+      assertEquals(info, null);
+})
+    Deno.test('BrowserSessionContainer - verifyProxyToken - loads tokens from storage when cache is empty', async () => {
+  const { container, ctx } = createContainerInstance();
 
       // Simulate a previous session that stored tokens
       ctx.storage._store.set('proxyTokens', {
@@ -199,30 +184,25 @@ describe('BrowserSessionContainer', () => {
       (container as any).cachedTokens = null;
 
       const info = await container.verifyProxyToken('stored-token-xyz');
-      expect(info).not.toBeNull();
-      expect(info!.sessionId).toBe('sess-old');
-    });
-
-    it('returns null when no tokens exist in storage', async () => {
-      const { container } = createContainerInstance();
+      assertNotEquals(info, null);
+      assertEquals(info!.sessionId, 'sess-old');
+})
+    Deno.test('BrowserSessionContainer - verifyProxyToken - returns null when no tokens exist in storage', async () => {
+  const { container } = createContainerInstance();
       (container as any).cachedTokens = null;
 
       const info = await container.verifyProxyToken('any-token');
-      expect(info).toBeNull();
-    });
-  });
-
-  describe('getSessionState', () => {
-    it('returns null when no session has been created', async () => {
-      const { container } = createContainerInstance();
+      assertEquals(info, null);
+})  
+  
+    Deno.test('BrowserSessionContainer - getSessionState - returns null when no session has been created', async () => {
+  const { container } = createContainerInstance();
       const state = await container.getSessionState();
-      expect(state).toBeNull();
-    });
-  });
-
-  describe('destroySession', () => {
-    it('marks session as stopped and clears tokens', async () => {
-      const { container, ctx } = createContainerInstance();
+      assertEquals(state, null);
+})  
+  
+    Deno.test('BrowserSessionContainer - destroySession - marks session as stopped and clears tokens', async () => {
+  const { container, ctx } = createContainerInstance();
 
       await container.createSession({
         sessionId: 'sess-1',
@@ -233,26 +213,21 @@ describe('BrowserSessionContainer', () => {
       await container.destroySession();
 
       const state = await container.getSessionState();
-      expect(state).not.toBeNull();
-      expect(state!.status).toBe('stopped');
-      expect(ctx.storage.delete).toHaveBeenCalledWith('proxyTokens');
-    });
-
-    it('handles destroy when no session exists', async () => {
-      const { container, ctx } = createContainerInstance();
+      assertNotEquals(state, null);
+      assertEquals(state!.status, 'stopped');
+      assertSpyCallArgs(ctx.storage.delete, 0, ['proxyTokens']);
+})
+    Deno.test('BrowserSessionContainer - destroySession - handles destroy when no session exists', async () => {
+  const { container, ctx } = createContainerInstance();
 
       // Should not throw
       await container.destroySession();
-      expect(ctx.storage.delete).toHaveBeenCalledWith('proxyTokens');
-    });
-  });
-
-  describe('forwardToContainer', () => {
-    it('forwards a request to the internal TCP port', async () => {
-      const { container, tcpPortFetcher } = createContainerInstance();
-      tcpPortFetcher.fetch.mockResolvedValue(
-        new Response('{"page":"loaded"}', { status: 200 }),
-      );
+      assertSpyCallArgs(ctx.storage.delete, 0, ['proxyTokens']);
+})  
+  
+    Deno.test('BrowserSessionContainer - forwardToContainer - forwards a request to the internal TCP port', async () => {
+  const { container, tcpPortFetcher } = createContainerInstance();
+      tcpPortFetcher.fetch = (async () => new Response('{"page":"loaded"}', { status: 200 }),) as any;
 
       const res = await container.forwardToContainer('/internal/goto', {
         method: 'POST',
@@ -260,37 +235,32 @@ describe('BrowserSessionContainer', () => {
         body: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      expect(res.status).toBe(200);
-      expect(tcpPortFetcher.fetch).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(tcpPortFetcher.fetch, 0, [
         'http://internal/internal/goto',
-        expect.any(Request),
-      );
-    });
-  });
-});
-
+        /* expect.any(Request) */ {} as any,
+      ]);
+})  
 // ---------------------------------------------------------------------------
 // Worker fetch handler routes
 // ---------------------------------------------------------------------------
 
-describe('browser-session-host Worker routes', () => {
-  describe('GET /health', () => {
-    it('returns 200 with service info', async () => {
-      const env = makeBrowserHostEnv();
+
+  
+    Deno.test('browser-session-host Worker routes - GET /health - returns 200 with service info', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/health', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const body = await res.json() as any;
-      expect(body.status).toBe('ok');
-      expect(body.service).toBe('takos-browser-host');
-    });
-  });
-
-  describe('POST /create', () => {
-    it('creates a session with valid payload', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.status, 'ok');
+      assertEquals(body.service, 'takos-browser-host');
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /create - creates a session with valid payload', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/create', {
           method: 'POST',
@@ -304,14 +274,13 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const body = await res.json() as any;
-      expect(body.ok).toBe(true);
-      expect(body.proxyToken).toBe('tok-123');
-    });
-
-    it('returns 400 when sessionId is missing', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.ok, true);
+      assertEquals(body.proxyToken, 'tok-123');
+})
+    Deno.test('browser-session-host Worker routes - POST /create - returns 400 when sessionId is missing', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/create', {
           method: 'POST',
@@ -323,13 +292,12 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const body = await res.json() as any;
-      expect(body.error).toContain('Missing required fields');
-    });
-
-    it('returns 400 when spaceId is missing', async () => {
-      const env = makeBrowserHostEnv();
+      assertStringIncludes(body.error, 'Missing required fields');
+})
+    Deno.test('browser-session-host Worker routes - POST /create - returns 400 when spaceId is missing', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/create', {
           method: 'POST',
@@ -341,11 +309,10 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 400 when userId is missing', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(res.status, 400);
+})
+    Deno.test('browser-session-host Worker routes - POST /create - returns 400 when userId is missing', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/create', {
           method: 'POST',
@@ -357,12 +324,11 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 500 when createSession throws', async () => {
-      const env = makeBrowserHostEnv({
-        createSession: vi.fn().mockRejectedValue(new Error('Container start failed')),
+      assertEquals(res.status, 400);
+})
+    Deno.test('browser-session-host Worker routes - POST /create - returns 500 when createSession throws', async () => {
+  const env = makeBrowserHostEnv({
+        createSession: (async () => { throw new Error('Container start failed'); }),
       });
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/create', {
@@ -376,42 +342,37 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(500);
+      assertEquals(res.status, 500);
       const body = await res.json() as any;
-      expect(body.error).toBe('Container start failed');
-    });
-  });
-
-  describe('GET /session/:id', () => {
-    it('returns session state when session exists', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.error, 'Container start failed');
+})  
+  
+    Deno.test('browser-session-host Worker routes - GET /session/:id - returns session state when session exists', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const body = await res.json() as any;
-      expect(body.sessionId).toBe('sess-1');
-      expect(body.status).toBe('active');
-    });
-
-    it('returns 404 when session does not exist', async () => {
-      const env = makeBrowserHostEnv({
-        getSessionState: vi.fn().mockResolvedValue(null),
+      assertEquals(body.sessionId, 'sess-1');
+      assertEquals(body.status, 'active');
+})
+    Deno.test('browser-session-host Worker routes - GET /session/:id - returns 404 when session does not exist', async () => {
+  const env = makeBrowserHostEnv({
+        getSessionState: (async () => null),
       });
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/nonexistent', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(404);
+      assertEquals(res.status, 404);
       const body = await res.json() as any;
-      expect(body.error).toContain('Session not found');
-    });
-  });
-
-  describe('POST /session/:id/goto', () => {
-    it('forwards goto request to container', async () => {
-      const env = makeBrowserHostEnv();
+      assertStringIncludes(body.error, 'Session not found');
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /session/:id/goto - forwards goto request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/goto', {
           method: 'POST',
@@ -420,16 +381,15 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, [
         '/internal/goto',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-
-    it('returns 500 when forward fails', async () => {
-      const env = makeBrowserHostEnv({
-        forwardToContainer: vi.fn().mockRejectedValue(new Error('Connection lost')),
+        ({ method: 'POST' }),
+      ]);
+})
+    Deno.test('browser-session-host Worker routes - POST /session/:id/goto - returns 500 when forward fails', async () => {
+  const env = makeBrowserHostEnv({
+        forwardToContainer: (async () => { throw new Error('Connection lost'); }),
       });
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/goto', {
@@ -439,15 +399,13 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(500);
+      assertEquals(res.status, 500);
       const body = await res.json() as any;
-      expect(body.error).toBe('Connection lost');
-    });
-  });
-
-  describe('POST /session/:id/action', () => {
-    it('forwards action request to container', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.error, 'Connection lost');
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /session/:id/action - forwards action request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/action', {
           method: 'POST',
@@ -456,17 +414,15 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, [
         '/internal/action',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-  });
-
-  describe('POST /session/:id/extract', () => {
-    it('forwards extract request to container', async () => {
-      const env = makeBrowserHostEnv();
+        ({ method: 'POST' }),
+      ]);
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /session/:id/extract - forwards extract request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/extract', {
           method: 'POST',
@@ -475,54 +431,47 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, [
         '/internal/extract',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-  });
-
-  describe('GET /session/:id/html', () => {
-    it('forwards html request to container', async () => {
-      const env = makeBrowserHostEnv();
+        ({ method: 'POST' }),
+      ]);
+})  
+  
+    Deno.test('browser-session-host Worker routes - GET /session/:id/html - forwards html request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/html', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith('/internal/html');
-    });
-  });
-
-  describe('GET /session/:id/screenshot', () => {
-    it('forwards screenshot request to container', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, ['/internal/html']);
+})  
+  
+    Deno.test('browser-session-host Worker routes - GET /session/:id/screenshot - forwards screenshot request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/screenshot', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith('/internal/screenshot');
-    });
-
-    it('returns 500 when screenshot forward fails', async () => {
-      const env = makeBrowserHostEnv({
-        forwardToContainer: vi.fn().mockRejectedValue(new Error('Browser crashed')),
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, ['/internal/screenshot']);
+})
+    Deno.test('browser-session-host Worker routes - GET /session/:id/screenshot - returns 500 when screenshot forward fails', async () => {
+  const env = makeBrowserHostEnv({
+        forwardToContainer: (async () => { throw new Error('Browser crashed'); }),
       });
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/screenshot', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(500);
+      assertEquals(res.status, 500);
       const body = await res.json() as any;
-      expect(body.error).toBe('Browser crashed');
-    });
-  });
-
-  describe('POST /session/:id/pdf', () => {
-    it('forwards pdf request to container', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.error, 'Browser crashed');
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /session/:id/pdf - forwards pdf request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/pdf', {
           method: 'POST',
@@ -530,29 +479,25 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, [
         '/internal/pdf',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-  });
-
-  describe('GET /session/:id/tabs', () => {
-    it('forwards tabs request to container', async () => {
-      const env = makeBrowserHostEnv();
+        ({ method: 'POST' }),
+      ]);
+})  
+  
+    Deno.test('browser-session-host Worker routes - GET /session/:id/tabs - forwards tabs request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/tabs', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith('/internal/tabs');
-    });
-  });
-
-  describe('POST /session/:id/tab/new', () => {
-    it('forwards new tab request to container', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, ['/internal/tabs']);
+})  
+  
+    Deno.test('browser-session-host Worker routes - POST /session/:id/tab/new - forwards new tab request to container', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1/tab/new', {
           method: 'POST',
@@ -561,50 +506,43 @@ describe('browser-session-host Worker routes', () => {
         }),
         env,
       );
-      expect(res.status).toBe(200);
-      expect(env._stub.forwardToContainer).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(env._stub.forwardToContainer, 0, [
         '/internal/tab/new',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-  });
-
-  describe('DELETE /session/:id', () => {
-    it('destroys the session and returns success', async () => {
-      const env = makeBrowserHostEnv();
+        ({ method: 'POST' }),
+      ]);
+})  
+  
+    Deno.test('browser-session-host Worker routes - DELETE /session/:id - destroys the session and returns success', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1', { method: 'DELETE' }),
         env,
       );
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const body = await res.json() as any;
-      expect(body.ok).toBe(true);
-      expect(body.message).toContain('destroyed');
-      expect(env._stub.destroySession).toHaveBeenCalled();
-    });
-
-    it('returns 500 when destroy fails', async () => {
-      const env = makeBrowserHostEnv({
-        destroySession: vi.fn().mockRejectedValue(new Error('Cleanup failed')),
+      assertEquals(body.ok, true);
+      assertStringIncludes(body.message, 'destroyed');
+      assert(env._stub.destroySession.calls.length > 0);
+})
+    Deno.test('browser-session-host Worker routes - DELETE /session/:id - returns 500 when destroy fails', async () => {
+  const env = makeBrowserHostEnv({
+        destroySession: (async () => { throw new Error('Cleanup failed'); }),
       });
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/session/sess-1', { method: 'DELETE' }),
         env,
       );
-      expect(res.status).toBe(500);
+      assertEquals(res.status, 500);
       const body = await res.json() as any;
-      expect(body.error).toBe('Cleanup failed');
-    });
-  });
-
-  describe('unknown routes', () => {
-    it('returns 404 for unmatched routes', async () => {
-      const env = makeBrowserHostEnv();
+      assertEquals(body.error, 'Cleanup failed');
+})  
+  
+    Deno.test('browser-session-host Worker routes - unknown routes - returns 404 for unmatched routes', async () => {
+  const env = makeBrowserHostEnv();
       const res = await browserSessionHost.fetch(
         new Request('http://localhost/nonexistent', { method: 'GET' }),
         env,
       );
-      expect(res.status).toBe(404);
-    });
-  });
-});
+      assertEquals(res.status, 404);
+})  

@@ -1,160 +1,144 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  updateDeploymentRecord: vi.fn(),
-  logDeploymentEvent: vi.fn(),
-  getStuckDeployments: vi.fn(),
-}));
+const mocks = ({
+  updateDeploymentRecord: ((..._args: any[]) => undefined) as any,
+  logDeploymentEvent: ((..._args: any[]) => undefined) as any,
+  getStuckDeployments: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/deployment/store', () => ({
-  updateDeploymentRecord: mocks.updateDeploymentRecord,
-  logDeploymentEvent: mocks.logDeploymentEvent,
-  getStuckDeployments: mocks.getStuckDeployments,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/store'
 import { updateDeploymentState, executeDeploymentStep, detectStuckDeployments, resetStuckDeployment } from '@/services/deployment/state';
 
-describe('updateDeploymentState', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-  });
 
-  it('updates status and deploy state', async () => {
-    await updateDeploymentState({} as any, 'dep-1', 'in_progress', 'deploying_worker');
+  Deno.test('updateDeploymentState - updates status and deploy state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+  await updateDeploymentState({} as any, 'dep-1', 'in_progress', 'deploying_worker');
 
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({
+      ({
         status: 'in_progress',
         deployState: 'deploying_worker',
       })
-    );
-  });
+    ]);
+})
+  Deno.test('updateDeploymentState - includes updatedAt timestamp', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+  await updateDeploymentState({} as any, 'dep-1', 'success', 'completed');
 
-  it('includes updatedAt timestamp', async () => {
-    await updateDeploymentState({} as any, 'dep-1', 'success', 'completed');
+    const call = mocks.updateDeploymentRecord.calls[0][2];
+    assert(call.updatedAt !== undefined);
+})
 
-    const call = mocks.updateDeploymentRecord.mock.calls[0][2];
-    expect(call.updatedAt).toBeDefined();
-  });
-});
-
-describe('executeDeploymentStep', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-  });
-
-  it('executes a successful step', async () => {
-    const action = vi.fn().mockResolvedValue(undefined);
+  Deno.test('executeDeploymentStep - executes a successful step', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+  const action = (async () => undefined);
 
     await executeDeploymentStep({} as any, 'dep-1', 'deploying_worker', 'deploy_worker', action);
 
-    expect(action).toHaveBeenCalledTimes(1);
+    assertSpyCalls(action, 1);
     // Should log step_started and step_completed
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledTimes(2);
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
-      expect.anything(), 'dep-1', 'step_started', 'deploy_worker', expect.any(String)
-    );
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
-      expect.anything(), 'dep-1', 'step_completed', 'deploy_worker', expect.any(String)
-    );
-  });
+    assertSpyCalls(mocks.logDeploymentEvent, 2);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
+      expect.anything(), 'dep-1', 'step_started', 'deploy_worker', /* expect.any(String) */ {} as any
+    ]);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
+      expect.anything(), 'dep-1', 'step_completed', 'deploy_worker', /* expect.any(String) */ {} as any
+    ]);
+})
+  Deno.test('executeDeploymentStep - logs failure and rethrows on action error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+  const error = new Error('deploy failed');
+    const action = (async () => { throw error; });
 
-  it('logs failure and rethrows on action error', async () => {
-    const error = new Error('deploy failed');
-    const action = vi.fn().mockRejectedValue(error);
-
-    await expect(
+    await await assertRejects(async () => { await 
       executeDeploymentStep({} as any, 'dep-1', 'deploying_worker', 'deploy_worker', action)
-    ).rejects.toThrow('deploy failed');
+    ; }, 'deploy failed');
 
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(), 'dep-1', 'step_failed', 'deploy_worker', 'deploy failed'
-    );
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({ stepError: 'deploy failed' })
-    );
-  });
-
-  it('records step name on start', async () => {
-    const action = vi.fn().mockResolvedValue(undefined);
+      ({ stepError: 'deploy failed' })
+    ]);
+})
+  Deno.test('executeDeploymentStep - records step name on start', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+  const action = (async () => undefined);
 
     await executeDeploymentStep({} as any, 'dep-1', 'routing', 'update_routing', action);
 
     // First updateDeploymentRecord call should set deployState and currentStep
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({
+      ({
         deployState: 'routing',
         currentStep: 'update_routing',
         stepError: null,
       })
-    );
-  });
-});
+    ]);
+})
 
-describe('detectStuckDeployments', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns stuck deployments using default timeout', async () => {
-    const stuckDeps = [{ id: 'dep-1', current_step: 'deploying_worker' }];
-    mocks.getStuckDeployments.mockResolvedValue(stuckDeps);
+  Deno.test('detectStuckDeployments - returns stuck deployments using default timeout', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const stuckDeps = [{ id: 'dep-1', current_step: 'deploying_worker' }];
+    mocks.getStuckDeployments = (async () => stuckDeps) as any;
 
     const result = await detectStuckDeployments({} as any);
 
-    expect(mocks.getStuckDeployments).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.getStuckDeployments, 0, [
       expect.anything(),
-      expect.any(String) // cutoff ISO string
-    );
-    expect(result).toEqual(stuckDeps);
-  });
-
-  it('uses custom timeout', async () => {
-    mocks.getStuckDeployments.mockResolvedValue([]);
+      /* expect.any(String) */ {} as any // cutoff ISO string
+    ]);
+    assertEquals(result, stuckDeps);
+})
+  Deno.test('detectStuckDeployments - uses custom timeout', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getStuckDeployments = (async () => []) as any;
 
     await detectStuckDeployments({} as any, 5 * 60 * 1000);
 
-    expect(mocks.getStuckDeployments).toHaveBeenCalled();
-  });
-});
+    assert(mocks.getStuckDeployments.calls.length > 0);
+})
 
-describe('resetStuckDeployment', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.updateDeploymentRecord.mockResolvedValue(undefined);
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-  });
+  Deno.test('resetStuckDeployment - marks deployment as failed with reason', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+  await resetStuckDeployment({} as any, 'dep-1', 'stuck for too long');
 
-  it('marks deployment as failed with reason', async () => {
-    await resetStuckDeployment({} as any, 'dep-1', 'stuck for too long');
-
-    expect(mocks.updateDeploymentRecord).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.updateDeploymentRecord, 0, [
       expect.anything(),
       'dep-1',
-      expect.objectContaining({
+      ({
         status: 'failed',
         deployState: 'failed',
         stepError: 'stuck for too long',
       })
-    );
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(), 'dep-1', 'stuck_reset', null, 'stuck for too long'
-    );
-  });
+    ]);
+})
+  Deno.test('resetStuckDeployment - uses default reason', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.updateDeploymentRecord = (async () => undefined) as any;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+  await resetStuckDeployment({} as any, 'dep-1');
 
-  it('uses default reason', async () => {
-    await resetStuckDeployment({} as any, 'dep-1');
-
-    const call = mocks.updateDeploymentRecord.mock.calls[0][2];
-    expect(call.stepError).toContain('timed out');
-  });
-});
+    const call = mocks.updateDeploymentRecord.calls[0][2];
+    assertStringIncludes(call.stepError, 'timed out');
+})

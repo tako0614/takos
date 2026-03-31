@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, type ReactNode, type HTMLAttributes } from 'react';
+import { createEffect, createUniqueId, onCleanup, splitProps, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
 import { useI18n } from '../../store/i18n';
@@ -11,7 +12,7 @@ interface ModalProps {
   size?: ModalSize;
   title?: string;
   descriptionId?: string;
-  children: ReactNode;
+  children: JSX.Element;
   showCloseButton?: boolean;
   closeOnOverlayClick?: boolean;
   closeOnEscape?: boolean;
@@ -54,37 +55,37 @@ function shouldRestoreFocus(previousFocusedElement: HTMLElement | null, currentC
   return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
 }
 
-export function Modal({
-  isOpen,
-  onClose,
-  size = 'md',
-  title,
-  descriptionId,
-  children,
-  showCloseButton = true,
-  closeOnOverlayClick = true,
-  closeOnEscape = true,
-  mobileFullScreen = true,
-}: ModalProps) {
+export function Modal(props: ModalProps) {
+  const [local] = splitProps(props, [
+    'isOpen', 'onClose', 'size', 'title', 'descriptionId', 'children',
+    'showCloseButton', 'closeOnOverlayClick', 'closeOnEscape', 'mobileFullScreen',
+  ]);
+
   const { t } = useI18n();
-  const { isMobile } = useBreakpoint();
-  const shouldBeFullScreen = mobileFullScreen && isMobile && size !== 'full';
-  const modalRef = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  const layerId = useId();
+  const breakpoint = useBreakpoint();
+  let modalRef: HTMLDivElement | undefined;
+  const titleId = createUniqueId();
+  const layerId = createUniqueId();
+
+  const size = () => local.size ?? 'md';
+  const showCloseButton = () => local.showCloseButton ?? true;
+  const closeOnOverlayClick = () => local.closeOnOverlayClick ?? true;
+  const closeOnEscape = () => local.closeOnEscape ?? true;
+  const mobileFullScreen = () => local.mobileFullScreen ?? true;
+  const shouldBeFullScreen = () => mobileFullScreen() && breakpoint.isMobile && size() !== 'full';
 
   const isTopLayer = useDialogLifecycle({
-    isOpen,
+    get isOpen() { return local.isOpen; },
     layerId,
-    onEscape: onClose,
-    closeOnEscape,
+    get onEscape() { return local.onClose; },
+    get closeOnEscape() { return closeOnEscape(); },
     lockBodyScroll: true,
   });
 
-  useEffect(() => {
-    if (!isOpen || !modalRef.current) return;
+  createEffect(() => {
+    if (!local.isOpen || !modalRef) return;
 
-    const container = modalRef.current;
+    const container = modalRef;
     const previousFocusedElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
@@ -122,82 +123,86 @@ export function Modal({
     };
 
     document.addEventListener('keydown', handleTabKey);
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('keydown', handleTabKey);
       if (previousFocusedElement && shouldRestoreFocus(previousFocusedElement, container)) {
         previousFocusedElement.focus();
       }
-    };
-  }, [isOpen, isTopLayer]);
-
-  if (!isOpen) return null;
+    });
+  });
 
   return (
-    <div
-      className={`fixed inset-0 z-50 flex justify-center bg-black/50 ${
-        shouldBeFullScreen ? 'items-end p-0' : 'items-center p-4'
-      }`}
-      onClick={closeOnOverlayClick ? onClose : undefined}
-    >
+    <Show when={local.isOpen}>
       <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-describedby={descriptionId}
-        aria-label={title ? undefined : t('dialog')}
-        tabIndex={-1}
-        className={`
-          bg-[var(--color-surface-primary)] shadow-[var(--shadow-lg)] w-full flex flex-col overflow-hidden
-          ${shouldBeFullScreen
-            ? 'rounded-t-2xl max-h-[90dvh] animate-slide-in-bottom pb-[var(--spacing-safe-bottom)]'
-            : `${sizeClasses[size]} ${size === 'full' ? 'rounded-none max-h-full' : 'rounded-[var(--radius-lg)] max-h-[90dvh]'}`
-          }
-        `}
-        onClick={(e) => e.stopPropagation()}
+        class={`fixed inset-0 z-50 flex justify-center bg-black/50 ${
+          shouldBeFullScreen() ? 'items-end p-0' : 'items-center p-4'
+        }`}
+        onClick={closeOnOverlayClick() ? local.onClose : undefined}
       >
-        {(title || showCloseButton) && (
-          <div className={`flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-primary)] ${shouldBeFullScreen ? 'min-h-[56px]' : ''}`}>
-            {title && (
-              <h2 id={titleId} className="text-lg font-semibold text-[var(--color-text-primary)] m-0">
-                {title}
-              </h2>
-            )}
-            {showCloseButton && (
-              <button
-                type="button"
-                className="p-2 min-w-[44px] min-h-[44px] bg-transparent border-none rounded-[var(--radius-sm)] cursor-pointer text-[var(--color-text-tertiary)] flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
-                onClick={onClose}
-                aria-label={t('close')}
-              >
-                <CloseIcon />
-              </button>
-            )}
+        <div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={local.title ? titleId : undefined}
+          aria-describedby={local.descriptionId}
+          aria-label={local.title ? undefined : t('dialog')}
+          tabIndex={-1}
+          class={`
+            bg-[var(--color-surface-primary)] shadow-[var(--shadow-lg)] w-full flex flex-col overflow-hidden
+            ${shouldBeFullScreen()
+              ? 'rounded-t-2xl max-h-[90dvh] animate-slide-in-bottom pb-[var(--spacing-safe-bottom)]'
+              : `${sizeClasses[size()]} ${size() === 'full' ? 'rounded-none max-h-full' : 'rounded-[var(--radius-lg)] max-h-[90dvh]'}`
+            }
+          `}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Show when={local.title || showCloseButton()}>
+            <div class={`flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-primary)] ${shouldBeFullScreen() ? 'min-h-[56px]' : ''}`}>
+              <Show when={local.title}>
+                <h2 id={titleId} class="text-lg font-semibold text-[var(--color-text-primary)] m-0">
+                  {local.title}
+                </h2>
+              </Show>
+              <Show when={showCloseButton()}>
+                <button
+                  type="button"
+                  class="p-2 min-w-[44px] min-h-[44px] bg-transparent border-none rounded-[var(--radius-sm)] cursor-pointer text-[var(--color-text-tertiary)] flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
+                  onClick={local.onClose}
+                  aria-label={t('close')}
+                >
+                  <CloseIcon />
+                </button>
+              </Show>
+            </div>
+          </Show>
+          <div class="p-6 overflow-y-auto flex-1 text-[var(--color-text-primary)]">
+            {local.children}
           </div>
-        )}
-        <div className="p-6 overflow-y-auto flex-1 text-[var(--color-text-primary)]">
-          {children}
         </div>
       </div>
-    </div>
+    </Show>
   );
 }
 
 function CloseIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M18 6L6 18M6 6l12 12" />
     </svg>
   );
 }
 
-export function ModalFooter({ children, className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+interface ModalFooterProps extends JSX.HTMLAttributes<HTMLDivElement> {}
+
+export function ModalFooter(props: ModalFooterProps) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+
   return (
     <div
-      className={`flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--color-border-primary)] bg-[var(--color-surface-secondary)] ${className}`}
-      {...props}
+      class={`flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--color-border-primary)] bg-[var(--color-surface-secondary)] ${local.class ?? ''}`}
+      {...rest}
     >
-      {children}
+      {local.children}
     </div>
   );
 }

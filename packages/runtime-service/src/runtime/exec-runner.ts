@@ -6,12 +6,12 @@ import {
   MAX_EXEC_OUTPUT_BYTES,
   MAX_EXEC_OUTPUT_TOTAL_BYTES,
   MAX_CONCURRENT_EXEC_PER_WORKSPACE,
-} from '../shared/config.js';
-import { pushLog } from './logging.js';
-import { runCommand } from './command.js';
-import { resolvePathWithin, verifyPathWithinAfterAccess } from './paths.js';
-import { validateCommandLine } from './validation.js';
-import { execTempDirManager } from '../utils/temp-dir.js';
+} from '../shared/config.ts';
+import { pushLog } from './logging.ts';
+import { runCommand } from './command.ts';
+import { resolvePathWithin, verifyPathWithinAfterAccess } from './paths.ts';
+import { validateCommandLine } from './validation.ts';
+import { execTempDirManager } from '../utils/temp-dir.ts';
 import { getErrorMessage } from 'takos-common/errors';
 
 // ---------------------------------------------------------------------------

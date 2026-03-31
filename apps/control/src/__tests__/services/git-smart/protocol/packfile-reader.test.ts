@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { MockR2Bucket } from '../../../../../test/integration/setup';
 import { readPackfileAsync, applyDelta } from '@/services/git-smart/protocol/packfile-reader';
 import { putBlob, getObject } from '@/services/git-smart/core/object-store';
@@ -10,6 +9,8 @@ import { deflateSync } from 'fflate';
  * writePackfile uses CompressionStream('deflate') which produces zlib format,
  * but the packfile reader expects raw deflate, so we build manually.
  */
+import { assertEquals, assertNotEquals, assertThrows, assertRejects } from 'jsr:@std/assert';
+
 async function buildTestPackfile(bucket: MockR2Bucket, shas: string[]): Promise<Uint8Array> {
   const PACK_SIG = new Uint8Array([0x50, 0x41, 0x43, 0x4B]);
   const encU32 = (n: number) => {
@@ -52,20 +53,18 @@ async function buildTestPackfile(bucket: MockR2Bucket, shas: string[]): Promise<
   return concatBytes(packNoChecksum, checksum);
 }
 
-describe('readPackfileAsync', () => {
-  let bucket: MockR2Bucket;
 
-  beforeEach(() => {
-    bucket = new MockR2Bucket();
-  });
+  let bucket: MockR2Bucket;
 
-  it('throws on invalid signature', async () => {
-    const bad = new TextEncoder().encode('NOTAPACK');
-    await expect(readPackfileAsync(bad, bucket as any)).rejects.toThrow('Invalid packfile signature');
-  });
+  Deno.test('readPackfileAsync - throws on invalid signature', async () => {
+  bucket = new MockR2Bucket();
+  const bad = new TextEncoder().encode('NOTAPACK');
+    await await assertRejects(async () => { await readPackfileAsync(bad, bucket as any); }, 'Invalid packfile signature');
+})
 
-  it('roundtrips: putBlob → writePackfile → readPackfileAsync stores objects', async () => {
-    const content = new TextEncoder().encode('hello\n');
+  Deno.test('readPackfileAsync - roundtrips: putBlob → writePackfile → readPackfileAsync stores objects', async () => {
+  bucket = new MockR2Bucket();
+  const content = new TextEncoder().encode('hello\n');
     const originalSha = await putBlob(bucket as any, content);
 
     // Build a packfile with raw-deflate compression (compatible with reader)
@@ -76,60 +75,64 @@ describe('readPackfileAsync', () => {
     const storedShas = await readPackfileAsync(pack, receiveBucket as any);
 
     // Exactly one object should be stored
-    expect(storedShas.length).toBe(1);
+    assertEquals(storedShas.length, 1);
 
     // SHA should match the original
-    expect(storedShas[0]).toBe(originalSha);
+    assertEquals(storedShas[0], originalSha);
 
     // Verify content roundtripped correctly
     const obj = await getObject(receiveBucket as any, storedShas[0]);
-    expect(obj).not.toBeNull();
-    expect(obj!.type).toBe('blob');
-    expect(new TextDecoder().decode(obj!.content)).toBe('hello\n');
-  });
+    assertNotEquals(obj, null);
+    assertEquals(obj!.type, 'blob');
+    assertEquals(new TextDecoder().decode(obj!.content), 'hello\n');
+})
 
-  it('throws when maxObjectCount is exceeded', async () => {
-    const content = new TextEncoder().encode('a');
+  Deno.test('readPackfileAsync - throws when maxObjectCount is exceeded', async () => {
+  bucket = new MockR2Bucket();
+  const content = new TextEncoder().encode('a');
     const sha = await putBlob(bucket as any, content);
     const pack = await buildTestPackfile(bucket, [sha]);
 
-    await expect(
+    await await assertRejects(async () => { await 
       readPackfileAsync(pack, new MockR2Bucket() as any, { maxObjectCount: 0 }),
-    ).rejects.toThrow(/Pack object count 1 exceeds limit of 0/);
-  });
+    ; }, /Pack object count 1 exceeds limit of 0/);
+})
 
-  it('throws when maxInflatedTotal is exceeded', async () => {
-    const content = new TextEncoder().encode('x'.repeat(1000));
+  Deno.test('readPackfileAsync - throws when maxInflatedTotal is exceeded', async () => {
+  bucket = new MockR2Bucket();
+  const content = new TextEncoder().encode('x'.repeat(1000));
     const sha = await putBlob(bucket as any, content);
     const pack = await buildTestPackfile(bucket, [sha]);
 
-    await expect(
+    await await assertRejects(async () => { await 
       readPackfileAsync(pack, new MockR2Bucket() as any, { maxInflatedTotal: 1 }),
-    ).rejects.toThrow(/Inflated total \d+ exceeds limit of 1/);
-  });
+    ; }, /Inflated total \d+ exceeds limit of 1/);
+})
 
-  it('throws when maxObjectInflated is exceeded', async () => {
-    const content = new TextEncoder().encode('a'.repeat(100));
+  Deno.test('readPackfileAsync - throws when maxObjectInflated is exceeded', async () => {
+  bucket = new MockR2Bucket();
+  const content = new TextEncoder().encode('a'.repeat(100));
     const sha = await putBlob(bucket as any, content);
     const pack = await buildTestPackfile(bucket, [sha]);
 
-    await expect(
+    await await assertRejects(async () => { await 
       readPackfileAsync(pack, new MockR2Bucket() as any, { maxObjectInflated: 10 }),
-    ).rejects.toThrow(/Object inflated size 100 exceeds limit of 10/);
-  });
+    ; }, /Object inflated size 100 exceeds limit of 10/);
+})
 
-  it('throws when maxPackfileBytes is exceeded', async () => {
-    const content = new TextEncoder().encode('test data');
+  Deno.test('readPackfileAsync - throws when maxPackfileBytes is exceeded', async () => {
+  bucket = new MockR2Bucket();
+  const content = new TextEncoder().encode('test data');
     const sha = await putBlob(bucket as any, content);
     const pack = await buildTestPackfile(bucket, [sha]);
 
-    await expect(
+    await await assertRejects(async () => { await 
       readPackfileAsync(pack, new MockR2Bucket() as any, { maxPackfileBytes: 10 }),
-    ).rejects.toThrow(/Packfile size \d+ exceeds limit of 10/);
-  });
-});
+    ; }, /Packfile size \d+ exceeds limit of 10/);
+})
 
-describe('applyDelta', () => {
+
+
   function makeVLE(n: number): number[] {
     const bytes: number[] = [];
     let value = n;
@@ -141,8 +144,8 @@ describe('applyDelta', () => {
     return bytes;
   }
 
-  it('applies a simple insert instruction', () => {
-    const base = new Uint8Array([0x41, 0x42, 0x43]); // "ABC"
+  Deno.test('applyDelta - applies a simple insert instruction', () => {
+  const base = new Uint8Array([0x41, 0x42, 0x43]); // "ABC"
     // Delta: base size=3, result size=5, insert 5 bytes "HELLO"
     const insertData = [0x48, 0x45, 0x4c, 0x4c, 0x4f]; // "HELLO"
     const delta = new Uint8Array([
@@ -152,11 +155,11 @@ describe('applyDelta', () => {
       ...insertData,
     ]);
     const result = applyDelta(base, delta);
-    expect(new TextDecoder().decode(result)).toBe('HELLO');
-  });
+    assertEquals(new TextDecoder().decode(result), 'HELLO');
+})
 
-  it('applies a copy instruction', () => {
-    const base = new TextEncoder().encode('Hello, World!');
+  Deno.test('applyDelta - applies a copy instruction', () => {
+  const base = new TextEncoder().encode('Hello, World!');
     // Copy 5 bytes from offset 7 ("World")
     const delta = new Uint8Array([
       ...makeVLE(13),    // base size
@@ -167,11 +170,11 @@ describe('applyDelta', () => {
       5,                 // size = 5
     ]);
     const result = applyDelta(base, delta);
-    expect(new TextDecoder().decode(result)).toBe('World');
-  });
+    assertEquals(new TextDecoder().decode(result), 'World');
+})
 
-  it('applies mixed copy + insert', () => {
-    const base = new TextEncoder().encode('ABCDEF');
+  Deno.test('applyDelta - applies mixed copy + insert', () => {
+  const base = new TextEncoder().encode('ABCDEF');
     // Result: "ABC" (copy from base 0,3) + "XY" (insert 2 bytes)
     const delta = new Uint8Array([
       ...makeVLE(6),     // base size
@@ -185,16 +188,16 @@ describe('applyDelta', () => {
       0x58, 0x59,        // "XY"
     ]);
     const result = applyDelta(base, delta);
-    expect(new TextDecoder().decode(result)).toBe('ABCXY');
-  });
+    assertEquals(new TextDecoder().decode(result), 'ABCXY');
+})
 
-  it('throws on 0x00 instruction', () => {
-    const base = new Uint8Array([1, 2, 3]);
+  Deno.test('applyDelta - throws on 0x00 instruction', () => {
+  const base = new Uint8Array([1, 2, 3]);
     const delta = new Uint8Array([
       ...makeVLE(3),     // base size
       ...makeVLE(3),     // result size
       0x00,              // invalid instruction
     ]);
-    expect(() => applyDelta(base, delta)).toThrow('Invalid delta instruction: 0x00');
-  });
-});
+    assertThrows(() => { () => applyDelta(base, delta); }, 'Invalid delta instruction: 0x00');
+})
+

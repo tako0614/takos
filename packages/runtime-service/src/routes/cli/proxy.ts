@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { PROXY_BASE_URL } from '../../shared/config.js';
-import { isValidSessionId } from '../../runtime/validation.js';
-import { sessionStore } from '../sessions/storage.js';
+import { PROXY_BASE_URL } from '../../shared/config.ts';
+import { isValidSessionId } from '../../runtime/validation.ts';
+import { sessionStore } from '../sessions/storage.ts';
 import { badRequest, internalError, forbidden } from 'takos-common/middleware/hono';
 
 const app = new Hono();

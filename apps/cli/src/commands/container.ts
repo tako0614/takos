@@ -12,10 +12,10 @@
  *   takos container delete <name>
  */
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
-import { api } from '../lib/api.js';
-import { resolveSpaceId } from '../lib/cli-utils.js';
+import { bold, cyan, dim, green, red } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
+import { api } from '../lib/api.ts';
+import { resolveSpaceId } from '../lib/cli-utils.ts';
 
 // ── Command registration ─────────────────────────────────────────────────────
 
@@ -56,13 +56,13 @@ export function registerContainerCommand(program: Command): void {
     }) => {
       // Offline mode: delegate to local entity operations
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deployContainer } = await import('../lib/entities/container.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deployContainer } = await import('../lib/entities/container.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
 
         if (!options.json) {
-          console.log(`${chalk.cyan('[DEPLOY]')} container ${chalk.bold(name)} -> ${options.env} (offline)`);
+          console.log(`${cyan('[DEPLOY]')} container ${bold(name)} -> ${options.env} (offline)`);
           console.log(`  Dockerfile: ${options.dockerfile}`);
           console.log(`  Port:       ${options.port}`);
         }
@@ -87,16 +87,16 @@ export function registerContainerCommand(program: Command): void {
           }
 
           if (result.success) {
-            const scriptInfo = result.scriptName ? chalk.dim(` -> ${result.scriptName}`) : '';
-            console.log(`  ${chalk.green('✓')} ${name} deployed${scriptInfo}`);
+            const scriptInfo = result.scriptName ? dim(` -> ${result.scriptName}`) : '';
+            console.log(`  ${green('✓')} ${name} deployed${scriptInfo}`);
           } else {
-            console.log(`  ${chalk.red('✗')} Deploy failed`);
-            if (result.error) console.log(chalk.red(`  Error: ${result.error}`));
+            console.log(`  ${red('✗')} Deploy failed`);
+            if (result.error) console.log(red(`  Error: ${result.error}`));
             cliExit(1);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to deploy container: ${message}`));
+          console.log(red(`Failed to deploy container: ${message}`));
           cliExit(1);
         }
         return;
@@ -107,7 +107,7 @@ export function registerContainerCommand(program: Command): void {
       const group = options.group;
 
       if (!options.json) {
-        console.log(`${chalk.cyan('[DEPLOY]')} container ${chalk.bold(name)} -> ${options.env}`);
+        console.log(`${cyan('[DEPLOY]')} container ${bold(name)} -> ${options.env}`);
         console.log(`  Dockerfile: ${options.dockerfile}`);
         console.log(`  Port:       ${options.port}`);
       }
@@ -124,7 +124,7 @@ export function registerContainerCommand(program: Command): void {
       );
 
       if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(red(`Error: ${res.error}`));
         cliExit(1);
       }
 
@@ -135,11 +135,11 @@ export function registerContainerCommand(program: Command): void {
       }
 
       if (result.success) {
-        const scriptInfo = result.scriptName ? chalk.dim(` -> ${result.scriptName}`) : '';
-        console.log(`  ${chalk.green('✓')} ${name} deployed${scriptInfo}`);
+        const scriptInfo = result.scriptName ? dim(` -> ${result.scriptName}`) : '';
+        console.log(`  ${green('✓')} ${name} deployed${scriptInfo}`);
       } else {
-        console.log(`  ${chalk.red('✗')} Deploy failed`);
-        if (result.error) console.log(chalk.red(`  Error: ${result.error}`));
+        console.log(`  ${red('✗')} Deploy failed`);
+        if (result.error) console.log(red(`  Error: ${result.error}`));
         cliExit(1);
       }
     });
@@ -155,7 +155,7 @@ export function registerContainerCommand(program: Command): void {
     .action(async (options: { group: string; space?: string; json?: boolean; offline?: boolean }) => {
       // Offline mode
       if (options.offline) {
-        const { listContainers } = await import('../lib/entities/container.js');
+        const { listContainers } = await import('../lib/entities/container.ts');
         try {
           const containers = await listContainers(options.group);
           if (options.json) {
@@ -163,20 +163,20 @@ export function registerContainerCommand(program: Command): void {
             return;
           }
           if (containers.length === 0) {
-            console.log(chalk.dim('No containers tracked. Use `takos container deploy` to deploy one.'));
+            console.log(dim('No containers tracked. Use `takos container deploy` to deploy one.'));
             return;
           }
           console.log('');
-          console.log(chalk.bold('Containers:'));
+          console.log(bold('Containers:'));
           for (const c of containers) {
-            const hashLabel = c.imageHash ? chalk.dim(` [${c.imageHash}]`) : '';
+            const hashLabel = c.imageHash ? dim(` [${c.imageHash}]`) : '';
             console.log(`  ${c.name}${hashLabel}`);
           }
           console.log('');
-          console.log(chalk.dim(`${containers.length} container(s)`));
+          console.log(dim(`${containers.length} container(s)`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to list containers: ${message}`));
+          console.log(red(`Failed to list containers: ${message}`));
           cliExit(1);
         }
         return;
@@ -191,7 +191,7 @@ export function registerContainerCommand(program: Command): void {
       );
 
       if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(red(`Error: ${res.error}`));
         cliExit(1);
       }
 
@@ -202,18 +202,18 @@ export function registerContainerCommand(program: Command): void {
       }
 
       if (containers.length === 0) {
-        console.log(chalk.dim('No containers tracked. Use `takos container deploy` to deploy one.'));
+        console.log(dim('No containers tracked. Use `takos container deploy` to deploy one.'));
         return;
       }
 
       console.log('');
-      console.log(chalk.bold('Containers:'));
+      console.log(bold('Containers:'));
       for (const c of containers) {
-        const hashLabel = c.imageHash ? chalk.dim(` [${c.imageHash}]`) : '';
+        const hashLabel = c.imageHash ? dim(` [${c.imageHash}]`) : '';
         console.log(`  ${c.name}${hashLabel}`);
       }
       console.log('');
-      console.log(chalk.dim(`${containers.length} container(s)`));
+      console.log(dim(`${containers.length} container(s)`));
     });
 
   // ── container delete ───────────────────────────────────────────────────────
@@ -228,17 +228,17 @@ export function registerContainerCommand(program: Command): void {
     .action(async (name: string, options: { group: string; space?: string; accountId?: string; apiToken?: string; offline?: boolean }) => {
       // Offline mode
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deleteContainer } = await import('../lib/entities/container.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deleteContainer } = await import('../lib/entities/container.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
         try {
           await deleteContainer(name, { group: options.group, accountId, apiToken });
-          console.log(chalk.green(`Removed container '${name}' from state.`));
-          console.log(chalk.dim('The actual container was NOT deleted.'));
+          console.log(green(`Removed container '${name}' from state.`));
+          console.log(dim('The actual container was NOT deleted.'));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to delete container: ${message}`));
+          console.log(red(`Failed to delete container: ${message}`));
           cliExit(1);
         }
         return;
@@ -254,11 +254,11 @@ export function registerContainerCommand(program: Command): void {
       );
 
       if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(red(`Error: ${res.error}`));
         cliExit(1);
       }
 
-      console.log(chalk.green(`Removed container '${name}' from state.`));
-      console.log(chalk.dim('The actual container was NOT deleted.'));
+      console.log(green(`Removed container '${name}' from state.`));
+      console.log(dim('The actual container was NOT deleted.'));
     });
 }

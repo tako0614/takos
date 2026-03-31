@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { convertMcpSchema } from '@/tools/mcp-client';
 import type { McpTool } from '@/tools/mcp-client';
 
@@ -6,9 +5,12 @@ import type { McpTool } from '@/tools/mcp-client';
 // convertMcpSchema
 // ---------------------------------------------------------------------------
 
-describe('convertMcpSchema', () => {
-  it('converts a basic MCP tool to a ToolDefinition', () => {
-    const tool: McpTool = {
+
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('convertMcpSchema - converts a basic MCP tool to a ToolDefinition', () => {
+  const tool: McpTool = {
       name: 'get_weather',
       description: 'Fetch weather data',
       inputSchema: {
@@ -22,16 +24,15 @@ describe('convertMcpSchema', () => {
 
     const def = convertMcpSchema(tool);
 
-    expect(def.name).toBe('get_weather');
-    expect(def.description).toBe('Fetch weather data');
-    expect(def.category).toBe('mcp');
-    expect(def.parameters.type).toBe('object');
-    expect(def.parameters.properties).toHaveProperty('location');
-    expect(def.parameters.required).toContain('location');
-  });
-
-  it('uses empty parameters when inputSchema is undefined', () => {
-    const tool: McpTool = {
+    assertEquals(def.name, 'get_weather');
+    assertEquals(def.description, 'Fetch weather data');
+    assertEquals(def.category, 'mcp');
+    assertEquals(def.parameters.type, 'object');
+    assert('location' in def.parameters.properties);
+    assertStringIncludes(def.parameters.required, 'location');
+})
+  Deno.test('convertMcpSchema - uses empty parameters when inputSchema is undefined', () => {
+  const tool: McpTool = {
       name: 'no_params',
       description: 'Tool without params',
       inputSchema: { type: 'object' },
@@ -39,38 +40,35 @@ describe('convertMcpSchema', () => {
 
     const def = convertMcpSchema(tool);
 
-    expect(def.parameters.type).toBe('object');
-    expect(def.parameters.properties ?? {}).toEqual({});
-  });
-
-  it('defaults description to empty string when missing', () => {
-    const tool = {
+    assertEquals(def.parameters.type, 'object');
+    assertEquals(def.parameters.properties ?? {}, {});
+})
+  Deno.test('convertMcpSchema - defaults description to empty string when missing', () => {
+  const tool = {
       name: 'no_desc',
       inputSchema: { type: 'object', properties: {} },
     } as McpTool;
 
     const def = convertMcpSchema(tool);
-    expect(def.description).toBe('');
-  });
-});
-
+    assertEquals(def.description, '');
+})
 // ---------------------------------------------------------------------------
 // McpClient — SDK mocked at the module level
 // ---------------------------------------------------------------------------
 
-const mocks = vi.hoisted(() => {
-  const mockListTools = vi.fn();
-  const mockCallTool = vi.fn();
-  const mockConnect = vi.fn();
-  const mockClose = vi.fn();
-  const MockClientClass = vi.fn().mockImplementation(() => ({
+const mocks = {
+  const mockListTools = ((..._args: any[]) => undefined) as any;
+  const mockCallTool = ((..._args: any[]) => undefined) as any;
+  const mockConnect = ((..._args: any[]) => undefined) as any;
+  const mockClose = ((..._args: any[]) => undefined) as any;
+  const MockClientClass = () => ({
     connect: mockConnect,
     listTools: mockListTools,
     callTool: mockCallTool,
     close: mockClose,
-  }));
-  const MockStreamableTransport = vi.fn().mockImplementation(() => ({}));
-  const MockSSETransport = vi.fn().mockImplementation(() => ({}));
+  });
+  const MockStreamableTransport = () => ({});
+  const MockSSETransport = () => ({});
   return {
     mockListTools,
     mockCallTool,
@@ -80,55 +78,47 @@ const mocks = vi.hoisted(() => {
     MockStreamableTransport,
     MockSSETransport,
   };
-});
+};
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: mocks.MockClientClass,
-}));
-
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
-  StreamableHTTPClientTransport: mocks.MockStreamableTransport,
-}));
-
-vi.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
-  SSEClientTransport: mocks.MockSSETransport,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@modelcontextprotocol/sdk/client/index.js'
+// [Deno] vi.mock removed - manually stub imports from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+// [Deno] vi.mock removed - manually stub imports from '@modelcontextprotocol/sdk/client/sse.js'
 import { McpClient } from '@/tools/mcp-client';
 
-describe('McpClient', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.mockConnect.mockResolvedValue(undefined);
-    mocks.mockClose.mockResolvedValue(undefined);
-  });
 
-  it('connects via StreamableHTTP on first attempt', async () => {
-    const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
+  Deno.test('McpClient - connects via StreamableHTTP on first attempt', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
     await client.connect();
 
-    expect(mocks.MockStreamableTransport).toHaveBeenCalledWith(
-      expect.any(URL),
-      expect.objectContaining({ fetch: expect.any(Function) }),
-    );
-    expect(mocks.mockConnect).toHaveBeenCalledOnce();
-  });
-
-  it('falls back to SSE when StreamableHTTP connect throws', async () => {
-    mocks.mockConnect
-      .mockRejectedValueOnce(new Error('streamable failed'))
-      .mockResolvedValueOnce(undefined);
+    assertSpyCallArgs(mocks.MockStreamableTransport, 0, [
+      /* expect.any(URL) */ {} as any,
+      ({ fetch: /* expect.any(Function) */ {} as any }),
+    ]);
+    assertSpyCalls(mocks.mockConnect, 1);
+})
+  Deno.test('McpClient - falls back to SSE when StreamableHTTP connect throws', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  mocks.mockConnect
+       = (async () => { throw new Error('streamable failed'); }) as any
+       = (async () => undefined) as any;
 
     const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
     await client.connect();
 
     // SSE transport should be constructed on fallback
-    expect(mocks.MockSSETransport).toHaveBeenCalledOnce();
-    expect(mocks.mockConnect).toHaveBeenCalledTimes(2);
-  });
-
-  it('listTools returns mapped definitions', async () => {
-    mocks.mockListTools.mockResolvedValue({
+    assertSpyCalls(mocks.MockSSETransport, 1);
+    assertSpyCalls(mocks.mockConnect, 2);
+})
+  Deno.test('McpClient - listTools returns mapped definitions', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  mocks.mockListTools = (async () => ({
       tools: [
         {
           name: 'do_thing',
@@ -136,53 +126,60 @@ describe('McpClient', () => {
           inputSchema: { type: 'object', properties: { x: { type: 'string', description: 'x' } } },
         },
       ],
-    });
+    })) as any;
 
     const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
     await client.connect();
     const tools = await client.listTools();
 
-    expect(tools).toHaveLength(1);
-    expect(tools[0].definition.name).toBe('do_thing');
-    expect(tools[0].definition.category).toBe('mcp');
-  });
-
-  it('callTool returns concatenated text content', async () => {
-    mocks.mockCallTool.mockResolvedValue({
+    assertEquals(tools.length, 1);
+    assertEquals(tools[0].definition.name, 'do_thing');
+    assertEquals(tools[0].definition.category, 'mcp');
+})
+  Deno.test('McpClient - callTool returns concatenated text content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  mocks.mockCallTool = (async () => ({
       content: [
         { type: 'text', text: 'hello' },
         { type: 'text', text: 'world' },
       ],
-    });
+    })) as any;
 
     const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
     await client.connect();
     const result = await client.callTool('do_thing', { x: '1' });
 
-    expect(result).toBe('hello\nworld');
-  });
-
-  it('callTool returns empty string when content is empty', async () => {
-    mocks.mockCallTool.mockResolvedValue({ content: [] });
+    assertEquals(result, 'hello\nworld');
+})
+  Deno.test('McpClient - callTool returns empty string when content is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  mocks.mockCallTool = (async () => ({ content: [] })) as any;
 
     const client = new McpClient('https://example.com/mcp', null, 'my_server');
     await client.connect();
     const result = await client.callTool('do_thing', {});
 
-    expect(result).toBe('');
-  });
+    assertEquals(result, '');
+})
+  Deno.test('McpClient - callTool throws when not connected', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  const client = new McpClient('https://example.com/mcp', null, 'my_server');
 
-  it('callTool throws when not connected', async () => {
-    const client = new McpClient('https://example.com/mcp', null, 'my_server');
-
-    await expect(client.callTool('tool', {})).rejects.toThrow('not connected');
-  });
-
-  it('close disconnects the underlying client', async () => {
-    const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
+    await await assertRejects(async () => { await client.callTool('tool', {}); }, 'not connected');
+})
+  Deno.test('McpClient - close disconnects the underlying client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.mockConnect = (async () => undefined) as any;
+    mocks.mockClose = (async () => undefined) as any;
+  const client = new McpClient('https://example.com/mcp', 'tok', 'my_server');
     await client.connect();
     await client.close();
 
-    expect(mocks.mockClose).toHaveBeenCalledOnce();
-  });
-});
+    assertSpyCalls(mocks.mockClose, 1);
+})

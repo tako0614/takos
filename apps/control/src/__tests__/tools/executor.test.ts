@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 import { ToolExecutor } from '@/tools/executor';
 import type { ToolContext, ToolDefinition } from '@/tools/types';
+
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
 function createTool(name: string, overrides: Partial<ToolDefinition> = {}): ToolDefinition {
   return {
@@ -28,9 +30,9 @@ function createContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: ['repo.read'],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -39,7 +41,7 @@ function createExecutor(tools: ToolDefinition[], contextOverrides: Partial<ToolC
   const registry = new Map(tools.map((tool) => [tool.name, {
     definition: tool,
     builtin: false,
-    handler: vi.fn(async () => 'ok'),
+    handler: async () => 'ok',
   }]));
 
   const resolver = {
@@ -60,9 +62,9 @@ function createExecutor(tools: ToolDefinition[], contextOverrides: Partial<ToolC
   );
 }
 
-describe('ToolExecutor visibility filtering', () => {
-  it('hides capability-gated and dynamic MCP tools that are not executable in this run', () => {
-    const executor = createExecutor([
+
+  Deno.test('ToolExecutor visibility filtering - hides capability-gated and dynamic MCP tools that are not executable in this run', () => {
+  const executor = createExecutor([
       createTool('web_search'),
       createTool('managed__tool', { required_roles: ['owner', 'admin', 'editor'] }),
       createTool('external__tool', {
@@ -71,36 +73,34 @@ describe('ToolExecutor visibility filtering', () => {
       }),
     ]);
 
-    expect(executor.getAvailableTools().map((tool) => tool.name)).toEqual([
+    assertEquals(executor.getAvailableTools().map((tool) => tool.name), [
       'web_search',
       'managed__tool',
     ]);
-  });
-
-  it('hides editor-only dynamic tools from viewers', () => {
-    const executor = createExecutor([
+})
+  Deno.test('ToolExecutor visibility filtering - hides editor-only dynamic tools from viewers', () => {
+  const executor = createExecutor([
       createTool('managed__tool', { required_roles: ['owner', 'admin', 'editor'] }),
     ], {
       role: 'viewer',
       capabilities: ['repo.read', 'storage.read'],
     });
 
-    expect(executor.getAvailableTools()).toEqual([]);
-  });
-
-  it('propagates run-level abort signals into tool handlers', async () => {
-    const controller = new AbortController();
+    assertEquals(executor.getAvailableTools(), []);
+})
+  Deno.test('ToolExecutor visibility filtering - propagates run-level abort signals into tool handlers', async () => {
+  const controller = new AbortController();
     controller.abort(new Error('run aborted'));
 
     const tool = createTool('managed__tool');
-    const handler = vi.fn(async (_args, ctx) => {
+    const handler = async (_args, ctx) => {
       if (ctx.abortSignal?.aborted) {
         throw (ctx.abortSignal.reason instanceof Error
           ? ctx.abortSignal.reason
           : new Error(String(ctx.abortSignal.reason)));
       }
       return 'ok';
-    });
+    };
 
     const registry = new Map([[tool.name, {
       definition: tool,
@@ -131,7 +131,6 @@ describe('ToolExecutor visibility filtering', () => {
       arguments: {},
     });
 
-    expect(handler).toHaveBeenCalledOnce();
-    expect(result.error).toContain('run aborted');
-  });
-});
+    assertSpyCalls(handler, 1);
+    assertStringIncludes(result.error, 'run aborted');
+})

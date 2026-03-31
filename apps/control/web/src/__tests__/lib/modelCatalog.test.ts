@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   DEFAULT_MODEL_ID,
   FALLBACK_MODELS,
@@ -7,20 +5,19 @@ import {
   getModelLabel,
 } from '../../lib/modelCatalog';
 
-describe('frontend model catalog', () => {
-  it('keeps fallback options on OpenAI models only', () => {
-    expect(DEFAULT_MODEL_ID).toBe('gpt-5.4-nano');
-    expect(FALLBACK_MODELS.map((model) => model.id)).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
-  });
 
-  it('lists all supported models', () => {
-    expect(MODEL_OPTIONS.map((m) => m.id)).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('returns model labels', () => {
-    expect(getModelLabel('gpt-5.4-nano')).toBe('GPT-5.4 Nano');
-    expect(getModelLabel('gpt-5.4-mini')).toBe('GPT-5.4 Mini');
-    expect(getModelLabel('gpt-5.4')).toBe('GPT-5.4');
-    expect(getModelLabel('unknown-model')).toBe('unknown-model');
-  });
-});
+  Deno.test('frontend model catalog - keeps fallback options on OpenAI models only', () => {
+  assertEquals(DEFAULT_MODEL_ID, 'gpt-5.4-nano');
+    assertEquals(FALLBACK_MODELS.map((model) => model.id), ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
+})
+  Deno.test('frontend model catalog - lists all supported models', () => {
+  assertEquals(MODEL_OPTIONS.map((m) => m.id), ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
+})
+  Deno.test('frontend model catalog - returns model labels', () => {
+  assertEquals(getModelLabel('gpt-5.4-nano'), 'GPT-5.4 Nano');
+    assertEquals(getModelLabel('gpt-5.4-mini'), 'GPT-5.4 Mini');
+    assertEquals(getModelLabel('gpt-5.4'), 'GPT-5.4');
+    assertEquals(getModelLabel('unknown-model'), 'unknown-model');
+})

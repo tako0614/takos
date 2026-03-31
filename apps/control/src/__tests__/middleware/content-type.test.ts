@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
 import { validateContentType } from '@/middleware/content-type';
+
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
 function createApp(options?: Parameters<typeof validateContentType>[0]) {
   const app = new Hono<{ Bindings: Env }>();
@@ -16,33 +17,30 @@ function createApp(options?: Parameters<typeof validateContentType>[0]) {
   return app;
 }
 
-describe('validateContentType middleware', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('allows GET requests without Content-Type', async () => {
-    const app = createApp();
+  Deno.test('validateContentType middleware - allows GET requests without Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', { method: 'GET' }),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('allows DELETE requests without Content-Type', async () => {
-    const app = createApp();
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - allows DELETE requests without Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', { method: 'DELETE' }),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('allows POST with application/json Content-Type', async () => {
-    const app = createApp();
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - allows POST with application/json Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -55,11 +53,11 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('allows POST with application/json; charset=utf-8', async () => {
-    const app = createApp();
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - allows POST with application/json; charset=utf-8', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -72,11 +70,11 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('rejects POST with unsupported Content-Type', async () => {
-    const app = createApp();
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - rejects POST with unsupported Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -89,14 +87,14 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(415);
+    assertEquals(res.status, 415);
     const json = await res.json() as Record<string, unknown>;
-    expect(json.code).toBe('UNSUPPORTED_CONTENT_TYPE');
-    expect(json.error).toContain('text/plain');
-  });
-
-  it('rejects POST with missing Content-Type when body is present', async () => {
-    const app = createApp({ allowEmptyBody: false });
+    assertEquals(json.code, 'UNSUPPORTED_CONTENT_TYPE');
+    assertStringIncludes(json.error, 'text/plain');
+})
+  Deno.test('validateContentType middleware - rejects POST with missing Content-Type when body is present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp({ allowEmptyBody: false });
     // Node's Request constructor auto-sets Content-Type: text/plain when a string body
     // is provided. To truly test MISSING_CONTENT_TYPE, we must explicitly delete it.
     const req = new Request('http://localhost/api/data', {
@@ -110,13 +108,13 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(415);
+    assertEquals(res.status, 415);
     const json = await res.json() as Record<string, unknown>;
-    expect(json.code).toBe('MISSING_CONTENT_TYPE');
-  });
-
-  it('allows POST with empty body and no Content-Type by default', async () => {
-    const app = createApp();
+    assertEquals(json.code, 'MISSING_CONTENT_TYPE');
+})
+  Deno.test('validateContentType middleware - allows POST with empty body and no Content-Type by default', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -125,11 +123,11 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('allows custom allowed types', async () => {
-    const app = createApp({
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - allows custom allowed types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp({
       allowedTypes: ['application/json', 'application/xml'],
     });
     const res = await app.fetch(
@@ -144,11 +142,11 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('supports wildcard type matching', async () => {
-    const app = createApp({
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - supports wildcard type matching', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp({
       allowedTypes: ['application/*'],
     });
     const res = await app.fetch(
@@ -163,11 +161,11 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('rejects PUT with wrong Content-Type', async () => {
-    const app = createApp();
+    assertEquals(res.status, 200);
+})
+  Deno.test('validateContentType middleware - rejects PUT with wrong Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'PUT',
@@ -180,13 +178,13 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(415);
+    assertEquals(res.status, 415);
     const json = await res.json() as Record<string, unknown>;
-    expect(json.allowed).toEqual(['application/json']);
-  });
-
-  it('rejects PATCH with wrong Content-Type', async () => {
-    const app = createApp();
+    assertEquals(json.allowed, ['application/json']);
+})
+  Deno.test('validateContentType middleware - rejects PATCH with wrong Content-Type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp();
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'PATCH',
@@ -199,6 +197,5 @@ describe('validateContentType middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(415);
-  });
-});
+    assertEquals(res.status, 415);
+})

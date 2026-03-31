@@ -8,26 +8,26 @@ interface LegalPageProps {
 
 export function LegalPage({ page }: LegalPageProps) {
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-900">
-      <header className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+    <div class="min-h-screen bg-white dark:bg-zinc-900">
+      <header class="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+        <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <a
             href="/"
-            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400"
+            class="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400"
           >
-            <Icons.ArrowLeft className="w-4 h-4" />
+            <Icons.ArrowLeft class="w-4 h-4" />
           </a>
-          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Takos</span>
+          <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100">Takos</span>
         </div>
       </header>
-      <main className="max-w-3xl mx-auto px-4 py-8">
+      <main class="max-w-3xl mx-auto px-4 py-8">
         {page === 'terms' && <TermsContent />}
         {page === 'privacy' && <PrivacyContent />}
         {page === 'tokushoho' && <TokushohoContent />}
-        <footer className="mt-12 pt-6 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-500 flex gap-4">
-          <a href="/terms" className="hover:text-zinc-600">利用規約</a>
-          <a href="/privacy" className="hover:text-zinc-600">プライバシーポリシー</a>
-          <a href="/legal/tokushoho" className="hover:text-zinc-600">特定商取引法に基づく表記</a>
+        <footer class="mt-12 pt-6 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-500 flex gap-4">
+          <a href="/terms" class="hover:text-zinc-600">利用規約</a>
+          <a href="/privacy" class="hover:text-zinc-600">プライバシーポリシー</a>
+          <a href="/legal/tokushoho" class="hover:text-zinc-600">特定商取引法に基づく表記</a>
         </footer>
       </main>
     </div>
@@ -36,9 +36,9 @@ export function LegalPage({ page }: LegalPageProps) {
 
 function TermsContent() {
   return (
-    <article className="prose prose-zinc prose-sm max-w-none">
+    <article class="prose prose-zinc prose-sm max-w-none">
       <h1>利用規約</h1>
-      <p className="text-zinc-500">最終更新日: 2026年3月17日</p>
+      <p class="text-zinc-500">最終更新日: 2026年3月17日</p>
 
       <h2>第1条（適用）</h2>
       <p>
@@ -176,9 +176,9 @@ function TermsContent() {
 
 function PrivacyContent() {
   return (
-    <article className="prose prose-zinc prose-sm max-w-none">
+    <article class="prose prose-zinc prose-sm max-w-none">
       <h1>プライバシーポリシー</h1>
-      <p className="text-zinc-500">最終更新日: 2026年3月17日</p>
+      <p class="text-zinc-500">最終更新日: 2026年3月17日</p>
 
       <p>
         本プライバシーポリシーは、Takos（以下「本サービス」、URL: takos.jp）におけるユーザー情報の取扱いについて定めるものです。
@@ -239,9 +239,9 @@ function PrivacyContent() {
       <table>
         <thead>
           <tr>
-            <th className="text-left">委託先</th>
-            <th className="text-left">目的</th>
-            <th className="text-left">提供される情報</th>
+            <th class="text-left">委託先</th>
+            <th class="text-left">目的</th>
+            <th class="text-left">提供される情報</th>
           </tr>
         </thead>
         <tbody>
@@ -325,64 +325,64 @@ function PrivacyContent() {
 
 function TokushohoContent() {
   return (
-    <article className="prose prose-zinc prose-sm max-w-none">
+    <article class="prose prose-zinc prose-sm max-w-none">
       <h1>特定商取引法に基づく表記</h1>
-      <p className="text-zinc-500">最終更新日: 2026年2月14日</p>
+      <p class="text-zinc-500">最終更新日: 2026年2月14日</p>
 
       <table>
         <tbody>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">販売事業者</th>
-            <td className="py-2">個人事業（要記載）</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">販売事業者</th>
+            <td class="py-2">個人事業（要記載）</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">代表者</th>
-            <td className="py-2">（要記載）</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">代表者</th>
+            <td class="py-2">（要記載）</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">所在地</th>
-            <td className="py-2">請求があった場合に遅滞なく開示します</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">所在地</th>
+            <td class="py-2">請求があった場合に遅滞なく開示します</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">電話番号</th>
-            <td className="py-2">請求があった場合に遅滞なく開示します</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">電話番号</th>
+            <td class="py-2">請求があった場合に遅滞なく開示します</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">メールアドレス</th>
-            <td className="py-2">（要記載）</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">メールアドレス</th>
+            <td class="py-2">（要記載）</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">販売価格</th>
-            <td className="py-2">月額100円（税込）</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">販売価格</th>
+            <td class="py-2">月額100円（税込）</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">支払方法</th>
-            <td className="py-2">クレジットカード（Stripe 経由）</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">支払方法</th>
+            <td class="py-2">クレジットカード（Stripe 経由）</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">支払時期</th>
-            <td className="py-2">サブスクリプション開始時および毎月の更新日</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">支払時期</th>
+            <td class="py-2">サブスクリプション開始時および毎月の更新日</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">商品の引渡時期</th>
-            <td className="py-2">決済完了後、即時利用可能</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">商品の引渡時期</th>
+            <td class="py-2">決済完了後、即時利用可能</td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">返品・キャンセル</th>
-            <td className="py-2">
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">返品・キャンセル</th>
+            <td class="py-2">
               デジタルサービスのため返品は受け付けておりません。
               サブスクリプションはいつでも解約可能で、現在の請求期間の終了まで利用できます。
               日割り返金は行いません。
             </td>
           </tr>
           <tr>
-            <th className="text-left align-top pr-4 py-2 whitespace-nowrap">動作環境</th>
-            <td className="py-2">最新のウェブブラウザ（Chrome, Firefox, Safari, Edge）およびインターネット接続</td>
+            <th class="text-left align-top pr-4 py-2 whitespace-nowrap">動作環境</th>
+            <td class="py-2">最新のウェブブラウザ（Chrome, Firefox, Safari, Edge）およびインターネット接続</td>
           </tr>
         </tbody>
       </table>
 
-      <p className="mt-6 text-zinc-500 text-xs">
+      <p class="mt-6 text-zinc-500 text-xs">
         ※ 所在地・電話番号については、個人事業のため請求があった場合に遅滞なく開示いたします
         （特定商取引法第11条但書に基づく）。
       </p>

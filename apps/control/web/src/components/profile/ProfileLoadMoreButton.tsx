@@ -5,12 +5,12 @@ interface ProfileLoadMoreButtonProps {
   onLoadMore: () => void;
 }
 
-export function ProfileLoadMoreButton({ onLoadMore }: ProfileLoadMoreButtonProps) {
+export function ProfileLoadMoreButton(props: ProfileLoadMoreButtonProps) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+    <div style={{ display: 'flex', 'justify-content': 'center', 'margin-top': '1.5rem' }}>
       <Button
         variant="secondary"
-        onClick={onLoadMore}
+        onClick={props.onLoadMore}
         leftIcon={<Icons.ChevronDown style={{ width: '1rem', height: '1rem' }} />}
       >
         Load More

@@ -1,35 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  requireSpaceAccess: vi.fn(),
-  listActivityPubStoresForWorkspace: vi.fn(),
-  createActivityPubStore: vi.fn(),
-  updateActivityPubStore: vi.fn(),
-  deleteActivityPubStore: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  listActivityPubStoresForWorkspace: ((..._args: any[]) => undefined) as any,
+  createActivityPubStore: ((..._args: any[]) => undefined) as any,
+  updateActivityPubStore: ((..._args: any[]) => undefined) as any,
+  deleteActivityPubStore: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/activitypub/stores', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/activitypub/stores')>();
-  return {
-    ...actual,
-    listActivityPubStoresForWorkspace: mocks.listActivityPubStoresForWorkspace,
-    createActivityPubStore: mocks.createActivityPubStore,
-    updateActivityPubStore: mocks.updateActivityPubStore,
-    deleteActivityPubStore: mocks.deleteActivityPubStore,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
+// [Deno] vi.mock removed - manually stub imports from '@/services/activitypub/stores'
 import workspaceStoresRoutes from '@/routes/spaces/stores';
 
 function createUser(): User {
@@ -57,17 +42,14 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   return app;
 }
 
-describe('workspace activitypub stores routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({
+
+  Deno.test('workspace activitypub stores routes - lists default and custom stores for a workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({
       workspace: { id: 'ws-1' },
       member: { role: 'owner' },
-    });
-  });
-
-  it('lists default and custom stores for a workspace', async () => {
-    mocks.listActivityPubStoresForWorkspace.mockResolvedValue([
+    })) as any;
+  mocks.listActivityPubStoresForWorkspace = (async () => [
       {
         accountId: 'ws-1',
         accountSlug: 'alice',
@@ -90,7 +72,7 @@ describe('workspace activitypub stores routes', () => {
         createdAt: '2026-03-02T00:00:00.000Z',
         updatedAt: '2026-03-02T00:00:00.000Z',
       },
-    ]);
+    ]) as any;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -99,8 +81,8 @@ describe('workspace activitypub stores routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       stores: [
         {
           slug: 'alice',
@@ -122,10 +104,14 @@ describe('workspace activitypub stores routes', () => {
         },
       ],
     });
-  });
-
-  it('creates a custom store for a workspace', async () => {
-    mocks.createActivityPubStore.mockResolvedValue({
+})
+  Deno.test('workspace activitypub stores routes - creates a custom store for a workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({
+      workspace: { id: 'ws-1' },
+      member: { role: 'owner' },
+    })) as any;
+  mocks.createActivityPubStore = (async () => ({
       accountId: 'ws-1',
       accountSlug: 'alice',
       slug: 'oss',
@@ -135,7 +121,7 @@ describe('workspace activitypub stores routes', () => {
       isDefault: false,
       createdAt: '2026-03-02T00:00:00.000Z',
       updatedAt: '2026-03-02T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -152,17 +138,21 @@ describe('workspace activitypub stores routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(201);
-    expect(mocks.createActivityPubStore).toHaveBeenCalledWith(expect.anything(), 'ws-1', {
+    assertEquals(response.status, 201);
+    assertSpyCallArgs(mocks.createActivityPubStore, 0, [expect.anything(), 'ws-1', {
       slug: 'oss',
       name: 'OSS Catalog',
       summary: 'Open source picks',
       iconUrl: undefined,
-    });
-  });
-
-  it('updates a custom store for a workspace', async () => {
-    mocks.updateActivityPubStore.mockResolvedValue({
+    }]);
+})
+  Deno.test('workspace activitypub stores routes - updates a custom store for a workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({
+      workspace: { id: 'ws-1' },
+      member: { role: 'owner' },
+    })) as any;
+  mocks.updateActivityPubStore = (async () => ({
       accountId: 'ws-1',
       accountSlug: 'alice',
       slug: 'oss',
@@ -172,7 +162,7 @@ describe('workspace activitypub stores routes', () => {
       isDefault: false,
       createdAt: '2026-03-02T00:00:00.000Z',
       updatedAt: '2026-03-03T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -187,16 +177,20 @@ describe('workspace activitypub stores routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(mocks.updateActivityPubStore).toHaveBeenCalledWith(expect.anything(), 'ws-1', 'oss', {
+    assertEquals(response.status, 200);
+    assertSpyCallArgs(mocks.updateActivityPubStore, 0, [expect.anything(), 'ws-1', 'oss', {
       name: undefined,
       summary: 'Updated summary',
       iconUrl: undefined,
-    });
-  });
-
-  it('deletes a custom store for a workspace', async () => {
-    mocks.deleteActivityPubStore.mockResolvedValue(true);
+    }]);
+})
+  Deno.test('workspace activitypub stores routes - deletes a custom store for a workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({
+      workspace: { id: 'ws-1' },
+      member: { role: 'owner' },
+    })) as any;
+  mocks.deleteActivityPubStore = (async () => true) as any;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -207,8 +201,7 @@ describe('workspace activitypub stores routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true });
-    expect(mocks.deleteActivityPubStore).toHaveBeenCalledWith(expect.anything(), 'ws-1', 'oss');
-  });
-});
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), { success: true });
+    assertSpyCallArgs(mocks.deleteActivityPubStore, 0, [expect.anything(), 'ws-1', 'oss']);
+})

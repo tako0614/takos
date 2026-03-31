@@ -1,196 +1,176 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/agent', () => ({
-  LLMClient: vi.fn(() => ({
-    chat: vi.fn().mockResolvedValue({ content: '[]' }),
-  })),
-}));
-
-import { MemoryConsolidator } from '@/services/memory/consolidation';
-
-describe('MemoryConsolidator', () => {
-  it('creates a consolidator instance via direct construction', () => {
-    const consolidator = new MemoryConsolidator({} as any);
-    expect(consolidator).toBeInstanceOf(MemoryConsolidator);
-  });
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
-describe('MemoryConsolidator methods', () => {
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent'
+import { MemoryConsolidator } from '@/services/memory/consolidation';
+
+
+  Deno.test('MemoryConsolidator - creates a consolidator instance via direct construction', () => {
+  const consolidator = new MemoryConsolidator({} as any);
+    assert(consolidator instanceof MemoryConsolidator);
+})
+
   function createDrizzleMock() {
-    const allMock = vi.fn();
-    const getMock = vi.fn();
-    const runMock = vi.fn().mockResolvedValue({ meta: { changes: 0 } });
+    const allMock = ((..._args: any[]) => undefined) as any;
+    const getMock = ((..._args: any[]) => undefined) as any;
+    const runMock = (async () => ({ meta: { changes: 0 } }));
     const chain = {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      set: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
+      from: (function(this: any) { return this; }),
+      where: (function(this: any) { return this; }),
+      set: (function(this: any) { return this; }),
+      orderBy: (function(this: any) { return this; }),
+      limit: (function(this: any) { return this; }),
       all: allMock,
       get: getMock,
       run: runMock,
     };
     return {
-      select: vi.fn(() => chain),
-      update: vi.fn(() => chain),
-      delete: vi.fn(() => chain),
-      insert: vi.fn(() => chain),
+      select: () => chain,
+      update: () => chain,
+      delete: () => chain,
+      insert: () => chain,
       run: runMock,
       _: { all: allMock, get: getMock, run: runMock, chain },
     };
   }
+  
+    Deno.test('MemoryConsolidator methods - applyDecay - runs decay SQL queries and returns counts', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const runMock = ((..._args: any[]) => undefined) as any
+         = (async () => ({ meta: { changes: 3 } })) as any // deleted
+         = (async () => ({ meta: { changes: 10 } })) as any; // updated
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('applyDecay', () => {
-    it('runs decay SQL queries and returns counts', async () => {
-      const runMock = vi.fn()
-        .mockResolvedValueOnce({ meta: { changes: 3 } }) // deleted
-        .mockResolvedValueOnce({ meta: { changes: 10 } }); // updated
-
-      mocks.getDb.mockReturnValue({ run: runMock });
+      mocks.getDb = (() => ({ run: runMock })) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.applyDecay('space-1');
 
-      expect(result.deleted).toBe(3);
-      expect(result.updated).toBe(10);
-      expect(runMock).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('mergeSimilarSimple (no LLM)', () => {
-    it('returns merged: 0 when fewer than 2 memories', async () => {
-      const drizzle = createDrizzleMock();
-      drizzle._.all.mockResolvedValue([
+      assertEquals(result.deleted, 3);
+      assertEquals(result.updated, 10);
+      assertSpyCalls(runMock, 2);
+})  
+  
+    Deno.test('MemoryConsolidator methods - mergeSimilarSimple (no LLM) - returns merged: 0 when fewer than 2 memories', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      drizzle._.all = (async () => [
         { id: 'm-1', type: 'semantic', content: 'only one memory', importance: 0.5 },
-      ]);
-      mocks.getDb.mockReturnValue(drizzle);
+      ]) as any;
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.mergeSimilar('space-1');
 
-      expect(result.merged).toBe(0);
-    });
-
-    it('returns merged: 0 for empty memories', async () => {
-      const drizzle = createDrizzleMock();
-      drizzle._.all.mockResolvedValue([]);
-      mocks.getDb.mockReturnValue(drizzle);
+      assertEquals(result.merged, 0);
+})
+    Deno.test('MemoryConsolidator methods - mergeSimilarSimple (no LLM) - returns merged: 0 for empty memories', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      drizzle._.all = (async () => []) as any;
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.mergeSimilar('space-1');
 
-      expect(result.merged).toBe(0);
-    });
-
-    it('merges similar memories of the same type', async () => {
-      const deleteMock = vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      });
+      assertEquals(result.merged, 0);
+})
+    Deno.test('MemoryConsolidator methods - mergeSimilarSimple (no LLM) - merges similar memories of the same type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deleteMock = (() => ({
+        where: (async () => undefined),
+      }));
       const drizzle = createDrizzleMock();
-      drizzle._.all.mockResolvedValue([
+      drizzle._.all = (async () => [
         { id: 'm-1', type: 'semantic', content: 'the quick brown fox jumps over the lazy dog today', importance: 0.8 },
         { id: 'm-2', type: 'semantic', content: 'the quick brown fox jumps over the lazy dog yesterday', importance: 0.6 },
-      ]);
+      ]) as any;
       drizzle.delete = deleteMock;
-      mocks.getDb.mockReturnValue(drizzle);
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.mergeSimilar('space-1');
 
       // These two memories share high n-gram similarity
-      expect(result.merged).toBeGreaterThanOrEqual(0);
-    });
-
-    it('does not merge memories of different types', async () => {
-      const drizzle = createDrizzleMock();
-      drizzle._.all.mockResolvedValue([
+      assert(result.merged >= 0);
+})
+    Deno.test('MemoryConsolidator methods - mergeSimilarSimple (no LLM) - does not merge memories of different types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      drizzle._.all = (async () => [
         { id: 'm-1', type: 'semantic', content: 'the quick brown fox jumps over the lazy dog', importance: 0.8 },
         { id: 'm-2', type: 'episode', content: 'the quick brown fox jumps over the lazy dog', importance: 0.6 },
-      ]);
-      mocks.getDb.mockReturnValue(drizzle);
+      ]) as any;
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.mergeSimilar('space-1');
 
-      expect(result.merged).toBe(0);
-    });
-  });
-
-  describe('summarizeOld', () => {
-    it('returns summarized: 0 when no LLM client', async () => {
-      const consolidator = new MemoryConsolidator({} as any);
+      assertEquals(result.merged, 0);
+})  
+  
+    Deno.test('MemoryConsolidator methods - summarizeOld - returns summarized: 0 when no LLM client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.summarizeOld('space-1');
 
-      expect(result.summarized).toBe(0);
-    });
-  });
-
-  describe('enforceLimit', () => {
-    it('returns deleted: 0 when under limit', async () => {
-      const drizzle = createDrizzleMock();
-      drizzle._.get.mockResolvedValue({ count: 100 });
-      mocks.getDb.mockReturnValue(drizzle);
+      assertEquals(result.summarized, 0);
+})  
+  
+    Deno.test('MemoryConsolidator methods - enforceLimit - returns deleted: 0 when under limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      drizzle._.get = (async () => ({ count: 100 })) as any;
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.enforceLimit('space-1');
 
-      expect(result.deleted).toBe(0);
-    });
-
-    it('deletes excess memories when over limit', async () => {
-      const deleteMock = vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      });
+      assertEquals(result.deleted, 0);
+})
+    Deno.test('MemoryConsolidator methods - enforceLimit - deletes excess memories when over limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deleteMock = (() => ({
+        where: (async () => undefined),
+      }));
       const drizzle = createDrizzleMock();
-      drizzle._.get.mockResolvedValue({ count: 10002 });
-      drizzle._.all.mockResolvedValue([
+      drizzle._.get = (async () => ({ count: 10002 })) as any;
+      drizzle._.all = (async () => [
         { id: 'm-excess-1' },
         { id: 'm-excess-2' },
-      ]);
+      ]) as any;
       drizzle.delete = deleteMock;
-      mocks.getDb.mockReturnValue(drizzle);
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.enforceLimit('space-1');
 
-      expect(result.deleted).toBe(2);
-    });
-  });
-
-  describe('consolidate', () => {
-    it('runs all consolidation steps', async () => {
-      // Mock applyDecay
-      const runMock = vi.fn()
-        .mockResolvedValue({ meta: { changes: 0 } });
+      assertEquals(result.deleted, 2);
+})  
+  
+    Deno.test('MemoryConsolidator methods - consolidate - runs all consolidation steps', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // Mock applyDecay
+      const runMock = ((..._args: any[]) => undefined) as any
+         = (async () => ({ meta: { changes: 0 } })) as any;
 
       const drizzle = {
         ...createDrizzleMock(),
         run: runMock,
       };
-      drizzle._.all.mockResolvedValue([]);
-      drizzle._.get.mockResolvedValue({ count: 0 });
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle._.all = (async () => []) as any;
+      drizzle._.get = (async () => ({ count: 0 })) as any;
+      mocks.getDb = (() => drizzle) as any;
 
       const consolidator = new MemoryConsolidator({} as any);
       const result = await consolidator.consolidate('space-1');
 
-      expect(result).toHaveProperty('decayed');
-      expect(result).toHaveProperty('merged');
-      expect(result).toHaveProperty('summarized');
-      expect(result).toHaveProperty('limited');
-    });
-  });
-});
+      assert('decayed' in result);
+      assert('merged' in result);
+      assert('summarized' in result);
+      assert('limited' in result);
+})  

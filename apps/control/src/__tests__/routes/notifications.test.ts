@@ -1,45 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  listNotifications: vi.fn(),
-  getUnreadCount: vi.fn(),
-  markNotificationRead: vi.fn(),
-  getNotificationPreferences: vi.fn(),
-  updateNotificationPreferences: vi.fn(),
-  getNotificationsMutedUntil: vi.fn(),
-  setNotificationsMutedUntil: vi.fn(),
-  isNotificationType: vi.fn(),
-  isNotificationChannel: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/notifications', () => ({
-  listNotifications: mocks.listNotifications,
-  getUnreadCount: mocks.getUnreadCount,
-  markNotificationRead: mocks.markNotificationRead,
-  getNotificationPreferences: mocks.getNotificationPreferences,
-  updateNotificationPreferences: mocks.updateNotificationPreferences,
-  getNotificationsMutedUntil: mocks.getNotificationsMutedUntil,
-  setNotificationsMutedUntil: mocks.setNotificationsMutedUntil,
-}));
+const mocks = ({
+  listNotifications: ((..._args: any[]) => undefined) as any,
+  getUnreadCount: ((..._args: any[]) => undefined) as any,
+  markNotificationRead: ((..._args: any[]) => undefined) as any,
+  getNotificationPreferences: ((..._args: any[]) => undefined) as any,
+  updateNotificationPreferences: ((..._args: any[]) => undefined) as any,
+  getNotificationsMutedUntil: ((..._args: any[]) => undefined) as any,
+  setNotificationsMutedUntil: ((..._args: any[]) => undefined) as any,
+  isNotificationType: ((..._args: any[]) => undefined) as any,
+  isNotificationChannel: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/notifications/types', () => ({
-  isNotificationType: mocks.isNotificationType,
-  isNotificationChannel: mocks.isNotificationChannel,
-  NOTIFICATION_TYPES: ['run_complete', 'mention'],
-  NOTIFICATION_CHANNELS: ['in_app', 'email'],
-}));
-
-vi.mock('@/durable-objects/shared', () => ({
-  buildSanitizedDOHeaders: vi.fn((_headers: Headers, extra: Record<string, string>) => {
-    const h = new Headers();
-    for (const [k, v] of Object.entries(extra)) h.set(k, v);
-    return h;
-  }),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/notifications'
+// [Deno] vi.mock removed - manually stub imports from '@/services/notifications/types'
+// [Deno] vi.mock removed - manually stub imports from '@/durable-objects/shared'
 import notificationsRoute from '@/routes/notifications';
 
 function createUser(): User {
@@ -67,17 +47,13 @@ function createApp(user: User) {
   return app;
 }
 
-describe('notifications routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('GET /api/notifications', () => {
-    it('returns notifications list', async () => {
-      const notifications = [{ id: 'n-1', type: 'run_complete', read: false }];
-      mocks.listNotifications.mockResolvedValue(notifications);
+  
+    Deno.test('notifications routes - GET /api/notifications - returns notifications list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const notifications = [{ id: 'n-1', type: 'run_complete', read: false }];
+      mocks.listNotifications = (async () => notifications) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -86,17 +62,17 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual(notifications);
-      expect(mocks.listNotifications).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), notifications);
+      assertSpyCallArgs(mocks.listNotifications, 0, [
         env.DB,
         'user-1',
         { limit: undefined, before: null },
-      );
-    });
-
-    it('passes limit and before query params', async () => {
-      mocks.listNotifications.mockResolvedValue([]);
+      ]);
+})
+    Deno.test('notifications routes - GET /api/notifications - passes limit and before query params', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listNotifications = (async () => []) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -105,29 +81,28 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.listNotifications).toHaveBeenCalledWith(
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.listNotifications, 0, [
         env.DB,
         'user-1',
         { limit: 10, before: '2026-03-01T00:00:00.000Z' },
-      );
-    });
-
-    it('rejects invalid before parameter', async () => {
-      const app = createApp(createUser());
+      ]);
+})
+    Deno.test('notifications routes - GET /api/notifications - rejects invalid before parameter', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/notifications?before=not-a-date'),
         env as unknown as Env,
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('GET /api/notifications/unread-count', () => {
-    it('returns unread count', async () => {
-      mocks.getUnreadCount.mockResolvedValue(5);
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('notifications routes - GET /api/notifications/unread-count - returns unread count', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUnreadCount = (async () => 5) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -136,14 +111,13 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ unread_count: 5 });
-    });
-  });
-
-  describe('PATCH /api/notifications/:id/read', () => {
-    it('marks notification as read', async () => {
-      mocks.markNotificationRead.mockResolvedValue({ success: true });
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { unread_count: 5 });
+})  
+  
+    Deno.test('notifications routes - PATCH /api/notifications/:id/read - marks notification as read', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.markNotificationRead = (async () => ({ success: true })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -154,14 +128,13 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.markNotificationRead).toHaveBeenCalledWith(env.DB, 'user-1', 'n-1');
-    });
-  });
-
-  describe('GET /api/notifications/preferences', () => {
-    it('returns preference list with types and channels', async () => {
-      mocks.getNotificationPreferences.mockResolvedValue([]);
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.markNotificationRead, 0, [env.DB, 'user-1', 'n-1']);
+})  
+  
+    Deno.test('notifications routes - GET /api/notifications/preferences - returns preference list with types and channels', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getNotificationPreferences = (async () => []) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -170,19 +143,18 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('types');
-      expect(json).toHaveProperty('channels');
-      expect(json).toHaveProperty('preferences');
-    });
-  });
-
-  describe('PATCH /api/notifications/preferences', () => {
-    it('updates preferences with valid input', async () => {
-      mocks.isNotificationType.mockReturnValue(true);
-      mocks.isNotificationChannel.mockReturnValue(true);
-      mocks.updateNotificationPreferences.mockResolvedValue([]);
+      assert('types' in json);
+      assert('channels' in json);
+      assert('preferences' in json);
+})  
+  
+    Deno.test('notifications routes - PATCH /api/notifications/preferences - updates preferences with valid input', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.isNotificationType = (() => true) as any;
+      mocks.isNotificationChannel = (() => true) as any;
+      mocks.updateNotificationPreferences = (async () => []) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -197,13 +169,13 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.updateNotificationPreferences).toHaveBeenCalled();
-    });
-
-    it('rejects invalid notification type', async () => {
-      mocks.isNotificationType.mockReturnValue(false);
-      mocks.isNotificationChannel.mockReturnValue(true);
+      assertEquals(res.status, 200);
+      assert(mocks.updateNotificationPreferences.calls.length > 0);
+})
+    Deno.test('notifications routes - PATCH /api/notifications/preferences - rejects invalid notification type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.isNotificationType = (() => false) as any;
+      mocks.isNotificationChannel = (() => true) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -218,12 +190,12 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('rejects invalid notification channel', async () => {
-      mocks.isNotificationType.mockReturnValue(true);
-      mocks.isNotificationChannel.mockReturnValue(false);
+      assertEquals(res.status, 400);
+})
+    Deno.test('notifications routes - PATCH /api/notifications/preferences - rejects invalid notification channel', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.isNotificationType = (() => true) as any;
+      mocks.isNotificationChannel = (() => false) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -238,11 +210,11 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('rejects request without updates array', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 400);
+})
+    Deno.test('notifications routes - PATCH /api/notifications/preferences - rejects request without updates array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/notifications/preferences', {
           method: 'PATCH',
@@ -253,13 +225,12 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('GET /api/notifications/settings', () => {
-    it('returns muted_until setting', async () => {
-      mocks.getNotificationsMutedUntil.mockResolvedValue('2026-04-01T00:00:00.000Z');
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('notifications routes - GET /api/notifications/settings - returns muted_until setting', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getNotificationsMutedUntil = (async () => '2026-04-01T00:00:00.000Z') as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -268,16 +239,15 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), {
         muted_until: '2026-04-01T00:00:00.000Z',
       });
-    });
-  });
-
-  describe('PATCH /api/notifications/settings', () => {
-    it('updates muted_until with valid datetime', async () => {
-      mocks.setNotificationsMutedUntil.mockResolvedValue({ muted_until: '2026-04-01T00:00:00.000Z' });
+})  
+  
+    Deno.test('notifications routes - PATCH /api/notifications/settings - updates muted_until with valid datetime', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.setNotificationsMutedUntil = (async () => ({ muted_until: '2026-04-01T00:00:00.000Z' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -290,11 +260,11 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('allows null muted_until to unmute', async () => {
-      mocks.setNotificationsMutedUntil.mockResolvedValue({ muted_until: null });
+      assertEquals(res.status, 200);
+})
+    Deno.test('notifications routes - PATCH /api/notifications/settings - allows null muted_until to unmute', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.setNotificationsMutedUntil = (async () => ({ muted_until: null })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -307,11 +277,11 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('rejects invalid datetime for muted_until', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 200);
+})
+    Deno.test('notifications routes - PATCH /api/notifications/settings - rejects invalid datetime for muted_until', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/notifications/settings', {
           method: 'PATCH',
@@ -322,17 +292,16 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('GET /api/notifications/ws', () => {
-    it('returns 426 without Upgrade: websocket header', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('notifications routes - GET /api/notifications/ws - returns 426 without Upgrade: websocket header', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const envWithNotifier = createMockEnv({
         NOTIFICATION_NOTIFIER: {
-          idFromName: vi.fn(() => 'id-1'),
-          get: vi.fn(() => ({ fetch: vi.fn() })),
+          idFromName: () => 'id-1',
+          get: () => ({ fetch: ((..._args: any[]) => undefined) as any }),
         },
       });
 
@@ -342,11 +311,11 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(426);
-    });
-
-    it('returns 500 when NOTIFICATION_NOTIFIER is not configured', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 426);
+})
+    Deno.test('notifications routes - GET /api/notifications/ws - returns 500 when NOTIFICATION_NOTIFIER is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/notifications/ws', {
           headers: { Upgrade: 'websocket' },
@@ -355,7 +324,5 @@ describe('notifications routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(500);
-    });
-  });
-});
+      assertEquals(res.status, 500);
+})  

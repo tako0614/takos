@@ -5,10 +5,10 @@
 import {
   MAX_EVALUATE_CALLS,
   MAX_PARSE_ACCESS_DEPTH,
-} from '../constants.js';
-import type { ExecutionContext } from '../workflow-models.js';
-import { ExpressionError } from './tokenizer.js';
-import type { Token, TokenType } from './tokenizer.js';
+} from '../constants.ts';
+import type { ExecutionContext } from '../workflow-models.ts';
+import { ExpressionError } from './tokenizer.ts';
+import type { Token, TokenType } from './tokenizer.ts';
 import {
   fnContains,
   fnStartsWith,
@@ -22,7 +22,7 @@ import {
   fnAlways,
   fnCancelled,
   fnFailure,
-} from './evaluator-builtins.js';
+} from './evaluator-builtins.ts';
 
 const BLOCKED_PROPERTY_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { createEffect, type Setter } from 'solid-js';
 import type { TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type {
@@ -13,7 +13,7 @@ import type {
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/types';
+} from '../views/chat/chat-types';
 import { isRunInRootTree } from '../views/chat/timeline';
 import { useWsSessionDiff, type SessionDiffState, type PendingSessionDiffSummary } from './useWsSessionDiff';
 import { useWsMessageProcessor, ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor';
@@ -21,22 +21,24 @@ import { useConnectionManagerWithFallback } from './useConnectionManagerWithFall
 
 export type { SessionDiffState } from './useWsSessionDiff';
 
+type MutableRefObject<T> = { current: T };
+
 export interface UseWebSocketConnectionOptions {
   threadId: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  isMountedRef: React.MutableRefObject<boolean>;
+  isMountedRef: MutableRefObject<boolean>;
   fetchMessages: (showError?: boolean) => Promise<void>;
-  startMessagePolling: (currentRunIdRef: React.MutableRefObject<string | null>) => void;
+  startMessagePolling: (currentRunIdRef: MutableRefObject<string | null>) => void;
   stopMessagePolling: () => void;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setMessages: Setter<Message[]>;
   setError: (value: string | null) => void;
 }
 
 export interface UseWebSocketConnectionResult {
   currentRun: Run | null;
-  setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
+  setCurrentRun: Setter<Run | null>;
   isLoading: boolean;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsLoading: Setter<boolean>;
   streaming: ChatStreamingState;
   resetStreamingState: () => void;
   timelineEntries: ChatTimelineEntry[];
@@ -51,19 +53,19 @@ export interface UseWebSocketConnectionResult {
     taskContext: ThreadHistoryTaskContext | null;
   }) => void;
   sessionDiff: SessionDiffState | null;
-  setSessionDiff: React.Dispatch<React.SetStateAction<SessionDiffState | null>>;
+  setSessionDiff: Setter<SessionDiffState | null>;
   loadPendingSessionDiff: (pending: PendingSessionDiffSummary | null) => Promise<void>;
   isMerging: boolean;
   handleMerge: () => Promise<void>;
   isCancelling: boolean;
-  setIsCancelling: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsCancelling: Setter<boolean>;
   handleCancel: () => Promise<void>;
   dismissSessionDiff: () => void;
   startWebSocket: (runId: string) => void;
   closeWebSocket: () => void;
-  currentRunIdRef: React.MutableRefObject<string | null>;
-  lastEventIdRef: React.MutableRefObject<number>;
-  rootRunIdRef: React.MutableRefObject<string | null>;
+  currentRunIdRef: MutableRefObject<string | null>;
+  lastEventIdRef: MutableRefObject<number>;
+  rootRunIdRef: MutableRefObject<string | null>;
   syncThreadAfterSendFailure: () => Promise<void>;
 }
 
@@ -90,8 +92,8 @@ export function useWebSocketConnection({
   });
 
   // Stable refs for cross-hook communication
-  const currentRunIdRef = useRef<string | null>(null);
-  const lastEventIdRef = useRef<number>(0);
+  let currentRunIdRef: MutableRefObject<string | null> = { current: null };
+  let lastEventIdRef: MutableRefObject<number> = { current: 0 };
 
   // --- Connection manager sub-hook (WS with SSE fallback) ---
   const connection = useConnectionManagerWithFallback({
@@ -141,7 +143,7 @@ export function useWebSocketConnection({
   };
 
   // --- Sync run tree ---
-  const syncRunTreeRef = useRef<(() => Promise<void>) | null>(null);
+  let syncRunTreeRef: MutableRefObject<(() => Promise<void>) | null> = { current: null };
 
   syncRunTreeRef.current = async () => {
     const rootRunId = connection.rootRunIdRef.current || currentRunIdRef.current;
@@ -186,19 +188,14 @@ export function useWebSocketConnection({
   };
 
   // --- Wrapped handleCancel (adapts the sub-hook's signature) ---
-  const handleCancel = useCallback(async (): Promise<void> => {
+  const handleCancel = async (): Promise<void> => {
     await sessionDiffHook.handleCancel(() => {
-      let run: Run | null = null;
-      processor.setCurrentRun((prev) => {
-        run = prev;
-        return prev;
-      });
-      return run;
+      return processor.currentRun;
     });
-  }, [sessionDiffHook, processor.setCurrentRun]);
+  };
 
   // --- syncThreadAfterSendFailure ---
-  const syncThreadAfterSendFailure = useCallback(async (): Promise<void> => {
+  const syncThreadAfterSendFailure = async (): Promise<void> => {
     try {
       const res = await rpc.threads[':id'].history.$get({
         param: { id: threadId },
@@ -229,46 +226,50 @@ export function useWebSocketConnection({
     } catch (syncErr) {
       console.debug('Failed to sync thread after send failure:', syncErr);
     }
-  }, [threadId, isMountedRef, setMessages]);
+  };
 
   // --- Effects ---
 
-  useEffect(() => {
-    if (processor.currentRun?.id) {
-      processor.upsertRunMeta(processor.currentRun);
+  createEffect(() => {
+    const run = processor.currentRun;
+    if (run?.id) {
+      processor.upsertRunMeta(run);
     }
-  }, [processor.currentRun, processor.upsertRunMeta]);
+  });
 
   // Sync run tree once when a run is first set (no polling).
   // Subsequent updates arrive via WebSocket events; reconnections
   // trigger verifyRunStatus which handles catch-up.
-  useEffect(() => {
-    if (!processor.currentRun && !connection.rootRunIdRef.current) {
+  createEffect(() => {
+    // Read reactive dependencies
+    const _run = processor.currentRun;
+    const _threadId = threadId;
+    if (!_run && !connection.rootRunIdRef.current) {
       return;
     }
     void syncRunTreeRef.current?.();
-  }, [processor.currentRun, threadId]);
+  });
 
   return {
-    currentRun: processor.currentRun,
+    get currentRun() { return processor.currentRun; },
     setCurrentRun: processor.setCurrentRun,
-    isLoading: processor.isLoading,
+    get isLoading() { return processor.isLoading; },
     setIsLoading: processor.setIsLoading,
-    streaming: processor.streaming,
+    get streaming() { return processor.streaming; },
     resetStreamingState: processor.resetStreamingState,
-    timelineEntries: processor.timelineEntries,
-    runMetaById: processor.runMetaById,
-    artifactsByRunId: processor.artifactsByRunId,
-    historyFocus: processor.historyFocus,
-    taskContext: processor.taskContext,
+    get timelineEntries() { return processor.timelineEntries; },
+    get runMetaById() { return processor.runMetaById; },
+    get artifactsByRunId() { return processor.artifactsByRunId; },
+    get historyFocus() { return processor.historyFocus; },
+    get taskContext() { return processor.taskContext; },
     resetTimeline: processor.resetTimeline,
     applyHistorySnapshot: processor.applyHistorySnapshot,
-    sessionDiff: sessionDiffHook.sessionDiff,
+    get sessionDiff() { return sessionDiffHook.sessionDiff; },
     setSessionDiff: sessionDiffHook.setSessionDiff,
     loadPendingSessionDiff: sessionDiffHook.loadPendingSessionDiff,
-    isMerging: sessionDiffHook.isMerging,
+    get isMerging() { return sessionDiffHook.isMerging; },
     handleMerge: sessionDiffHook.handleMerge,
-    isCancelling: sessionDiffHook.isCancelling,
+    get isCancelling() { return sessionDiffHook.isCancelling; },
     setIsCancelling: sessionDiffHook.setIsCancelling,
     handleCancel,
     dismissSessionDiff: sessionDiffHook.dismissSessionDiff,

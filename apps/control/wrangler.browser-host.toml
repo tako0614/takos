@@ -20,7 +20,7 @@ class_name = "BrowserSessionContainer"
 tag = "v1"
 new_sqlite_classes = ["BrowserSessionContainer"]
 
-# Container image must be provided by your deployment (e.g. takos-computer).
+# Container image must be provided by your deployment (e.g. takos-agent).
 [[containers]]
 class_name = "BrowserSessionContainer"
 image = "your-browser-image:tag"

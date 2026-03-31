@@ -1,27 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  checkWorkspaceAccess: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  checkWorkspaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils')>();
-  return {
-    ...actual,
-    checkWorkspaceAccess: mocks.checkWorkspaceAccess,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import { checkThreadAccess, createThread, listThreadMessages } from '@/services/threads/thread-service';
 
 /**
@@ -35,36 +23,33 @@ function createDrizzleMock(options: {
   selectAll?: unknown[];
   insertGet?: unknown;
 } = {}) {
-  const get = vi.fn().mockResolvedValue(options.selectGet);
-  const all = vi.fn().mockResolvedValue(options.selectAll ?? []);
-  const chainable = { get, all, limit: vi.fn().mockReturnThis(), offset: vi.fn().mockReturnThis(), orderBy: vi.fn().mockReturnThis() };
-  const where = vi.fn().mockReturnValue(chainable);
-  const from = vi.fn().mockReturnValue({ where, get, all, orderBy: vi.fn().mockReturnValue(chainable) });
-  const select = vi.fn().mockReturnValue({ from });
+  const get = (async () => options.selectGet);
+  const all = (async () => options.selectAll ?? []);
+  const chainable = { get, all, limit: (function(this: any) { return this; }), offset: (function(this: any) { return this; }), orderBy: (function(this: any) { return this; }) };
+  const where = (() => chainable);
+  const from = (() => ({ where, get, all, orderBy: (() => chainable) }));
+  const select = (() => ({ from }));
 
-  const returningGet = vi.fn().mockResolvedValue(options.insertGet);
-  const returning = vi.fn().mockReturnValue({ get: returningGet });
-  const values = vi.fn().mockReturnValue({ returning });
-  const insert = vi.fn().mockReturnValue({ values });
+  const returningGet = (async () => options.insertGet);
+  const returning = (() => ({ get: returningGet }));
+  const values = (() => ({ returning }));
+  const insert = (() => ({ values }));
 
-  const set = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: vi.fn().mockReturnValue({ get: vi.fn() }) }) });
-  const update = vi.fn().mockReturnValue({ set });
+  const set = (() => ({ where: (() => ({ returning: (() => ({ get: ((..._args: any[]) => undefined) as any })) })) }));
+  const update = (() => ({ set }));
 
   return { select, insert, update, from, where, get, all };
 }
 
-describe('thread access fallback guards (issue 186)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('rejects invalid IDs before DB query', async () => {
-    await expect(checkThreadAccess({} as D1Database, 'bad id', 'user-1')).resolves.toBeNull();
-    expect(mocks.getDb).not.toHaveBeenCalled();
-  });
-
-  it('returns thread access when thread exists and user has workspace access', async () => {
-    const drizzleMock = createDrizzleMock({
+  Deno.test('thread access fallback guards (issue 186) - rejects invalid IDs before DB query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await assertEquals(await checkThreadAccess({} as D1Database, 'bad id', 'user-1'), null);
+    assertSpyCalls(mocks.getDb, 0);
+})
+  Deno.test('thread access fallback guards (issue 186) - returns thread access when thread exists and user has workspace access', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzleMock = createDrizzleMock({
       selectGet: {
         id: 'thread-1',
         accountId: 'ws-1',
@@ -79,15 +64,15 @@ describe('thread access fallback guards (issue 186)', () => {
         updatedAt: '2026-02-13T00:00:00.000Z',
       },
     });
-    mocks.getDb.mockReturnValue(drizzleMock);
-    mocks.checkWorkspaceAccess.mockResolvedValue({
+    mocks.getDb = (() => drizzleMock) as any;
+    mocks.checkWorkspaceAccess = (async () => ({
       workspace: { id: 'ws-1' },
       member: { role: 'owner' },
-    });
+    })) as any;
 
     const result = await checkThreadAccess({} as D1Database, 'thread-1', 'user-1');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       thread: {
         id: 'thread-1',
         space_id: 'ws-1',
@@ -103,19 +88,19 @@ describe('thread access fallback guards (issue 186)', () => {
       },
       role: 'owner',
     });
-  });
-
-  it('returns null when thread not found in DB', async () => {
-    const drizzleMock = createDrizzleMock({ selectGet: undefined });
-    mocks.getDb.mockReturnValue(drizzleMock);
+})
+  Deno.test('thread access fallback guards (issue 186) - returns null when thread not found in DB', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzleMock = createDrizzleMock({ selectGet: undefined });
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await checkThreadAccess({} as D1Database, 'thread-1', 'user-1');
 
-    expect(result).toBeNull();
-  });
-
-  it('returns null when user has no workspace access', async () => {
-    const drizzleMock = createDrizzleMock({
+    assertEquals(result, null);
+})
+  Deno.test('thread access fallback guards (issue 186) - returns null when user has no workspace access', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzleMock = createDrizzleMock({
       selectGet: {
         id: 'thread-1',
         accountId: 'ws-1',
@@ -130,16 +115,16 @@ describe('thread access fallback guards (issue 186)', () => {
         updatedAt: '2026-02-13T00:00:00.000Z',
       },
     });
-    mocks.getDb.mockReturnValue(drizzleMock);
-    mocks.checkWorkspaceAccess.mockResolvedValue(null);
+    mocks.getDb = (() => drizzleMock) as any;
+    mocks.checkWorkspaceAccess = (async () => null) as any;
 
     const result = await checkThreadAccess({} as D1Database, 'thread-1', 'user-1');
 
-    expect(result).toBeNull();
-  });
-
-  it('lists thread messages via Drizzle query', async () => {
-    const messageRow = {
+    assertEquals(result, null);
+})
+  Deno.test('thread access fallback guards (issue 186) - lists thread messages via Drizzle query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const messageRow = {
       id: 'msg-1',
       threadId: 'thread-1',
       role: 'user',
@@ -174,59 +159,59 @@ describe('thread access fallback guards (issue 186)', () => {
     };
 
     // Build a more elaborate mock that handles different .from() calls
-    const allMessages = vi.fn().mockResolvedValue([messageRow]);
-    const countGet = vi.fn().mockResolvedValue({ count: 1 });
-    const allRuns = vi.fn().mockResolvedValue([runRow]);
+    const allMessages = (async () => [messageRow]);
+    const countGet = (async () => ({ count: 1 }));
+    const allRuns = (async () => [runRow]);
 
     let callIdx = 0;
     const drizzleMock = {
-      select: vi.fn().mockImplementation(() => {
+      select: () => {
         callIdx++;
         if (callIdx === 1) {
           // messages select
           return {
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                orderBy: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockReturnValue({
-                    offset: vi.fn().mockReturnValue({
+            from: (() => ({
+              where: (() => ({
+                orderBy: (() => ({
+                  limit: (() => ({
+                    offset: (() => ({
                       all: allMessages,
-                    }),
-                  }),
-                }),
-              }),
-            }),
+                    })),
+                  })),
+                })),
+              })),
+            })),
           };
         }
         if (callIdx === 2) {
           // count select
           return {
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
+            from: (() => ({
+              where: (() => ({
                 get: countGet,
-              }),
-            }),
+              })),
+            })),
           };
         }
         // runs select
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockReturnValue({
+          from: (() => ({
+            where: (() => ({
+              orderBy: (() => ({
+                limit: (() => ({
                   all: allRuns,
-                }),
-              }),
-            }),
-          }),
+                })),
+              })),
+            })),
+          })),
         };
-      }),
+      },
     };
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await listThreadMessages({} as never, {} as D1Database, 'thread-1', 100, 0);
 
-    expect(result).toEqual({
+    assertEquals(result, {
       messages: [
         {
           id: 'msg-1',
@@ -265,10 +250,10 @@ describe('thread access fallback guards (issue 186)', () => {
         },
       ],
     });
-  });
-
-  it('creates a thread via Drizzle insert', async () => {
-    const insertedRow = {
+})
+  Deno.test('thread access fallback guards (issue 186) - creates a thread via Drizzle insert', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const insertedRow = {
       id: 'new-thread-id',
       accountId: 'ws-1',
       title: 'Hello',
@@ -282,11 +267,11 @@ describe('thread access fallback guards (issue 186)', () => {
       updatedAt: '2026-03-06T00:00:00.000Z',
     };
     const drizzleMock = createDrizzleMock({ insertGet: insertedRow });
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await createThread({} as D1Database, 'ws-1', { title: 'Hello' });
 
-    expect(result).toMatchObject({
+    assertObjectMatch(result, {
       space_id: 'ws-1',
       title: 'Hello',
       status: 'active',
@@ -295,5 +280,4 @@ describe('thread access fallback guards (issue 186)', () => {
       retrieval_index: -1,
       context_window: 50,
     });
-  });
-});
+})

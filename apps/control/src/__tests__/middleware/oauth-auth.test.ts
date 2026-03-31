@@ -1,30 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 import { requireOAuthAuth } from '@/middleware/oauth-auth';
 
-const mocks = vi.hoisted(() => ({
-  getCachedUser: vi.fn(),
-  validateTakosAccessToken: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/utils/user-cache', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils/user-cache')>();
-  return {
-    ...actual,
-    getCachedUser: mocks.getCachedUser,
-  };
+const mocks = ({
+  getCachedUser: ((..._args: any[]) => undefined) as any,
+  validateTakosAccessToken: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/identity/takos-access-tokens', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/identity/takos-access-tokens')>();
-  return {
-    ...actual,
-    validateTakosAccessToken: mocks.validateTakosAccessToken,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/utils/user-cache'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/takos-access-tokens'
 type TestVars = {
   user?: User;
   oauth?: { userId: string; clientId: string; scope: string; scopes: string[] };
@@ -50,13 +38,10 @@ const resolvedUser: User = {
   updated_at: '2026-02-13T00:00:00.000Z',
 };
 
-describe('requireOAuthAuth PAT scope validation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('rejects PAT with invalid JSON scopes', async () => {
-    mocks.validateTakosAccessToken.mockResolvedValue(null);
+  Deno.test('requireOAuthAuth PAT scope validation - rejects PAT with invalid JSON scopes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.validateTakosAccessToken = (async () => null) as any;
     const env = createMockEnv();
 
     const app = createApp();
@@ -69,22 +54,22 @@ describe('requireOAuthAuth PAT scope validation', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 401);
+    await assertEquals(await response.json(), {
       error: 'invalid_token',
       error_description: 'Invalid or expired PAT',
     });
-    expect(mocks.getCachedUser).not.toHaveBeenCalled();
-    expect(mocks.validateTakosAccessToken).toHaveBeenCalledTimes(1);
-  });
-
-  it('accepts PAT with valid scopes and required scope present', async () => {
-    mocks.validateTakosAccessToken.mockResolvedValue({
+    assertSpyCalls(mocks.getCachedUser, 0);
+    assertSpyCalls(mocks.validateTakosAccessToken, 1);
+})
+  Deno.test('requireOAuthAuth PAT scope validation - accepts PAT with valid scopes and required scope present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.validateTakosAccessToken = (async () => ({
       userId: 'user-1',
       scopes: ['repo:read', 'repo:write'],
       tokenKind: 'personal',
-    });
-    mocks.getCachedUser.mockResolvedValue(resolvedUser);
+    })) as any;
+    mocks.getCachedUser = (async () => resolvedUser) as any;
     const env = createMockEnv();
 
     const app = createApp();
@@ -97,18 +82,18 @@ describe('requireOAuthAuth PAT scope validation', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, userId: 'user-1' });
-    expect(mocks.getCachedUser).toHaveBeenCalledTimes(1);
-  });
-
-  it('accepts managed built-in token with valid scopes', async () => {
-    mocks.validateTakosAccessToken.mockResolvedValue({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), { ok: true, userId: 'user-1' });
+    assertSpyCalls(mocks.getCachedUser, 1);
+})
+  Deno.test('requireOAuthAuth PAT scope validation - accepts managed built-in token with valid scopes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.validateTakosAccessToken = (async () => ({
       userId: 'user-1',
       scopes: ['repo:read', 'repo:write'],
       tokenKind: 'managed_builtin',
-    });
-    mocks.getCachedUser.mockResolvedValue(resolvedUser);
+    })) as any;
+    mocks.getCachedUser = (async () => resolvedUser) as any;
     const env = createMockEnv();
 
     const app = createApp();
@@ -121,12 +106,12 @@ describe('requireOAuthAuth PAT scope validation', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, userId: 'user-1' });
-  });
-
-  it('rejects PAT when required scope missing', async () => {
-    mocks.validateTakosAccessToken.mockResolvedValue(null);
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), { ok: true, userId: 'user-1' });
+})
+  Deno.test('requireOAuthAuth PAT scope validation - rejects PAT when required scope missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.validateTakosAccessToken = (async () => null) as any;
     const env = createMockEnv();
 
     const app = new Hono<TestEnv>();
@@ -140,11 +125,10 @@ describe('requireOAuthAuth PAT scope validation', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 401);
+    await assertEquals(await response.json(), {
       error: 'invalid_token',
       error_description: 'Invalid or expired PAT',
     });
-    expect(mocks.getCachedUser).not.toHaveBeenCalled();
-  });
-});
+    assertSpyCalls(mocks.getCachedUser, 0);
+})

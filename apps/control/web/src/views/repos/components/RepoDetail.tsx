@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useReducer } from 'react';
-import type { ReactNode } from 'react';
+import { createSignal, createEffect, on, Show, For } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { Icons } from '../../../lib/Icons';
 import type { Repository, Branch } from '../../../types';
 import { CommitList } from './CommitList';
@@ -34,19 +34,6 @@ type ReadmeState =
   | { status: 'loading'; content: string | null }
   | { status: 'done'; content: string | null };
 
-type ReadmeAction =
-  | { type: 'fetch' }
-  | { type: 'resolve'; content: string | null };
-
-function readmeReducer(state: ReadmeState, action: ReadmeAction): ReadmeState {
-  switch (action.type) {
-    case 'fetch':
-      return { status: 'loading', content: state.content };
-    case 'resolve':
-      return { status: 'done', content: action.content };
-  }
-}
-
 const README_CANDIDATES = ['README.md', 'readme.md', 'README', 'readme.txt'] as const;
 
 const NON_RETRYABLE_ERRORS = new Set([
@@ -79,7 +66,7 @@ async function resolveReadmeContent(repoId: string, branch: string): Promise<str
         break;
       }
     } catch {
-      // network error – try next candidate
+      // network error - try next candidate
     }
   }
   return null;
@@ -93,35 +80,37 @@ interface RepoDetailProps {
   onRequireLogin?: () => void;
 }
 
-export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRequireLogin }: RepoDetailProps) {
+export function RepoDetail(props: RepoDetailProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const safeHomepage = toSafeHref(repo.homepage);
-  const [activeTab, setActiveTab] = useState<TabType>('code');
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [currentBranch, setCurrentBranch] = useState<string>(repo.default_branch);
-  const [selectedFile, setSelectedFile] = useState<SelectedFile>({ path: null, line: null });
-  const [star, setStar] = useState<StarState>({ starred: repo.is_starred ?? false, count: repo.stars });
-  const [forksCount, setForksCount] = useState(repo.forks);
-  const [showForkModal, setShowForkModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [readmeState, dispatchReadme] = useReducer(readmeReducer, { status: 'idle', content: null });
+  const safeHomepage = () => toSafeHref(props.repo.homepage);
+  const [activeTab, setActiveTab] = createSignal<TabType>('code');
+  const [branches, setBranches] = createSignal<Branch[]>([]);
+  const [currentBranch, setCurrentBranch] = createSignal<string>(props.repo.default_branch);
+  const [selectedFile, setSelectedFile] = createSignal<SelectedFile>({ path: null, line: null });
+  const [star, setStar] = createSignal<StarState>({ starred: props.repo.is_starred ?? false, count: props.repo.stars });
+  const [forksCount, setForksCount] = createSignal(props.repo.forks);
+  const [showForkModal, setShowForkModal] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [readmeState, setReadmeState] = createSignal<ReadmeState>({ status: 'idle', content: null });
 
-  const fetchReadme = useCallback(async () => {
-    dispatchReadme({ type: 'fetch' });
+  const isAuthenticated = () => props.isAuthenticated ?? true;
+
+  const fetchReadme = async () => {
+    setReadmeState(prev => ({ status: 'loading', content: prev.content }));
     try {
-      const content = await resolveReadmeContent(repo.id, currentBranch);
-      dispatchReadme({ type: 'resolve', content });
+      const content = await resolveReadmeContent(props.repo.id, currentBranch());
+      setReadmeState({ status: 'done', content });
     } catch {
-      dispatchReadme({ type: 'resolve', content: null });
+      setReadmeState({ status: 'done', content: null });
     }
-  }, [repo.id, currentBranch]);
+  };
 
-  const fetchBranches = useCallback(async () => {
+  const fetchBranches = async () => {
     try {
       const res = await rpc.repos[':repoId'].branches.$get({
-        param: { repoId: repo.id },
+        param: { repoId: props.repo.id },
         query: {},
       });
       const data = await rpcJson<{ branches?: Branch[] }>(res);
@@ -129,37 +118,49 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
     } catch {
       // Branch fetch is optional, silently ignore errors
     }
-  }, [repo.id]);
+  };
 
-  useEffect(() => {
-    fetchBranches();
-    fetchReadme();
-  }, [fetchBranches, fetchReadme]);
+  createEffect(on(
+    () => [props.repo.id],
+    () => {
+      fetchBranches();
+      fetchReadme();
+    },
+  ));
 
-  useEffect(() => {
-    if (branches.length === 0) return;
-    if (branches.some((branch) => branch.name === currentBranch)) return;
+  createEffect(on(
+    () => currentBranch(),
+    () => { fetchReadme(); },
+  ));
 
-    const fallbackBranch = branches.find((branch) => branch.is_default)?.name || branches[0].name;
-    if (!fallbackBranch) return;
+  createEffect(on(
+    () => [branches(), currentBranch()],
+    () => {
+      const br = branches();
+      if (br.length === 0) return;
+      if (br.some((branch) => branch.name === currentBranch())) return;
 
-    setCurrentBranch(fallbackBranch);
-    setSelectedFile({ path: null, line: null });
-  }, [branches, currentBranch]);
+      const fallbackBranch = br.find((branch) => branch.is_default)?.name || br[0].name;
+      if (!fallbackBranch) return;
+
+      setCurrentBranch(fallbackBranch);
+      setSelectedFile({ path: null, line: null });
+    },
+  ));
 
   const toggleStar = async () => {
-    if (!isAuthenticated) {
-      onRequireLogin?.();
+    if (!isAuthenticated()) {
+      props.onRequireLogin?.();
       return;
     }
-    const prev = star;
+    const prev = star();
     setStar({ starred: !prev.starred, count: prev.count + (prev.starred ? -1 : 1) });
 
     try {
       if (prev.starred) {
-        await rpc.repos[':repoId'].star.$delete({ param: { repoId: repo.id } });
+        await rpc.repos[':repoId'].star.$delete({ param: { repoId: props.repo.id } });
       } else {
-        await rpc.repos[':repoId'].star.$post({ param: { repoId: repo.id } });
+        await rpc.repos[':repoId'].star.$post({ param: { repoId: props.repo.id } });
       }
     } catch {
       setStar(prev);
@@ -172,13 +173,13 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
   };
 
   const handleDelete = async () => {
-    if (!isAuthenticated) {
-      onRequireLogin?.();
+    if (!isAuthenticated()) {
+      props.onRequireLogin?.();
       return;
     }
     const confirmed = await confirm({
       title: t('deleteRepo'),
-      message: t('deleteRepoConfirm', { name: repo.name }),
+      message: t('deleteRepoConfirm', { name: props.repo.name }),
       confirmText: t('delete'),
       danger: true,
     });
@@ -186,10 +187,10 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
 
     setDeleting(true);
     try {
-      const res = await rpc.repos[':repoId'].$delete({ param: { repoId: repo.id } });
+      const res = await rpc.repos[':repoId'].$delete({ param: { repoId: props.repo.id } });
       await rpcJson(res);
       showToast('success', t('repoDeleted'));
-      onBack();
+      props.onBack();
     } catch (err) {
       showToast('error', `${t('deleteFailed')}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -205,93 +206,90 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
     setSelectedFile({ path: null, line: null });
   };
 
-  const tabs: { id: TabType; label: string; icon: ReactNode }[] = [
-    { id: 'code', label: t('code'), icon: <Icons.Code className="w-4 h-4" /> },
-    { id: 'search', label: t('search'), icon: <Icons.Search className="w-4 h-4" /> },
-    { id: 'commits', label: t('commits'), icon: <Icons.Clock className="w-4 h-4" /> },
-    { id: 'branches', label: t('branches'), icon: <Icons.GitMerge className="w-4 h-4" /> },
-    { id: 'pull-requests', label: t('pullRequests'), icon: <Icons.GitMerge className="w-4 h-4" /> },
-    { id: 'releases', label: t('releases'), icon: <Icons.Tag className="w-4 h-4" /> },
-    { id: 'actions', label: t('actions'), icon: <Icons.Terminal className="w-4 h-4" /> },
+  const tabs: { id: TabType; label: string; icon: JSX.Element }[] = [
+    { id: 'code', label: t('code'), icon: <Icons.Code class="w-4 h-4" /> },
+    { id: 'search', label: t('search'), icon: <Icons.Search class="w-4 h-4" /> },
+    { id: 'commits', label: t('commits'), icon: <Icons.Clock class="w-4 h-4" /> },
+    { id: 'branches', label: t('branches'), icon: <Icons.GitMerge class="w-4 h-4" /> },
+    { id: 'pull-requests', label: t('pullRequests'), icon: <Icons.GitMerge class="w-4 h-4" /> },
+    { id: 'releases', label: t('releases'), icon: <Icons.Tag class="w-4 h-4" /> },
+    { id: 'actions', label: t('actions'), icon: <Icons.Terminal class="w-4 h-4" /> },
   ];
 
-  const ownerName = repo.owner_username || repo.owner_name;
+  const ownerName = () => props.repo.owner_username || props.repo.owner_name;
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900">
-      <div className="max-w-3xl w-full mx-auto flex flex-col flex-1 min-h-0">
+    <div class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900">
+      <div class="max-w-3xl w-full mx-auto flex flex-col flex-1 min-h-0">
 
       {/* Header */}
-      <div className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-base">
-              <button onClick={onBack} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-                <Icons.ChevronLeft className="w-5 h-5" />
+      <div class="border-b border-zinc-200 dark:border-zinc-800">
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-base">
+              <button onClick={props.onBack} class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                <Icons.ChevronLeft class="w-5 h-5" />
               </button>
-              {ownerName && (
-                <>
-                  <span className="text-zinc-500 dark:text-zinc-400">{ownerName}</span>
-                  <span className="text-zinc-400 dark:text-zinc-600">/</span>
-                </>
-              )}
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100">{repo.name}</span>
-              <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${
-                repo.visibility === 'private'
+              <Show when={ownerName()}>
+                <span class="text-zinc-500 dark:text-zinc-400">{ownerName()}</span>
+                <span class="text-zinc-400 dark:text-zinc-600">/</span>
+              </Show>
+              <span class="font-semibold text-zinc-900 dark:text-zinc-100">{props.repo.name}</span>
+              <span class={`px-1.5 py-0.5 text-[10px] rounded-full ${
+                props.repo.visibility === 'private'
                   ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20'
                   : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
               }`}>
-                {repo.visibility}
+                {props.repo.visibility}
               </span>
             </div>
 
-            <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+            <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
               <button
-                className={`flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${
-                  star.starred ? 'text-amber-500' : ''
+                class={`flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${
+                  star().starred ? 'text-amber-500' : ''
                 }`}
                 onClick={toggleStar}
               >
-                <Icons.Sparkles className="w-3.5 h-3.5" />
-                <span>{star.count}</span>
+                <Icons.Sparkles class="w-3.5 h-3.5" />
+                <span>{star().count}</span>
               </button>
               <button
-                className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                class="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                 onClick={() => {
-                  if (!isAuthenticated) { onRequireLogin?.(); return; }
+                  if (!isAuthenticated()) { props.onRequireLogin?.(); return; }
                   setShowForkModal(true);
                 }}
               >
-                <Icons.GitMerge className="w-3.5 h-3.5" />
-                <span>{forksCount}</span>
+                <Icons.GitMerge class="w-3.5 h-3.5" />
+                <span>{forksCount()}</span>
               </button>
             </div>
           </div>
 
-          {repo.description && (
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{repo.description}</p>
-          )}
+          <Show when={props.repo.description}>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{props.repo.description}</p>
+          </Show>
 
-          {repo.forked_from && (
-            <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
-              <Icons.GitMerge className="w-3 h-3" />
+          <Show when={props.repo.forked_from}>
+            <div class="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
+              <Icons.GitMerge class="w-3 h-3" />
               <span>{t('forkedFrom')}</span>
               <button
-                className="text-blue-500 dark:text-blue-400 hover:underline"
-                onClick={() => showToast('info', `Upstream: ${repo.forked_from?.owner_username || 'unknown'}/${repo.forked_from?.name}`)}
+                class="text-blue-500 dark:text-blue-400 hover:underline"
+                onClick={() => showToast('info', `Upstream: ${props.repo.forked_from?.owner_username || 'unknown'}/${props.repo.forked_from?.name}`)}
               >
-                {repo.forked_from.owner_username || repo.forked_from.owner_name || 'unknown'}/{repo.forked_from.name}
+                {props.repo.forked_from!.owner_username || props.repo.forked_from!.owner_name || 'unknown'}/{props.repo.forked_from!.name}
               </button>
             </div>
-          )}
+          </Show>
         </div>
 
-        <div className="flex items-center gap-0 px-4 -mb-px overflow-x-auto scrollbar-none">
-          {tabs.map(tab => (
+        <div class="flex items-center gap-0 px-4 -mb-px overflow-x-auto scrollbar-none">
+          <For each={tabs}>{(tab) => (
             <button
-              key={tab.id}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
+              class={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors whitespace-nowrap ${
+                activeTab() === tab.id
                   ? 'border-orange-500 text-zinc-900 dark:text-zinc-100 font-medium'
                   : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
@@ -300,49 +298,49 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
               {tab.icon}
               <span>{tab.label}</span>
             </button>
-          ))}
+          )}</For>
         </div>
       </div>
 
-      {activeTab === 'code' && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-200 dark:border-zinc-800">
+      <Show when={activeTab() === 'code'}>
+        <div class="flex items-center justify-between px-4 py-2 border-b border-zinc-200 dark:border-zinc-800">
           <RepoDetailBranches
-            branches={branches}
-            currentBranch={currentBranch}
+            branches={branches()}
+            currentBranch={currentBranch()}
             onBranchChange={(branch) => {
               setCurrentBranch(branch);
               setSelectedFile({ path: null, line: null });
             }}
           />
 
-          <div className="flex items-center gap-2">
-            {isAuthenticated && (
+          <div class="flex items-center gap-2">
+            <Show when={isAuthenticated()}>
               <button
-                className="p-1 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                class="p-1 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-50"
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={deleting()}
               >
-                <Icons.Trash className="w-3.5 h-3.5" />
+                <Icons.Trash class="w-3.5 h-3.5" />
               </button>
-            )}
+            </Show>
           </div>
         </div>
-      )}
+      </Show>
 
-      <div className="flex-1 overflow-auto">
-        {activeTab === 'code' && (
+      <div class="flex-1 overflow-auto">
+        <Show when={activeTab() === 'code'}>
           <RepoDetailFiles
-            repo={repo}
-            currentBranch={currentBranch}
-            selectedFilePath={selectedFile.path}
-            selectedFileLine={selectedFile.line}
-            readme={readmeState.content}
-            readmeLoading={readmeState.status === 'loading'}
-            safeHomepage={safeHomepage}
-            starsCount={star.count}
-            forksCount={forksCount}
-            branches={branches}
-            isAuthenticated={isAuthenticated}
+            repo={props.repo}
+            currentBranch={currentBranch()}
+            selectedFilePath={selectedFile().path}
+            selectedFileLine={selectedFile().line}
+            readme={readmeState().content}
+            readmeLoading={readmeState().status === 'loading'}
+            safeHomepage={safeHomepage()}
+            starsCount={star().count}
+            forksCount={forksCount()}
+            branches={branches()}
+            isAuthenticated={isAuthenticated()}
             onFileSelect={handleFileSelect}
             onBackToTree={handleBackToTree}
             onSyncComplete={() => {
@@ -350,60 +348,60 @@ export function RepoDetail({ spaceId, repo, onBack, isAuthenticated = true, onRe
               fetchReadme();
             }}
           />
-        )}
+        </Show>
 
-        {activeTab === 'search' && (
+        <Show when={activeTab() === 'search'}>
           <RepoCodeSearch
-            repoId={repo.id}
-            branch={currentBranch}
+            repoId={props.repo.id}
+            branch={currentBranch()}
             onOpenFile={(path, line) => {
               setSelectedFile({ path, line: typeof line === 'number' ? line : null });
               setActiveTab('code');
             }}
           />
-        )}
+        </Show>
 
-        {activeTab === 'commits' && (
+        <Show when={activeTab() === 'commits'}>
           <CommitList
-            repoId={repo.id}
-            branch={currentBranch}
+            repoId={props.repo.id}
+            branch={currentBranch()}
           />
-        )}
+        </Show>
 
-        {activeTab === 'branches' && (
+        <Show when={activeTab() === 'branches'}>
           <BranchesTab
-            repoId={repo.id}
+            repoId={props.repo.id}
           />
-        )}
+        </Show>
 
-        {activeTab === 'pull-requests' && (
+        <Show when={activeTab() === 'pull-requests'}>
           <PRList
-            repoId={repo.id}
+            repoId={props.repo.id}
           />
-        )}
+        </Show>
 
-        {activeTab === 'releases' && (
+        <Show when={activeTab() === 'releases'}>
           <ReleaseList
-            repoId={repo.id}
+            repoId={props.repo.id}
           />
-        )}
+        </Show>
 
-        {activeTab === 'actions' && (
+        <Show when={activeTab() === 'actions'}>
           <ActionsTab
-            repoId={repo.id}
+            repoId={props.repo.id}
           />
-        )}
+        </Show>
       </div>
 
       </div>
 
-      {showForkModal && (
+      <Show when={showForkModal()}>
         <ForkModal
-          repo={repo}
+          repo={props.repo}
           onClose={() => setShowForkModal(false)}
           onSuccess={handleForkSuccess}
         />
-      )}
+      </Show>
     </div>
   );
 }

@@ -1,36 +1,35 @@
-import { describe, expect, it } from 'vitest';
-
-import type { JobResult, Step, StepResult } from '../../workflow-models.js';
-import { normalizeNeedsInput } from '../../scheduler/job.js';
+import type { JobResult, Step, StepResult } from '../../workflow-models.ts';
+import { normalizeNeedsInput } from '../../scheduler/job.ts';
 import {
   classifyStepControl,
   createCompletedJobResult,
   createInProgressJobResult,
   finalizeJobResult,
   getDependencySkipReason,
-} from '../../scheduler/job-policy.js';
+} from '../../scheduler/job-policy.ts';
 
-describe('job policy helpers', () => {
-  it('normalizes job needs definitions', () => {
-    expect(
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+
+  Deno.test('job policy helpers - normalizes job needs definitions', () => {
+  assertEquals(
       normalizeNeedsInput({
         'runs-on': 'ubuntu-latest',
         needs: 'build',
         steps: [{ run: 'echo test' }],
       }.needs)
-    ).toEqual(['build']);
+    , ['build']);
 
-    expect(
+    assertEquals(
       normalizeNeedsInput({
         'runs-on': 'ubuntu-latest',
         needs: ['build', 'test'],
         steps: [{ run: 'echo test' }],
       }.needs)
-    ).toEqual(['build', 'test']);
-  });
-
-  it('creates completed and in-progress job result shapes', () => {
-    expect(createCompletedJobResult('build', 'Build', 'skipped')).toEqual({
+    , ['build', 'test']);
+})
+  Deno.test('job policy helpers - creates completed and in-progress job result shapes', () => {
+  assertEquals(createCompletedJobResult('build', 'Build', 'skipped'), {
       id: 'build',
       name: 'Build',
       status: 'completed',
@@ -40,16 +39,15 @@ describe('job policy helpers', () => {
     });
 
     const inProgress = createInProgressJobResult('test', 'Test');
-    expect(inProgress.id).toBe('test');
-    expect(inProgress.name).toBe('Test');
-    expect(inProgress.status).toBe('in_progress');
-    expect(inProgress.outputs).toEqual({});
-    expect(inProgress.steps).toEqual([]);
-    expect(inProgress.startedAt).toBeInstanceOf(Date);
-  });
-
-  it('returns dependency skip reason for non-success dependency outcomes', () => {
-    const results = new Map<string, JobResult>([
+    assertEquals(inProgress.id, 'test');
+    assertEquals(inProgress.name, 'Test');
+    assertEquals(inProgress.status, 'in_progress');
+    assertEquals(inProgress.outputs, {});
+    assertEquals(inProgress.steps, []);
+    assert(inProgress.startedAt instanceof Date);
+})
+  Deno.test('job policy helpers - returns dependency skip reason for non-success dependency outcomes', () => {
+  const results = new Map<string, JobResult>([
       [
         'setup',
         {
@@ -62,7 +60,7 @@ describe('job policy helpers', () => {
       ],
     ]);
 
-    expect(getDependencySkipReason(['setup'], results)).toBe(
+    assertEquals(getDependencySkipReason(['setup'], results), 
       'Dependency "setup" failure'
     );
 
@@ -73,7 +71,7 @@ describe('job policy helpers', () => {
       steps: [],
       outputs: {},
     });
-    expect(getDependencySkipReason(['setup'], results)).toBe(
+    assertEquals(getDependencySkipReason(['setup'], results), 
       'Dependency "setup" cancelled'
     );
 
@@ -84,7 +82,7 @@ describe('job policy helpers', () => {
       steps: [],
       outputs: {},
     });
-    expect(getDependencySkipReason(['setup'], results)).toBe(
+    assertEquals(getDependencySkipReason(['setup'], results), 
       'Dependency "setup" skipped'
     );
 
@@ -94,13 +92,12 @@ describe('job policy helpers', () => {
       steps: [],
       outputs: {},
     });
-    expect(getDependencySkipReason(['setup'], results)).toBe(
+    assertEquals(getDependencySkipReason(['setup'], results), 
       'Dependency "setup" did not succeed'
     );
-  });
-
-  it('returns null when dependencies are successful or missing', () => {
-    const results = new Map<string, JobResult>([
+})
+  Deno.test('job policy helpers - returns null when dependencies are successful or missing', () => {
+  const results = new Map<string, JobResult>([
       [
         'setup',
         {
@@ -113,12 +110,11 @@ describe('job policy helpers', () => {
       ],
     ]);
 
-    expect(getDependencySkipReason(['setup'], results)).toBeNull();
-    expect(getDependencySkipReason(['unknown'], results)).toBeNull();
-  });
-
-  it('classifies step control decisions with fail-fast and continue-on-error', () => {
-    const strictStep: Step = { run: 'build' };
+    assertEquals(getDependencySkipReason(['setup'], results), null);
+    assertEquals(getDependencySkipReason(['unknown'], results), null);
+})
+  Deno.test('job policy helpers - classifies step control decisions with fail-fast and continue-on-error', () => {
+  const strictStep: Step = { run: 'build' };
     const permissiveStep: Step = { run: 'build', 'continue-on-error': true };
     const failureResult: StepResult = {
       id: 'build',
@@ -133,30 +129,29 @@ describe('job policy helpers', () => {
       outputs: {},
     };
 
-    expect(classifyStepControl(strictStep, successResult, true)).toEqual({
+    assertEquals(classifyStepControl(strictStep, successResult, true), {
       shouldStopJob: false,
       shouldMarkJobFailed: false,
       shouldCancelWorkflow: false,
     });
-    expect(classifyStepControl(permissiveStep, failureResult, true)).toEqual({
+    assertEquals(classifyStepControl(permissiveStep, failureResult, true), {
       shouldStopJob: false,
       shouldMarkJobFailed: false,
       shouldCancelWorkflow: false,
     });
-    expect(classifyStepControl(strictStep, failureResult, false)).toEqual({
+    assertEquals(classifyStepControl(strictStep, failureResult, false), {
       shouldStopJob: true,
       shouldMarkJobFailed: true,
       shouldCancelWorkflow: false,
     });
-    expect(classifyStepControl(strictStep, failureResult, true)).toEqual({
+    assertEquals(classifyStepControl(strictStep, failureResult, true), {
       shouldStopJob: true,
       shouldMarkJobFailed: true,
       shouldCancelWorkflow: true,
     });
-  });
-
-  it('finalizes job status/conclusion and aggregates outputs from named steps', () => {
-    const result = createInProgressJobResult('build', 'Build');
+})
+  Deno.test('job policy helpers - finalizes job status/conclusion and aggregates outputs from named steps', () => {
+  const result = createInProgressJobResult('build', 'Build');
     result.steps = [
       {
         id: 'compile',
@@ -178,18 +173,17 @@ describe('job policy helpers', () => {
     ];
 
     finalizeJobResult(result, { failed: false, cancelled: false });
-    expect(result.status).toBe('completed');
-    expect(result.conclusion).toBe('success');
-    expect(result.completedAt).toBeInstanceOf(Date);
-    expect(result.outputs).toEqual({
+    assertEquals(result.status, 'completed');
+    assertEquals(result.conclusion, 'success');
+    assert(result.completedAt instanceof Date);
+    assertEquals(result.outputs, {
       artifact: 'build.tar',
       report: 'junit.xml',
     });
 
     finalizeJobResult(result, { failed: true, cancelled: false });
-    expect(result.conclusion).toBe('failure');
+    assertEquals(result.conclusion, 'failure');
 
     finalizeJobResult(result, { failed: true, cancelled: true });
-    expect(result.conclusion).toBe('cancelled');
-  });
-});
+    assertEquals(result.conclusion, 'cancelled');
+})

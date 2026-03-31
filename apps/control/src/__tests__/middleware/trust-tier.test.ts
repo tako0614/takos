@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { requireTrustTier, meetsMinTier } from '@/middleware/trust-tier';
@@ -6,6 +5,8 @@ import { createMockEnv } from '../../../test/integration/setup';
 
 type TestVars = { user?: User };
 type TestEnv = { Bindings: Env; Variables: TestVars };
+
+import { assertEquals } from 'jsr:@std/assert';
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -37,83 +38,75 @@ function createApp(minTier: 'normal' | 'trusted', presetUser?: User) {
   return app;
 }
 
-describe('requireTrustTier middleware', () => {
-  it('returns 401 when no user is set (unauthenticated)', async () => {
-    const app = createApp('normal');
-    const res = await app.fetch(
-      new Request('https://takos.jp/protected'),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
-    );
-    expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body).toEqual({ error: 'Authentication required', code: 'UNAUTHORIZED' });
-  });
 
-  it('returns 403 when user trust_tier is "new" but "normal" is required', async () => {
-    const app = createApp('normal', makeUser({ trust_tier: 'new' }));
+  Deno.test('requireTrustTier middleware - returns 401 when no user is set (unauthenticated)', async () => {
+  const app = createApp('normal');
     const res = await app.fetch(
       new Request('https://takos.jp/protected'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(403);
+    assertEquals(res.status, 401);
     const body = await res.json();
-    expect(body).toEqual({
+    assertEquals(body, { error: 'Authentication required', code: 'UNAUTHORIZED' });
+})
+  Deno.test('requireTrustTier middleware - returns 403 when user trust_tier is "new" but "normal" is required', async () => {
+  const app = createApp('normal', makeUser({ trust_tier: 'new' }));
+    const res = await app.fetch(
+      new Request('https://takos.jp/protected'),
+      createMockEnv() as unknown as Env,
+      {} as ExecutionContext,
+    );
+    assertEquals(res.status, 403);
+    const body = await res.json();
+    assertEquals(body, {
       error: 'Account too new for this operation',
       code: 'FORBIDDEN',
     });
-  });
-
-  it('passes when user trust_tier is "normal" and "normal" is required', async () => {
-    const app = createApp('normal', makeUser({ trust_tier: 'normal' }));
+})
+  Deno.test('requireTrustTier middleware - passes when user trust_tier is "normal" and "normal" is required', async () => {
+  const app = createApp('normal', makeUser({ trust_tier: 'normal' }));
     const res = await app.fetch(
       new Request('https://takos.jp/protected'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
     const body = await res.json();
-    expect(body).toEqual({ ok: true });
-  });
-
-  it('passes when user trust_tier is "trusted" and "normal" is required', async () => {
-    const app = createApp('normal', makeUser({ trust_tier: 'trusted' }));
+    assertEquals(body, { ok: true });
+})
+  Deno.test('requireTrustTier middleware - passes when user trust_tier is "trusted" and "normal" is required', async () => {
+  const app = createApp('normal', makeUser({ trust_tier: 'trusted' }));
     const res = await app.fetch(
       new Request('https://takos.jp/protected'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
+    assertEquals(res.status, 200);
     const body = await res.json();
-    expect(body).toEqual({ ok: true });
-  });
-
-  it('returns 403 when user trust_tier is "normal" but "trusted" is required', async () => {
-    const app = createApp('trusted', makeUser({ trust_tier: 'normal' }));
+    assertEquals(body, { ok: true });
+})
+  Deno.test('requireTrustTier middleware - returns 403 when user trust_tier is "normal" but "trusted" is required', async () => {
+  const app = createApp('trusted', makeUser({ trust_tier: 'normal' }));
     const res = await app.fetch(
       new Request('https://takos.jp/protected'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(403);
+    assertEquals(res.status, 403);
     const body = await res.json();
-    expect(body).toEqual({
+    assertEquals(body, {
       error: 'Account too new for this operation',
       code: 'FORBIDDEN',
     });
-  });
-});
+})
 
-describe('meetsMinTier', () => {
-  it('treats unknown tier as level 0 (same as "new")', () => {
-    expect(meetsMinTier('unknown', 'normal')).toBe(false);
-    expect(meetsMinTier('unknown', 'new')).toBe(true);
-  });
-
-  it('"trusted" meets all tiers', () => {
-    expect(meetsMinTier('trusted', 'new')).toBe(true);
-    expect(meetsMinTier('trusted', 'normal')).toBe(true);
-    expect(meetsMinTier('trusted', 'trusted')).toBe(true);
-  });
-});
+  Deno.test('meetsMinTier - treats unknown tier as level 0 (same as "new")', () => {
+  assertEquals(meetsMinTier('unknown', 'normal'), false);
+    assertEquals(meetsMinTier('unknown', 'new'), true);
+})
+  Deno.test('meetsMinTier - "trusted" meets all tiers', () => {
+  assertEquals(meetsMinTier('trusted', 'new'), true);
+    assertEquals(meetsMinTier('trusted', 'normal'), true);
+    assertEquals(meetsMinTier('trusted', 'trusted'), true);
+})

@@ -2,25 +2,25 @@ import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { SANDBOX_LIMITS } from '../../shared/config.js';
-import { createSandboxEnv } from '../../utils/sandbox-env.js';
-import { createSecretsSanitizer } from '../../runtime/actions/secrets.js';
-import { pushLog } from '../../runtime/logging.js';
-import { isR2Configured, s3Client } from '../../storage/r2.js';
+import { SANDBOX_LIMITS } from '../../shared/config.ts';
+import { createSandboxEnv } from '../../utils/sandbox-env.ts';
+import { createSecretsSanitizer } from '../../runtime/actions/secrets.ts';
+import { pushLog } from '../../runtime/logging.ts';
+import { isR2Configured, s3Client } from '../../storage/r2.ts';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { R2_BUCKET } from '../../shared/config.js';
+import { R2_BUCKET } from '../../shared/config.ts';
 import {
   getScopedSpaceId,
   hasSpaceScopeMismatch,
   SPACE_SCOPE_MISMATCH_ERROR,
-} from '../../middleware/space-scope.js';
+} from '../../middleware/space-scope.ts';
 import {
   jobManager,
   removeJobDirSafe,
-} from '../../runtime/actions/job-manager.js';
-import type { ActiveJob } from '../../runtime/actions/job-manager.js';
-import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.js';
-import type { StartJobRequest } from './action-types.js';
+} from '../../runtime/actions/job-manager.ts';
+import type { ActiveJob } from '../../runtime/actions/job-manager.ts';
+import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.ts';
+import type { StartJobRequest } from './action-types.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
 

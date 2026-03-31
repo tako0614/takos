@@ -1,15 +1,11 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { loadAppManifest } from '../src/lib/app-manifest.js';
+import { loadAppManifest } from '../src/lib/app-manifest.ts';
+
+import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std/assert';
 
 const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
-});
-
 async function createTempRepo(files: Record<string, string>) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-app-manifest-'));
   tempDirs.push(dir);
@@ -23,9 +19,10 @@ async function createTempRepo(files: Record<string, string>) {
   return dir;
 }
 
-describe('app manifest', () => {
-  it('loads workers manifest', async () => {
-    const repoDir = await createTempRepo({
+
+  Deno.test('app manifest - loads workers manifest', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -64,20 +61,23 @@ spec:
 
     const manifest = await loadAppManifest(path.join(repoDir, '.takos/app.yml'));
 
-    expect(manifest.metadata.name).toBe('sample-app');
-    expect(manifest.spec.workers.gateway).toBeDefined();
-    expect(manifest.spec.workers.gateway.build.fromWorkflow).toEqual({
+    assertEquals(manifest.metadata.name, 'sample-app');
+    assert(manifest.spec.workers.gateway !== undefined);
+    assertEquals(manifest.spec.workers.gateway.build.fromWorkflow, {
       path: '.takos/workflows/build.yml',
       job: 'build-gateway',
       artifact: 'gateway-dist',
       artifactPath: 'dist/gateway.mjs',
     });
-    expect(manifest.spec.routes).toHaveLength(1);
-    expect(manifest.spec.mcpServers).toHaveLength(1);
-  });
-
-  it('preserves the extended manifest surface', async () => {
-    const repoDir = await createTempRepo({
+    assertEquals(manifest.spec.routes.length, 1);
+    assertEquals(manifest.spec.mcpServers.length, 1);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - preserves the extended manifest surface', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -241,7 +241,7 @@ jobs:
 
     const manifest = await loadAppManifest(path.join(repoDir, '.takos/app.yml'));
 
-    expect(manifest.spec.containers?.browser).toMatchObject({
+    assertObjectMatch(manifest.spec.containers?.browser, {
       dockerfile: 'packages/browser/Dockerfile',
       port: 8080,
       instanceType: 'standard-2',
@@ -249,7 +249,7 @@ jobs:
       env: { CHROME_FLAGS: '--headless=new' },
       volumes: [{ name: 'browser-cache', mountPath: '/cache', size: '1Gi' }],
     });
-    expect(manifest.spec.services?.browserApi).toMatchObject({
+    assertObjectMatch(manifest.spec.services?.browserApi, {
       dockerfile: 'services/browser-api/Dockerfile',
       port: 3000,
       ipv4: true,
@@ -258,7 +258,7 @@ jobs:
       bindings: { services: [{ name: 'api', version: '^1.0.0' }] },
       triggers: { schedules: [{ cron: '*/5 * * * *', export: 'sync' }] },
     });
-    expect(manifest.spec.workers.api).toMatchObject({
+    assertObjectMatch(manifest.spec.workers.api, {
       containers: ['browser'],
       env: { API_MODE: 'production' },
       bindings: {
@@ -278,12 +278,12 @@ jobs:
       scaling: { minInstances: 1, maxConcurrency: 10 },
       dependsOn: ['browserApi'],
     });
-    expect(manifest.spec.routes).toEqual([
+    assertEquals(manifest.spec.routes, [
       { name: 'api', target: 'api', path: '/api', ingress: 'api', methods: ['GET', 'POST'] },
       { name: 'browser', target: 'browser', path: '/browser' },
       { name: 'browserApi', target: 'browserApi', path: '/browser-api' },
     ]);
-    expect(manifest.spec.env).toEqual({
+    assertEquals(manifest.spec.env, {
       required: ['API_KEY'],
       inject: {
         API_URL: '{{routes.api.url}}',
@@ -291,7 +291,7 @@ jobs:
         SEARCH_INDEX_ID: '{{resources.searchIndex.id}}',
       },
     });
-    expect(manifest.spec.mcpServers).toEqual([
+    assertEquals(manifest.spec.mcpServers, [
       {
         name: 'browser-mcp',
         route: 'browserApi',
@@ -299,7 +299,7 @@ jobs:
         transport: 'streamable-http',
       },
     ]);
-    expect(manifest.spec.overrides).toEqual({
+    assertEquals(manifest.spec.overrides, {
       staging: {
         containers: {
           browser: {
@@ -318,10 +318,13 @@ jobs:
         },
       },
     });
-  });
-
-  it('rejects workers without fromWorkflow build source', async () => {
-    const repoDir = await createTempRepo({
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - rejects workers without fromWorkflow build source', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -335,13 +338,16 @@ spec:
 `,
     });
 
-    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(
+    await await assertRejects(async () => { await loadAppManifest(path.join(repoDir, '.takos/app.yml')); }, 
       /build\.fromWorkflow or artifact\.kind=bundle/i,
     );
-  });
-
-  it('rejects missing workflow files during validation', async () => {
-    const repoDir = await createTempRepo({
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - rejects missing workflow files during validation', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -360,12 +366,15 @@ spec:
 `,
     });
 
-    const { validateAppManifest } = await import('../src/lib/app-manifest.js');
-    await expect(validateAppManifest(repoDir)).rejects.toThrow(/Workflow file not found/);
-  });
-
-  it('rejects missing workflow jobs during validation', async () => {
-    const repoDir = await createTempRepo({
+    const { validateAppManifest } = await import('../src/lib/app-manifest.ts');
+    await await assertRejects(async () => { await validateAppManifest(repoDir); }, /Workflow file not found/);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - rejects missing workflow jobs during validation', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -391,12 +400,15 @@ jobs:
 `,
     });
 
-    const { validateAppManifest } = await import('../src/lib/app-manifest.js');
-    await expect(validateAppManifest(repoDir)).rejects.toThrow(/Workflow job not found/);
-  });
-
-  it('rejects deploy producer jobs that use needs', async () => {
-    const repoDir = await createTempRepo({
+    const { validateAppManifest } = await import('../src/lib/app-manifest.ts');
+    await await assertRejects(async () => { await validateAppManifest(repoDir); }, /Workflow job not found/);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - rejects deploy producer jobs that use needs', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -427,12 +439,15 @@ jobs:
 `,
     });
 
-    const { validateAppManifest } = await import('../src/lib/app-manifest.js');
-    await expect(validateAppManifest(repoDir)).rejects.toThrow(/must not use needs/);
-  });
-
-  it('requires at least one worker', async () => {
-    const repoDir = await createTempRepo({
+    const { validateAppManifest } = await import('../src/lib/app-manifest.ts');
+    await await assertRejects(async () => { await validateAppManifest(repoDir); }, /must not use needs/);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})
+  Deno.test('app manifest - requires at least one worker', async () => {
+  try {
+  const repoDir = await createTempRepo({
       '.takos/app.yml': `
 apiVersion: takos.dev/v1alpha1
 kind: App
@@ -443,6 +458,8 @@ spec:
 `,
     });
 
-    await expect(loadAppManifest(path.join(repoDir, '.takos/app.yml'))).rejects.toThrow(/spec.workers must contain at least one worker/);
-  });
-});
+    await await assertRejects(async () => { await loadAppManifest(path.join(repoDir, '.takos/app.yml')); }, /spec.workers must contain at least one worker/);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  }
+})

@@ -1,21 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
 import { compileGroupDesiredState } from '@/services/deployment/group-state';
 
-const mocks = vi.hoisted(() => ({
-  upsertHostnameRouting: vi.fn(),
-  deleteHostnameRouting: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/routing/service', () => ({
-  upsertHostnameRouting: mocks.upsertHostnameRouting,
-  deleteHostnameRouting: mocks.deleteHostnameRouting,
-}));
+const mocks = ({
+  upsertHostnameRouting: ((..._args: any[]) => undefined) as any,
+  deleteHostnameRouting: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/routing/service'
 import { reconcileGroupRouting } from '@/services/deployment/group-routing';
 
-describe('group routing reconciler', () => {
-  it('publishes hostname routing from canonical workloads and removes stale hostnames', async () => {
-    const desired = compileGroupDesiredState({
+
+  Deno.test('group routing reconciler - publishes hostname routing from canonical workloads and removes stale hostnames', async () => {
+  const desired = compileGroupDesiredState({
       apiVersion: 'takos.dev/v1alpha1',
       kind: 'App',
       metadata: { name: 'demo-app' },
@@ -93,7 +91,7 @@ describe('group routing reconciler', () => {
       '2026-03-29T12:00:00.000Z',
     );
 
-    expect(mocks.upsertHostnameRouting).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(mocks.upsertHostnameRouting, 0, [({
       hostname: 'edge.example.test',
       target: {
         type: 'http-endpoint-set',
@@ -108,15 +106,14 @@ describe('group routing reconciler', () => {
           },
         ],
       },
-    }));
-    expect(mocks.deleteHostnameRouting).toHaveBeenCalledWith(expect.objectContaining({
+    })]);
+    assertSpyCallArgs(mocks.deleteHostnameRouting, 0, [({
       hostname: 'old.example.test',
-    }));
-    expect(result.failedRoutes).toEqual([]);
-    expect(result.routes.api).toMatchObject({
+    })]);
+    assertEquals(result.failedRoutes, []);
+    assertObjectMatch(result.routes.api, {
       hostname: 'edge.example.test',
       url: 'https://edge.example.test/api',
     });
-    expect(result.routes.stale).toBeUndefined();
-  });
-});
+    assertEquals(result.routes.stale, undefined);
+})

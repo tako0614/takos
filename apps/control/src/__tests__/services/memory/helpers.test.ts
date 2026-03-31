@@ -1,55 +1,48 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseJsonArrayFromLLM, chatAndParseJsonArray } from '@/services/memory/helpers';
 
-describe('parseJsonArrayFromLLM', () => {
-  it('parses a plain JSON array', () => {
-    const result = parseJsonArrayFromLLM<{ name: string }>('[{"name":"alice"},{"name":"bob"}]');
-    expect(result).toEqual([{ name: 'alice' }, { name: 'bob' }]);
-  });
 
-  it('extracts JSON array from markdown code fences', () => {
-    const input = '```json\n[{"type":"semantic","content":"test"}]\n```';
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('parseJsonArrayFromLLM - parses a plain JSON array', () => {
+  const result = parseJsonArrayFromLLM<{ name: string }>('[{"name":"alice"},{"name":"bob"}]');
+    assertEquals(result, [{ name: 'alice' }, { name: 'bob' }]);
+})
+  Deno.test('parseJsonArrayFromLLM - extracts JSON array from markdown code fences', () => {
+  const input = '```json\n[{"type":"semantic","content":"test"}]\n```';
     const result = parseJsonArrayFromLLM(input);
-    expect(result).toEqual([{ type: 'semantic', content: 'test' }]);
-  });
-
-  it('extracts JSON array from surrounding text', () => {
-    const input = 'Here are the results:\n[{"a":1}]\nDone!';
+    assertEquals(result, [{ type: 'semantic', content: 'test' }]);
+})
+  Deno.test('parseJsonArrayFromLLM - extracts JSON array from surrounding text', () => {
+  const input = 'Here are the results:\n[{"a":1}]\nDone!';
     const result = parseJsonArrayFromLLM(input);
-    expect(result).toEqual([{ a: 1 }]);
-  });
-
-  it('returns null when no array found', () => {
-    expect(parseJsonArrayFromLLM('no array here')).toBeNull();
-    expect(parseJsonArrayFromLLM('{"not":"an_array"}')).toBeNull();
-  });
-
-  it('returns null for invalid JSON array', () => {
-    expect(parseJsonArrayFromLLM('[invalid json]')).toBeNull();
-  });
-
-  it('handles empty array', () => {
-    expect(parseJsonArrayFromLLM('[]')).toEqual([]);
-  });
-
-  it('handles nested arrays', () => {
-    const result = parseJsonArrayFromLLM('[[1,2],[3,4]]');
-    expect(result).toEqual([[1, 2], [3, 4]]);
-  });
-
-  it('handles multiline JSON arrays', () => {
-    const input = `[\n  {"type": "episode", "content": "decided to use React"},\n  {"type": "semantic", "content": "user is in fintech"}\n]`;
+    assertEquals(result, [{ a: 1 }]);
+})
+  Deno.test('parseJsonArrayFromLLM - returns null when no array found', () => {
+  assertEquals(parseJsonArrayFromLLM('no array here'), null);
+    assertEquals(parseJsonArrayFromLLM('{"not":"an_array"}'), null);
+})
+  Deno.test('parseJsonArrayFromLLM - returns null for invalid JSON array', () => {
+  assertEquals(parseJsonArrayFromLLM('[invalid json]'), null);
+})
+  Deno.test('parseJsonArrayFromLLM - handles empty array', () => {
+  assertEquals(parseJsonArrayFromLLM('[]'), []);
+})
+  Deno.test('parseJsonArrayFromLLM - handles nested arrays', () => {
+  const result = parseJsonArrayFromLLM('[[1,2],[3,4]]');
+    assertEquals(result, [[1, 2], [3, 4]]);
+})
+  Deno.test('parseJsonArrayFromLLM - handles multiline JSON arrays', () => {
+  const input = `[\n  {"type": "episode", "content": "decided to use React"},\n  {"type": "semantic", "content": "user is in fintech"}\n]`;
     const result = parseJsonArrayFromLLM(input);
-    expect(result).toHaveLength(2);
-  });
-});
+    assertEquals(result.length, 2);
+})
 
-describe('chatAndParseJsonArray', () => {
-  it('calls LLM and parses response', async () => {
-    const mockLLM = {
-      chat: vi.fn().mockResolvedValue({
+  Deno.test('chatAndParseJsonArray - calls LLM and parses response', async () => {
+  const mockLLM = {
+      chat: (async () => ({
         content: '[{"type":"semantic","content":"test"}]',
-      }),
+      })),
     };
 
     const result = await chatAndParseJsonArray(
@@ -58,31 +51,28 @@ describe('chatAndParseJsonArray', () => {
       'user prompt'
     );
 
-    expect(mockLLM.chat).toHaveBeenCalledWith(
+    assertSpyCallArgs(mockLLM.chat, 0, [
       [
         { role: 'system', content: 'system prompt' },
         { role: 'user', content: 'user prompt' },
       ],
       []
-    );
-    expect(result).toEqual([{ type: 'semantic', content: 'test' }]);
-  });
-
-  it('returns null when LLM throws', async () => {
-    const mockLLM = {
-      chat: vi.fn().mockRejectedValue(new Error('API error')),
+    ]);
+    assertEquals(result, [{ type: 'semantic', content: 'test' }]);
+})
+  Deno.test('chatAndParseJsonArray - returns null when LLM throws', async () => {
+  const mockLLM = {
+      chat: (async () => { throw new Error('API error'); }),
     };
 
     const result = await chatAndParseJsonArray(mockLLM as any, 'sys', 'usr');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when LLM returns unparseable response', async () => {
-    const mockLLM = {
-      chat: vi.fn().mockResolvedValue({ content: 'no json here' }),
+    assertEquals(result, null);
+})
+  Deno.test('chatAndParseJsonArray - returns null when LLM returns unparseable response', async () => {
+  const mockLLM = {
+      chat: (async () => ({ content: 'no json here' })),
     };
 
     const result = await chatAndParseJsonArray(mockLLM as any, 'sys', 'usr');
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})

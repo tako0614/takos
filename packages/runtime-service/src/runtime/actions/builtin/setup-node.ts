@@ -1,8 +1,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { type ActionContext } from '../executor.js';
-import { pushLog } from '../../logging.js';
-import { resolvePathWithin } from '../../paths.js';
+import { type ActionContext } from '../executor.ts';
+import { pushLog } from '../../logging.ts';
+import { resolvePathWithin } from '../../paths.ts';
 
 export async function setupNode(
   inputs: {

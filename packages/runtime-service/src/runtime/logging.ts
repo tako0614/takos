@@ -1,5 +1,5 @@
-import { MAX_LOG_LINES } from '../shared/config.js';
-import { SecretsSanitizer } from './actions/secrets.js';
+import { MAX_LOG_LINES } from '../shared/config.ts';
+import { SecretsSanitizer } from './actions/secrets.ts';
 
 const MAX_LOG_LINE_LENGTH = 10_000;
 

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
 import { buildRunNotifierEmitRequest } from '@/services/run-notifier/client';
 import { buildRunNotifierEmitPayload } from '@/services/run-notifier/run-notifier-payload';
 
-describe('run-notifier-client helper', () => {
-  it('builds a POST request for /emit', async () => {
-    const payload = buildRunNotifierEmitPayload(
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('run-notifier-client helper - builds a POST request for /emit', async () => {
+  const payload = buildRunNotifierEmitPayload(
       'run-1',
       'run.failed',
       { status: 'failed' },
@@ -12,9 +13,8 @@ describe('run-notifier-client helper', () => {
     );
     const request: Request = buildRunNotifierEmitRequest(payload);
 
-    expect(request.method).toBe('POST');
-    expect(request.url).toBe('https://internal.do/emit');
-    expect(request.headers.get('Content-Type')).toBe('application/json');
-    expect(await request.json()).toEqual(payload);
-  });
-});
+    assertEquals(request.method, 'POST');
+    assertEquals(request.url, 'https://internal.do/emit');
+    assertEquals(request.headers.get('Content-Type'), 'application/json');
+    assertEquals(await request.json(), payload);
+})

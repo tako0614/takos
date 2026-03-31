@@ -1,29 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getServiceForUser: vi.fn(),
-  getServiceForUserWithRole: vi.fn(),
-  DeploymentService: vi.fn(),
-  upsertGroupDesiredWorkload: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/platform/workers', () => ({
-  getServiceForUser: mocks.getServiceForUser,
-  getServiceForUserWithRole: mocks.getServiceForUserWithRole,
-}));
+const mocks = ({
+  getServiceForUser: ((..._args: any[]) => undefined) as any,
+  getServiceForUserWithRole: ((..._args: any[]) => undefined) as any,
+  DeploymentService: ((..._args: any[]) => undefined) as any,
+  upsertGroupDesiredWorkload: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/deployment/index', () => ({
-  DeploymentService: mocks.DeploymentService,
-}));
-
-vi.mock('@/services/deployment/group-desired-projector', () => ({
-  upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/workers'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/index'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-desired-projector'
 import workersDeployments from '@/routes/workers/deployments';
 
 function createUser(): User {
@@ -53,27 +45,24 @@ function createApp(user: User): Hono<AuthenticatedRouteEnv> {
 
 function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
   return {
-    createDeployment: vi.fn(),
-    executeDeployment: vi.fn(),
-    getDeploymentHistory: vi.fn().mockResolvedValue([]),
-    rollback: vi.fn(),
-    rollbackWorker: vi.fn(),
-    getDeploymentById: vi.fn(),
-    getDeploymentEvents: vi.fn().mockResolvedValue([]),
-    getMaskedEnvVars: vi.fn().mockResolvedValue({}),
-    getBindings: vi.fn().mockResolvedValue([]),
+    createDeployment: ((..._args: any[]) => undefined) as any,
+    executeDeployment: ((..._args: any[]) => undefined) as any,
+    getDeploymentHistory: (async () => []),
+    rollback: ((..._args: any[]) => undefined) as any,
+    rollbackWorker: ((..._args: any[]) => undefined) as any,
+    getDeploymentById: ((..._args: any[]) => undefined) as any,
+    getDeploymentEvents: (async () => []),
+    getMaskedEnvVars: (async () => ({})),
+    getBindings: (async () => []),
     ...overrides,
   };
 }
 
-describe('services deployments routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('passes OCI target configuration into deployment creation', async () => {
-    const service = createDeploymentServiceMock({
-      createDeployment: vi.fn().mockResolvedValue({
+  Deno.test('services deployments routes - passes OCI target configuration into deployment creation', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const service = createDeploymentServiceMock({
+      createDeployment: (async () => ({
         id: 'dep-1',
         version: 1,
         status: 'pending',
@@ -94,17 +83,17 @@ describe('services deployments routes', () => {
         routing_status: 'active',
         routing_weight: 100,
         created_at: '2026-03-22T00:00:00.000Z',
-      }),
+      })),
     });
-    mocks.DeploymentService.mockImplementation(() => service);
-    mocks.getServiceForUserWithRole.mockResolvedValue({
+    mocks.DeploymentService = () => service as any;
+    mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'space-1',
-    });
+    })) as any;
 
     const app = createApp(createUser());
     const env = createMockEnv({
-      DEPLOY_QUEUE: { send: vi.fn().mockResolvedValue(undefined) },
+      DEPLOY_QUEUE: { send: (async () => undefined) },
     }) as unknown as Env;
     const response = await app.fetch(new Request('http://localhost/api/services/worker-1/deployments', {
       method: 'POST',
@@ -128,8 +117,8 @@ describe('services deployments routes', () => {
       }),
     }), env, {} as ExecutionContext);
 
-    expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 201);
+    await assertEquals(await response.json(), {
       deployment: {
         id: 'dep-1',
         version: 1,
@@ -152,7 +141,7 @@ describe('services deployments routes', () => {
         created_at: '2026-03-22T00:00:00.000Z',
       },
     });
-    expect(service.createDeployment).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(service.createDeployment, 0, [({
       serviceId: 'worker-1',
       spaceId: 'space-1',
       userId: 'user-1',
@@ -170,12 +159,12 @@ describe('services deployments routes', () => {
           exposed_port: 8080,
         },
       },
-    }));
-  });
-
-  it('includes provider and generic target in deployment history responses', async () => {
-    const service = createDeploymentServiceMock({
-      getDeploymentHistory: vi.fn().mockResolvedValue([
+    })]);
+})
+  Deno.test('services deployments routes - includes provider and generic target in deployment history responses', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const service = createDeploymentServiceMock({
+      getDeploymentHistory: (async () => [
         {
           id: 'dep-oci',
           version: 3,
@@ -203,11 +192,11 @@ describe('services deployments routes', () => {
         },
       ]),
     });
-    mocks.DeploymentService.mockImplementation(() => service);
-    mocks.getServiceForUser.mockResolvedValue({
+    mocks.DeploymentService = () => service as any;
+    mocks.getServiceForUser = (async () => ({
       id: 'worker-1',
       space_id: 'space-1',
-    });
+    })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -217,10 +206,10 @@ describe('services deployments routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       deployments: [
-        expect.objectContaining({
+        ({
           id: 'dep-oci',
           provider: { name: 'oci' },
           target: {
@@ -234,11 +223,11 @@ describe('services deployments routes', () => {
         }),
       ],
     });
-  });
-
-  it('preserves provider on rollback responses', async () => {
-    const service = createDeploymentServiceMock({
-      rollback: vi.fn().mockResolvedValue({
+})
+  Deno.test('services deployments routes - preserves provider on rollback responses', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const service = createDeploymentServiceMock({
+      rollback: (async () => ({
         id: 'dep-rb',
         version: 2,
         provider_name: 'oci',
@@ -252,13 +241,13 @@ describe('services deployments routes', () => {
         provider_state_json: '{}',
         routing_status: 'rollback',
         routing_weight: 100,
-      }),
+      })),
     });
-    mocks.DeploymentService.mockImplementation(() => service);
-    mocks.getServiceForUserWithRole.mockResolvedValue({
+    mocks.DeploymentService = () => service as any;
+    mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'space-1',
-    });
+    })) as any;
 
     const app = createApp(createUser());
     const env = createMockEnv() as unknown as Env;
@@ -268,8 +257,8 @@ describe('services deployments routes', () => {
       body: JSON.stringify({ target_version: 1 }),
     }), env, {} as ExecutionContext);
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       success: true,
       deployment: {
         id: 'dep-rb',
@@ -286,11 +275,11 @@ describe('services deployments routes', () => {
         routing_weight: 100,
       },
     });
-  });
-
-  it('returns parsed target in deployment detail responses', async () => {
-    const service = createDeploymentServiceMock({
-      getDeploymentById: vi.fn().mockResolvedValue({
+})
+  Deno.test('services deployments routes - returns parsed target in deployment detail responses', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const service = createDeploymentServiceMock({
+      getDeploymentById: (async () => ({
         id: 'dep-oci',
         service_id: 'worker-1',
         provider_name: 'oci',
@@ -303,13 +292,13 @@ describe('services deployments routes', () => {
         }),
         provider_state_json: '{}',
         step_error: null,
-      }),
+      })),
     });
-    mocks.DeploymentService.mockImplementation(() => service);
-    mocks.getServiceForUser.mockResolvedValue({
+    mocks.DeploymentService = () => service as any;
+    mocks.getServiceForUser = (async () => ({
       id: 'worker-1',
       space_id: 'space-1',
-    });
+    })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -319,9 +308,9 @@ describe('services deployments routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      deployment: expect.objectContaining({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
+      deployment: ({
         id: 'dep-oci',
         provider: { name: 'oci' },
         target: {
@@ -337,5 +326,4 @@ describe('services deployments routes', () => {
       }),
       events: [],
     });
-  });
-});
+})

@@ -8,11 +8,11 @@
  *   takos route show <name> --group <name>  -- Show details for a specific route
  */
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, getStateDir } from '../lib/state/state-file.js';
-import { cliExit } from '../lib/command-exit.js';
-import { printJson } from '../lib/cli-utils.js';
-import type { RouteState } from '../lib/state/state-types.js';
+import { bold, dim, red } from '@std/fmt/colors';
+import { readState, getStateDir } from '../lib/state/state-file.ts';
+import { cliExit } from '../lib/command-exit.ts';
+import { printJson } from '../lib/cli-utils.ts';
+import type { RouteState } from '../lib/state/state-types.ts';
 
 // ── Command registration ─────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ export function registerRouteCommand(program: Command): void {
       const state = await readState(stateDir, group);
 
       if (!state) {
-        console.log(chalk.dim(`No state file found for group "${group}". Run \`takos apply\` first.`));
+        console.log(dim(`No state file found for group "${group}". Run \`takos apply\` first.`));
         return;
       }
 
@@ -47,21 +47,21 @@ export function registerRouteCommand(program: Command): void {
       }
 
       if (routeKeys.length === 0) {
-        console.log(chalk.dim('No routes found in this group.'));
+        console.log(dim('No routes found in this group.'));
         return;
       }
 
       console.log('');
-      console.log(chalk.bold(`Routes (group: ${group}):`));
+      console.log(bold(`Routes (group: ${group}):`));
       for (const name of routeKeys) {
         const r: RouteState = routes[name];
-        const domainLabel = r.domain ? chalk.dim(` domain=${r.domain}`) : '';
-        const pathLabel = r.path ? chalk.dim(` path=${r.path}`) : '';
-        const urlLabel = r.url ? chalk.dim(` url=${r.url}`) : '';
+        const domainLabel = r.domain ? dim(` domain=${r.domain}`) : '';
+        const pathLabel = r.path ? dim(` path=${r.path}`) : '';
+        const urlLabel = r.url ? dim(` url=${r.url}`) : '';
         console.log(`  ${name} -> ${r.target}${domainLabel}${pathLabel}${urlLabel}`);
       }
       console.log('');
-      console.log(chalk.dim(`${routeKeys.length} route(s)`));
+      console.log(dim(`${routeKeys.length} route(s)`));
     });
 
   // ── route show ────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export function registerRouteCommand(program: Command): void {
       const state = await readState(stateDir, group);
 
       if (!state) {
-        console.log(chalk.red(`No state file found for group "${group}".`));
+        console.log(red(`No state file found for group "${group}".`));
         cliExit(1);
         return; // unreachable
       }
@@ -86,8 +86,8 @@ export function registerRouteCommand(program: Command): void {
       const route = routes[name];
 
       if (!route) {
-        console.log(chalk.red(`Route not found: ${name}`));
-        console.log(chalk.dim('Use `takos route list` to see available routes.'));
+        console.log(red(`Route not found: ${name}`));
+        console.log(dim('Use `takos route list` to see available routes.'));
         cliExit(1);
         return; // unreachable
       }
@@ -98,7 +98,7 @@ export function registerRouteCommand(program: Command): void {
       }
 
       console.log('');
-      console.log(chalk.bold(`Route: ${name}`));
+      console.log(bold(`Route: ${name}`));
       console.log(`  Target:  ${route.target}`);
       if (route.domain) {
         console.log(`  Domain:  ${route.domain}`);

@@ -7,7 +7,6 @@
  * - API testing patterns
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createUser,
   createWorkspace,
@@ -18,6 +17,9 @@ import {
 import { createMockEnv } from './setup';
 
 type CanonicalSpaceLike = {
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { stub, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
   id: string;
   name: string;
   principal_id?: string;
@@ -48,65 +50,68 @@ function getUserPrincipalId(user: CanonicalUserLike): string {
 // Factory Tests - Demonstrate factory usage
 // ============================================================================
 
-describe('Test Factories', () => {
-  beforeEach(() => {
-    resetIdCounter();
-  });
 
-  describe('createUser', () => {
-    it('should create a user with default values', () => {
-      const user = createUser();
 
-      expect(user.id).toMatch(/^user-/);
-      expect(user.email).toContain('@test.example.com');
-      expect(user.name).toContain('Test User');
-      expect(user.created_at).toBeDefined();
-      expect(user.updated_at).toBeDefined();
-    });
+  
+    Deno.test('Test Factories - createUser - should create a user with default values', () => {
+  resetIdCounter();
+  const user = createUser();
 
-    it('should allow overriding user properties', () => {
-      const user = createUser({
+      assert(/^user-/.test(user.id));
+      assertStringIncludes(user.email, '@test.example.com');
+      assertStringIncludes(user.name, 'Test User');
+      assert(user.created_at !== undefined);
+      assert(user.updated_at !== undefined);
+})
+
+    Deno.test('Test Factories - createUser - should allow overriding user properties', () => {
+  resetIdCounter();
+  const user = createUser({
         name: 'Custom Name',
         email: 'custom@example.com',
         username: 'customuser',
       });
 
-      expect(user.name).toBe('Custom Name');
-      expect(user.email).toBe('custom@example.com');
-      expect(user.username).toBe('customuser');
-    });
-  });
+      assertEquals(user.name, 'Custom Name');
+      assertEquals(user.email, 'custom@example.com');
+      assertEquals(user.username, 'customuser');
+})
+  
 
-  describe('createWorkspace', () => {
-    it('should create a space with default values', () => {
-      const space = createWorkspace();
+  
+    Deno.test('Test Factories - createWorkspace - should create a space with default values', () => {
+  resetIdCounter();
+  const space = createWorkspace();
 
-      expect(space.id).toMatch(/^ws-/);
-      expect(space.name).toContain('Test Workspace');
-      expect(getSpacePrincipalId(space)).toMatch(/^principal-/);
-    });
+      assert(/^ws-/.test(space.id));
+      assertStringIncludes(space.name, 'Test Workspace');
+      assert(/^principal-/.test(getSpacePrincipalId(space)));
+})
 
-    it('should create a personal space', () => {
-      const space = createWorkspace({ kind: 'user' });
+    Deno.test('Test Factories - createWorkspace - should create a personal space', () => {
+  resetIdCounter();
+  const space = createWorkspace({ kind: 'user' });
 
-      expect(isPersonalSpace(space)).toBe(true);
-    });
-  });
+      assertEquals(isPersonalSpace(space), true);
+})
+  
 
-  describe('createUserWithWorkspace', () => {
-    it('should create a user with their personal space', () => {
-      const { user, workspace: space, member } = createUserWithWorkspace();
+  
+    Deno.test('Test Factories - createUserWithWorkspace - should create a user with their personal space', () => {
+  resetIdCounter();
+  const { user, workspace: space, member } = createUserWithWorkspace();
 
-      expect(isPersonalSpace(space)).toBe(true);
-      expect(member.principal_id).toBe(getUserPrincipalId(user));
-      expect(member.space_id).toBe(space.id);
-      expect(member.role).toBe('owner');
-    });
-  });
+      assertEquals(isPersonalSpace(space), true);
+      assertEquals(member.principal_id, getUserPrincipalId(user));
+      assertEquals(member.space_id, space.id);
+      assertEquals(member.role, 'owner');
+})
+  
 
-  describe('createThreadWithMessages', () => {
-    it('should create a thread with messages', () => {
-      const { thread, messages } = createThreadWithMessages(
+  
+    Deno.test('Test Factories - createThreadWithMessages - should create a thread with messages', () => {
+  resetIdCounter();
+  const { thread, messages } = createThreadWithMessages(
         { title: 'Test Conversation' },
         [
           { role: 'user', content: 'Hello' },
@@ -115,170 +120,174 @@ describe('Test Factories', () => {
         ]
       );
 
-      expect(thread.title).toBe('Test Conversation');
-      expect(messages).toHaveLength(3);
-      expect(messages[0].role).toBe('user');
-      expect(messages[0].content).toBe('Hello');
-      expect(messages[1].role).toBe('assistant');
-      expect(messages[2].sequence).toBe(2);
-    });
-  });
-});
+      assertEquals(thread.title, 'Test Conversation');
+      assertEquals(messages.length, 3);
+      assertEquals(messages[0].role, 'user');
+      assertEquals(messages[0].content, 'Hello');
+      assertEquals(messages[1].role, 'assistant');
+      assertEquals(messages[2].sequence, 2);
+})
+  
+
 
 // ============================================================================
 // Mock Environment Tests - Demonstrate mock usage
 // ============================================================================
 
-describe('Mock Environment', () => {
-  let env: ReturnType<typeof createMockEnv>;
 
-  beforeEach(() => {
-    env = createMockEnv();
-  });
+  let env: ReturnType<typeof createMockEnv>;
 
-  describe('MockD1Database', () => {
-    it('should prepare and execute queries', async () => {
-      const result = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
+  
+    Deno.test('Mock Environment - MockD1Database - should prepare and execute queries', async () => {
+  env = createMockEnv();
+  const result = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
         .bind('test-id')
         .first();
 
       // Mock returns null by default
-      expect(result).toBeNull();
-    });
+      assertEquals(result, null);
+})
 
-    it('should return success for run operations', async () => {
-      const result = await env.DB.prepare('INSERT INTO users (id, name) VALUES (?, ?)')
+    Deno.test('Mock Environment - MockD1Database - should return success for run operations', async () => {
+  env = createMockEnv();
+  const result = await env.DB.prepare('INSERT INTO users (id, name) VALUES (?, ?)')
         .bind('test-id', 'Test Name')
         .run();
 
-      expect(result.success).toBe(true);
-      expect(result.meta.changes).toBe(1);
-    });
-  });
+      assertEquals(result.success, true);
+      assertEquals(result.meta.changes, 1);
+})
+  
 
-  describe('MockR2Bucket', () => {
-    it('should put and get objects', async () => {
-      await env.TENANT_SOURCE.put('test-key', 'test-content');
+  
+    Deno.test('Mock Environment - MockR2Bucket - should put and get objects', async () => {
+  env = createMockEnv();
+  await env.TENANT_SOURCE.put('test-key', 'test-content');
       const obj = await env.TENANT_SOURCE.get('test-key');
 
-      expect(obj).not.toBeNull();
-      expect(await obj!.text()).toBe('test-content');
-    });
+      assertNotEquals(obj, null);
+      assertEquals(await obj!.text(), 'test-content');
+})
 
-    it('should return null for non-existent objects', async () => {
-      const obj = await env.TENANT_SOURCE.get('non-existent');
+    Deno.test('Mock Environment - MockR2Bucket - should return null for non-existent objects', async () => {
+  env = createMockEnv();
+  const obj = await env.TENANT_SOURCE.get('non-existent');
 
-      expect(obj).toBeNull();
-    });
+      assertEquals(obj, null);
+})
 
-    it('should list objects with prefix', async () => {
-      await env.TENANT_SOURCE.put('prefix/a', 'content a');
+    Deno.test('Mock Environment - MockR2Bucket - should list objects with prefix', async () => {
+  env = createMockEnv();
+  await env.TENANT_SOURCE.put('prefix/a', 'content a');
       await env.TENANT_SOURCE.put('prefix/b', 'content b');
       await env.TENANT_SOURCE.put('other/c', 'content c');
 
       const result = await env.TENANT_SOURCE.list({ prefix: 'prefix/' });
 
-      expect(result.objects).toHaveLength(2);
-      expect(result.objects.map((o) => o.key)).toContain('prefix/a');
-      expect(result.objects.map((o) => o.key)).toContain('prefix/b');
-    });
-  });
+      assertEquals(result.objects.length, 2);
+      assertStringIncludes(result.objects.map((o) => o.key), 'prefix/a');
+      assertStringIncludes(result.objects.map((o) => o.key), 'prefix/b');
+})
+  
 
-  describe('MockKVNamespace', () => {
-    it('should put and get values', async () => {
-      await env.HOSTNAME_ROUTING.put('test-key', 'test-value');
+  
+    Deno.test('Mock Environment - MockKVNamespace - should put and get values', async () => {
+  env = createMockEnv();
+  await env.HOSTNAME_ROUTING.put('test-key', 'test-value');
       const value = await env.HOSTNAME_ROUTING.get('test-key');
 
-      expect(value).toBe('test-value');
-    });
+      assertEquals(value, 'test-value');
+})
 
-    it('should support TTL', async () => {
-      // Put with 1 second TTL
+    Deno.test('Mock Environment - MockKVNamespace - should support TTL', async () => {
+  env = createMockEnv();
+  // Put with 1 second TTL
       await env.HOSTNAME_ROUTING.put('expiring-key', 'value', {
         expirationTtl: 1,
       });
 
       // Should be retrievable immediately
       const value = await env.HOSTNAME_ROUTING.get('expiring-key');
-      expect(value).toBe('value');
-    });
+      assertEquals(value, 'value');
+})
 
-    it('should return null for non-existent keys', async () => {
-      const value = await env.HOSTNAME_ROUTING.get('non-existent');
+    Deno.test('Mock Environment - MockKVNamespace - should return null for non-existent keys', async () => {
+  env = createMockEnv();
+  const value = await env.HOSTNAME_ROUTING.get('non-existent');
 
-      expect(value).toBeNull();
-    });
-  });
+      assertEquals(value, null);
+})
+  
 
-  describe('MockQueue', () => {
-    it('should send messages', async () => {
-      await env.RUN_QUEUE.send({ runId: 'test-run', timestamp: Date.now() });
+  
+    Deno.test('Mock Environment - MockQueue - should send messages', async () => {
+  env = createMockEnv();
+  await env.RUN_QUEUE.send({ runId: 'test-run', timestamp: Date.now() });
 
       const messages = (env.RUN_QUEUE as any).getMessages();
-      expect(messages).toHaveLength(1);
-      expect(messages[0].body.runId).toBe('test-run');
-    });
+      assertEquals(messages.length, 1);
+      assertEquals(messages[0].body.runId, 'test-run');
+})
 
-    it('should send batch messages', async () => {
-      await env.RUN_QUEUE.sendBatch([
+    Deno.test('Mock Environment - MockQueue - should send batch messages', async () => {
+  env = createMockEnv();
+  await env.RUN_QUEUE.sendBatch([
         { body: { runId: 'run-1', timestamp: Date.now() } },
         { body: { runId: 'run-2', timestamp: Date.now() } },
       ]);
 
       const messages = (env.RUN_QUEUE as any).getMessages();
-      expect(messages).toHaveLength(2);
-    });
-  });
-});
+      assertEquals(messages.length, 2);
+})
+  
+
 
 // ============================================================================
 // Service Tests - Demonstrate testing services
 // ============================================================================
 
-describe('Service Layer Tests', () => {
-  describe('Example Service', () => {
-    it('should demonstrate mocking external calls', async () => {
-      // Mock fetch for external API calls
-      const mockFetch = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ success: true }), {
+
+  
+    Deno.test('Service Layer Tests - Example Service - should demonstrate mocking external calls', async () => {
+  // Mock fetch for external API calls
+      const mockFetch = (async () => new Response(JSON.stringify({ success: true }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
-        })
-      );
-      vi.stubGlobal('fetch', mockFetch);
+        }));
+      (globalThis as any).fetch = mockFetch;
 
       // Your service code would call fetch here
       const response = await fetch('https://api.example.com/endpoint');
       const data = await response.json() as { success: boolean };
 
-      expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/endpoint');
-      expect(data.success).toBe(true);
+      assertSpyCallArgs(mockFetch, 0, ['https://api.example.com/endpoint']);
+      assertEquals(data.success, true);
 
-      vi.unstubAllGlobals();
-    });
+      /* TODO: restore stubbed globals manually */ void 0;
+})
 
-    it('should demonstrate testing with spy', () => {
-      const obj = {
+    Deno.test('Service Layer Tests - Example Service - should demonstrate testing with spy', () => {
+  const obj = {
         method: (x: number) => x * 2,
       };
 
-      const spy = vi.spyOn(obj, 'method');
+      const spy = stub(obj, 'method');
 
       const result = obj.method(5);
 
-      expect(spy).toHaveBeenCalledWith(5);
-      expect(result).toBe(10);
-    });
-  });
-});
+      assertSpyCallArgs(spy, 0, [5]);
+      assertEquals(result, 10);
+})
+  
+
 
 // ============================================================================
 // Integration Test Pattern - Demonstrate full request flow
 // ============================================================================
 
-describe('Integration Test Pattern', () => {
-  it('should demonstrate a complete test flow', async () => {
-    // 1. Set up test data using factories
+
+  Deno.test('Integration Test Pattern - should demonstrate a complete test flow', async () => {
+  // 1. Set up test data using factories
     const { user, workspace: space } = createUserWithWorkspace();
     const { thread, messages } = createThreadWithMessages(
       { space_id: space.id },
@@ -289,7 +298,7 @@ describe('Integration Test Pattern', () => {
     const env = createMockEnv();
 
     // 3. Mock database responses (you would customize this for your needs)
-    vi.spyOn(env.DB, 'prepare').mockImplementation((query: string) => {
+    stub(env.DB, 'prepare') = (query: string) => {
       return {
         bind: () => ({
           first: async () => {
@@ -309,7 +318,7 @@ describe('Integration Test Pattern', () => {
           }),
         }),
       } as any;
-    });
+    } as any;
 
     // 4. Execute your code under test
     // In a real test, you would call your service or route handler here
@@ -318,6 +327,6 @@ describe('Integration Test Pattern', () => {
       .first();
 
     // 5. Assert results
-    expect(userResult).toEqual(user);
-  });
-});
+    assertEquals(userResult, user);
+})
+

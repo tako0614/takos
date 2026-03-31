@@ -4,8 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { createHash } from 'crypto';
 import { parse as parseYaml } from 'yaml';
-import type { ActionRuns, ActionOutputDefinition } from './composite-executor.js';
-import { cloneAndCheckout } from '../git.js';
+import type { ActionRuns, ActionOutputDefinition } from './composite-executor.ts';
+import { cloneAndCheckout } from '../git.ts';
 import { createLogger } from 'takos-common/logger';
 
 const logger = createLogger({ service: 'takos-runtime' });

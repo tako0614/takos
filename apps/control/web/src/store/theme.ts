@@ -1,5 +1,5 @@
-import { atom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
+import { atom } from 'jotai/vanilla';
+import { atomWithStorageVanilla } from '../lib/storage-atom';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -14,7 +14,7 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 /** User preference: 'light' | 'dark' | 'system'. Persisted to localStorage. */
-export const themePreferenceAtom = atomWithStorage<Theme>(STORAGE_KEY, 'system');
+export const themePreferenceAtom = atomWithStorageVanilla<Theme>(STORAGE_KEY, 'system');
 
 /** Writable atom tracking the current OS-level color-scheme. Updated by ThemeSync. */
 export const systemThemeAtom = atom<ResolvedTheme>(getSystemTheme());

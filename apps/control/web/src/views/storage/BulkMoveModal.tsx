@@ -14,48 +14,39 @@ interface BulkMoveModalProps {
   normalizePath: (path: string) => string;
 }
 
-export function BulkMoveModal({
-  isOpen,
-  onClose,
-  selectedCount,
-  bulkMovePath,
-  onPathChange,
-  onMove,
-  moving,
-  normalizePath,
-}: BulkMoveModalProps) {
+export function BulkMoveModal(props: BulkMoveModalProps) {
   const { t } = useI18n();
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
+      isOpen={props.isOpen}
+      onClose={props.onClose}
       title={t('move') || 'Move'}
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         <Input
-          value={bulkMovePath}
-          onChange={(e) => onPathChange(e.target.value)}
+          value={props.bulkMovePath}
+          onInput={(e) => props.onPathChange((e.target as HTMLInputElement).value)}
           placeholder="/path/to/folder"
-          autoFocus
+          autofocus
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && bulkMovePath.trim()) {
-              onMove();
+            if (e.key === 'Enter' && props.bulkMovePath.trim()) {
+              props.onMove();
             }
           }}
         />
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
-          Move {selectedCount} items to <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">{normalizePath(bulkMovePath || '/')}</code>
+        <div class="text-xs text-zinc-500 dark:text-zinc-400">
+          Move {props.selectedCount} items to <code class="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">{props.normalizePath(props.bulkMovePath || '/')}</code>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
+        <div class="flex justify-end gap-2">
+          <Button variant="ghost" onClick={props.onClose}>
             {t('cancel')}
           </Button>
           <Button
             variant="primary"
-            onClick={onMove}
-            disabled={!bulkMovePath.trim() || moving}
-            isLoading={moving}
+            onClick={props.onMove}
+            disabled={!props.bulkMovePath.trim() || props.moving}
+            isLoading={props.moving}
           >
             {t('move') || 'Move'}
           </Button>

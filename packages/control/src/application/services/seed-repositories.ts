@@ -28,8 +28,8 @@ export interface SeedRepository {
  */
 export const SEED_REPOSITORIES: SeedRepository[] = [
   {
-    url: 'https://github.com/tako0614/takos-computer.git',
-    name: 'Takos Computer',
+    url: 'https://github.com/tako0614/takos-agent.git',
+    name: 'Takos Agent',
     description: 'Browser automation and agent executor',
     category: 'tool',
     checked: true,

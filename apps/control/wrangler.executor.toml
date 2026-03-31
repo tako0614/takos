@@ -13,9 +13,20 @@ compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolut
 [observability]
 enabled = true
 
+# Tier 1 — lite: lightweight always-on instances (1/16 vCPU, 256 MiB)
 [[durable_objects.bindings]]
 name = "EXECUTOR_CONTAINER"
-class_name = "TakosAgentExecutorContainer"
+class_name = "ExecutorContainerTier1"
+
+# Tier 2 — basic: scale-out instances (0.25 vCPU, 1 GiB)
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER2"
+class_name = "ExecutorContainerTier2"
+
+# Tier 3 — large: max-memory instances (1 vCPU, 12 GiB)
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER3"
+class_name = "ExecutorContainerTier3"
 
 [[durable_objects.bindings]]
 name = "RUN_NOTIFIER"
@@ -24,13 +35,24 @@ script_name = "takos"
 
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["TakosAgentExecutorContainer"]
+new_sqlite_classes = ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"]
 
-# Container image must be provided by your deployment (e.g. takos-computer).
 [[containers]]
-class_name = "TakosAgentExecutorContainer"
+class_name = "ExecutorContainerTier1"
 image = "your-executor-image:tag"
-instance_type = "standard-2"
+instance_type = "lite"
+max_instances = 20
+
+[[containers]]
+class_name = "ExecutorContainerTier2"
+image = "your-executor-image:tag"
+instance_type = "basic"
+max_instances = 200
+
+[[containers]]
+class_name = "ExecutorContainerTier3"
+image = "your-executor-image:tag"
+instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
 [[d1_databases]]
@@ -87,7 +109,15 @@ CONTROL_RPC_BASE_URL = "https://takos-executor-host-staging.example.workers.dev"
 
 [[env.staging.durable_objects.bindings]]
 name = "EXECUTOR_CONTAINER"
-class_name = "TakosAgentExecutorContainer"
+class_name = "ExecutorContainerTier1"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER2"
+class_name = "ExecutorContainerTier2"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER3"
+class_name = "ExecutorContainerTier3"
 
 [[env.staging.durable_objects.bindings]]
 name = "RUN_NOTIFIER"
@@ -95,9 +125,21 @@ class_name = "RunNotifierDO"
 script_name = "takos-staging"
 
 [[env.staging.containers]]
-class_name = "TakosAgentExecutorContainer"
+class_name = "ExecutorContainerTier1"
 image = "your-executor-image:tag"
-instance_type = "standard-2"
+instance_type = "lite"
+max_instances = 20
+
+[[env.staging.containers]]
+class_name = "ExecutorContainerTier2"
+image = "your-executor-image:tag"
+instance_type = "basic"
+max_instances = 100
+
+[[env.staging.containers]]
+class_name = "ExecutorContainerTier3"
+image = "your-executor-image:tag"
+instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
 
 [[env.staging.d1_databases]]

@@ -1,36 +1,32 @@
-import { describe, expect, it } from 'vitest';
 import { hasPermission } from '@/utils/space-access';
 
-describe('hasPermission', () => {
-  it('returns false for null role', () => {
-    expect(hasPermission(null, 'viewer')).toBe(false);
-  });
 
-  it('owner has all permissions', () => {
-    expect(hasPermission('owner', 'owner')).toBe(true);
-    expect(hasPermission('owner', 'admin')).toBe(true);
-    expect(hasPermission('owner', 'editor')).toBe(true);
-    expect(hasPermission('owner', 'viewer')).toBe(true);
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('admin has admin, editor, viewer but not owner', () => {
-    expect(hasPermission('admin', 'owner')).toBe(false);
-    expect(hasPermission('admin', 'admin')).toBe(true);
-    expect(hasPermission('admin', 'editor')).toBe(true);
-    expect(hasPermission('admin', 'viewer')).toBe(true);
-  });
-
-  it('editor has editor, viewer but not admin or owner', () => {
-    expect(hasPermission('editor', 'owner')).toBe(false);
-    expect(hasPermission('editor', 'admin')).toBe(false);
-    expect(hasPermission('editor', 'editor')).toBe(true);
-    expect(hasPermission('editor', 'viewer')).toBe(true);
-  });
-
-  it('viewer only has viewer permission', () => {
-    expect(hasPermission('viewer', 'owner')).toBe(false);
-    expect(hasPermission('viewer', 'admin')).toBe(false);
-    expect(hasPermission('viewer', 'editor')).toBe(false);
-    expect(hasPermission('viewer', 'viewer')).toBe(true);
-  });
-});
+  Deno.test('hasPermission - returns false for null role', () => {
+  assertEquals(hasPermission(null, 'viewer'), false);
+})
+  Deno.test('hasPermission - owner has all permissions', () => {
+  assertEquals(hasPermission('owner', 'owner'), true);
+    assertEquals(hasPermission('owner', 'admin'), true);
+    assertEquals(hasPermission('owner', 'editor'), true);
+    assertEquals(hasPermission('owner', 'viewer'), true);
+})
+  Deno.test('hasPermission - admin has admin, editor, viewer but not owner', () => {
+  assertEquals(hasPermission('admin', 'owner'), false);
+    assertEquals(hasPermission('admin', 'admin'), true);
+    assertEquals(hasPermission('admin', 'editor'), true);
+    assertEquals(hasPermission('admin', 'viewer'), true);
+})
+  Deno.test('hasPermission - editor has editor, viewer but not admin or owner', () => {
+  assertEquals(hasPermission('editor', 'owner'), false);
+    assertEquals(hasPermission('editor', 'admin'), false);
+    assertEquals(hasPermission('editor', 'editor'), true);
+    assertEquals(hasPermission('editor', 'viewer'), true);
+})
+  Deno.test('hasPermission - viewer only has viewer permission', () => {
+  assertEquals(hasPermission('viewer', 'owner'), false);
+    assertEquals(hasPermission('viewer', 'admin'), false);
+    assertEquals(hasPermission('viewer', 'editor'), false);
+    assertEquals(hasPermission('viewer', 'viewer'), true);
+})

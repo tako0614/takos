@@ -1,14 +1,14 @@
-import { useState, useCallback, useRef } from 'react';
+import { createSignal } from 'solid-js';
 import type { StorageFile } from '../types';
 import { rpc, rpcJson } from '../lib/rpc';
 import { getErrorMessage } from 'takos-common/errors';
 
 interface UseSpaceStorageReturn {
-  files: StorageFile[];
-  currentPath: string;
-  loading: boolean;
-  error: string | null;
-  truncated: boolean;
+  files: () => StorageFile[];
+  currentPath: () => string;
+  loading: () => boolean;
+  error: () => string | null;
+  truncated: () => boolean;
   loadFiles: (path?: string) => Promise<void>;
   createFolder: (name: string) => Promise<StorageFile | null>;
   uploadFile: (file: File) => Promise<StorageFile | null>;
@@ -23,18 +23,18 @@ interface UseSpaceStorageReturn {
 }
 
 export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
-  const [files, setFiles] = useState<StorageFile[]>([]);
-  const [currentPath, setCurrentPath] = useState('/');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [truncated, setTruncated] = useState(false);
+  const [files, setFiles] = createSignal<StorageFile[]>([]);
+  const [currentPath, setCurrentPath] = createSignal('/');
+  const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [truncated, setTruncated] = createSignal(false);
   // Monotonic counter to prevent stale loadFiles responses from overwriting newer ones
-  const loadVersionRef = useRef(0);
+  let loadVersion = 0;
 
-  const loadFiles = useCallback(async (path = '/') => {
+  const loadFiles = async (path = '/') => {
     if (!spaceId) return;
 
-    const version = ++loadVersionRef.current;
+    const version = ++loadVersion;
     setLoading(true);
     setError(null);
 
@@ -45,7 +45,7 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       });
 
       // Discard result if a newer loadFiles was called while this was in flight
-      if (version !== loadVersionRef.current) return;
+      if (version !== loadVersion) return;
 
       if (!res.ok) {
         const data = await rpcJson<{ error: string }>(res);
@@ -57,26 +57,26 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       setCurrentPath(data.path || path);
       setTruncated(data.truncated ?? false);
     } catch (err) {
-      if (version !== loadVersionRef.current) return;
+      if (version !== loadVersion) return;
       setError(getErrorMessage(err, 'Failed to load files'));
       setFiles([]);
       setCurrentPath(path);
       setTruncated(false);
     } finally {
-      if (version === loadVersionRef.current) {
+      if (version === loadVersion) {
         setLoading(false);
       }
     }
-  }, [spaceId]);
+  };
 
-  const createFolder = useCallback(async (name: string): Promise<StorageFile | null> => {
+  const createFolder = async (name: string): Promise<StorageFile | null> => {
     if (!spaceId) return null;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage.folders.$post({
         param: { spaceId: spaceId },
-        json: { name, parent_path: currentPath },
+        json: { name, parent_path: currentPath() },
       });
 
       if (!res.ok) {
@@ -85,15 +85,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       }
 
       const data = await rpcJson<{ folder: StorageFile }>(res);
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return data.folder;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to create folder'));
       return null;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const uploadFile = useCallback(async (file: File): Promise<StorageFile | null> => {
+  const uploadFile = async (file: File): Promise<StorageFile | null> => {
     if (!spaceId) return null;
     setError(null);
 
@@ -102,7 +102,7 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
         param: { spaceId: spaceId },
         json: {
           name: file.name,
-          parent_path: currentPath,
+          parent_path: currentPath(),
           size: file.size,
           mime_type: file.type || undefined,
         },
@@ -143,15 +143,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       }
 
       const confirmData = await rpcJson<{ file: StorageFile }>(confirmRes);
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return confirmData.file;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to upload file'));
       return null;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const deleteItem = useCallback(async (fileId: string): Promise<boolean> => {
+  const deleteItem = async (fileId: string): Promise<boolean> => {
     if (!spaceId) return false;
     setError(null);
 
@@ -165,15 +165,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
         throw new Error(data.error || 'Failed to delete');
       }
 
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return true;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to delete'));
       return false;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const deleteItems = useCallback(async (fileIds: string[]): Promise<boolean> => {
+  const deleteItems = async (fileIds: string[]): Promise<boolean> => {
     if (!spaceId || fileIds.length === 0) return false;
     setError(null);
 
@@ -188,15 +188,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
         throw new Error(data.error || 'Failed to delete');
       }
 
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return true;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to delete'));
       return false;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const renameItem = useCallback(async (fileId: string, name: string): Promise<StorageFile | null> => {
+  const renameItem = async (fileId: string, name: string): Promise<StorageFile | null> => {
     if (!spaceId) return null;
     setError(null);
 
@@ -212,15 +212,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       }
 
       const data = await rpcJson<{ file: StorageFile }>(res);
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return data.file;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to rename'));
       return null;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const moveItem = useCallback(async (fileId: string, parentPath: string): Promise<StorageFile | null> => {
+  const moveItem = async (fileId: string, parentPath: string): Promise<StorageFile | null> => {
     if (!spaceId) return null;
     setError(null);
 
@@ -236,15 +236,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       }
 
       const data = await rpcJson<{ file: StorageFile }>(res);
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return data.file;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to move'));
       return null;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const bulkMoveItems = useCallback(async (fileIds: string[], parentPath: string): Promise<boolean> => {
+  const bulkMoveItems = async (fileIds: string[], parentPath: string): Promise<boolean> => {
     if (!spaceId || fileIds.length === 0) return false;
     setError(null);
 
@@ -259,15 +259,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
         throw new Error(data.error || 'Failed to move');
       }
 
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return true;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to move'));
       return false;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const bulkRenameItems = useCallback(async (renames: Array<{ file_id: string; name: string }>): Promise<boolean> => {
+  const bulkRenameItems = async (renames: Array<{ file_id: string; name: string }>): Promise<boolean> => {
     if (!spaceId || renames.length === 0) return false;
     setError(null);
 
@@ -282,15 +282,15 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
         throw new Error(data.error || 'Failed to rename');
       }
 
-      await loadFiles(currentPath);
+      await loadFiles(currentPath());
       return true;
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to rename'));
       return false;
     }
-  }, [spaceId, currentPath, loadFiles]);
+  };
 
-  const getDownloadUrl = useCallback(async (fileId: string): Promise<string | null> => {
+  const getDownloadUrl = async (fileId: string): Promise<string | null> => {
     if (!spaceId) return null;
 
     try {
@@ -310,9 +310,9 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       setError(getErrorMessage(err, 'Failed to get download URL'));
       return null;
     }
-  }, [spaceId]);
+  };
 
-  const downloadFolderZip = useCallback(async (path: string): Promise<Response | null> => {
+  const downloadFolderZip = async (path: string): Promise<Response | null> => {
     if (!spaceId) return null;
 
     try {
@@ -331,7 +331,7 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       setError(getErrorMessage(err, 'Failed to download ZIP'));
       return null;
     }
-  }, [spaceId]);
+  };
 
   return {
     files,

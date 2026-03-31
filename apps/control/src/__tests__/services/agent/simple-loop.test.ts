@@ -1,33 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/services/agent/skills', () => ({
-  buildSkillEnhancedPrompt: vi.fn((_prompt: string) => 'enhanced-prompt'),
-}));
-
-vi.mock('@/services/agent/runner-config', () => ({
-  getTimeoutConfig: vi.fn(() => ({
-    iterationTimeout: 120000,
-    totalTimeout: 900000,
-    toolExecutionTimeout: 300000,
-    langGraphTimeout: 900000,
-  })),
-}));
-
-vi.mock('@/utils/with-timeout', () => ({
-  withTimeout: vi.fn(async (fn: (signal: AbortSignal) => Promise<unknown>) => {
-    const controller = new AbortController();
-    return fn(controller.signal);
-  }),
-}));
-
-vi.mock('@/services/agent/runner-utils', () => ({
-  anySignal: vi.fn((signals: AbortSignal[]) => signals[0] || new AbortController().signal),
-  addToolExecution: vi.fn(),
-  redactSensitiveArgs: vi.fn((args: Record<string, unknown>) => args),
-  MAX_TOTAL_TOOL_CALLS: 1000,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/skills'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/runner-config'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/with-timeout'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/runner-utils'
 import { runWithSimpleLoop, runWithoutLLM, type SimpleLoopDeps, type NoLLMDeps } from '@/services/agent/simple-loop';
+
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { stub, assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
 function createSimpleLoopDeps(overrides?: Partial<SimpleLoopDeps>): SimpleLoopDeps {
   return {
@@ -40,15 +18,15 @@ function createSimpleLoopDeps(overrides?: Partial<SimpleLoopDeps>): SimpleLoopDe
       temperature: 0.5,
     },
     llmClient: {
-      chat: vi.fn(async () => ({
+      chat: async () => ({
         content: 'Final response',
         toolCalls: undefined,
         stopReason: 'stop' as const,
         usage: { inputTokens: 100, outputTokens: 50 },
-      })),
+      }),
     } as any,
     toolExecutor: {
-      execute: vi.fn(async () => ({ output: 'tool output', error: undefined })),
+      execute: async () => ({ output: 'tool output', error: undefined }),
     } as any,
     skillLocale: 'en',
     availableSkills: [],
@@ -59,16 +37,16 @@ function createSimpleLoopDeps(overrides?: Partial<SimpleLoopDeps>): SimpleLoopDe
     totalUsage: { inputTokens: 0, outputTokens: 0 },
     toolCallCount: 0,
     totalToolCalls: 0,
-    throwIfCancelled: vi.fn(async () => {}),
-    emitEvent: vi.fn(async () => {}),
-    addMessage: vi.fn(async () => {}),
-    updateRunStatus: vi.fn(async () => {}),
-    buildTerminalEventPayload: vi.fn((status, details) => ({
+    throwIfCancelled: async () => {},
+    emitEvent: async () => {},
+    addMessage: async () => {},
+    updateRunStatus: async () => {},
+    buildTerminalEventPayload: (status, details) => ({
       run: { id: 'run-1', status, ...details },
-    })) as any,
-    getConversationHistory: vi.fn(async () => [
+    }) as any,
+    getConversationHistory: async () => [
       { role: 'user' as const, content: 'Hello' },
-    ]),
+    ],
     ...overrides,
   };
 }
@@ -76,66 +54,63 @@ function createSimpleLoopDeps(overrides?: Partial<SimpleLoopDeps>): SimpleLoopDe
 function createNoLLMDeps(overrides?: Partial<NoLLMDeps>): NoLLMDeps {
   return {
     toolExecutor: {
-      execute: vi.fn(async (call: { name: string }) => {
+      execute: async (call: { name: string }) => {
         if (call.name === 'file_list') {
           return { output: 'file1.ts\nfile2.ts', error: undefined };
         }
         return { output: 'result', error: undefined };
-      }),
+      },
     } as any,
-    emitEvent: vi.fn(async () => {}),
-    addMessage: vi.fn(async () => {}),
-    updateRunStatus: vi.fn(async () => {}),
-    buildTerminalEventPayload: vi.fn((status, details) => ({
+    emitEvent: async () => {},
+    addMessage: async () => {},
+    updateRunStatus: async () => {},
+    buildTerminalEventPayload: (status, details) => ({
       run: { id: 'run-1', status, ...details },
-    })) as any,
+    }) as any,
     ...overrides,
   };
 }
 
-describe('runWithSimpleLoop', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('completes when LLM returns a final response without tool calls', async () => {
-    const deps = createSimpleLoopDeps();
+  Deno.test('runWithSimpleLoop - completes when LLM returns a final response without tool calls', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createSimpleLoopDeps();
     await runWithSimpleLoop(deps);
 
-    expect(deps.emitEvent).toHaveBeenCalledWith('thinking', expect.objectContaining({ iteration: 1 }));
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'assistant', content: 'Final response' }),
-      expect.any(Object),
-    );
-    expect(deps.updateRunStatus).toHaveBeenCalledWith(
+    assertSpyCallArgs(deps.emitEvent, 0, ['thinking', ({ iteration: 1 })]);
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({ role: 'assistant', content: 'Final response' }),
+      /* expect.any(Object) */ {} as any,
+    ]);
+    assertSpyCallArgs(deps.updateRunStatus, 0, [
       'completed',
       expect.stringContaining('Final response'),
-    );
-    expect(deps.emitEvent).toHaveBeenCalledWith('completed', expect.any(Object));
-  });
-
-  it('accumulates token usage across iterations', async () => {
-    const deps = createSimpleLoopDeps();
+    ]);
+    assertSpyCallArgs(deps.emitEvent, 0, ['completed', /* expect.any(Object) */ {} as any]);
+})
+  Deno.test('runWithSimpleLoop - accumulates token usage across iterations', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createSimpleLoopDeps();
     await runWithSimpleLoop(deps);
 
-    expect(deps.totalUsage.inputTokens).toBe(100);
-    expect(deps.totalUsage.outputTokens).toBe(50);
-  });
-
-  it('executes tool calls when LLM requests them', async () => {
-    const llmChat = vi.fn()
-      .mockResolvedValueOnce({
+    assertEquals(deps.totalUsage.inputTokens, 100);
+    assertEquals(deps.totalUsage.outputTokens, 50);
+})
+  Deno.test('runWithSimpleLoop - executes tool calls when LLM requests them', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const llmChat = ((..._args: any[]) => undefined) as any
+       = (async () => ({
         content: 'Let me check...',
         toolCalls: [{ id: 'tc1', name: 'file_read', arguments: { path: '/test' } }],
         stopReason: 'tool_calls',
         usage: { inputTokens: 50, outputTokens: 20 },
-      })
-      .mockResolvedValueOnce({
+      })) as any
+       = (async () => ({
         content: 'Here is the result.',
         toolCalls: undefined,
         stopReason: 'stop',
         usage: { inputTokens: 80, outputTokens: 30 },
-      });
+      })) as any;
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
@@ -143,28 +118,28 @@ describe('runWithSimpleLoop', () => {
 
     await runWithSimpleLoop(deps);
 
-    expect(deps.toolExecutor!.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'file_read' }),
-    );
-    expect(deps.emitEvent).toHaveBeenCalledWith('tool_call', expect.objectContaining({
+    assertSpyCallArgs(deps.toolExecutor!.execute, 0, [
+      ({ name: 'file_read' }),
+    ]);
+    assertSpyCallArgs(deps.emitEvent, 0, ['tool_call', ({
       tool: 'file_read',
-    }));
-    expect(deps.emitEvent).toHaveBeenCalledWith('tool_result', expect.any(Object));
-  });
-
-  it('checks cancellation before each iteration', async () => {
-    const deps = createSimpleLoopDeps();
+    })]);
+    assertSpyCallArgs(deps.emitEvent, 0, ['tool_result', /* expect.any(Object) */ {} as any]);
+})
+  Deno.test('runWithSimpleLoop - checks cancellation before each iteration', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createSimpleLoopDeps();
     await runWithSimpleLoop(deps);
-    expect(deps.throwIfCancelled).toHaveBeenCalledWith('iteration');
-  });
-
-  it('throws on rate limit exceeded', async () => {
-    const llmChat = vi.fn().mockResolvedValue({
+    assertSpyCallArgs(deps.throwIfCancelled, 0, ['iteration']);
+})
+  Deno.test('runWithSimpleLoop - throws on rate limit exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const llmChat = (async () => ({
       content: '',
       toolCalls: [{ id: 'tc1', name: 'tool', arguments: {} }],
       stopReason: 'tool_calls',
       usage: { inputTokens: 1, outputTokens: 1 },
-    });
+    }));
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
@@ -178,32 +153,32 @@ describe('runWithSimpleLoop', () => {
       toolCallCount: 1,
     });
 
-    await expect(runWithSimpleLoop(deps)).rejects.toThrow('Rate limit exceeded');
-  });
-
-  it('throws when tool executor is not initialized', async () => {
-    const llmChat = vi.fn().mockResolvedValue({
+    await await assertRejects(async () => { await runWithSimpleLoop(deps); }, 'Rate limit exceeded');
+})
+  Deno.test('runWithSimpleLoop - throws when tool executor is not initialized', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const llmChat = (async () => ({
       content: '',
       toolCalls: [{ id: 'tc1', name: 'tool', arguments: {} }],
       stopReason: 'tool_calls',
       usage: { inputTokens: 1, outputTokens: 1 },
-    });
+    }));
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
       toolExecutor: undefined,
     });
 
-    await expect(runWithSimpleLoop(deps)).rejects.toThrow('Tool executor not initialized');
-  });
-
-  it('completes with max iterations message when limit reached', async () => {
-    const llmChat = vi.fn().mockResolvedValue({
+    await await assertRejects(async () => { await runWithSimpleLoop(deps); }, 'Tool executor not initialized');
+})
+  Deno.test('runWithSimpleLoop - completes with max iterations message when limit reached', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const llmChat = (async () => ({
       content: '',
       toolCalls: [{ id: 'tc1', name: 'tool', arguments: {} }],
       stopReason: 'tool_calls',
       usage: { inputTokens: 1, outputTokens: 1 },
-    });
+    }));
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
@@ -217,18 +192,18 @@ describe('runWithSimpleLoop', () => {
 
     await runWithSimpleLoop(deps);
 
-    expect(deps.updateRunStatus).toHaveBeenCalledWith(
+    assertSpyCallArgs(deps.updateRunStatus, 0, [
       'completed',
       expect.stringContaining('Max iterations'),
-    );
-  });
-
-  it('refreshes memory before LLM call when memoryRuntime is available', async () => {
-    const mockMemoryRuntime = {
-      beforeModel: vi.fn(() => ({
+    ]);
+})
+  Deno.test('runWithSimpleLoop - refreshes memory before LLM call when memoryRuntime is available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockMemoryRuntime = {
+      beforeModel: () => ({
         hasContent: true,
         segment: 'Memory segment content',
-      })),
+      }),
     };
 
     const deps = createSimpleLoopDeps({
@@ -236,27 +211,27 @@ describe('runWithSimpleLoop', () => {
     });
 
     await runWithSimpleLoop(deps);
-    expect(mockMemoryRuntime.beforeModel).toHaveBeenCalled();
-  });
-
-  it('throws when total run timeout is exceeded', async () => {
-    // Use fake timers to control Date.now() and simulate timeout
+    assert(mockMemoryRuntime.beforeModel.calls.length > 0);
+})
+  Deno.test('runWithSimpleLoop - throws when total run timeout is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // Use fake timers to control Date.now() and simulate timeout
     let callCount = 0;
     // First call returns base time (runStartTime), second call returns time far in the future
-    vi.spyOn(Date, 'now').mockImplementation(() => {
+    stub(Date, 'now') = () => {
       callCount++;
       // First call is for runStartTime; subsequent calls simulate time passed
       if (callCount <= 1) return 1000000;
       return 1000000 + 1000000; // 1000 seconds later — well past the 900s (15min) default timeout
-    });
+    } as any;
 
     // LLM returns tool calls so the loop continues to a second iteration
-    const llmChat = vi.fn().mockResolvedValue({
+    const llmChat = (async () => ({
       content: '',
       toolCalls: [{ id: 'tc1', name: 'tool', arguments: {} }],
       stopReason: 'tool_calls',
       usage: { inputTokens: 1, outputTokens: 1 },
-    });
+    }));
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
@@ -268,17 +243,17 @@ describe('runWithSimpleLoop', () => {
       },
     });
 
-    await expect(runWithSimpleLoop(deps)).rejects.toThrow(/timed out/);
-    vi.spyOn(Date, 'now').mockRestore();
-  });
-
-  it('throws when MAX_TOTAL_TOOL_CALLS limit is exceeded', async () => {
-    const llmChat = vi.fn().mockResolvedValue({
+    await await assertRejects(async () => { await runWithSimpleLoop(deps); }, /timed out/);
+    stub(Date, 'now').restore();
+})
+  Deno.test('runWithSimpleLoop - throws when MAX_TOTAL_TOOL_CALLS limit is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const llmChat = (async () => ({
       content: '',
       toolCalls: [{ id: 'tc1', name: 'tool', arguments: {} }],
       stopReason: 'tool_calls',
       usage: { inputTokens: 1, outputTokens: 1 },
-    });
+    }));
 
     const deps = createSimpleLoopDeps({
       llmClient: { chat: llmChat } as any,
@@ -291,12 +266,12 @@ describe('runWithSimpleLoop', () => {
       totalToolCalls: 1000, // Already at the limit (MAX_TOTAL_TOOL_CALLS = 1000)
     });
 
-    await expect(runWithSimpleLoop(deps)).rejects.toThrow(/Total tool call limit exceeded/);
-  });
-
-  it('inserts [ACTIVE_MEMORY] message after the system prompt when memoryRuntime has content', async () => {
-    let capturedMessages: any[] | undefined;
-    const llmChat = vi.fn().mockImplementation(async (msgs: any[]) => {
+    await await assertRejects(async () => { await runWithSimpleLoop(deps); }, /Total tool call limit exceeded/);
+})
+  Deno.test('runWithSimpleLoop - inserts [ACTIVE_MEMORY] message after the system prompt when memoryRuntime has content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  let capturedMessages: any[] | undefined;
+    const llmChat = async (msgs: any[]) => {
       capturedMessages = [...msgs];
       return {
         content: 'Done',
@@ -304,13 +279,13 @@ describe('runWithSimpleLoop', () => {
         stopReason: 'stop',
         usage: { inputTokens: 10, outputTokens: 5 },
       };
-    });
+    };
 
     const mockMemoryRuntime = {
-      beforeModel: vi.fn(() => ({
+      beforeModel: () => ({
         hasContent: true,
         segment: 'Memory about the user preferences',
-      })),
+      }),
     };
 
     const deps = createSimpleLoopDeps({
@@ -320,18 +295,18 @@ describe('runWithSimpleLoop', () => {
 
     await runWithSimpleLoop(deps);
 
-    expect(capturedMessages).toBeDefined();
+    assert(capturedMessages !== undefined);
     // The memory message should be at index 1 (right after the system prompt at index 0)
-    expect(capturedMessages![1].role).toBe('system');
-    expect(capturedMessages![1].content).toContain('[ACTIVE_MEMORY]');
-    expect(capturedMessages![1].content).toContain('Memory about the user preferences');
-  });
-
-  it('replaces existing [ACTIVE_MEMORY] message on subsequent iterations', async () => {
-    let callCount = 0;
+    assertEquals(capturedMessages![1].role, 'system');
+    assertStringIncludes(capturedMessages![1].content, '[ACTIVE_MEMORY]');
+    assertStringIncludes(capturedMessages![1].content, 'Memory about the user preferences');
+})
+  Deno.test('runWithSimpleLoop - replaces existing [ACTIVE_MEMORY] message on subsequent iterations', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  let callCount = 0;
     let capturedMessages: any[][] = [];
 
-    const llmChat = vi.fn().mockImplementation(async (msgs: any[]) => {
+    const llmChat = async (msgs: any[]) => {
       capturedMessages.push([...msgs]);
       callCount++;
       if (callCount === 1) {
@@ -348,17 +323,17 @@ describe('runWithSimpleLoop', () => {
         stopReason: 'stop',
         usage: { inputTokens: 10, outputTokens: 5 },
       };
-    });
+    };
 
     let memoryCallCount = 0;
     const mockMemoryRuntime = {
-      beforeModel: vi.fn(() => {
+      beforeModel: () => {
         memoryCallCount++;
         return {
           hasContent: true,
           segment: `Memory segment v${memoryCallCount}`,
         };
-      }),
+      },
     };
 
     const deps = createSimpleLoopDeps({
@@ -368,7 +343,7 @@ describe('runWithSimpleLoop', () => {
 
     await runWithSimpleLoop(deps);
 
-    expect(mockMemoryRuntime.beforeModel).toHaveBeenCalledTimes(2);
+    assertSpyCalls(mockMemoryRuntime.beforeModel, 2);
 
     // In the second call, the [ACTIVE_MEMORY] message should have been replaced
     const secondCallMsgs = capturedMessages[1];
@@ -376,13 +351,13 @@ describe('runWithSimpleLoop', () => {
       (m: any) => m.role === 'system' && m.content.includes('[ACTIVE_MEMORY]'),
     );
     // There should be exactly one [ACTIVE_MEMORY] message (replaced, not duplicated)
-    expect(memoryMsgs).toHaveLength(1);
-    expect(memoryMsgs[0].content).toContain('Memory segment v2');
-  });
-
-  it('does not insert [ACTIVE_MEMORY] message when memoryRuntime has no content', async () => {
-    let capturedMessages: any[] | undefined;
-    const llmChat = vi.fn().mockImplementation(async (msgs: any[]) => {
+    assertEquals(memoryMsgs.length, 1);
+    assertStringIncludes(memoryMsgs[0].content, 'Memory segment v2');
+})
+  Deno.test('runWithSimpleLoop - does not insert [ACTIVE_MEMORY] message when memoryRuntime has no content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  let capturedMessages: any[] | undefined;
+    const llmChat = async (msgs: any[]) => {
       capturedMessages = [...msgs];
       return {
         content: 'Done',
@@ -390,13 +365,13 @@ describe('runWithSimpleLoop', () => {
         stopReason: 'stop',
         usage: { inputTokens: 10, outputTokens: 5 },
       };
-    });
+    };
 
     const mockMemoryRuntime = {
-      beforeModel: vi.fn(() => ({
+      beforeModel: () => ({
         hasContent: false,
         segment: '',
-      })),
+      }),
     };
 
     const deps = createSimpleLoopDeps({
@@ -406,96 +381,91 @@ describe('runWithSimpleLoop', () => {
 
     await runWithSimpleLoop(deps);
 
-    expect(capturedMessages).toBeDefined();
+    assert(capturedMessages !== undefined);
     const memoryMsgs = capturedMessages!.filter(
       (m: any) => m.role === 'system' && m.content.includes('[ACTIVE_MEMORY]'),
     );
-    expect(memoryMsgs).toHaveLength(0);
-  });
-});
+    assertEquals(memoryMsgs.length, 0);
+})
 
-describe('runWithoutLLM', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('responds with file listing for "list files" query', async () => {
-    const deps = createNoLLMDeps();
+  Deno.test('runWithoutLLM - responds with file listing for "list files" query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps();
     const history = [{ role: 'user' as const, content: 'list files' }];
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.toolExecutor!.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'file_list' }),
-    );
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(deps.toolExecutor!.execute, 0, [
+      ({ name: 'file_list' }),
+    ]);
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({
         role: 'assistant',
         content: expect.stringContaining('file1.ts'),
       }),
-    );
-    expect(deps.updateRunStatus).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(deps.updateRunStatus, 0, [
       'completed',
       expect.stringContaining('no-llm'),
-    );
-  });
-
-  it('responds with file content for "read file" query with path', async () => {
-    const toolExecutor = {
-      execute: vi.fn(async () => ({ output: 'file content here', error: undefined })),
+    ]);
+})
+  Deno.test('runWithoutLLM - responds with file content for "read file" query with path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const toolExecutor = {
+      execute: async () => ({ output: 'file content here', error: undefined }),
     };
     const deps = createNoLLMDeps({ toolExecutor: toolExecutor as any });
     const history = [{ role: 'user' as const, content: "read file 'src/index.ts'" }];
 
     await runWithoutLLM(deps, history);
 
-    expect(toolExecutor.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'file_read' }),
-    );
-  });
-
-  it('handles search queries', async () => {
-    const toolExecutor = {
-      execute: vi.fn(async () => ({ output: 'found: result.ts', error: undefined })),
+    assertSpyCallArgs(toolExecutor.execute, 0, [
+      ({ name: 'file_read' }),
+    ]);
+})
+  Deno.test('runWithoutLLM - handles search queries', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const toolExecutor = {
+      execute: async () => ({ output: 'found: result.ts', error: undefined }),
     };
     const deps = createNoLLMDeps({ toolExecutor: toolExecutor as any });
     const history = [{ role: 'user' as const, content: 'search for "config"' }];
 
     await runWithoutLLM(deps, history);
 
-    expect(toolExecutor.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'search' }),
-    );
-  });
-
-  it('returns generic help when no pattern matches', async () => {
-    const deps = createNoLLMDeps();
+    assertSpyCallArgs(toolExecutor.execute, 0, [
+      ({ name: 'search' }),
+    ]);
+})
+  Deno.test('runWithoutLLM - returns generic help when no pattern matches', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps();
     const history = [{ role: 'user' as const, content: 'What is the meaning of life?' }];
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({
         content: expect.stringContaining('LLM API key not configured'),
       }),
-    );
-  });
-
-  it('handles missing tool executor', async () => {
-    const deps = createNoLLMDeps({ toolExecutor: undefined });
+    ]);
+})
+  Deno.test('runWithoutLLM - handles missing tool executor', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps({ toolExecutor: undefined });
     const history = [{ role: 'user' as const, content: 'list files' }];
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({
         content: expect.stringContaining('Tool executor not available'),
       }),
-    );
-  });
-
-  it('uses last user message as query', async () => {
-    const deps = createNoLLMDeps();
+    ]);
+})
+  Deno.test('runWithoutLLM - uses last user message as query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps();
     const history = [
       { role: 'user' as const, content: 'first message' },
       { role: 'assistant' as const, content: 'response' },
@@ -504,44 +474,43 @@ describe('runWithoutLLM', () => {
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.toolExecutor!.execute).toHaveBeenCalled();
-  });
-
-  it('handles empty history gracefully', async () => {
-    const deps = createNoLLMDeps();
+    assert(deps.toolExecutor!.execute.calls.length > 0);
+})
+  Deno.test('runWithoutLLM - handles empty history gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps();
     await runWithoutLLM(deps, []);
 
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'assistant' }),
-    );
-  });
-
-  it('handles file read error', async () => {
-    const toolExecutor = {
-      execute: vi.fn(async () => ({ output: '', error: 'File not found' })),
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({ role: 'assistant' }),
+    ]);
+})
+  Deno.test('runWithoutLLM - handles file read error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const toolExecutor = {
+      execute: async () => ({ output: '', error: 'File not found' }),
     };
     const deps = createNoLLMDeps({ toolExecutor: toolExecutor as any });
     const history = [{ role: 'user' as const, content: "read file 'nonexistent.ts'" }];
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({
         content: expect.stringContaining('Error reading file'),
       }),
-    );
-  });
-
-  it('prompts for file path when read file has no path', async () => {
-    const deps = createNoLLMDeps();
+    ]);
+})
+  Deno.test('runWithoutLLM - prompts for file path when read file has no path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const deps = createNoLLMDeps();
     const history = [{ role: 'user' as const, content: 'read file' }];
 
     await runWithoutLLM(deps, history);
 
-    expect(deps.addMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(deps.addMessage, 0, [
+      ({
         content: expect.stringContaining('specify a file path'),
       }),
-    );
-  });
-});
+    ]);
+})

@@ -10,9 +10,9 @@
  *
  * Requires: docker CLI available.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { isAlreadyExistsError } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-utils.js';
+import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
+import { isAlreadyExistsError } from '../resource-provider.ts';
+import { execCommand } from '../cloudflare-utils.ts';
 
 const DOCKER_ALREADY_EXISTS_PATTERNS = [
   'already exists',
@@ -25,7 +25,7 @@ export class DockerProvider implements ResourceProvider {
   private readonly composeProject: string;
 
   constructor(opts?: { composeProject?: string }) {
-    this.composeProject = opts?.composeProject || process.env.COMPOSE_PROJECT_NAME || 'takos';
+    this.composeProject = opts?.composeProject || Deno.env.get('COMPOSE_PROJECT_NAME') || 'takos';
   }
 
   /** Run a docker exec command against a running container. */

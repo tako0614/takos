@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { rpc, rpcJson } from '../lib/rpc';
+import { createSignal, createEffect, on } from 'solid-js';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc';
 import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
 import type { Resource } from '../types';
@@ -14,17 +14,17 @@ export function useResourceBindings(resource: Resource | null) {
   const { showToast } = useToast();
   const { t } = useI18n();
 
-  const [boundServices, setBoundServices] = useState<Array<{ id: string; slug: string; hostname: string }>>([]);
-  const [loadingBindings, setLoadingBindings] = useState(false);
+  const [boundServices, setBoundServices] = createSignal<Array<{ id: string; slug: string; hostname: string }>>([]);
+  const [loadingBindings, setLoadingBindings] = createSignal(false);
 
-  const fetchBindings = useCallback(async () => {
+  const fetchBindings = async () => {
     if (!resource) return;
 
     setLoadingBindings(true);
     try {
-      const res = await rpc.resources['by-name'][':name'].$get({
+      const res = await rpcPath(rpc, 'resources', 'by-name', ':name').$get({
         param: { name: resource.name },
-      });
+      }) as Response;
 
       const data = await rpcJson<{ bindings?: ApiServiceBinding[] }>(res);
 
@@ -46,30 +46,30 @@ export function useResourceBindings(resource: Resource | null) {
     } finally {
       setLoadingBindings(false);
     }
-  }, [resource?.name]);
+  };
 
-  const onRemoveBinding = useCallback(async (serviceId: string) => {
+  const onRemoveBinding = async (serviceId: string) => {
     if (!resource) return;
 
     try {
-      const res = await rpc.resources['by-name'][':name'].bind[':serviceId'].$delete({
+      const res = await rpcPath(rpc, 'resources', 'by-name', ':name', 'bind', ':serviceId').$delete({
         param: { name: resource.name, serviceId },
-      });
+      }) as Response;
       await rpcJson(res);
       showToast('success', t('bindingRemoved'));
       await fetchBindings();
     } catch {
       showToast('error', t('failedToRemoveBinding'));
     }
-  }, [resource?.name, fetchBindings, showToast, t]);
+  };
 
-  useEffect(() => {
+  createEffect(on(() => resource?.name, () => {
     if (!resource) {
       setBoundServices([]);
       return;
     }
     void fetchBindings();
-  }, [resource?.name]);
+  }));
 
   return {
     boundServices,

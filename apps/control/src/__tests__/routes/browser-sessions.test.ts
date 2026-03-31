@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
 import browserSessionsRoute from '@/routes/browser-sessions';
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
 function createUser(): User {
   return {
@@ -32,18 +34,15 @@ function createApp(user?: User) {
 
 function createBrowserHostMock(response: Response = new Response(JSON.stringify({ ok: true }), { status: 200 })) {
   return {
-    fetch: vi.fn().mockResolvedValue(response),
+    fetch: (async () => response),
   };
 }
 
-describe('browser-sessions routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('POST /api/spaces/:spaceId/browser-sessions', () => {
-    it('creates a browser session and returns 201', async () => {
-      const browserHost = createBrowserHostMock(
+  
+    Deno.test('browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - creates a browser session and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ status: 'created' }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -59,14 +58,14 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('sessionId');
-      expect(browserHost.fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns 401 when no user is set', async () => {
-      const env = createMockEnv({ BROWSER_HOST: createBrowserHostMock() });
+      assert('sessionId' in json);
+      assertSpyCalls(browserHost.fetch, 1);
+})
+    Deno.test('browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - returns 401 when no user is set', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = createMockEnv({ BROWSER_HOST: createBrowserHostMock() });
 
       const app = createApp(); // no user
       const res = await app.fetch(
@@ -79,11 +78,11 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(401);
-    });
-
-    it('returns 500 when browser host returns error', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 401);
+})
+    Deno.test('browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - returns 500 when browser host returns error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response('Internal Error', { status: 500 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -99,11 +98,11 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(500);
-    });
-
-    it('throws when BROWSER_HOST is not configured', async () => {
-      const env = createMockEnv(); // no BROWSER_HOST
+      assertEquals(res.status, 500);
+})
+    Deno.test('browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - throws when BROWSER_HOST is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = createMockEnv(); // no BROWSER_HOST
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -116,13 +115,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(500);
-    });
-  });
-
-  describe('GET /api/browser-sessions/:id', () => {
-    it('returns session info for owner', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 500);
+})  
+  
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id - returns session info for owner', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ userId: 'user-1', url: 'https://example.com' }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -134,11 +132,11 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('returns 403 when session belongs to another user', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 200);
+})
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id - returns 403 when session belongs to another user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ userId: 'other-user' }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -150,11 +148,11 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(403);
-    });
-
-    it('returns 404 when session not found', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 403);
+})
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id - returns 404 when session not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response('Not found', { status: 404 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -166,11 +164,11 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 401 without user', async () => {
-      const env = createMockEnv({ BROWSER_HOST: createBrowserHostMock() });
+      assertEquals(res.status, 404);
+})
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id - returns 401 without user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = createMockEnv({ BROWSER_HOST: createBrowserHostMock() });
 
       const app = createApp();
       const res = await app.fetch(
@@ -179,13 +177,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(401);
-    });
-  });
-
-  describe('POST /api/browser-sessions/:id/goto', () => {
-    it('forwards goto to browser host', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 401);
+})  
+  
+    Deno.test('browser-sessions routes - POST /api/browser-sessions/:id/goto - forwards goto to browser host', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ navigated: true }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -201,13 +198,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('POST /api/browser-sessions/:id/action', () => {
-    it('forwards action to browser host', async () => {
-      const browserHost = createBrowserHostMock();
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('browser-sessions routes - POST /api/browser-sessions/:id/action - forwards action to browser host', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock();
       const env = createMockEnv({ BROWSER_HOST: browserHost });
 
       const app = createApp(createUser());
@@ -221,13 +217,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('POST /api/browser-sessions/:id/extract', () => {
-    it('forwards extract to browser host', async () => {
-      const browserHost = createBrowserHostMock();
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('browser-sessions routes - POST /api/browser-sessions/:id/extract - forwards extract to browser host', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock();
       const env = createMockEnv({ BROWSER_HOST: browserHost });
 
       const app = createApp(createUser());
@@ -241,13 +236,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('GET /api/browser-sessions/:id/html', () => {
-    it('returns HTML content', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id/html - returns HTML content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ html: '<html></html>' }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -259,13 +253,12 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('GET /api/browser-sessions/:id/screenshot', () => {
-    it('returns screenshot with proper content type', async () => {
-      const pngData = new Uint8Array([137, 80, 78, 71]);
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('browser-sessions routes - GET /api/browser-sessions/:id/screenshot - returns screenshot with proper content type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const pngData = new Uint8Array([137, 80, 78, 71]);
       const browserHost = createBrowserHostMock(
         new Response(pngData, {
           status: 200,
@@ -281,14 +274,13 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(res.headers.get('Content-Type')).toBe('image/png');
-    });
-  });
-
-  describe('DELETE /api/browser-sessions/:id', () => {
-    it('destroys a session', async () => {
-      const browserHost = createBrowserHostMock(
+      assertEquals(res.status, 200);
+      assertEquals(res.headers.get('Content-Type'), 'image/png');
+})  
+  
+    Deno.test('browser-sessions routes - DELETE /api/browser-sessions/:id - destroys a session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const browserHost = createBrowserHostMock(
         new Response(JSON.stringify({ destroyed: true }), { status: 200 }),
       );
       const env = createMockEnv({ BROWSER_HOST: browserHost });
@@ -300,7 +292,5 @@ describe('browser-sessions routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-});
+      assertEquals(res.status, 200);
+})  

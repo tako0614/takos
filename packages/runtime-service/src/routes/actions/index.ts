@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import executionRoutes from './execution.js';
-import jobLifecycleRoutes from './job-lifecycle.js';
-import jobQueryRoutes from './job-queries.js';
+import executionRoutes from './execution.ts';
+import jobLifecycleRoutes from './job-lifecycle.ts';
+import jobQueryRoutes from './job-queries.ts';
 
 const app = new Hono();
 

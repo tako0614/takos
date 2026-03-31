@@ -5,11 +5,11 @@
  * Services are long-running containers that may have dedicated IPv4 addresses,
  * distinct from CF Containers which are ephemeral/on-demand.
  */
-import type { TakosState, ServiceState } from '../state/state-types.js';
-import { readState, writeState, getStateDir } from '../state/state-file.js';
-import { deployContainerWithWrangler } from '../group-deploy/container.js';
-import type { ContainerServiceDef, GroupDeployOptions } from '../group-deploy/deploy-models.js';
-import { createEmptyState } from '../empty-state.js';
+import type { TakosState, ServiceState } from '../state/state-types.ts';
+import { readState, writeState, getStateDir } from '../state/state-file.ts';
+import { deployContainerWithWrangler } from '../group-deploy/container.ts';
+import type { ContainerServiceDef, GroupDeployOptions } from '../group-deploy/deploy-models.ts';
+import { createEmptyState } from '../empty-state.ts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

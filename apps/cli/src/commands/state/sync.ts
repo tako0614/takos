@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { getStateDir } from '../../lib/state/state-file.js';
-import { syncState } from '../../lib/state/sync.js';
-import { printJson } from '../../lib/cli-utils.js';
+import { cyan, dim, green, yellow } from '@std/fmt/colors';
+import { getStateDir } from '../../lib/state/state-file.ts';
+import { syncState } from '../../lib/state/sync.ts';
+import { printJson } from '../../lib/cli-utils.ts';
 
 export function registerStateSyncCommand(stateCmd: Command): void {
   stateCmd
@@ -24,22 +24,22 @@ export function registerStateSyncCommand(stateCmd: Command): void {
 
       switch (result.action) {
         case 'no-api':
-          console.log(chalk.dim(result.message));
+          console.log(dim(result.message));
           break;
         case 'already-in-sync':
-          console.log(chalk.green(result.message));
+          console.log(green(result.message));
           break;
         case 'local-updated':
-          console.log(chalk.cyan(result.message));
+          console.log(cyan(result.message));
           break;
         case 'remote-updated':
-          console.log(chalk.cyan(result.message));
+          console.log(cyan(result.message));
           break;
         case 'no-remote':
-          console.log(chalk.yellow(result.message));
+          console.log(yellow(result.message));
           break;
         case 'no-local':
-          console.log(chalk.yellow(result.message));
+          console.log(yellow(result.message));
           break;
         default:
           console.log(result.message);

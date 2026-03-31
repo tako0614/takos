@@ -1,3 +1,4 @@
+import type { Accessor, Setter } from 'solid-js';
 import { useI18n } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useToast } from '../store/toast';
@@ -23,14 +24,14 @@ function makeEmptyTakopack(): SourceItemTakopack {
 
 export interface UseSourceFetchActionsOptions {
   isAuthenticated: boolean;
-  effectiveSpaceId: string | null;
-  filter: string;
+  effectiveSpaceId: Accessor<string | null>;
+  filter: Accessor<string>;
   onNavigateToRepo: (username: string, repoName: string) => void;
   onRequireLogin: () => void;
-  setItems: React.Dispatch<React.SetStateAction<SourceItem[]>>;
-  setSelectedItem: React.Dispatch<React.SetStateAction<SourceItem | null>>;
-  setInstallingId: React.Dispatch<React.SetStateAction<string | null>>;
-  requestSeqRef: React.MutableRefObject<number>;
+  setItems: Setter<SourceItem[]>;
+  setSelectedItem: Setter<SourceItem | null>;
+  setInstallingId: Setter<string | null>;
+  refs: { requestSeqRef: number; appendInFlightRef: boolean };
   fetchMine: (requestId?: number) => Promise<void>;
 }
 
@@ -53,7 +54,7 @@ export function useSourceFetchActions({
   setItems,
   setSelectedItem,
   setInstallingId,
-  requestSeqRef,
+  refs,
   fetchMine,
 }: UseSourceFetchActionsOptions): UseSourceFetchActionsResult {
   const { t } = useI18n();
@@ -64,7 +65,7 @@ export function useSourceFetchActions({
       onRequireLogin();
       return;
     }
-    if (!effectiveSpaceId) {
+    if (!effectiveSpaceId()) {
       showToast('error', t('selectSpaceFirst'));
       return;
     }
@@ -74,7 +75,7 @@ export function useSourceFetchActions({
     }
     try {
       setInstallingId(item.id);
-      const response = await fetch(`/api/spaces/${effectiveSpaceId}/app-deployments`, {
+      const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,10 +108,10 @@ export function useSourceFetchActions({
       onRequireLogin();
       return;
     }
-    if (!effectiveSpaceId || !item.installation?.app_deployment_id) return;
+    if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
     try {
       const res = await fetch(
-        `/api/spaces/${effectiveSpaceId}/app-deployments/${item.installation.app_deployment_id}`,
+        `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}`,
         { method: 'DELETE' },
       );
       if (!res.ok) throw new Error('Failed to uninstall');
@@ -129,10 +130,10 @@ export function useSourceFetchActions({
       onRequireLogin();
       return;
     }
-    if (!effectiveSpaceId || !item.installation?.app_deployment_id) return;
+    if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
     try {
       const res = await fetch(
-        `/api/spaces/${effectiveSpaceId}/app-deployments/${item.installation.app_deployment_id}/rollback`,
+        `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}/rollback`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
       );
       if (!res.ok) throw new Error('Rollback failed');
@@ -160,14 +161,14 @@ export function useSourceFetchActions({
           : i;
       setItems((prev) => {
         const updated = prev.map(updateItem);
-        if (filter === 'starred' && item.is_starred) {
+        if (filter() === 'starred' && item.is_starred) {
           return updated.filter((i) => i.id !== item.id);
         }
         return updated;
       });
       setSelectedItem((prev) => {
         if (prev?.id !== item.id) return prev;
-        if (filter === 'starred' && item.is_starred) {
+        if (filter() === 'starred' && item.is_starred) {
           return null;
         }
         return updateItem(prev);
@@ -182,16 +183,16 @@ export function useSourceFetchActions({
       onRequireLogin();
       return false;
     }
-    if (!effectiveSpaceId) return false;
+    if (!effectiveSpaceId()) return false;
     try {
       const response = await rpc.spaces[':spaceId'].repos.$post({
-        param: { spaceId: effectiveSpaceId },
+        param: { spaceId: effectiveSpaceId()! },
         json: { name, description, visibility },
       });
       await rpcJson(response);
       showToast('success', t('repositoryCreated'));
-      if (filter === 'mine') {
-        void fetchMine(requestSeqRef.current);
+      if (filter() === 'mine') {
+        void fetchMine(refs.requestSeqRef);
       }
       return true;
     } catch {

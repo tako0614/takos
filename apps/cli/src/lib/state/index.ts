@@ -5,11 +5,11 @@ export type {
   ContainerState,
   ServiceState,
   RouteState,
-} from './state-types.js';
+} from './state-types.ts';
 
 export type {
   StateAccessOptions,
-} from './state-file.js';
+} from './state-file.ts';
 
 export {
   readState,
@@ -23,43 +23,43 @@ export {
   writeStateToFile,
   deleteStateFromFile,
   listStateGroupsFromFile,
-} from './state-file.js';
+} from './state-file.ts';
 
 export {
   hasApiEndpoint,
   getDefaultSpaceId,
-} from './api-client.js';
+} from './api-client.ts';
 
 export type {
   DiffAction,
   DiffEntry,
   DiffResult,
-} from './diff.js';
+} from './diff.ts';
 
 export {
   computeDiff,
   computeWorkerDiff,
-} from './diff.js';
+} from './diff.ts';
 
 export {
   formatPlan,
-} from './plan.js';
+} from './plan.ts';
 
 export type {
   RefreshChange,
   RefreshResult,
   RefreshableProvider,
-} from './refresh.js';
+} from './refresh.ts';
 
 export {
   refreshState,
-} from './refresh.js';
+} from './refresh.ts';
 
 export type {
   SyncAction,
   SyncResult,
-} from './sync.js';
+} from './sync.ts';
 
 export {
   syncState,
-} from './sync.js';
+} from './sync.ts';

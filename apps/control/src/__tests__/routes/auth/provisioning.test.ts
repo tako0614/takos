@@ -1,13 +1,12 @@
-import { describe, expect, it } from 'vitest';
 import { sanitizeReturnTo } from '@/routes/auth/provisioning';
 
-describe('sanitizeReturnTo', () => {
-  it('keeps store hub and detail routes', () => {
-    expect(sanitizeReturnTo('/store')).toBe('/store');
-    expect(sanitizeReturnTo('/store/installed')).toBe('/store/installed');
-  });
 
-  it('rejects invalid routes', () => {
-    expect(sanitizeReturnTo('//docs')).toBe('/');
-  });
-});
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('sanitizeReturnTo - keeps store hub and detail routes', () => {
+  assertEquals(sanitizeReturnTo('/store'), '/store');
+    assertEquals(sanitizeReturnTo('/store/installed'), '/store/installed');
+})
+  Deno.test('sanitizeReturnTo - rejects invalid routes', () => {
+  assertEquals(sanitizeReturnTo('//docs'), '/');
+})

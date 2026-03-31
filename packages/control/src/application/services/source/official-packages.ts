@@ -34,11 +34,11 @@ export interface OfficialPackage {
 
 export const OFFICIAL_PACKAGES: OfficialPackage[] = [
   {
-    id: 'official/takos-computer',
-    name: 'Takos Computer',
+    id: 'official/takos-agent',
+    name: 'Takos Agent',
     description: 'Browser automation and agent executor',
     category: 'tool',
-    url: 'https://github.com/tako0614/takos-computer.git',
+    url: 'https://github.com/tako0614/takos-agent.git',
     owner: {
       name: 'Takos',
       username: 'takos',

@@ -1,3 +1,4 @@
+import { Show, For } from 'solid-js';
 import { MODEL_OPTIONS, getModelLabel } from '../../lib/modelCatalog';
 import { Icons } from '../../lib/Icons';
 
@@ -7,32 +8,30 @@ interface ModelSwitcherProps {
   onModelChange?: (model: string) => void;
 }
 
-export function ModelSwitcher({ selectedModel, isLoading = false, onModelChange }: ModelSwitcherProps) {
-  if (!onModelChange) {
-    return (
-      <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-        {getModelLabel(selectedModel)}
-      </span>
-    );
-  }
-
+export function ModelSwitcher(props: ModelSwitcherProps) {
   return (
-    <div className="relative">
-      <select
-        value={selectedModel}
-        onChange={(e) => onModelChange(e.target.value)}
-        disabled={isLoading}
-        className="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {MODEL_OPTIONS.map((opt) => (
-          <option key={opt.id} value={opt.id} className="bg-white dark:bg-zinc-900 text-base font-normal">
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500 dark:text-zinc-400">
-        <Icons.ChevronDown className="w-4 h-4" />
+    <Show when={props.onModelChange} fallback={
+      <span class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        {getModelLabel(props.selectedModel)}
+      </span>
+    }>
+      <div class="relative">
+        <select
+          value={props.selectedModel}
+          onInput={(e) => props.onModelChange!(e.currentTarget.value)}
+          disabled={props.isLoading ?? false}
+          class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <For each={MODEL_OPTIONS}>{(opt) => (
+            <option value={opt.id} class="bg-white dark:bg-zinc-900 text-base font-normal">
+              {opt.label}
+            </option>
+          )}</For>
+        </select>
+        <div class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500 dark:text-zinc-400">
+          <Icons.ChevronDown class="w-4 h-4" />
+        </div>
       </div>
-    </div>
+    </Show>
   );
 }

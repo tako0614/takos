@@ -3,15 +3,15 @@
  * Layer 1 entity operation (resource / worker / container / service).
  */
 
-import { createResource, deleteResource } from '../entities/resource.js';
-import type { ResourceType } from '../entities/resource.js';
-import { deployWorker, deleteWorker } from '../entities/worker.js';
-import { deployContainer, deleteContainer } from '../entities/container.js';
-import { deployService, deleteService } from '../entities/service.js';
-import type { DiffEntry } from '../state/diff.js';
-import type { AppManifest } from '../app-manifest.js';
-import { DEFAULT_CONTAINER_PORT } from './coordinator.js';
-import type { ApplyOpts } from './coordinator.js';
+import { createResource, deleteResource } from '../entities/resource.ts';
+import type { ResourceType } from '../entities/resource.ts';
+import { deployWorker, deleteWorker } from '../entities/worker.ts';
+import { deployContainer, deleteContainer } from '../entities/container.ts';
+import { deployService, deleteService } from '../entities/service.ts';
+import type { DiffEntry } from '../state/diff.ts';
+import type { AppManifest } from '../app-manifest.ts';
+import { DEFAULT_CONTAINER_PORT } from './coordinator.ts';
+import type { ApplyOpts } from './coordinator.ts';
 
 export async function executeEntry(
   entry: DiffEntry,

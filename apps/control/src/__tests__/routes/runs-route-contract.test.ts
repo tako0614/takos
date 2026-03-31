@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 import runsRouter from '@/routes/runs/routes';
 
-describe('runs route contract', () => {
-  it('does not mount /runs/:id/emit', async () => {
-    const response = await runsRouter.fetch(
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('runs route contract - does not mount /runs/:id/emit', async () => {
+  const response = await runsRouter.fetch(
       new Request('http://localhost/runs/run-1/emit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -15,6 +16,5 @@ describe('runs route contract', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(404);
-  });
-});
+    assertEquals(response.status, 404);
+})

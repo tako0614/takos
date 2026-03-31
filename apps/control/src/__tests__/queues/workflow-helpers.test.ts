@@ -1,32 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  callRuntimeRequest: vi.fn(),
-  safeJsonParseOrDefault: vi.fn(),
-  createWorkflowEngine: vi.fn(),
-}));
-
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db');
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  callRuntimeRequest: ((..._args: any[]) => undefined) as any,
+  safeJsonParseOrDefault: ((..._args: any[]) => undefined) as any,
+  createWorkflowEngine: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', () => ({
-  safeJsonParseOrDefault: mocks.safeJsonParseOrDefault,
-}));
-
-vi.mock('@/services/execution/runtime', () => ({
-  callRuntimeRequest: mocks.callRuntimeRequest,
-}));
-
-vi.mock('@/services/execution/workflow-engine', () => ({
-  createWorkflowEngine: mocks.createWorkflowEngine,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
 import {
   runtimeJson,
   runtimeDelete,
@@ -50,16 +35,16 @@ function createDrizzleMock(opts: {
   selectAll?: ReturnType<typeof vi.fn>;
   updateWhere?: ReturnType<typeof vi.fn>;
 }) {
-  const selectGet = opts.selectGet ?? vi.fn().mockResolvedValue(null);
-  const selectAll = opts.selectAll ?? vi.fn().mockResolvedValue([]);
-  const updateWhere = opts.updateWhere ?? vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+  const selectGet = opts.selectGet ?? (async () => null);
+  const selectAll = opts.selectAll ?? (async () => []);
+  const updateWhere = opts.updateWhere ?? (async () => ({ meta: { changes: 1 } }));
 
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
-    c.limit = vi.fn().mockReturnValue(c);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
+    c.limit = (() => c);
     c.get = selectGet;
     c.all = selectAll;
     return c;
@@ -67,18 +52,18 @@ function createDrizzleMock(opts: {
 
   const updateChain = () => {
     const c: Record<string, unknown> = {};
-    c.set = vi.fn().mockReturnValue(c);
+    c.set = (() => c);
     c.where = updateWhere;
     return c;
   };
 
   return {
-    select: vi.fn().mockImplementation(() => chain()),
-    update: vi.fn().mockImplementation(() => updateChain()),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockReturnValue({ returning: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ id: 1 }) }) }),
-    })),
-    delete: vi.fn().mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
+    select: () => chain(),
+    update: () => updateChain(),
+    insert: () => ({
+      values: (() => ({ returning: (() => ({ get: (async () => ({ id: 1 })) })) })),
+    }),
+    delete: () => ({ where: (async () => undefined) }),
   };
 }
 
@@ -86,321 +71,310 @@ function createMockEnv(overrides: Partial<WorkflowQueueEnv> = {}): WorkflowQueue
   return {
     DB: {} as any,
     GIT_OBJECTS: {} as any,
-    WORKFLOW_QUEUE: { send: vi.fn() } as any,
+    WORKFLOW_QUEUE: { send: ((..._args: any[]) => undefined) as any } as any,
     RUN_NOTIFIER: {} as any,
     ...overrides,
   } as unknown as WorkflowQueueEnv;
 }
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
 // ---------------------------------------------------------------------------
 // runtimeJson
 // ---------------------------------------------------------------------------
 
-describe('runtimeJson', () => {
-  it('sends a POST request with space_id and returns parsed JSON', async () => {
-    const mockResponse = {
+
+  Deno.test('runtimeJson - sends a POST request with space_id and returns parsed JSON', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockResponse = {
       ok: true,
       json: async () => ({ result: 'ok' }),
     };
-    mocks.callRuntimeRequest.mockResolvedValue(mockResponse);
+    mocks.callRuntimeRequest = (async () => mockResponse) as any;
 
     const env = createMockEnv();
     const result = await runtimeJson(env, '/test/endpoint', 'space-1', { key: 'value' });
 
-    expect(result).toEqual({ result: 'ok' });
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(env, '/test/endpoint', {
+    assertEquals(result, { result: 'ok' });
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [env, '/test/endpoint', {
       method: 'POST',
       body: { key: 'value', space_id: 'space-1' },
-    });
-  });
-
-  it('uses specified HTTP method', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({
+    }]);
+})
+  Deno.test('runtimeJson - uses specified HTTP method', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({
       ok: true,
       json: async () => ({}),
-    });
+    })) as any;
 
     const env = createMockEnv();
     await runtimeJson(env, '/endpoint', 'space-1', {}, 'PUT');
 
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(env, '/endpoint', {
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [env, '/endpoint', {
       method: 'PUT',
       body: { space_id: 'space-1' },
-    });
-  });
-
-  it('throws when response is not ok', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({
+    }]);
+})
+  Deno.test('runtimeJson - throws when response is not ok', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
       text: async () => 'server error',
-    });
+    })) as any;
 
     const env = createMockEnv();
-    await expect(runtimeJson(env, '/endpoint', 'space-1')).rejects.toThrow(
+    await await assertRejects(async () => { await runtimeJson(env, '/endpoint', 'space-1'); }, 
       'Runtime request failed (500): server error'
     );
-  });
-
-  it('uses statusText when text() returns empty', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({
+})
+  Deno.test('runtimeJson - uses statusText when text() returns empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({
       ok: false,
       status: 503,
       statusText: 'Service Unavailable',
       text: async () => '',
-    });
+    })) as any;
 
     const env = createMockEnv();
-    await expect(runtimeJson(env, '/endpoint', 'space-1')).rejects.toThrow(
+    await await assertRejects(async () => { await runtimeJson(env, '/endpoint', 'space-1'); }, 
       'Runtime request failed (503): Service Unavailable'
     );
-  });
-
-  it('sends empty body when none provided', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({
+})
+  Deno.test('runtimeJson - sends empty body when none provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({
       ok: true,
       json: async () => ({ ok: true }),
-    });
+    })) as any;
 
     const env = createMockEnv();
     await runtimeJson(env, '/endpoint', 'space-1');
 
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(env, '/endpoint', {
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [env, '/endpoint', {
       method: 'POST',
       body: { space_id: 'space-1' },
-    });
-  });
-});
-
+    }]);
+})
 // ---------------------------------------------------------------------------
 // runtimeDelete
 // ---------------------------------------------------------------------------
 
-describe('runtimeDelete', () => {
-  it('sends DELETE request with space_id', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({ ok: true, status: 200 });
+
+  Deno.test('runtimeDelete - sends DELETE request with space_id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({ ok: true, status: 200 })) as any;
 
     const env = createMockEnv();
     await runtimeDelete(env, '/actions/jobs/job-1', 'space-1');
 
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(env, '/actions/jobs/job-1', {
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [env, '/actions/jobs/job-1', {
       method: 'DELETE',
       body: { space_id: 'space-1' },
-    });
-  });
-
-  it('does not throw on 404', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({ ok: false, status: 404 });
+    }]);
+})
+  Deno.test('runtimeDelete - does not throw on 404', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({ ok: false, status: 404 })) as any;
 
     const env = createMockEnv();
-    await expect(runtimeDelete(env, '/endpoint', 'space-1')).resolves.toBeUndefined();
-  });
-
-  it('does not throw on non-404 errors (logs warning instead)', async () => {
-    mocks.callRuntimeRequest.mockResolvedValue({
+    await assertEquals(await runtimeDelete(env, '/endpoint', 'space-1'), undefined);
+})
+  Deno.test('runtimeDelete - does not throw on non-404 errors (logs warning instead)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => ({
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
       text: async () => 'fail',
-    });
+    })) as any;
 
     const env = createMockEnv();
     // runtimeDelete catches errors internally
-    await expect(runtimeDelete(env, '/endpoint', 'space-1')).resolves.toBeUndefined();
-  });
-
-  it('does not throw when callRuntimeRequest rejects', async () => {
-    mocks.callRuntimeRequest.mockRejectedValue(new Error('network down'));
+    await assertEquals(await runtimeDelete(env, '/endpoint', 'space-1'), undefined);
+})
+  Deno.test('runtimeDelete - does not throw when callRuntimeRequest rejects', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.callRuntimeRequest = (async () => { throw new Error('network down'); }) as any;
 
     const env = createMockEnv();
-    await expect(runtimeDelete(env, '/endpoint', 'space-1')).resolves.toBeUndefined();
-  });
-});
-
+    await assertEquals(await runtimeDelete(env, '/endpoint', 'space-1'), undefined);
+})
 // ---------------------------------------------------------------------------
 // getStepDisplayName
 // ---------------------------------------------------------------------------
 
-describe('getStepDisplayName', () => {
-  it('uses step.name when available', () => {
-    expect(getStepDisplayName({ name: 'Build project' } as any, 1)).toBe('Build project');
-  });
 
-  it('falls back to step.uses', () => {
-    expect(getStepDisplayName({ uses: 'actions/checkout@v4' } as any, 1)).toBe('actions/checkout@v4');
-  });
-
-  it('falls back to step.run truncated to 50 chars', () => {
-    const longRun = 'a'.repeat(100);
-    expect(getStepDisplayName({ run: longRun } as any, 1)).toBe('a'.repeat(50));
-  });
-
-  it('falls back to "Step N" when nothing is available', () => {
-    expect(getStepDisplayName({} as any, 3)).toBe('Step 3');
-  });
-
-  it('prefers name over uses', () => {
-    expect(getStepDisplayName({ name: 'Checkout', uses: 'actions/checkout@v4' } as any, 1)).toBe('Checkout');
-  });
-
-  it('prefers uses over run', () => {
-    expect(getStepDisplayName({ uses: 'actions/checkout@v4', run: 'echo hi' } as any, 1)).toBe('actions/checkout@v4');
-  });
-
-  it('handles short run command', () => {
-    expect(getStepDisplayName({ run: 'echo ok' } as any, 1)).toBe('echo ok');
-  });
-});
-
+  Deno.test('getStepDisplayName - uses step.name when available', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({ name: 'Build project' } as any, 1), 'Build project');
+})
+  Deno.test('getStepDisplayName - falls back to step.uses', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({ uses: 'actions/checkout@v4' } as any, 1), 'actions/checkout@v4');
+})
+  Deno.test('getStepDisplayName - falls back to step.run truncated to 50 chars', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const longRun = 'a'.repeat(100);
+    assertEquals(getStepDisplayName({ run: longRun } as any, 1), 'a'.repeat(50));
+})
+  Deno.test('getStepDisplayName - falls back to "Step N" when nothing is available', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({} as any, 3), 'Step 3');
+})
+  Deno.test('getStepDisplayName - prefers name over uses', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({ name: 'Checkout', uses: 'actions/checkout@v4' } as any, 1), 'Checkout');
+})
+  Deno.test('getStepDisplayName - prefers uses over run', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({ uses: 'actions/checkout@v4', run: 'echo hi' } as any, 1), 'actions/checkout@v4');
+})
+  Deno.test('getStepDisplayName - handles short run command', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(getStepDisplayName({ run: 'echo ok' } as any, 1), 'echo ok');
+})
 // ---------------------------------------------------------------------------
 // getRunContext
 // ---------------------------------------------------------------------------
 
-describe('getRunContext', () => {
-  it('returns workflow path and parsed inputs', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({
+
+  Deno.test('getRunContext - returns workflow path and parsed inputs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => ({
         workflowPath: '.takos/workflows/ci.yml',
         inputs: '{"env":"prod"}',
-      }),
+      })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.safeJsonParseOrDefault.mockReturnValue({ env: 'prod' });
+    mocks.getDb = (() => dbMock) as any;
+    mocks.safeJsonParseOrDefault = (() => ({ env: 'prod' })) as any;
 
     const result = await getRunContext({} as any, 'run-1');
 
-    expect(result.workflowPath).toBe('.takos/workflows/ci.yml');
-    expect(result.inputs).toEqual({ env: 'prod' });
-  });
-
-  it('returns defaults when run record is missing', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue(null),
+    assertEquals(result.workflowPath, '.takos/workflows/ci.yml');
+    assertEquals(result.inputs, { env: 'prod' });
+})
+  Deno.test('getRunContext - returns defaults when run record is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => null),
     });
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.safeJsonParseOrDefault.mockReturnValue({});
+    mocks.getDb = (() => dbMock) as any;
+    mocks.safeJsonParseOrDefault = (() => ({})) as any;
 
     const result = await getRunContext({} as any, 'run-missing');
 
-    expect(result.workflowPath).toBe('unknown');
-    expect(result.inputs).toEqual({});
-  });
-});
-
+    assertEquals(result.workflowPath, 'unknown');
+    assertEquals(result.inputs, {});
+})
 // ---------------------------------------------------------------------------
 // getRunStatus
 // ---------------------------------------------------------------------------
 
-describe('getRunStatus', () => {
-  it('returns the run status', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ status: 'running' }),
+
+  Deno.test('getRunStatus - returns the run status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => ({ status: 'running' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const result = await getRunStatus({} as any, 'run-1');
-    expect(result).toBe('running');
-  });
-
-  it('returns null when run not found', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue(null),
+    assertEquals(result, 'running');
+})
+  Deno.test('getRunStatus - returns null when run not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => null),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const result = await getRunStatus({} as any, 'missing-run');
-    expect(result).toBeNull();
-  });
-});
-
+    assertEquals(result, null);
+})
 // ---------------------------------------------------------------------------
 // getSpaceIdFromRepoId
 // ---------------------------------------------------------------------------
 
-describe('getSpaceIdFromRepoId', () => {
-  it('returns accountId from repository', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ accountId: 'ws-123' }),
+
+  Deno.test('getSpaceIdFromRepoId - returns accountId from repository', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => ({ accountId: 'ws-123' })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const result = await getSpaceIdFromRepoId({} as any, 'repo-1');
-    expect(result).toBe('ws-123');
-  });
-
-  it('throws when repository not found', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue(null),
+    assertEquals(result, 'ws-123');
+})
+  Deno.test('getSpaceIdFromRepoId - throws when repository not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => null),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
-    await expect(getSpaceIdFromRepoId({} as any, 'missing')).rejects.toThrow(
+    await await assertRejects(async () => { await getSpaceIdFromRepoId({} as any, 'missing'); }, 
       'Space not found for repository missing'
     );
-  });
-
-  it('throws when accountId is null', async () => {
-    const dbMock = createDrizzleMock({
-      selectGet: vi.fn().mockResolvedValue({ accountId: null }),
+})
+  Deno.test('getSpaceIdFromRepoId - throws when accountId is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectGet: (async () => ({ accountId: null })),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
-    await expect(getSpaceIdFromRepoId({} as any, 'repo-no-account')).rejects.toThrow(
+    await await assertRejects(async () => { await getSpaceIdFromRepoId({} as any, 'repo-no-account'); }, 
       'Space not found for repository repo-no-account'
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // markJobSkipped
 // ---------------------------------------------------------------------------
 
-describe('markJobSkipped', () => {
-  it('updates job and steps with skipped status', async () => {
-    const updateWhere = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+
+  Deno.test('markJobSkipped - updates job and steps with skipped status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateWhere = (async () => ({ meta: { changes: 1 } }));
     const dbMock = createDrizzleMock({ updateWhere });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await markJobSkipped({} as any, 'job-1', '2024-01-01T00:00:00Z');
 
-    expect(dbMock.update).toHaveBeenCalledTimes(2);
-  });
-
-  it('uses cancelled conclusion when specified', async () => {
-    const updateWhere = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+    assertSpyCalls(dbMock.update, 2);
+})
+  Deno.test('markJobSkipped - uses cancelled conclusion when specified', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateWhere = (async () => ({ meta: { changes: 1 } }));
     const dbMock = createDrizzleMock({ updateWhere });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await markJobSkipped({} as any, 'job-1', '2024-01-01T00:00:00Z', 'cancelled');
 
     // Both update calls go through
-    expect(dbMock.update).toHaveBeenCalledTimes(2);
-  });
-});
-
+    assertSpyCalls(dbMock.update, 2);
+})
 // ---------------------------------------------------------------------------
 // buildSkippedStepResultsFromDb
 // ---------------------------------------------------------------------------
 
-describe('buildSkippedStepResultsFromDb', () => {
-  it('returns step results from DB records', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+
+  Deno.test('buildSkippedStepResultsFromDb - returns step results from DB records', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { number: 1, name: 'Build' },
         { number: 2, name: 'Test' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const results = await buildSkippedStepResultsFromDb({} as any, 'job-1', 'fallback');
 
-    expect(results).toHaveLength(2);
-    expect(results[0]).toEqual({
+    assertEquals(results.length, 2);
+    assertEquals(results[0], {
       stepNumber: 1,
       name: 'Build',
       status: 'skipped',
@@ -408,7 +382,7 @@ describe('buildSkippedStepResultsFromDb', () => {
       error: undefined,
       outputs: {},
     });
-    expect(results[1]).toEqual({
+    assertEquals(results[1], {
       stepNumber: 2,
       name: 'Test',
       status: 'skipped',
@@ -416,33 +390,33 @@ describe('buildSkippedStepResultsFromDb', () => {
       error: undefined,
       outputs: {},
     });
-  });
-
-  it('includes error message on first step only', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([
+})
+  Deno.test('buildSkippedStepResultsFromDb - includes error message on first step only', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => [
         { number: 1, name: 'Step 1' },
         { number: 2, name: 'Step 2' },
       ]),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const results = await buildSkippedStepResultsFromDb({} as any, 'job-1', 'fallback', 'Something broke');
 
-    expect(results[0].error).toBe('Something broke');
-    expect(results[1].error).toBeUndefined();
-  });
-
-  it('returns fallback step result when no DB steps found', async () => {
-    const dbMock = createDrizzleMock({
-      selectAll: vi.fn().mockResolvedValue([]),
+    assertEquals(results[0].error, 'Something broke');
+    assertEquals(results[1].error, undefined);
+})
+  Deno.test('buildSkippedStepResultsFromDb - returns fallback step result when no DB steps found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const dbMock = createDrizzleMock({
+      selectAll: (async () => []),
     });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     const results = await buildSkippedStepResultsFromDb({} as any, 'job-1', 'fallback-name', 'error msg');
 
-    expect(results).toHaveLength(1);
-    expect(results[0]).toEqual({
+    assertEquals(results.length, 1);
+    assertEquals(results[0], {
       stepNumber: 1,
       name: 'fallback-name',
       status: 'skipped',
@@ -450,17 +424,16 @@ describe('buildSkippedStepResultsFromDb', () => {
       error: 'error msg',
       outputs: {},
     });
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // failJobWithResults
 // ---------------------------------------------------------------------------
 
-describe('failJobWithResults', () => {
-  it('calls engine.onJobComplete with failure conclusion', async () => {
-    const engine = {
-      onJobComplete: vi.fn().mockResolvedValue(undefined),
+
+  Deno.test('failJobWithResults - calls engine.onJobComplete with failure conclusion', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const engine = {
+      onJobComplete: (async () => undefined),
     };
 
     const stepResults = [
@@ -469,7 +442,7 @@ describe('failJobWithResults', () => {
 
     await failJobWithResults(engine as any, 'job-1', stepResults, '2024-01-01T00:00:00Z');
 
-    expect(engine.onJobComplete).toHaveBeenCalledWith('job-1', {
+    assertSpyCallArgs(engine.onJobComplete, 0, ['job-1', {
       jobId: 'job-1',
       status: 'completed',
       conclusion: 'failure',
@@ -477,22 +450,20 @@ describe('failJobWithResults', () => {
       stepResults,
       startedAt: '2024-01-01T00:00:00Z',
       completedAt: '2024-01-01T00:00:00Z',
-    });
-  });
-});
-
+    }]);
+})
 // ---------------------------------------------------------------------------
 // markJobFailed
 // ---------------------------------------------------------------------------
 
-describe('markJobFailed', () => {
-  it('updates job record to failure', async () => {
-    const updateWhere = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+
+  Deno.test('markJobFailed - updates job record to failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const updateWhere = (async () => ({ meta: { changes: 1 } }));
     const dbMock = createDrizzleMock({ updateWhere });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await markJobFailed({} as any, 'job-1', '2024-01-01T00:00:00Z');
 
-    expect(dbMock.update).toHaveBeenCalledTimes(1);
-  });
-});
+    assertSpyCalls(dbMock.update, 1);
+})

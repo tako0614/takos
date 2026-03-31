@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { asRunRow, runRowToApi, type RunRow } from '@/services/runs/run-serialization';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 function makeRunRow(overrides: Partial<RunRow> = {}): RunRow {
   return {
@@ -26,9 +27,9 @@ function makeRunRow(overrides: Partial<RunRow> = {}): RunRow {
   };
 }
 
-describe('asRunRow', () => {
-  it('casts a generic record to RunRow', () => {
-    const raw: Record<string, unknown> = {
+
+  Deno.test('asRunRow - casts a generic record to RunRow', () => {
+  const raw: Record<string, unknown> = {
       id: 'run-1',
       threadId: 'thread-1',
       spaceId: 'space-1',
@@ -51,51 +52,46 @@ describe('asRunRow', () => {
     };
 
     const result = asRunRow(raw);
-    expect(result.id).toBe('run-1');
-    expect(result.threadId).toBe('thread-1');
-  });
-});
+    assertEquals(result.id, 'run-1');
+    assertEquals(result.threadId, 'thread-1');
+})
 
-describe('runRowToApi', () => {
-  it('converts a RunRow to a Run API object', () => {
-    const row = makeRunRow();
+  Deno.test('runRowToApi - converts a RunRow to a Run API object', () => {
+  const row = makeRunRow();
     const run = runRowToApi(row);
 
-    expect(run.id).toBe('run-1');
-    expect(run.thread_id).toBe('thread-1');
-    expect(run.space_id).toBe('space-1');
-    expect(run.session_id).toBeNull();
-    expect(run.parent_run_id).toBeNull();
-    expect(run.child_thread_id).toBeNull();
-    expect(run.root_thread_id).toBe('thread-1');
-    expect(run.root_run_id).toBe('run-1');
-    expect(run.agent_type).toBe('default');
-    expect(run.status).toBe('running');
-    expect(run.input).toBe('{}');
-    expect(run.output).toBeNull();
-    expect(run.error).toBeNull();
-    expect(run.usage).toBe('{}');
-    expect(run.worker_id).toBeNull();
-    expect(run.worker_heartbeat).toBeNull();
-    expect(run.started_at).toBeNull();
-    expect(run.completed_at).toBeNull();
-    expect(run.created_at).toBe('2026-03-01T00:00:00.000Z');
-  });
-
-  it('defaults rootThreadId to threadId when null', () => {
-    const row = makeRunRow({ rootThreadId: null });
+    assertEquals(run.id, 'run-1');
+    assertEquals(run.thread_id, 'thread-1');
+    assertEquals(run.space_id, 'space-1');
+    assertEquals(run.session_id, null);
+    assertEquals(run.parent_run_id, null);
+    assertEquals(run.child_thread_id, null);
+    assertEquals(run.root_thread_id, 'thread-1');
+    assertEquals(run.root_run_id, 'run-1');
+    assertEquals(run.agent_type, 'default');
+    assertEquals(run.status, 'running');
+    assertEquals(run.input, '{}');
+    assertEquals(run.output, null);
+    assertEquals(run.error, null);
+    assertEquals(run.usage, '{}');
+    assertEquals(run.worker_id, null);
+    assertEquals(run.worker_heartbeat, null);
+    assertEquals(run.started_at, null);
+    assertEquals(run.completed_at, null);
+    assertEquals(run.created_at, '2026-03-01T00:00:00.000Z');
+})
+  Deno.test('runRowToApi - defaults rootThreadId to threadId when null', () => {
+  const row = makeRunRow({ rootThreadId: null });
     const run = runRowToApi(row);
-    expect(run.root_thread_id).toBe('thread-1');
-  });
-
-  it('defaults rootRunId to id when null', () => {
-    const row = makeRunRow({ rootRunId: null });
+    assertEquals(run.root_thread_id, 'thread-1');
+})
+  Deno.test('runRowToApi - defaults rootRunId to id when null', () => {
+  const row = makeRunRow({ rootRunId: null });
     const run = runRowToApi(row);
-    expect(run.root_run_id).toBe('run-1');
-  });
-
-  it('handles Date objects for timestamp fields', () => {
-    const startedAt = new Date('2026-03-01T01:00:00.000Z');
+    assertEquals(run.root_run_id, 'run-1');
+})
+  Deno.test('runRowToApi - handles Date objects for timestamp fields', () => {
+  const startedAt = new Date('2026-03-01T01:00:00.000Z');
     const completedAt = new Date('2026-03-01T02:00:00.000Z');
     const createdAt = new Date('2026-03-01T00:00:00.000Z');
     const workerHeartbeat = new Date('2026-03-01T01:30:00.000Z');
@@ -109,14 +105,13 @@ describe('runRowToApi', () => {
 
     const run = runRowToApi(row);
 
-    expect(run.started_at).toBe('2026-03-01T01:00:00.000Z');
-    expect(run.completed_at).toBe('2026-03-01T02:00:00.000Z');
-    expect(run.created_at).toBe('2026-03-01T00:00:00.000Z');
-    expect(run.worker_heartbeat).toBe('2026-03-01T01:30:00.000Z');
-  });
-
-  it('passes through string timestamps as-is', () => {
-    const row = makeRunRow({
+    assertEquals(run.started_at, '2026-03-01T01:00:00.000Z');
+    assertEquals(run.completed_at, '2026-03-01T02:00:00.000Z');
+    assertEquals(run.created_at, '2026-03-01T00:00:00.000Z');
+    assertEquals(run.worker_heartbeat, '2026-03-01T01:30:00.000Z');
+})
+  Deno.test('runRowToApi - passes through string timestamps as-is', () => {
+  const row = makeRunRow({
       startedAt: '2026-03-01T01:00:00.000Z',
       completedAt: '2026-03-01T02:00:00.000Z',
       workerHeartbeat: '2026-03-01T01:30:00.000Z',
@@ -124,13 +119,12 @@ describe('runRowToApi', () => {
 
     const run = runRowToApi(row);
 
-    expect(run.started_at).toBe('2026-03-01T01:00:00.000Z');
-    expect(run.completed_at).toBe('2026-03-01T02:00:00.000Z');
-    expect(run.worker_heartbeat).toBe('2026-03-01T01:30:00.000Z');
-  });
-
-  it('preserves all optional fields when populated', () => {
-    const row = makeRunRow({
+    assertEquals(run.started_at, '2026-03-01T01:00:00.000Z');
+    assertEquals(run.completed_at, '2026-03-01T02:00:00.000Z');
+    assertEquals(run.worker_heartbeat, '2026-03-01T01:30:00.000Z');
+})
+  Deno.test('runRowToApi - preserves all optional fields when populated', () => {
+  const row = makeRunRow({
       sessionId: 'session-1',
       parentRunId: 'parent-run-1',
       childThreadId: 'child-thread-1',
@@ -143,22 +137,20 @@ describe('runRowToApi', () => {
 
     const run = runRowToApi(row);
 
-    expect(run.session_id).toBe('session-1');
-    expect(run.parent_run_id).toBe('parent-run-1');
-    expect(run.child_thread_id).toBe('child-thread-1');
-    expect(run.root_thread_id).toBe('root-thread-1');
-    expect(run.root_run_id).toBe('root-run-1');
-    expect(run.output).toBe('{"result": "done"}');
-    expect(run.error).toBe('something failed');
-    expect(run.worker_id).toBe('worker-abc');
-  });
-
-  it('maps all valid status values', () => {
-    const statuses = ['pending', 'queued', 'running', 'completed', 'failed', 'cancelled'] as const;
+    assertEquals(run.session_id, 'session-1');
+    assertEquals(run.parent_run_id, 'parent-run-1');
+    assertEquals(run.child_thread_id, 'child-thread-1');
+    assertEquals(run.root_thread_id, 'root-thread-1');
+    assertEquals(run.root_run_id, 'root-run-1');
+    assertEquals(run.output, '{"result": "done"}');
+    assertEquals(run.error, 'something failed');
+    assertEquals(run.worker_id, 'worker-abc');
+})
+  Deno.test('runRowToApi - maps all valid status values', () => {
+  const statuses = ['pending', 'queued', 'running', 'completed', 'failed', 'cancelled'] as const;
     for (const status of statuses) {
       const row = makeRunRow({ status });
       const run = runRowToApi(row);
-      expect(run.status).toBe(status);
+      assertEquals(run.status, status);
     }
-  });
-});
+})

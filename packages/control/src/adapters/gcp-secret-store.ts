@@ -1,4 +1,4 @@
-import { GoogleAuth } from 'google-auth-library';
+import type { GoogleAuth } from 'google-auth-library';
 
 export type GcpSecretStoreConfig = {
   projectId?: string;
@@ -14,6 +14,7 @@ function encodeSecretPayload(value: string): string {
 }
 
 async function buildAuth(config: GcpSecretStoreConfig): Promise<GoogleAuth> {
+  const { GoogleAuth } = await import('google-auth-library');
   return new GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),

@@ -17,14 +17,14 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { TakosState } from './state-types.js';
+import type { TakosState } from './state-types.ts';
 import {
   hasApiEndpoint,
   readGroupStateFromApi,
   writeGroupStateToApi,
   deleteGroupStateFromApi,
   listGroupsFromApi,
-} from './api-client.js';
+} from './api-client.ts';
 
 // ---------------------------------------------------------------------------
 // Options

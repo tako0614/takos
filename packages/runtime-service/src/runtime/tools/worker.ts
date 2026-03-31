@@ -1,6 +1,6 @@
 import { parentPort } from 'worker_threads';
 import vm from 'vm';
-import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.js';
+import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import { createLogger } from 'takos-common/logger';
 import {
@@ -8,7 +8,7 @@ import {
   parseFetchUrl,
   assertOutboundUrlAllowed,
   ALLOWED_PROTOCOLS,
-} from './network.js';
+} from './network.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

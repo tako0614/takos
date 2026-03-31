@@ -1,22 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { MockQueue, createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  checkThreadAccess: vi.fn(),
-}));
+import { assertEquals, assert, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  checkThreadAccess: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/threads/thread-service', () => ({
-  checkThreadAccess: mocks.checkThreadAccess,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-service'
 import runs from '@/routes/runs/routes';
 
 type Vars = { user: User };
@@ -74,18 +68,18 @@ function createFallbackDb(options: {
   runHandler?: (sql: string, values: unknown[]) => Promise<unknown> | unknown;
 }) {
   return {
-    prepare: vi.fn((sql: string) => ({
-      bind: vi.fn((...values: unknown[]) => ({
-        first: vi.fn(async () => {
+    prepare: (sql: string) => ({
+      bind: (...values: unknown[]) => ({
+        first: async () => {
           if (!options.firstHandler) return null;
           return options.firstHandler(sql, values);
-        }),
-        run: vi.fn(async () => {
+        },
+        run: async () => {
           if (!options.runHandler) return { success: true, meta: { changes: 1 } };
           return options.runHandler(sql, values);
-        }),
-      })),
-    })),
+        },
+      }),
+    }),
   };
 }
 
@@ -103,58 +97,55 @@ function createDrizzleMock(options: {
   let selectGetCallIndex = 0;
   const invalidArrayBufferError = new Error('Invalid array buffer length');
   return {
-    select: vi.fn(() => {
+    select: () => {
       const thisAllIndex = selectAllCallIndex++;
       const thisGetIndex = selectGetCallIndex++;
       const chain: any = {
-        from: vi.fn(() => chain),
-        where: vi.fn(() => chain),
-        orderBy: vi.fn(() => chain),
-        limit: vi.fn(() => chain),
-        offset: vi.fn(() => chain),
-        all: vi.fn(async () => {
+        from: () => chain,
+        where: () => chain,
+        orderBy: () => chain,
+        limit: () => chain,
+        offset: () => chain,
+        all: async () => {
           if (options.selectAllThrowIndices?.has(thisAllIndex)) {
             throw invalidArrayBufferError;
           }
           return [];
-        }),
-        get: vi.fn(async () => {
+        },
+        get: async () => {
           const results = options.selectGetResults ?? [];
           return results[thisGetIndex] ?? undefined;
-        }),
+        },
       };
       return chain;
-    }),
-    insert: vi.fn(() => ({
-      values: vi.fn(async () => {
+    },
+    insert: () => ({
+      values: async () => {
         if (options.insertThrow) {
           throw invalidArrayBufferError;
         }
-      }),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(async () => {
+      },
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => {
           if (options.updateThrow) {
             throw invalidArrayBufferError;
           }
-        }),
-      })),
-    })),
+        },
+      }),
+    }),
   };
 }
 
-describe('POST /threads/:threadId/runs', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.checkThreadAccess.mockResolvedValue({
+
+  Deno.test('POST /threads/:threadId/runs - falls back to D1 for rate-limit lookup when DB adapter rejects a valid request', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
       thread: { id: 'thread-1', space_id: 'ws-1' },
       role: 'owner',
-    });
-  });
-
-  it('falls back to D1 for rate-limit lookup when DB adapter rejects a valid request', async () => {
-    // Flow of select() calls:
+    })) as any;
+  // Flow of select() calls:
     //   #0: resolveActorPrincipalId -> .get() -> { id: 'user-1' }
     //   #1: checkRunRateLimits: accountMemberships -> .all() -> throws (D1 fallback)
     //   #2: getWorkspaceModel -> .get() -> { aiModel: 'gpt-5.4-nano' }
@@ -167,35 +158,35 @@ describe('POST /threads/:threadId/runs', () => {
       0: { id: 'user-1' },           // resolveActorPrincipalId
       2: { aiModel: 'gpt-5.4-nano' },  // getWorkspaceModel
     };
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => {
+    mocks.getDb = (() => ({
+      select: () => {
         const idx = selectCallIndex++;
         const chain: any = {
-          from: vi.fn(() => chain),
-          where: vi.fn(() => chain),
-          orderBy: vi.fn(() => chain),
-          limit: vi.fn(() => chain),
-          offset: vi.fn(() => chain),
-          all: vi.fn(async () => {
+          from: () => chain,
+          where: () => chain,
+          orderBy: () => chain,
+          limit: () => chain,
+          offset: () => chain,
+          all: async () => {
             if (idx === 1) throw invalidArrayBufferError;
             return [];
-          }),
-          get: vi.fn(async () => {
+          },
+          get: async () => {
             if (idx === 3) return createRunRow('generated'); // getRunResponse
             return selectGetResults[idx] ?? undefined;
-          }),
+          },
         };
         return chain;
+      },
+      insert: () => ({
+        values: async () => {},
       }),
-      insert: vi.fn(() => ({
-        values: vi.fn(async () => {}),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn(async () => {}),
-        })),
-      })),
-    });
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+    })) as any;
 
     const db = createFallbackDb({
       firstHandler: (sql) => {
@@ -219,29 +210,33 @@ describe('POST /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(201);
+    assertEquals(response.status, 201);
 
     const payload = await response.json() as { run: { id: string; status: string } };
-    expect(payload.run.id).toMatch(/^[a-z0-9]+$/);
-    expect(payload.run.status).toBe('queued');
+    assert(/^[a-z0-9]+$/.test(payload.run.id));
+    assertEquals(payload.run.status, 'queued');
 
     const runQueue = env.RUN_QUEUE as unknown as MockQueue<{ model: string }>;
-    expect(runQueue.getMessages()).toHaveLength(1);
-    expect(runQueue.getMessages()[0]?.body.model).toBe('gpt-5.4-nano');
-  });
-
+    assertEquals(runQueue.getMessages().length, 1);
+    assertEquals(runQueue.getMessages()[0]?.body.model, 'gpt-5.4-nano');
+})
   // D1 fallback test removed — production code no longer has D1 fallback after Drizzle migration
 
-  it('rejects malformed parent_run_id before lookup', async () => {
-    // Rate-limit should pass, then parent_run_id validation should fail early
-    mocks.getDb.mockReturnValue(createDrizzleMock({
+  Deno.test('POST /threads/:threadId/runs - rejects malformed parent_run_id before lookup', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
+      thread: { id: 'thread-1', space_id: 'ws-1' },
+      role: 'owner',
+    })) as any;
+  // Rate-limit should pass, then parent_run_id validation should fail early
+    mocks.getDb = (() => createDrizzleMock({
       selectGetResults: [
         { count: 0 }, // rate-limit minute
         { count: 0 }, // rate-limit hour
         { count: 0 }, // rate-limit concurrent
         { aiModel: 'gpt-5.4-nano' }, // workspace model
       ],
-    }));
+    })) as any;
 
     const env = createMockEnv() as unknown as Env;
     const app = createApp(createUser('user-1', 'alice'));
@@ -256,12 +251,16 @@ describe('POST /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid parent_run_id' });
-  });
-
-  it('falls back to D1 for run create and status update writes', async () => {
-    // insert and update throw, triggering D1 fallback
+    assertEquals(response.status, 400);
+    await assertObjectMatch(await response.json(), { error: 'Invalid parent_run_id' });
+})
+  Deno.test('POST /threads/:threadId/runs - falls back to D1 for run create and status update writes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkThreadAccess = (async () => ({
+      thread: { id: 'thread-1', space_id: 'ws-1' },
+      role: 'owner',
+    })) as any;
+  // insert and update throw, triggering D1 fallback
     const invalidArrayBufferError = new Error('Invalid array buffer length');
     let selectGetCallIndex = 0;
     const selectGetResults = [
@@ -271,33 +270,33 @@ describe('POST /threads/:threadId/runs', () => {
       { count: 0 }, // rate-limit concurrent count
       { aiModel: 'gpt-5.4-nano' }, // workspace model
     ];
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => {
+    mocks.getDb = (() => ({
+      select: () => {
         const idx = selectGetCallIndex++;
         const chain: any = {
-          from: vi.fn(() => chain),
-          where: vi.fn(() => chain),
-          orderBy: vi.fn(() => chain),
-          limit: vi.fn(() => chain),
-          offset: vi.fn(() => chain),
-          all: vi.fn(async () => []),
-          get: vi.fn(async () => selectGetResults[idx] ?? undefined),
+          from: () => chain,
+          where: () => chain,
+          orderBy: () => chain,
+          limit: () => chain,
+          offset: () => chain,
+          all: async () => [],
+          get: async () => selectGetResults[idx] ?? undefined,
         };
         return chain;
-      }),
-      insert: vi.fn(() => ({
-        values: vi.fn(async () => {
+      },
+      insert: () => ({
+        values: async () => {
           throw invalidArrayBufferError;
-        }),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn(async () => {
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {
             throw invalidArrayBufferError;
-          }),
-        })),
-      })),
-    });
+          },
+        }),
+      }),
+    })) as any;
 
     const runCalls: Array<{ sql: string; values: unknown[] }> = [];
     const db = createFallbackDb({
@@ -328,9 +327,8 @@ describe('POST /threads/:threadId/runs', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(201);
-    expect(runCalls).toHaveLength(2);
-    expect(runCalls[0]?.sql).toContain('INSERT INTO runs');
-    expect(runCalls[1]?.sql).toContain('UPDATE runs');
-  });
-});
+    assertEquals(response.status, 201);
+    assertEquals(runCalls.length, 2);
+    assertStringIncludes(runCalls[0]?.sql, 'INSERT INTO runs');
+    assertStringIncludes(runCalls[1]?.sql, 'UPDATE runs');
+})

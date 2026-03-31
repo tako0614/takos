@@ -1,12 +1,12 @@
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
+import { cyan, gray, red } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
 import {
   createAuthorizedRequest,
   parseSseEventBlock,
   toWebSocketUrl,
   tryParseJson,
-} from './api-request.js';
-import type { ParsedSseEvent, StreamCommandOptions } from './api-request.js';
+} from './api-request.ts';
+import type { ParsedSseEvent, StreamCommandOptions } from './api-request.ts';
 
 function printSseEvent(event: ParsedSseEvent, jsonOutput: boolean): void {
   if (jsonOutput) {
@@ -28,7 +28,7 @@ function printSseEvent(event: ParsedSseEvent, jsonOutput: boolean): void {
     headerParts.push(`retry=${event.retry}`);
   }
 
-  const header = chalk.cyan(headerParts.join(' '));
+  const header = cyan(headerParts.join(' '));
   if (event.data === null) {
     console.log(header);
     return;
@@ -54,11 +54,11 @@ function setupInterruptHandler(controller: AbortController): {
     controller.abort();
   };
 
-  process.once('SIGINT', onSigint);
+  Deno.addSignalListener('SIGINT', onSigint);
 
   return {
     isInterrupted: () => interrupted,
-    cleanup: () => process.removeListener('SIGINT', onSigint),
+    cleanup: () => Deno.removeSignalListener('SIGINT', onSigint),
   };
 }
 
@@ -122,27 +122,27 @@ export async function executeSseStream(path: string, options: StreamCommandOptio
 
     if (!response.ok) {
       const body = await response.text().catch((e) => { console.warn('Failed to read SSE error response body:', e); return ''; });
-      console.log(chalk.red(body || `HTTP ${response.status} ${response.statusText}`));
+      console.log(red(body || `HTTP ${response.status} ${response.statusText}`));
       cliExit(1);
     }
 
     if (!response.body) {
-      console.log(chalk.red('SSE stream body is not available'));
+      console.log(red('SSE stream body is not available'));
       cliExit(1);
     }
 
     await readSseEvents(response.body, !!options.json);
 
     if (!isInterrupted()) {
-      console.log(chalk.gray('SSE stream closed'));
+      console.log(gray('SSE stream closed'));
     }
   } catch (error) {
     if (isInterrupted() && error instanceof Error && error.name === 'AbortError') {
-      console.log(chalk.gray('SSE stream stopped'));
+      console.log(gray('SSE stream stopped'));
       return;
     }
 
-    console.log(chalk.red(`SSE stream error: ${String(error)}`));
+    console.log(red(`SSE stream error: ${String(error)}`));
     cliExit(1);
   } finally {
     cleanup();
@@ -216,10 +216,10 @@ export async function executeWebSocketStream(path: string, options: StreamComman
       interrupted = true;
       socket.close(1000, 'SIGINT');
     };
-    process.once('SIGINT', onSigint);
+    Deno.addSignalListener('SIGINT', onSigint);
 
     socket.on('open', () => {
-      console.log(chalk.gray(`WebSocket connected: ${wsUrl}`));
+      console.log(gray(`WebSocket connected: ${wsUrl}`));
       for (const message of options.send ?? []) {
         socket.send(message);
       }
@@ -231,31 +231,31 @@ export async function executeWebSocketStream(path: string, options: StreamComman
     });
 
     socket.on('error', (error: unknown) => {
-      process.removeListener('SIGINT', onSigint);
+      Deno.removeSignalListener('SIGINT', onSigint);
       reject(error);
     });
 
     socket.on('close', (code: unknown, reason: unknown) => {
       closeCode = typeof code === 'number' ? code : 0;
       closeReason = toTextPayload(reason as Buffer);
-      process.removeListener('SIGINT', onSigint);
+      Deno.removeSignalListener('SIGINT', onSigint);
       resolve();
     });
   }).catch((error: unknown) => {
-    console.log(chalk.red(`WebSocket stream error: ${String(error)}`));
+    console.log(red(`WebSocket stream error: ${String(error)}`));
     cliExit(1);
   });
 
   if (interrupted) {
-    console.log(chalk.gray('WebSocket stream stopped'));
+    console.log(gray('WebSocket stream stopped'));
     return;
   }
 
   if (closeCode !== 1000) {
     const detail = closeReason ? ` (${closeReason})` : '';
-    console.log(chalk.red(`WebSocket closed with code ${closeCode}${detail}`));
+    console.log(red(`WebSocket closed with code ${closeCode}${detail}`));
     cliExit(1);
   }
 
-  console.log(chalk.gray('WebSocket stream closed'));
+  console.log(gray('WebSocket stream closed'));
 }

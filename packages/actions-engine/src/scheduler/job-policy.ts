@@ -7,7 +7,7 @@ import type {
   Conclusion,
   Step,
   StepResult,
-} from '../workflow-models.js';
+} from '../workflow-models.ts';
 
 // --- ジョブ実行状態 ---
 

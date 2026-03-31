@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { badRequest, forbidden, internalError } from 'takos-common/middleware/hono';
-import { getRepoPath } from '../../runtime/paths.js';
-import { generateTempSuffix } from '../../shared/temp-id.js';
-import { runGitCommand } from '../../runtime/git.js';
-import { validateNameParam } from '../../runtime/validation.js';
-import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
+import { getRepoPath } from '../../runtime/paths.ts';
+import { generateTempSuffix } from '../../shared/temp-id.ts';
+import { runGitCommand } from '../../runtime/git.ts';
+import { validateNameParam } from '../../runtime/validation.ts';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
 
 async function execGit(args: string[], cwd: string): Promise<void> {
   const { exitCode, output } = await runGitCommand(args, cwd);

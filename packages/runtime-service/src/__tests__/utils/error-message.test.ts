@@ -1,38 +1,32 @@
-import { describe, expect, it } from 'vitest';
 import { getErrorMessage } from 'takos-common/errors';
 
-describe('getErrorMessage', () => {
-  it('returns message from Error instance', () => {
-    expect(getErrorMessage(new Error('test error'))).toBe('test error');
-  });
 
-  it('returns string representation for non-Error', () => {
-    expect(getErrorMessage('string error')).toBe('string error');
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('handles number', () => {
-    expect(getErrorMessage(42)).toBe('42');
-  });
-
-  it('handles null', () => {
-    expect(getErrorMessage(null)).toBe('null');
-  });
-
-  it('handles undefined', () => {
-    expect(getErrorMessage(undefined)).toBe('undefined');
-  });
-
-  it('handles object', () => {
-    expect(getErrorMessage({ code: 'ERR' })).toBe('[object Object]');
-  });
-
-  it('returns message from custom error class', () => {
-    class CustomError extends Error {
+  Deno.test('getErrorMessage - returns message from Error instance', () => {
+  assertEquals(getErrorMessage(new Error('test error')), 'test error');
+})
+  Deno.test('getErrorMessage - returns string representation for non-Error', () => {
+  assertEquals(getErrorMessage('string error'), 'string error');
+})
+  Deno.test('getErrorMessage - handles number', () => {
+  assertEquals(getErrorMessage(42), '42');
+})
+  Deno.test('getErrorMessage - handles null', () => {
+  assertEquals(getErrorMessage(null), 'null');
+})
+  Deno.test('getErrorMessage - handles undefined', () => {
+  assertEquals(getErrorMessage(undefined), 'undefined');
+})
+  Deno.test('getErrorMessage - handles object', () => {
+  assertEquals(getErrorMessage({ code: 'ERR' }), '[object Object]');
+})
+  Deno.test('getErrorMessage - returns message from custom error class', () => {
+  class CustomError extends Error {
       constructor() {
         super('custom message');
         this.name = 'CustomError';
       }
     }
-    expect(getErrorMessage(new CustomError())).toBe('custom message');
-  });
-});
+    assertEquals(getErrorMessage(new CustomError()), 'custom message');
+})

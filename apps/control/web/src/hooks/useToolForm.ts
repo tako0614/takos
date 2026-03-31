@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { createSignal, createMemo } from 'solid-js';
 import type { SchemaParameter } from '../views/hub/ToolModals';
 
 interface InputSchema {
@@ -23,31 +23,31 @@ interface UseToolFormOptions {
 }
 
 export function useToolForm(options: UseToolFormOptions = {}) {
-  const [description, setDescription] = useState(options.initialDescription ?? '');
-  const [parameters, setParameters] = useState<SchemaParameter[]>(() =>
+  const [description, setDescription] = createSignal(options.initialDescription ?? '');
+  const [parameters, setParameters] = createSignal<SchemaParameter[]>(
     parseSchemaParameters(options.initialSchema),
   );
-  const [showAddParam, setShowAddParam] = useState(false);
+  const [showAddParam, setShowAddParam] = createSignal(false);
 
-  const addParameter = useCallback((param: SchemaParameter) => {
+  const addParameter = (param: SchemaParameter) => {
     setParameters((prev) => [...prev, param]);
     setShowAddParam(false);
-  }, []);
+  };
 
-  const removeParameter = useCallback((index: number) => {
+  const removeParameter = (index: number) => {
     setParameters((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  };
 
-  const openAddParam = useCallback(() => setShowAddParam(true), []);
-  const closeAddParam = useCallback(() => setShowAddParam(false), []);
+  const openAddParam = () => setShowAddParam(true);
+  const closeAddParam = () => setShowAddParam(false);
 
-  const reset = useCallback(() => {
+  const reset = () => {
     setDescription(options.initialDescription ?? '');
     setParameters(parseSchemaParameters(options.initialSchema));
     setShowAddParam(false);
-  }, [options.initialDescription, options.initialSchema]);
+  };
 
-  const parameterNames = parameters.map((p) => p.name);
+  const parameterNames = createMemo(() => parameters().map((p) => p.name));
 
   return {
     description,

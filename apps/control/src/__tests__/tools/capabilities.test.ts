@@ -1,89 +1,88 @@
-import { describe, it, expect } from 'vitest';
 import { getRequiredCapabilitiesForTool } from '@/tools/capabilities';
 
-describe('getRequiredCapabilitiesForTool', () => {
-  describe('egress.http tools', () => {
-    it.each([
-      'web_fetch',
-      'browser_open',
-      'browser_goto',
-      'mcp_add_server',
-      'domain_verify',
-    ])('requires egress.http for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toContain('egress.http');
-    });
-  });
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
-  describe('repo.read tools', () => {
-    it.each([
-      'file_read',
-      'file_list',
-      'repo_list',
-      'repo_status',
-      'repo_switch',
-    ])('requires repo.read for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toContain('repo.read');
-    });
+for (const toolName of [
+  'web_fetch',
+  'browser_open',
+  'browser_goto',
+  'mcp_add_server',
+  'domain_verify',
+]) {
+  Deno.test(`requires egress.http for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertStringIncludes(caps, 'egress.http');
   });
+}
 
-  describe('repo.write tools', () => {
-    it.each([
-      'create_repository',
-      'repo_fork',
-      'container_commit',
-      'file_write',
-      'file_write_binary',
-      'file_delete',
-      'file_mkdir',
-      'file_rename',
-      'file_copy',
-    ])('requires repo.write for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toContain('repo.write');
-    });
+for (const toolName of [
+  'file_read',
+  'file_list',
+  'repo_list',
+  'repo_status',
+  'repo_switch',
+]) {
+  Deno.test(`requires repo.read for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertStringIncludes(caps, 'repo.read');
   });
+}
 
-  describe('storage.read tools', () => {
-    it.each([
-      'search',
-      'workspace_files_list',
-      'workspace_files_read',
-    ])('requires storage.read for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toContain('storage.read');
-    });
+for (const toolName of [
+  'create_repository',
+  'repo_fork',
+  'container_commit',
+  'file_write',
+  'file_write_binary',
+  'file_delete',
+  'file_mkdir',
+  'file_rename',
+  'file_copy',
+]) {
+  Deno.test(`requires repo.write for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertStringIncludes(caps, 'repo.write');
   });
+}
 
-  describe('storage.write tools', () => {
-    it.each([
-      'workspace_files_write',
-      'workspace_files_create',
-      'workspace_files_mkdir',
-      'workspace_files_delete',
-      'workspace_files_rename',
-      'workspace_files_move',
-    ])('requires storage.write for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toContain('storage.write');
-    });
+for (const toolName of [
+  'search',
+  'workspace_files_list',
+  'workspace_files_read',
+]) {
+  Deno.test(`requires storage.read for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertStringIncludes(caps, 'storage.read');
   });
+}
 
-  describe('tools with no special capabilities', () => {
-    it.each([
-      'remember',
-      'recall',
-      'container_start',
-      'container_stop',
-      'runtime_exec',
-      'create_artifact',
-      'spawn_agent',
-      'wait_agent',
-      'some_unknown_tool',
-    ])('returns empty array for %s', (toolName) => {
-      const caps = getRequiredCapabilitiesForTool(toolName);
-      expect(caps).toEqual([]);
-    });
+for (const toolName of [
+  'workspace_files_write',
+  'workspace_files_create',
+  'workspace_files_mkdir',
+  'workspace_files_delete',
+  'workspace_files_rename',
+  'workspace_files_move',
+]) {
+  Deno.test(`requires storage.write for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertStringIncludes(caps, 'storage.write');
   });
-});
+}
+
+for (const toolName of [
+  'remember',
+  'recall',
+  'container_start',
+  'container_stop',
+  'runtime_exec',
+  'create_artifact',
+  'spawn_agent',
+  'wait_agent',
+  'some_unknown_tool',
+]) {
+  Deno.test(`returns empty array for ${toolName}`, () => {
+    const caps = getRequiredCapabilitiesForTool(toolName);
+    assertEquals(caps, []);
+  });
+}

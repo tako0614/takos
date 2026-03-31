@@ -7,10 +7,10 @@
  * --offline: Delegate to the local entity operations.
  */
 import type { Command } from 'commander';
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
-import { api } from '../lib/api.js';
-import { resolveSpaceId } from '../lib/cli-utils.js';
+import { bold, cyan, dim, green, red } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
+import { api } from '../lib/api.ts';
+import { resolveSpaceId } from '../lib/cli-utils.ts';
 import {
   createServiceDeployment,
   ensureServiceInSpace,
@@ -18,7 +18,7 @@ import {
   findServiceInSpace,
   listServicesInSpace,
   setServiceGroup,
-} from '../lib/platform-surface.js';
+} from '../lib/platform-surface.ts';
 
 export function registerServiceCommand(program: Command): void {
   const serviceCmd = program
@@ -64,17 +64,17 @@ export function registerServiceCommand(program: Command): void {
     }) => {
       if (options.offline) {
         if (!options.dockerfile) {
-          console.log(chalk.red('Offline service deploy requires --dockerfile.'));
+          console.log(red('Offline service deploy requires --dockerfile.'));
           cliExit(1);
         }
 
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deployService } = await import('../lib/entities/service.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deployService } = await import('../lib/entities/service.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
 
         if (!options.json) {
-          console.log(`${chalk.cyan('[DEPLOY]')} service ${chalk.bold(name)} -> ${options.env} (offline)`);
+          console.log(`${cyan('[DEPLOY]')} service ${bold(name)} -> ${options.env} (offline)`);
           console.log(`  Dockerfile: ${options.dockerfile}`);
           console.log(`  Port:       ${options.port}`);
         }
@@ -100,29 +100,29 @@ export function registerServiceCommand(program: Command): void {
           }
 
           if (result.success) {
-            console.log(`  ${chalk.green('✓')} ${name} deployed`);
+            console.log(`  ${green('✓')} ${name} deployed`);
           } else {
-            console.log(`  ${chalk.red('✗')} Deploy failed`);
-            if (result.error) console.log(chalk.red(`  Error: ${result.error}`));
+            console.log(`  ${red('✗')} Deploy failed`);
+            if (result.error) console.log(red(`  Error: ${result.error}`));
             cliExit(1);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to deploy service: ${message}`));
+          console.log(red(`Failed to deploy service: ${message}`));
           cliExit(1);
         }
         return;
       }
 
       if (!options.imageRef) {
-        console.log(chalk.red('Online service deploy requires --image-ref.'));
+        console.log(red('Online service deploy requires --image-ref.'));
         cliExit(1);
       }
 
       const spaceId = resolveSpaceId(options.space);
 
       if (!options.json) {
-        console.log(`${chalk.cyan('[DEPLOY]')} service ${chalk.bold(name)} -> ${options.env}`);
+        console.log(`${cyan('[DEPLOY]')} service ${bold(name)} -> ${options.env}`);
         console.log(`  Image:      ${options.imageRef}`);
         console.log(`  Port:       ${options.port}`);
         console.log(`  Provider:   ${options.provider}`);
@@ -163,14 +163,14 @@ export function registerServiceCommand(program: Command): void {
           return;
         }
 
-        console.log(`  ${chalk.green('✓')} deployment ${result.deployment.id} v${result.deployment.version}`);
-        console.log(chalk.dim(`  status=${result.deployment.status} slug=${service.slug ?? service.id}`));
+        console.log(`  ${green('✓')} deployment ${result.deployment.id} v${result.deployment.version}`);
+        console.log(dim(`  status=${result.deployment.status} slug=${service.slug ?? service.id}`));
         if (group) {
-          console.log(chalk.dim(`  group=${group.name}`));
+          console.log(dim(`  group=${group.name}`));
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to deploy service: ${message}`));
+        console.log(red(`Failed to deploy service: ${message}`));
         cliExit(1);
       }
     });
@@ -185,16 +185,16 @@ export function registerServiceCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'service');
         if (!service) {
-          console.log(chalk.red(`Service not found: ${name}`));
+          console.log(red(`Service not found: ${name}`));
           cliExit(1);
           return;
         }
         const group = await ensureGroupInSpace(spaceId, options.group);
         await setServiceGroup(service.id, group.id);
-        console.log(chalk.green(`Attached service '${name}' to group '${group.name}'.`));
+        console.log(green(`Attached service '${name}' to group '${group.name}'.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to attach service: ${message}`));
+        console.log(red(`Failed to attach service: ${message}`));
         cliExit(1);
       }
     });
@@ -208,15 +208,15 @@ export function registerServiceCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'service');
         if (!service) {
-          console.log(chalk.red(`Service not found: ${name}`));
+          console.log(red(`Service not found: ${name}`));
           cliExit(1);
           return;
         }
         await setServiceGroup(service.id, null);
-        console.log(chalk.green(`Detached service '${name}' from its group.`));
+        console.log(green(`Detached service '${name}' from its group.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to detach service: ${message}`));
+        console.log(red(`Failed to detach service: ${message}`));
         cliExit(1);
       }
     });
@@ -230,7 +230,7 @@ export function registerServiceCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (options: { group: string; space?: string; json?: boolean; offline?: boolean }) => {
       if (options.offline) {
-        const { listServices } = await import('../lib/entities/service.js');
+        const { listServices } = await import('../lib/entities/service.ts');
         try {
           const services = await listServices(options.group);
           if (options.json) {
@@ -238,19 +238,19 @@ export function registerServiceCommand(program: Command): void {
             return;
           }
           if (services.length === 0) {
-            console.log(chalk.dim('No services tracked. Use `takos service deploy --offline` to deploy one.'));
+            console.log(dim('No services tracked. Use `takos service deploy --offline` to deploy one.'));
             return;
           }
           console.log('');
-          console.log(chalk.bold('Services:'));
+          console.log(bold('Services:'));
           for (const service of services) {
-            console.log(`  ${service.name} ${chalk.dim(`[${service.imageHash}]`)}`);
+            console.log(`  ${service.name} ${dim(`[${service.imageHash}]`)}`);
           }
           console.log('');
-          console.log(chalk.dim(`${services.length} service(s)`));
+          console.log(dim(`${services.length} service(s)`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to list services: ${message}`));
+          console.log(red(`Failed to list services: ${message}`));
           cliExit(1);
         }
         return;
@@ -267,23 +267,23 @@ export function registerServiceCommand(program: Command): void {
         }
 
         if (services.length === 0) {
-          console.log(chalk.dim('No services found.'));
+          console.log(dim('No services found.'));
           return;
         }
 
         console.log('');
-        console.log(chalk.bold('Services:'));
+        console.log(bold('Services:'));
         for (const service of services) {
-          const slugLabel = service.slug ? chalk.dim(` slug=${service.slug}`) : '';
-          const hostnameLabel = service.hostname ? chalk.dim(` host=${service.hostname}`) : '';
-          const groupLabel = service.group_id ? chalk.dim(` group=${service.group_id}`) : '';
+          const slugLabel = service.slug ? dim(` slug=${service.slug}`) : '';
+          const hostnameLabel = service.hostname ? dim(` host=${service.hostname}`) : '';
+          const groupLabel = service.group_id ? dim(` group=${service.group_id}`) : '';
           console.log(`  ${service.id}${slugLabel}${hostnameLabel}${groupLabel}`);
         }
         console.log('');
-        console.log(chalk.dim(`${services.length} service(s)`));
+        console.log(dim(`${services.length} service(s)`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to list services: ${message}`));
+        console.log(red(`Failed to list services: ${message}`));
         cliExit(1);
       }
     });
@@ -298,16 +298,16 @@ export function registerServiceCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (name: string, options: { group: string; space?: string; accountId?: string; apiToken?: string; offline?: boolean }) => {
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deleteService } = await import('../lib/entities/service.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deleteService } = await import('../lib/entities/service.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
         try {
           await deleteService(name, { group: options.group, accountId, apiToken });
-          console.log(chalk.green(`Removed service '${name}' from offline state.`));
+          console.log(green(`Removed service '${name}' from offline state.`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to delete service: ${message}`));
+          console.log(red(`Failed to delete service: ${message}`));
           cliExit(1);
         }
         return;
@@ -317,21 +317,21 @@ export function registerServiceCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'service');
         if (!service) {
-          console.log(chalk.red(`Service not found: ${name}`));
+          console.log(red(`Service not found: ${name}`));
           cliExit(1);
           return;
         }
 
         const res = await api<void>(`/api/services/${encodeURIComponent(service.id)}`, { method: 'DELETE' });
         if (!res.ok) {
-          console.log(chalk.red(`Error: ${res.error}`));
+          console.log(red(`Error: ${res.error}`));
           cliExit(1);
         }
 
-        console.log(chalk.green(`Deleted service '${name}'.`));
+        console.log(green(`Deleted service '${name}'.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to delete service: ${message}`));
+        console.log(red(`Failed to delete service: ${message}`));
         cliExit(1);
       }
     });

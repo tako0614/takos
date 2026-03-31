@@ -4,18 +4,17 @@
  * Session file I/O lives in ./config-session-io.ts.
  */
 
-import Conf from 'conf';
 import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync, chmodSync, mkdirSync } from 'fs';
+import { existsSync, chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { PRODUCTION_DOMAIN } from 'takos-control/shared/constants';
-import { logWarning } from './cli-log.js';
-import { validateApiUrl, isValidId } from './config-validation.js';
+import { logWarning } from './cli-log.ts';
+import { validateApiUrl, isValidId } from './config-validation.ts';
 import {
   findSessionFile,
   isWindows,
   setSecurePermissions,
-} from './config-session-io.js';
+} from './config-session-io.ts';
 
 export interface TakosConfig {
   apiUrl: string;
@@ -28,11 +27,20 @@ export interface TakosConfig {
 
 type ConfStore = { token?: string; apiUrl?: string };
 
-function getConfInstance(): Conf<ConfStore> {
-  return new Conf<ConfStore>({
-    projectName: 'takos',
-    cwd: join(homedir(), '.takos'),
-  });
+const CONFIG_DIR = join(homedir(), '.takos');
+const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
+function readConfStore(): ConfStore {
+  try {
+    return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) as ConfStore;
+  } catch {
+    return {};
+  }
+}
+
+function writeConfStore(store: ConfStore): void {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_FILE, JSON.stringify(store, null, 2));
 }
 
 export const DEFAULT_API_URL = `https://${PRODUCTION_DOMAIN}`;
@@ -41,7 +49,7 @@ export const DEFAULT_API_URL = `https://${PRODUCTION_DOMAIN}`;
  * Validate workspace ID from env var and return it, or throw on invalid format.
  */
 function validateEnvWorkspaceId(): string | undefined {
-  const workspaceId = process.env.TAKOS_WORKSPACE_ID;
+  const workspaceId = Deno.env.get('TAKOS_WORKSPACE_ID');
   if (workspaceId && !isValidId(workspaceId)) {
     logWarning('SECURITY WARNING: TAKOS_WORKSPACE_ID has invalid format');
     logWarning('Expected UUID v4 or alphanumeric ID (1-64 characters)');
@@ -54,8 +62,8 @@ function validateEnvWorkspaceId(): string | undefined {
  * Validate API URL from env var and return it, or throw on invalid domain.
  */
 function validateEnvApiUrl(): string {
-  const apiUrl = process.env.TAKOS_API_URL || DEFAULT_API_URL;
-  if (process.env.TAKOS_API_URL) {
+  const apiUrl = Deno.env.get('TAKOS_API_URL') || DEFAULT_API_URL;
+  if (Deno.env.get('TAKOS_API_URL')) {
     logWarning(`Using custom API URL from environment: ${apiUrl}`);
     const domainValidation = validateApiUrl(apiUrl);
     if (!domainValidation.valid) {
@@ -68,16 +76,16 @@ function validateEnvApiUrl(): string {
 
 // Check if running inside takos container (env var or session file)
 export function isContainerMode(): boolean {
-  return !!process.env.TAKOS_SESSION_ID || !!process.env.TAKOS_TOKEN || findSessionFile() !== null;
+  return !!Deno.env.get('TAKOS_SESSION_ID') || !!Deno.env.get('TAKOS_TOKEN') || findSessionFile() !== null;
 }
 
 // Get configuration based on mode
 export function getConfig(): TakosConfig {
   // 1. Check environment variables first
-  if (process.env.TAKOS_SESSION_ID) {
+  if (Deno.env.get('TAKOS_SESSION_ID')) {
     logWarning('Using environment variable authentication (TAKOS_SESSION_ID)');
 
-    const sessionId = process.env.TAKOS_SESSION_ID;
+    const sessionId = Deno.env.get('TAKOS_SESSION_ID')!;
     if (!isValidId(sessionId)) {
       logWarning('SECURITY WARNING: TAKOS_SESSION_ID has invalid format');
       logWarning('Expected UUID v4 or alphanumeric ID (8-64 characters)');
@@ -94,13 +102,13 @@ export function getConfig(): TakosConfig {
   }
 
   // 1b. Environment token mode (TAKOS_TOKEN)
-  if (process.env.TAKOS_TOKEN) {
+  if (Deno.env.get('TAKOS_TOKEN')) {
     logWarning('Using environment variable authentication (TAKOS_TOKEN)');
 
     const workspaceId = validateEnvWorkspaceId();
     return {
       apiUrl: validateEnvApiUrl(),
-      token: process.env.TAKOS_TOKEN,
+      token: Deno.env.get('TAKOS_TOKEN'),
       workspaceId,
       spaceId: workspaceId,
     };
@@ -118,8 +126,8 @@ export function getConfig(): TakosConfig {
   }
 
   // 3. External mode - read from config file
-  const config = getConfInstance();
-  const configuredApiUrl = config.get('apiUrl');
+  const store = readConfStore();
+  const configuredApiUrl = store.apiUrl;
   let validatedApiUrl = DEFAULT_API_URL;
   if (configuredApiUrl) {
     const domainValidation = validateApiUrl(configuredApiUrl);
@@ -133,7 +141,7 @@ export function getConfig(): TakosConfig {
 
   return {
     apiUrl: validatedApiUrl,
-    token: config.get('token'),
+    token: store.token,
   };
 }
 
@@ -143,26 +151,24 @@ export function saveToken(token: string): void {
     throw new Error('Cannot save token in container mode');
   }
 
-  const configDir = join(homedir(), '.takos');
-
   // Ensure config directory exists with secure permissions (0o700 for directories)
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
     if (!isWindows()) {
       try {
-        chmodSync(configDir, 0o700);
+        chmodSync(CONFIG_DIR, 0o700);
       } catch {
-        logWarning(`Failed to set secure permissions on config directory: ${configDir}`);
+        logWarning(`Failed to set secure permissions on config directory: ${CONFIG_DIR}`);
       }
     }
   }
 
-  const config = getConfInstance();
-  config.set('token', token);
+  const store = readConfStore();
+  store.token = token;
+  writeConfStore(store);
 
-  const configFilePath = join(configDir, 'config.json');
-  if (existsSync(configFilePath)) {
-    setSecurePermissions(configFilePath);
+  if (existsSync(CONFIG_FILE)) {
+    setSecurePermissions(CONFIG_FILE);
   }
 }
 
@@ -178,7 +184,9 @@ export function saveApiUrl(apiUrl: string): void {
     throw new Error(`Invalid API URL: ${domainValidation.error}`);
   }
 
-  getConfInstance().set('apiUrl', normalizedApiUrl);
+  const store = readConfStore();
+  store.apiUrl = normalizedApiUrl;
+  writeConfStore(store);
 }
 
 // Clear stored credentials
@@ -187,7 +195,7 @@ export function clearCredentials(): void {
     throw new Error('Cannot clear credentials in container mode');
   }
 
-  getConfInstance().clear();
+  writeConfStore({});
 }
 
 // Check if authenticated

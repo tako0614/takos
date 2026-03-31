@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 
 const appRootDir = path.resolve(import.meta.dirname, '../..');
 const sourceRootDir = path.resolve(appRootDir, '../../packages/control');
@@ -36,31 +37,29 @@ function listTsFiles(relativeDir: string): string[] {
   return files;
 }
 
-describe('platform architecture contract', () => {
-  it('keeps the shared platform builder free of named runtime binding extraction', () => {
-    const sharedBuilder = read('src/platform/adapters/shared.ts');
 
-    expect(sharedBuilder).not.toContain("'DB'");
-    expect(sharedBuilder).not.toContain("'RUN_QUEUE'");
-    expect(sharedBuilder).not.toContain("'INDEX_QUEUE'");
-    expect(sharedBuilder).not.toContain("'WORKFLOW_QUEUE'");
-    expect(sharedBuilder).not.toContain("'DEPLOY_QUEUE'");
-    expect(sharedBuilder).not.toContain("'SESSION_DO'");
-    expect(sharedBuilder).not.toContain("'RUN_NOTIFIER'");
-    expect(sharedBuilder).not.toContain("'TAKOS_OFFLOAD'");
-    expect(sharedBuilder).not.toContain("'DISPATCHER'");
-  });
+  Deno.test('platform architecture contract - keeps the shared platform builder free of named runtime binding extraction', () => {
+  const sharedBuilder = read('src/platform/adapters/shared.ts');
 
-  it('keeps Cloudflare-specific PDF rendering out of thread export application logic', () => {
-    const threadExport = read('src/application/services/threads/thread-export.ts');
+    assert(!(sharedBuilder).includes("'DB'"));
+    assert(!(sharedBuilder).includes("'RUN_QUEUE'"));
+    assert(!(sharedBuilder).includes("'INDEX_QUEUE'"));
+    assert(!(sharedBuilder).includes("'WORKFLOW_QUEUE'"));
+    assert(!(sharedBuilder).includes("'DEPLOY_QUEUE'"));
+    assert(!(sharedBuilder).includes("'SESSION_DO'"));
+    assert(!(sharedBuilder).includes("'RUN_NOTIFIER'"));
+    assert(!(sharedBuilder).includes("'TAKOS_OFFLOAD'"));
+    assert(!(sharedBuilder).includes("'DISPATCHER'"));
+})
+  Deno.test('platform architecture contract - keeps Cloudflare-specific PDF rendering out of thread export application logic', () => {
+  const threadExport = read('src/application/services/threads/thread-export.ts');
     const cloudflarePdfProvider = read('src/platform/providers/cloudflare/pdf-render.ts');
 
-    expect(threadExport).not.toContain('@cloudflare/puppeteer');
-    expect(cloudflarePdfProvider).toContain('@cloudflare/puppeteer');
-  });
-
-  it('keeps route and middleware layers off getPlatformBindings() and session Env bags', () => {
-    const routeAndMiddlewareFiles = [
+    assert(!(threadExport).includes('@cloudflare/puppeteer'));
+    assertStringIncludes(cloudflarePdfProvider, '@cloudflare/puppeteer');
+})
+  Deno.test('platform architecture contract - keeps route and middleware layers off getPlatformBindings() and session Env bags', () => {
+  const routeAndMiddlewareFiles = [
       'src/server/middleware/auth.ts',
       'src/server/middleware/oauth-auth.ts',
       'src/server/routes/auth/session.ts',
@@ -75,18 +74,17 @@ describe('platform architecture contract', () => {
 
     for (const relativePath of routeAndMiddlewareFiles) {
       const source = read(relativePath);
-      expect(source).not.toContain('getPlatformBindings(');
-      expect(source).not.toContain('createSession(c.env');
-      expect(source).not.toContain('deleteSession(c.env');
-      expect(source).not.toContain('getSession(c.env');
-      expect(source).not.toContain('getSession(env,');
-      expect(source).not.toContain('createSession(platformBindings');
-      expect(source).not.toContain('getSession(platformBindings');
+      assert(!(source).includes('getPlatformBindings('));
+      assert(!(source).includes('createSession(c.env'));
+      assert(!(source).includes('deleteSession(c.env'));
+      assert(!(source).includes('getSession(c.env'));
+      assert(!(source).includes('getSession(env,'));
+      assert(!(source).includes('createSession(platformBindings'));
+      assert(!(source).includes('getSession(platformBindings'));
     }
-  });
-
-  it('keeps canonical package source off getPlatformBindings()', () => {
-    const scopedFiles = [
+})
+  Deno.test('platform architecture contract - keeps canonical package source off getPlatformBindings()', () => {
+  const scopedFiles = [
       ...listTsFiles('src/application'),
       ...listTsFiles('src/server'),
       ...listTsFiles('src/runtime'),
@@ -104,25 +102,23 @@ describe('platform architecture contract', () => {
       return read(relativePath).includes('getPlatformBindings(');
     });
 
-    expect(offenders).toEqual([]);
-  });
-
-  it('keeps deployment core off worker-centric deployment pointer field names', () => {
-    const deploymentCoreFiles = [
+    assertEquals(offenders, []);
+})
+  Deno.test('platform architecture contract - keeps deployment core off worker-centric deployment pointer field names', () => {
+  const deploymentCoreFiles = [
       'src/application/services/deployment/service.ts',
     ];
 
     for (const relativePath of deploymentCoreFiles) {
       const source = read(relativePath);
-      expect(source).not.toContain('currentDeploymentId');
-      expect(source).not.toContain('previousDeploymentId');
-      expect(source).not.toContain('workers.currentDeploymentId');
-      expect(source).not.toContain('workers.previousDeploymentId');
+      assert(!(source).includes('currentDeploymentId'));
+      assert(!(source).includes('previousDeploymentId'));
+      assert(!(source).includes('workers.currentDeploymentId'));
+      assert(!(source).includes('workers.previousDeploymentId'));
     }
-  });
-
-  it('keeps application, tool, and server layers off direct Cloudflare provider implementations', () => {
-    const scopedFiles = [
+})
+  Deno.test('platform architecture contract - keeps application, tool, and server layers off direct Cloudflare provider implementations', () => {
+  const scopedFiles = [
       ...listTsFiles('src/application/services'),
       ...listTsFiles('src/application/tools'),
       ...listTsFiles('src/server'),
@@ -130,15 +126,14 @@ describe('platform architecture contract', () => {
 
     for (const relativePath of scopedFiles) {
       const source = read(relativePath);
-      expect(source).not.toMatch(/from ['"].*application\/services\/cloudflare\//);
-      expect(source).not.toMatch(/from ['"].*application\/services\/wfp(?:\/|['"])/);
-      expect(source).not.toMatch(/from ['"].*services\/cloudflare\//);
-      expect(source).not.toMatch(/from ['"].*services\/wfp(?:\/|['"])/);
+      assert(!(/from ['"].*application\/services\/cloudflare\//).test(source));
+      assert(!(/from ['"].*application\/services\/wfp(?:\/|['"])/).test(source));
+      assert(!(/from ['"].*services\/cloudflare\//).test(source));
+      assert(!(/from ['"].*services\/wfp(?:\/|['"])/).test(source));
     }
-  });
-
-  it('keeps canonical core and local public path off @cloudflare/containers', () => {
-    const scopedFiles = [
+})
+  Deno.test('platform architecture contract - keeps canonical core and local public path off @cloudflare/containers', () => {
+  const scopedFiles = [
       ...listTsFiles('src/application'),
       ...listTsFiles('src/server'),
       ...listTsFiles('src/local-platform'),
@@ -158,11 +153,10 @@ describe('platform architecture contract', () => {
       return read(relativePath).includes('@cloudflare/containers');
     });
 
-    expect(offenders).toEqual([]);
-  });
-
-  it('keeps worker-centric deployment schema fields fenced to mapping layers', () => {
-    const allowedSchemaFieldCallers = new Set([
+    assertEquals(offenders, []);
+})
+  Deno.test('platform architecture contract - keeps worker-centric deployment schema fields fenced to mapping layers', () => {
+  const allowedSchemaFieldCallers = new Set([
       'src/application/services/deployment/store.ts',
       'src/application/services/platform/workers.ts',
     ]);
@@ -182,11 +176,10 @@ describe('platform architecture contract', () => {
         || source.includes('workers.previousDeploymentId');
     });
 
-    expect(offenders).toEqual([]);
-  });
-
-  it('keeps worker facade, platform tools, and resource binding routes on service-centric table aliases', () => {
-    const scopedFiles = [
+    assertEquals(offenders, []);
+})
+  Deno.test('platform architecture contract - keeps worker facade, platform tools, and resource binding routes on service-centric table aliases', () => {
+  const scopedFiles = [
       'src/application/services/platform/workers.ts',
       'src/application/tools/builtin/platform/deployments.ts',
       'src/application/tools/builtin/platform/deployment-history.ts',
@@ -198,16 +191,15 @@ describe('platform architecture contract', () => {
 
     for (const relativePath of scopedFiles) {
       const source = read(relativePath);
-      expect(source).not.toContain('from(workers)');
-      expect(source).not.toContain('insert(workers)');
-      expect(source).not.toContain('delete(workers)');
-      expect(source).not.toContain('eq(workers.');
-      expect(source).not.toMatch(/import\s*\{[^}]*\bworkers\b[^}]*\}\s*from ['"].*infra\/db\/schema/);
+      assert(!(source).includes('from(workers)'));
+      assert(!(source).includes('insert(workers)'));
+      assert(!(source).includes('delete(workers)'));
+      assert(!(source).includes('eq(workers.'));
+      assert(!(/import\s*\{[^}]*\bworkers\b[^}]*\}\s*from ['"].*infra\/db\/schema/).test(source));
     }
-  });
-
-  it('keeps canonical deployment logic off worker-centric schema pointer names', () => {
-    const scopedFiles = [
+})
+  Deno.test('platform architecture contract - keeps canonical deployment logic off worker-centric schema pointer names', () => {
+  const scopedFiles = [
       'src/application/services/deployment/service.ts',
       'src/application/services/deployment/routing.ts',
       'src/application/services/deployment/provider.ts',
@@ -215,50 +207,47 @@ describe('platform architecture contract', () => {
 
     for (const relativePath of scopedFiles) {
       const source = read(relativePath);
-      expect(source).not.toContain('currentDeploymentId');
-      expect(source).not.toContain('previousDeploymentId');
-      expect(source).not.toContain('workers.currentDeploymentId');
-      expect(source).not.toContain('workers.previousDeploymentId');
+      assert(!(source).includes('currentDeploymentId'));
+      assert(!(source).includes('previousDeploymentId'));
+      assert(!(source).includes('workers.currentDeploymentId'));
+      assert(!(source).includes('workers.previousDeploymentId'));
     }
-  });
-
-  it('keeps canonical deployment logic off worker-centric deployment helper names', () => {
-    const scopedFiles = [
+})
+  Deno.test('platform architecture contract - keeps canonical deployment logic off worker-centric deployment helper names', () => {
+  const scopedFiles = [
       'src/application/services/deployment/service.ts',
       'src/application/services/deployment/routing.ts',
     ];
 
     for (const relativePath of scopedFiles) {
       const source = read(relativePath);
-      expect(source).not.toContain('getWorkerBasics');
-      expect(source).not.toContain('getWorkerRollbackInfo');
-      expect(source).not.toContain('findDeploymentByWorkerVersion');
-      expect(source).not.toContain('getDeploymentRoutingWorkerRecord');
-      expect(source).not.toContain('updateWorkerDeploymentPointers');
-      expect(source).not.toContain('fetchWorkerWithDomains');
-      expect(source).not.toContain('WorkerBasics');
-      expect(source).not.toContain('WorkerRollbackInfo');
-      expect(source).not.toContain('DeploymentRoutingWorkerRecord');
+      assert(!(source).includes('getWorkerBasics'));
+      assert(!(source).includes('getWorkerRollbackInfo'));
+      assert(!(source).includes('findDeploymentByWorkerVersion'));
+      assert(!(source).includes('getDeploymentRoutingWorkerRecord'));
+      assert(!(source).includes('updateWorkerDeploymentPointers'));
+      assert(!(source).includes('fetchWorkerWithDomains'));
+      assert(!(source).includes('WorkerBasics'));
+      assert(!(source).includes('WorkerRollbackInfo'));
+      assert(!(source).includes('DeploymentRoutingWorkerRecord'));
     }
-  });
+})
+  Deno.test('platform architecture contract - keeps baseline SQL service storage pointed at services/route deployment fields', () => {
+  const baselineSql = readApp('db/migrations/0001_baseline.sql');
 
-  it('keeps baseline SQL service storage pointed at services/route deployment fields', () => {
-    const baselineSql = readApp('db/migrations/0001_baseline.sql');
-
-    expect(baselineSql).toContain('CREATE TABLE "services"');
-    expect(baselineSql).toContain('"route_ref"');
-    expect(baselineSql).toContain('"active_deployment_id"');
-    expect(baselineSql).toContain('"fallback_deployment_id"');
-    expect(baselineSql).toContain('CREATE TABLE "service_bindings"');
-    expect(baselineSql).toContain('CREATE TABLE "service_common_env_links"');
-    expect(baselineSql).toContain('CREATE TABLE "service_env_vars"');
-    expect(baselineSql).toContain('CREATE TABLE "service_runtime_settings"');
-    expect(baselineSql).not.toContain('"current_deployment_id"');
-    expect(baselineSql).not.toContain('"previous_deployment_id"');
-  });
-
-  it('keeps local runtime scripts pointed at canonical package entrypoints without public node-wrapper exports', () => {
-    const controlPackage = JSON.parse(readFileSync(path.join(appRootDir, 'package.json'), 'utf8')) as {
+    assertStringIncludes(baselineSql, 'CREATE TABLE "services"');
+    assertStringIncludes(baselineSql, '"route_ref"');
+    assertStringIncludes(baselineSql, '"active_deployment_id"');
+    assertStringIncludes(baselineSql, '"fallback_deployment_id"');
+    assertStringIncludes(baselineSql, 'CREATE TABLE "service_bindings"');
+    assertStringIncludes(baselineSql, 'CREATE TABLE "service_common_env_links"');
+    assertStringIncludes(baselineSql, 'CREATE TABLE "service_env_vars"');
+    assertStringIncludes(baselineSql, 'CREATE TABLE "service_runtime_settings"');
+    assert(!(baselineSql).includes('"current_deployment_id"'));
+    assert(!(baselineSql).includes('"previous_deployment_id"'));
+})
+  Deno.test('platform architecture contract - keeps local runtime scripts pointed at canonical package entrypoints without public node-wrapper exports', () => {
+  const controlPackage = JSON.parse(readFileSync(path.join(appRootDir, 'package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
       dependencies?: Record<string, string>;
     };
@@ -275,79 +264,75 @@ describe('platform architecture contract', () => {
     const localExecutorHostEntrypoint = readFileSync(path.join(appRootDir, '../../packages/control/local-platform/src/executor-host.ts'), 'utf8');
     const localBrowserHostEntrypoint = readFileSync(path.join(appRootDir, '../../packages/control/local-platform/src/browser-host.ts'), 'utf8');
 
-    expect(controlPackage.scripts?.['dev:local:web']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/web.ts');
-    expect(controlPackage.scripts?.['dev:local:dispatch']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/dispatch.ts');
-    expect(controlPackage.scripts?.['dev:local:runtime-host']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/runtime-host.ts');
-    expect(controlPackage.scripts?.['dev:local:executor-host']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/executor-host.ts');
-    expect(controlPackage.scripts?.['dev:local:browser-host']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/browser-host.ts');
-    expect(controlPackage.scripts?.['dev:local:worker']).toBe('pnpm exec tsx ../../packages/control/local-platform/src/worker.ts');
-    expect(controlPackage.scripts?.['dev:local:web']).not.toContain('register-public-loader');
-    expect(controlPackage.scripts?.['dev:local:web']).not.toContain('register-loader.mjs');
-    expect(controlPackage.scripts?.['dev:local:web']).not.toContain('public-resolve-loader.mjs');
-    expect(controlPackage.scripts?.['dev:local:web']).not.toContain('run-public-entrypoint.mjs');
-    expect(controlPackage.scripts?.['dev:local:web:node']).toBeUndefined();
-    expect(controlPackage.scripts?.['dev:local:dispatch:node']).toBeUndefined();
-    expect(controlPackage.scripts?.['dev:local:runtime-host:node']).toBeUndefined();
-    expect(controlPackage.scripts?.['dev:local:executor-host:node']).toBeUndefined();
-    expect(controlPackage.scripts?.['dev:local:browser-host:node']).toBeUndefined();
-    expect(controlPackage.scripts?.['dev:local:worker:node']).toBeUndefined();
-    expect(controlPackage.dependencies?.['@hono/node-server']).toBeUndefined();
-    expect(localWebEntrypoint).not.toContain('fetch-server.ts');
-    expect(localDispatchEntrypoint).not.toContain('fetch-server.ts');
-    expect(localRuntimeHostEntrypoint).not.toContain('fetch-server.ts');
-    expect(localExecutorHostEntrypoint).not.toContain('fetch-server.ts');
-    expect(localBrowserHostEntrypoint).not.toContain('fetch-server.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:web'], 'pnpm exec tsx ../../packages/control/local-platform/src/web.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:dispatch'], 'pnpm exec tsx ../../packages/control/local-platform/src/dispatch.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:runtime-host'], 'pnpm exec tsx ../../packages/control/local-platform/src/runtime-host.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:executor-host'], 'pnpm exec tsx ../../packages/control/local-platform/src/executor-host.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:browser-host'], 'pnpm exec tsx ../../packages/control/local-platform/src/browser-host.ts');
+    assertEquals(controlPackage.scripts?.['dev:local:worker'], 'pnpm exec tsx ../../packages/control/local-platform/src/worker.ts');
+    assert(!(controlPackage.scripts?.['dev:local:web']).includes('register-public-loader'));
+    assert(!(controlPackage.scripts?.['dev:local:web']).includes('register-loader.mjs'));
+    assert(!(controlPackage.scripts?.['dev:local:web']).includes('public-resolve-loader.mjs'));
+    assert(!(controlPackage.scripts?.['dev:local:web']).includes('run-public-entrypoint.mjs'));
+    assertEquals(controlPackage.scripts?.['dev:local:web:node'], undefined);
+    assertEquals(controlPackage.scripts?.['dev:local:dispatch:node'], undefined);
+    assertEquals(controlPackage.scripts?.['dev:local:runtime-host:node'], undefined);
+    assertEquals(controlPackage.scripts?.['dev:local:executor-host:node'], undefined);
+    assertEquals(controlPackage.scripts?.['dev:local:browser-host:node'], undefined);
+    assertEquals(controlPackage.scripts?.['dev:local:worker:node'], undefined);
+    assertEquals(controlPackage.dependencies?.['@hono/node-server'], undefined);
+    assert(!(localWebEntrypoint).includes('fetch-server.ts'));
+    assert(!(localDispatchEntrypoint).includes('fetch-server.ts'));
+    assert(!(localRuntimeHostEntrypoint).includes('fetch-server.ts'));
+    assert(!(localExecutorHostEntrypoint).includes('fetch-server.ts'));
+    assert(!(localBrowserHostEntrypoint).includes('fetch-server.ts'));
 
-    expect(localPlatformPackage.bin).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./node-runtime']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./web-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./dispatch-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./runtime-host-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./executor-host-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./browser-host-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./worker-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./oci-orchestrator-node']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./run-public-entrypoint']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./register-loader']).toBeUndefined();
-    expect(localPlatformPackage.exports?.['./run-entrypoint']).toBeUndefined();
-    expect(localPlatformPackage.dependencies?.['takos-control-hosts']).toBeUndefined();
-    expect(localPlatformPackage.dependencies?.miniflare).toBeUndefined();
-  });
-
-  it('removes the local public runner shim entirely', () => {
-    expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/http-server.ts'))).toBe(false);
-    expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/start-server.ts'))).toBe(false);
-    expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/run-public-entrypoint.mjs'))).toBe(false);
-    expect(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/node-runtime.ts'))).toBe(false);
-    expect(
+    assertEquals(localPlatformPackage.bin, undefined);
+    assertEquals(localPlatformPackage.exports?.['./node-runtime'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./web-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./dispatch-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./runtime-host-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./executor-host-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./browser-host-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./worker-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./oci-orchestrator-node'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./run-public-entrypoint'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./register-loader'], undefined);
+    assertEquals(localPlatformPackage.exports?.['./run-entrypoint'], undefined);
+    assertEquals(localPlatformPackage.dependencies?.['takos-control-hosts'], undefined);
+    assertEquals(localPlatformPackage.dependencies?.miniflare, undefined);
+})
+  Deno.test('platform architecture contract - removes the local public runner shim entirely', () => {
+  assertEquals(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/http-server.ts')), false);
+    assertEquals(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/start-server.ts')), false);
+    assertEquals(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/run-public-entrypoint.mjs')), false);
+    assertEquals(existsSync(path.join(appRootDir, '../../packages/control/local-platform/src/node-runtime.ts')), false);
+    assertEquals(
       existsSync(path.join(appRootDir, '..', '..', ['packages', 'control', 'src', 'local-platform', 'node-runtime.ts'].join('/')))
-    ).toBe(false);
-  });
+    , false);
+})
+  Deno.test('platform architecture contract - keeps local bootstrap off Node loader registration concerns', () => {
+  const localBootstrap = read('src/local-platform/bootstrap.ts');
 
-  it('keeps local bootstrap off Node loader registration concerns', () => {
-    const localBootstrap = read('src/local-platform/bootstrap.ts');
-
-    expect(localBootstrap).not.toContain('node:module');
-    expect(localBootstrap).not.toContain('registerNodeResolveLoader');
-  });
-
-  it('keeps canonical local runtime on explicit local runtime host handlers', () => {
-    const localRuntime = read('src/local-platform/runtime.ts');
+    assert(!(localBootstrap).includes('node:module'));
+    assert(!(localBootstrap).includes('registerNodeResolveLoader'));
+})
+  Deno.test('platform architecture contract - keeps canonical local runtime on explicit local runtime host handlers', () => {
+  const localRuntime = read('src/local-platform/runtime.ts');
     // The env builder (node-platform/env-builder.ts) is the canonical location
     // for binding creation.
     const envBuilder = read('src/node-platform/env-builder.ts');
     const localTenantRuntime = read('src/local-platform/tenant-worker-runtime.ts');
 
-    expect(localRuntime).not.toContain("takos-control-hosts/executor-host");
-    expect(localRuntime).not.toContain("takos-control-hosts/runtime-host");
-    expect(localRuntime).not.toContain("takos-control-hosts/browser-host");
-    expect(localRuntime).not.toContain("../runtime/container-hosts/runtime-host.ts");
-    expect(localRuntime).not.toContain("../runtime/container-hosts/executor-host.ts");
-    expect(localRuntime).not.toContain("../runtime/container-hosts/browser-session-host.ts");
+    assert(!(localRuntime).includes("takos-control-hosts/executor-host"));
+    assert(!(localRuntime).includes("takos-control-hosts/runtime-host"));
+    assert(!(localRuntime).includes("takos-control-hosts/browser-host"));
+    assert(!(localRuntime).includes("../runtime/container-hosts/runtime-host.ts"));
+    assert(!(localRuntime).includes("../runtime/container-hosts/executor-host.ts"));
+    assert(!(localRuntime).includes("../runtime/container-hosts/browser-session-host.ts"));
 
-    expect(envBuilder).toContain("from '../local-platform/tenant-worker-runtime.ts'");
-    expect(envBuilder).not.toContain("from '../local-platform/miniflare-registry.ts'");
-    expect(localTenantRuntime).toContain("import('./miniflare-registry.ts')");
-    expect(localTenantRuntime).not.toContain('TAKOS_LOCAL_DEBUG_TENANT_RUNTIME');
-  });
-});
+    assertStringIncludes(envBuilder, "from '../local-platform/tenant-worker-runtime.ts'");
+    assert(!(envBuilder).includes("from '../local-platform/miniflare-registry.ts'"));
+    assertStringIncludes(localTenantRuntime, "import('./miniflare-registry.ts')");
+    assert(!(localTenantRuntime).includes('TAKOS_LOCAL_DEBUG_TENANT_RUNTIME'));
+})

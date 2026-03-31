@@ -1,16 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const billingServiceMocks = vi.hoisted(() => ({
-  checkBillingQuota: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/services/billing/billing', () => ({
-  checkBillingQuota: billingServiceMocks.checkBillingQuota,
-}));
+const billingServiceMocks = ({
+  checkBillingQuota: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/billing/billing'
 import { billingGate } from '@/middleware/billing';
 
 function createUser(): User {
@@ -28,9 +26,9 @@ function createUser(): User {
   };
 }
 
-describe('billingGate', () => {
-  it('fails closed with 503 when quota check throws', async () => {
-    billingServiceMocks.checkBillingQuota.mockRejectedValue(new Error('db unavailable'));
+
+  Deno.test('billingGate - fails closed with 503 when quota check throws', async () => {
+  billingServiceMocks.checkBillingQuota = (async () => { throw new Error('db unavailable'); }) as any;
 
     const app = new Hono<{ Bindings: Env; Variables: { user?: User } }>();
     app.use('/metered', async (c, next) => {
@@ -46,10 +44,9 @@ describe('billingGate', () => {
       {} as ExecutionContext
     );
 
-    expect(res.status).toBe(503);
-    await expect(res.json()).resolves.toEqual({
+    assertEquals(res.status, 503);
+    await assertEquals(await res.json(), {
       error: 'Billing unavailable',
       code: 'SERVICE_UNAVAILABLE',
     });
-  });
-});
+})

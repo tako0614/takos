@@ -1,14 +1,14 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
-import { executeApiRequest } from './api-request.js';
-import { executeSseStream, executeWebSocketStream } from './api-streams.js';
+import { red, yellow } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
+import { executeApiRequest } from './api-request.ts';
+import { executeSseStream, executeWebSocketStream } from './api-streams.ts';
 import {
   resolveTaskPath,
   buildRunWatchPath,
   buildActionsWatchPath,
-} from './api-request.js';
-import type { ApiCommandOptions, StreamCommandOptions, WatchTaskOptions } from './api-request.js';
+} from './api-request.ts';
+import type { ApiCommandOptions, StreamCommandOptions, WatchTaskOptions } from './api-request.ts';
 
 
 interface TaskDomainDefinition {
@@ -139,7 +139,7 @@ function registerCrudTaskCommands(command: Command, basePath: string): void {
 function parseTransport(transportInput: string | undefined): 'ws' | 'sse' {
   const transport = (transportInput ?? 'ws').toLowerCase();
   if (transport !== 'ws' && transport !== 'sse') {
-    console.log(chalk.red(`Unsupported transport: ${transportInput}. Use ws or sse.`));
+    console.log(red(`Unsupported transport: ${transportInput}. Use ws or sse.`));
     cliExit(1);
   }
   return transport;
@@ -198,7 +198,7 @@ function registerActionsFollowTask(command: Command): void {
   followCommand.action(async (repoId: string, runId: string, options: WatchTaskOptions) => {
     const transport = parseTransport(options.transport);
     if (transport !== 'ws') {
-      console.log(chalk.red('`takos repo follow` currently supports WebSocket only.'));
+      console.log(red('`takos repo follow` currently supports WebSocket only.'));
       cliExit(1);
     }
 
@@ -217,8 +217,8 @@ function registerRemovedHttpStyleSubcommands(command: Command): void {
       .allowExcessArguments(true)
       .allowUnknownOption(true)
       .action(() => {
-        console.log(chalk.red('HTTP-verb style commands are removed.'));
-        console.log(chalk.yellow('Use task-style subcommands: list/view/create/replace/update/remove/probe/describe/watch/follow'));
+        console.log(red('HTTP-verb style commands are removed.'));
+        console.log(yellow('Use task-style subcommands: list/view/create/replace/update/remove/probe/describe/watch/follow'));
         cliExit(1);
       });
   }
@@ -231,8 +231,8 @@ function registerRemovedApiCommand(program: Command): void {
     .allowUnknownOption(true)
     .allowExcessArguments(true)
     .action(() => {
-      console.log(chalk.red('`takos api` is removed.'));
-      console.log(chalk.yellow('Use task-style commands such as:'));
+      console.log(red('`takos api` is removed.'));
+      console.log(yellow('Use task-style commands such as:'));
       console.log('  takos workspace list');
       console.log('  takos workspace create --body ...');
       console.log('  takos run follow <runId> --transport sse');
@@ -248,8 +248,8 @@ function registerMergedDomainRedirects(program: Command): void {
       .allowExcessArguments(true)
       .allowUnknownOption(true)
       .action(() => {
-        console.log(chalk.red(`\`takos ${oldName}\` has been merged into \`takos ${replacement}\`.`));
-        console.log(chalk.yellow(`Example: ${example}`));
+        console.log(red(`\`takos ${oldName}\` has been merged into \`takos ${replacement}\`.`));
+        console.log(yellow(`Example: ${example}`));
         cliExit(1);
       });
   }

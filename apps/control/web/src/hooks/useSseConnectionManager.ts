@@ -1,10 +1,11 @@
-import { useCallback, useRef } from 'react';
 import {
   useConnectionManagerBase,
   type ConnectionManagerOptions,
   type ConnectionManagerResult,
   type TransportSetupContext,
 } from './useConnectionManagerBase';
+
+type MutableRefObject<T> = { current: T };
 
 /**
  * SSE-based connection manager that exposes the same interface as
@@ -28,9 +29,9 @@ export type UseSseConnectionManagerResult = ConnectionManagerResult;
 export function useSseConnectionManager(
   options: UseSseConnectionManagerOptions,
 ): UseSseConnectionManagerResult {
-  const eventSourceRef = useRef<EventSource | null>(null);
+  let eventSourceRef: MutableRefObject<EventSource | null> = { current: null };
 
-  const cleanupTransport = useCallback((): void => {
+  const cleanupTransport = (): void => {
     if (eventSourceRef.current) {
       try {
         eventSourceRef.current.onopen = null;
@@ -42,9 +43,9 @@ export function useSseConnectionManager(
       }
       eventSourceRef.current = null;
     }
-  }, []);
+  };
 
-  const setupTransport = useCallback((ctx: TransportSetupContext): void => {
+  const setupTransport = (ctx: TransportSetupContext): void => {
     const { runId, lastEventId, onMessage, onClose, onOpen } = ctx;
 
     const sseParams = new URLSearchParams();
@@ -95,7 +96,7 @@ export function useSseConnectionManager(
     } catch (sseErr) {
       console.error('SSE creation failed:', sseErr);
     }
-  }, []);
+  };
 
   return useConnectionManagerBase(
     options,

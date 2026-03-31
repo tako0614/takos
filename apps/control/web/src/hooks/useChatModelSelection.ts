@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, onMount } from 'solid-js';
 import { rpc, rpcJson } from '../lib/rpc';
 import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog';
 import type { ModelOption } from '../views/agent/work/task-work-types';
@@ -19,10 +19,10 @@ export function useChatModelSelection({
   spaceId,
   initialModel,
 }: UseChatModelSelectionOptions): UseChatModelSelectionResult {
-  const [selectedModel, setSelectedModel] = useState<string>(initialModel ?? DEFAULT_MODEL_ID);
-  const [availableModels, setAvailableModels] = useState<ModelSelectOption[]>([...FALLBACK_MODELS]);
+  const [selectedModel, setSelectedModel] = createSignal<string>(initialModel ?? DEFAULT_MODEL_ID);
+  const [availableModels, setAvailableModels] = createSignal<ModelSelectOption[]>([...FALLBACK_MODELS]);
 
-  const fetchSpaceModels = useCallback(async () => {
+  const fetchSpaceModels = async () => {
     if (!spaceId) return;
     try {
       const res = await rpc.spaces[':spaceId'].model.$get({
@@ -81,15 +81,15 @@ export function useChatModelSelection({
       console.error('Failed to fetch space models:', err);
       setAvailableModels([...FALLBACK_MODELS]);
     }
-  }, [spaceId, initialModel]);
+  };
 
-  useEffect(() => {
+  onMount(() => {
     fetchSpaceModels();
-  }, [fetchSpaceModels]);
+  });
 
   return {
-    availableModels,
-    selectedModel,
+    get availableModels() { return availableModels(); },
+    get selectedModel() { return selectedModel(); },
     setSelectedModel,
     fetchSpaceModels,
   };

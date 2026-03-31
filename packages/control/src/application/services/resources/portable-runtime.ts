@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CreateQueueCommand, DeleteQueueCommand, GetQueueUrlCommand, SQSClient } from '@aws-sdk/client-sqs';
-import { PubSub } from '@google-cloud/pubsub';
+import type { PubSub } from '@google-cloud/pubsub';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
 import type { D1Database, KVNamespace, R2Bucket } from '../../../shared/types/bindings.ts';
@@ -327,9 +327,9 @@ function missingPortableBootstrapRequirements(
     case 'secret':
       if (provider !== 'k8s') return [];
       return [
-        ...(optionalEnv('K8S_API_SERVER') || process.env.KUBERNETES_SERVICE_HOST ? [] : ['K8S_API_SERVER or in-cluster Kubernetes service env']),
-        ...(optionalEnv('K8S_BEARER_TOKEN') || process.env.KUBERNETES_SERVICE_HOST ? [] : ['K8S_BEARER_TOKEN or in-cluster service account token']),
-        ...(optionalEnv('K8S_NAMESPACE') || process.env.KUBERNETES_SERVICE_HOST ? [] : ['K8S_NAMESPACE or in-cluster service account namespace']),
+        ...(optionalEnv('K8S_API_SERVER') || Deno.env.get('KUBERNETES_SERVICE_HOST') ? [] : ['K8S_API_SERVER or in-cluster Kubernetes service env']),
+        ...(optionalEnv('K8S_BEARER_TOKEN') || Deno.env.get('KUBERNETES_SERVICE_HOST') ? [] : ['K8S_BEARER_TOKEN or in-cluster service account token']),
+        ...(optionalEnv('K8S_NAMESPACE') || Deno.env.get('KUBERNETES_SERVICE_HOST') ? [] : ['K8S_NAMESPACE or in-cluster service account namespace']),
       ];
     default:
       return [];
@@ -439,17 +439,25 @@ async function deletePortableAwsQueue(resource: PortableResourceRef): Promise<vo
   }));
 }
 
-function createPortablePubSubClient(): PubSub {
-  return new PubSub({
-    ...(optionalEnv('GCP_PROJECT_ID') ? { projectId: optionalEnv('GCP_PROJECT_ID') } : {}),
-    ...(optionalEnv('GOOGLE_APPLICATION_CREDENTIALS')
-      ? { keyFilename: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS') }
-      : {}),
-  });
+let portablePubSubPromise: Promise<PubSub> | undefined;
+
+async function createPortablePubSubClient(): Promise<PubSub> {
+  if (!portablePubSubPromise) {
+    portablePubSubPromise = (async () => {
+      const { PubSub } = await import('@google-cloud/pubsub');
+      return new PubSub({
+        ...(optionalEnv('GCP_PROJECT_ID') ? { projectId: optionalEnv('GCP_PROJECT_ID') } : {}),
+        ...(optionalEnv('GOOGLE_APPLICATION_CREDENTIALS')
+          ? { keyFilename: optionalEnv('GOOGLE_APPLICATION_CREDENTIALS') }
+          : {}),
+      });
+    })();
+  }
+  return portablePubSubPromise;
 }
 
 async function ensurePortableGcpQueue(resource: PortableResourceRef): Promise<string> {
-  const pubsub = createPortablePubSubClient();
+  const pubsub = await createPortablePubSubClient();
   const topicName = resolvePortableQueueName(resource);
   const subscriptionName = resolvePortablePubSubSubscriptionName(resource);
   const [topic] = await pubsub.topic(topicName).get({ autoCreate: true });
@@ -461,7 +469,7 @@ async function ensurePortableGcpQueue(resource: PortableResourceRef): Promise<st
 }
 
 async function deletePortableGcpQueue(resource: PortableResourceRef): Promise<void> {
-  const pubsub = createPortablePubSubClient();
+  const pubsub = await createPortablePubSubClient();
   const topicName = resolvePortableQueueName(resource);
   const subscriptionName = resolvePortablePubSubSubscriptionName(resource);
   try {
@@ -1058,6 +1066,7 @@ export async function deletePortableManagedResource(
 }
 
 export function resetPortableResourceRuntimeCachesForTests(): void {
+  portablePubSubPromise = undefined;
   sqlCache.clear();
   objectStoreCache.clear();
   kvStoreCache.clear();

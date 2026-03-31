@@ -1,447 +1,417 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-
 // Mock playwright-core before importing
-vi.mock('playwright-core', () => ({
-  chromium: {
-    launchPersistentContext: vi.fn(),
-  },
-}));
-
-vi.mock('takos-common/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    child: vi.fn().mockReturnThis(),
-  }),
-}));
-
-import { BrowserManager } from '../browser-manager.js';
+// [Deno] vi.mock removed - manually stub imports from 'playwright-core'
+// [Deno] vi.mock removed - manually stub imports from 'takos-common/logger'
+import { BrowserManager } from '../browser-manager.ts';
 import { chromium } from 'playwright-core';
 
-describe('BrowserManager', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('isAlive', () => {
-    it('returns false when context is not started', () => {
-      const mgr = new BrowserManager();
-      expect(mgr.isAlive()).toBe(false);
-    });
-  });
+  
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-  describe('tabs', () => {
-    it('returns empty array when context is not started', async () => {
-      const mgr = new BrowserManager();
+    Deno.test('BrowserManager - isAlive - returns false when context is not started', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      assertEquals(mgr.isAlive(), false);
+})  
+  
+    Deno.test('BrowserManager - tabs - returns empty array when context is not started', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
       const tabs = await mgr.tabs();
-      expect(tabs).toEqual([]);
-    });
-  });
-
-  describe('action', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(
+      assertEquals(tabs, []);
+})  
+  
+    Deno.test('BrowserManager - action - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await 
         mgr.action({ type: 'click', selector: '#btn' }),
-      ).rejects.toThrow('No active page');
-    });
-  });
-
-  describe('goto', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(
+      ; }, 'No active page');
+})  
+  
+    Deno.test('BrowserManager - goto - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await 
         mgr.goto({ url: 'https://example.com' }),
-      ).rejects.toThrow('No active page');
-    });
-  });
-
-  describe('html', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.html()).rejects.toThrow('No active page');
-    });
-  });
-
-  describe('screenshot', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.screenshot()).rejects.toThrow('No active page');
-    });
-  });
-
-  describe('pdf', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.pdf()).rejects.toThrow('No active page');
-    });
-  });
-
-  describe('extract', () => {
-    it('throws when no active page', async () => {
-      const mgr = new BrowserManager();
-      await expect(
+      ; }, 'No active page');
+})  
+  
+    Deno.test('BrowserManager - html - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.html(); }, 'No active page');
+})  
+  
+    Deno.test('BrowserManager - screenshot - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.screenshot(); }, 'No active page');
+})  
+  
+    Deno.test('BrowserManager - pdf - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.pdf(); }, 'No active page');
+})  
+  
+    Deno.test('BrowserManager - extract - throws when no active page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await 
         mgr.extract({ selector: 'div' }),
-      ).rejects.toThrow('No active page');
-    });
-
-    it('throws when neither selector nor evaluate provided (after bootstrap)', async () => {
-      // Setup mock context and page
+      ; }, 'No active page');
+})
+    Deno.test('BrowserManager - extract - throws when neither selector nor evaluate provided (after bootstrap)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // Setup mock context and page
       const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        content: vi.fn(),
-        screenshot: vi.fn(),
-        pdf: vi.fn(),
-        evaluate: vi.fn(),
-        $$: vi.fn(),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        content: ((..._args: any[]) => undefined) as any,
+        screenshot: ((..._args: any[]) => undefined) as any,
+        pdf: ((..._args: any[]) => undefined) as any,
+        evaluate: ((..._args: any[]) => undefined) as any,
+        $$: ((..._args: any[]) => undefined) as any,
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
-      await expect(mgr.extract({})).rejects.toThrow(
+      await await assertRejects(async () => { await mgr.extract({}); }, 
         'Either selector or evaluate must be provided',
       );
-    });
-
-    it('extracts data using selector — queries elements and returns tag/text/attributes', async () => {
-      const mockElement = {
-        evaluate: vi.fn()
-          .mockResolvedValueOnce('div')   // tagName
-          .mockResolvedValueOnce({ class: 'item', id: 'el1' }), // attributes
-        textContent: vi.fn().mockResolvedValue('  Hello World  '),
+})
+    Deno.test('BrowserManager - extract - extracts data using selector — queries elements and returns tag/text/attributes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockElement = {
+        evaluate: ((..._args: any[]) => undefined) as any
+           = (async () => 'div') as any   // tagName
+           = (async () => ({ class: 'item', id: 'el1' })) as any, // attributes
+        textContent: (async () => '  Hello World  '),
       };
       const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        $$: vi.fn().mockResolvedValue([mockElement]),
-        evaluate: vi.fn(),
-        content: vi.fn(),
-        screenshot: vi.fn(),
-        pdf: vi.fn(),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        $$: (async () => [mockElement]),
+        evaluate: ((..._args: any[]) => undefined) as any,
+        content: ((..._args: any[]) => undefined) as any,
+        screenshot: ((..._args: any[]) => undefined) as any,
+        pdf: ((..._args: any[]) => undefined) as any,
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.extract({ selector: '.item' });
-      expect(mockPage.$$).toHaveBeenCalledWith('.item');
-      expect(result.data).toEqual([
+      assertSpyCallArgs(mockPage.$$, 0, ['.item']);
+      assertEquals(result.data, [
         { tag: 'div', text: 'Hello World', attributes: { class: 'item', id: 'el1' } },
       ]);
-    });
-
-    it('extracts data using evaluate — calls page.evaluate with the expression', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        evaluate: vi.fn().mockResolvedValue({ count: 42 }),
-        $$: vi.fn(),
-        content: vi.fn(),
-        screenshot: vi.fn(),
-        pdf: vi.fn(),
+})
+    Deno.test('BrowserManager - extract - extracts data using evaluate — calls page.evaluate with the expression', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        evaluate: (async () => ({ count: 42 })),
+        $$: ((..._args: any[]) => undefined) as any,
+        content: ((..._args: any[]) => undefined) as any,
+        screenshot: ((..._args: any[]) => undefined) as any,
+        pdf: ((..._args: any[]) => undefined) as any,
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const evalExpr = 'document.querySelectorAll("a").length';
       const result = await mgr.extract({ evaluate: evalExpr });
-      expect(mockPage.evaluate).toHaveBeenCalledWith(evalExpr);
-      expect(result.data).toEqual({ count: 42 });
-    });
-  });
-
-  describe('newTab', () => {
-    it('throws when context is not started', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.newTab()).rejects.toThrow('Browser not started');
-    });
-  });
-
-  describe('closeTab', () => {
-    it('throws when context is not started', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.closeTab(0)).rejects.toThrow('Browser not started');
-    });
-  });
-
-  describe('switchTab', () => {
-    it('throws when context is not started', async () => {
-      const mgr = new BrowserManager();
-      await expect(mgr.switchTab(0)).rejects.toThrow('Browser not started');
-    });
-  });
-
-  describe('close', () => {
-    it('does nothing when context is null', async () => {
-      const mgr = new BrowserManager();
+      assertSpyCallArgs(mockPage.evaluate, 0, [evalExpr]);
+      assertEquals(result.data, { count: 42 });
+})  
+  
+    Deno.test('BrowserManager - newTab - throws when context is not started', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.newTab(); }, 'Browser not started');
+})  
+  
+    Deno.test('BrowserManager - closeTab - throws when context is not started', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.closeTab(0); }, 'Browser not started');
+})  
+  
+    Deno.test('BrowserManager - switchTab - throws when context is not started', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
+      await await assertRejects(async () => { await mgr.switchTab(0); }, 'Browser not started');
+})  
+  
+    Deno.test('BrowserManager - close - does nothing when context is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mgr = new BrowserManager();
       // Should not throw
       await mgr.close();
-      expect(mgr.isAlive()).toBe(false);
-    });
-  });
-
-  describe('bootstrap', () => {
-    it('launches persistent context and returns page info', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue('New Tab'),
+      assertEquals(mgr.isAlive(), false);
+})  
+  
+    Deno.test('BrowserManager - bootstrap - launches persistent context and returns page info', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => 'New Tab'),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       const result = await mgr.bootstrap({});
 
-      expect(result.ok).toBe(true);
-      expect(result.url).toBe('about:blank');
-      expect(result.title).toBe('New Tab');
-      expect(mgr.isAlive()).toBe(true);
-    });
-
-    it('navigates to URL when provided', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('https://example.com'),
-        title: vi.fn().mockResolvedValue('Example'),
+      assertEquals(result.ok, true);
+      assertEquals(result.url, 'about:blank');
+      assertEquals(result.title, 'New Tab');
+      assertEquals(mgr.isAlive(), true);
+})
+    Deno.test('BrowserManager - bootstrap - navigates to URL when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'https://example.com'),
+        title: (async () => 'Example'),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       const result = await mgr.bootstrap({ url: 'https://example.com' });
 
-      expect(mockPage.goto).toHaveBeenCalledWith('https://example.com', {
+      assertSpyCallArgs(mockPage.goto, 0, ['https://example.com', {
         waitUntil: 'load',
         timeout: 30000,
-      });
-      expect(result.url).toBe('https://example.com');
-    });
-
-    it('uses custom viewport', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      }]);
+      assertEquals(result.url, 'https://example.com');
+})
+    Deno.test('BrowserManager - bootstrap - uses custom viewport', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({ viewport: { width: 1920, height: 1080 } });
 
-      expect(chromium.launchPersistentContext).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
+      assertSpyCallArgs(chromium.launchPersistentContext, 0, [
+        /* expect.any(String) */ {} as any,
+        ({
           viewport: { width: 1920, height: 1080 },
         }),
-      );
-    });
-
-    it('creates new page when no default pages exist', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      ]);
+})
+    Deno.test('BrowserManager - bootstrap - creates new page when no default pages exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([]),
-        newPage: vi.fn().mockResolvedValue(mockPage),
-        close: vi.fn(),
+        pages: (() => []),
+        newPage: (async () => mockPage),
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       const result = await mgr.bootstrap({});
 
-      expect(mockContext.newPage).toHaveBeenCalled();
-      expect(result.ok).toBe(true);
-    });
-
-    it('closes existing context when re-bootstrapping', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      assert(mockContext.newPage.calls.length > 0);
+      assertEquals(result.ok, true);
+})
+    Deno.test('BrowserManager - bootstrap - closes existing context when re-bootstrapping', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
       await mgr.bootstrap({});
 
-      expect(mockContext.close).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('goto with mocked context', () => {
-    it('returns url, title and status', async () => {
-      const mockResponse = { status: vi.fn().mockReturnValue(200) };
+      assertSpyCalls(mockContext.close, 1);
+})  
+  
+    Deno.test('BrowserManager - goto with mocked context - returns url, title and status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockResponse = { status: (() => 200) };
       const mockPage = {
-        goto: vi.fn().mockResolvedValue(mockResponse),
-        url: vi.fn().mockReturnValue('https://example.com/page'),
-        title: vi.fn().mockResolvedValue('Page Title'),
+        goto: (async () => mockResponse),
+        url: (() => 'https://example.com/page'),
+        title: (async () => 'Page Title'),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.goto({ url: 'https://example.com/page' });
-      expect(result.url).toBe('https://example.com/page');
-      expect(result.title).toBe('Page Title');
-      expect(result.status).toBe(200);
-    });
-
-    it('returns null status when response is null', async () => {
-      const mockPage = {
-        goto: vi.fn().mockResolvedValue(null),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      assertEquals(result.url, 'https://example.com/page');
+      assertEquals(result.title, 'Page Title');
+      assertEquals(result.status, 200);
+})
+    Deno.test('BrowserManager - goto with mocked context - returns null status when response is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: (async () => null),
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.goto({ url: 'https://example.com' });
-      expect(result.status).toBeNull();
-    });
-  });
-
-  describe('action with mocked context', () => {
+      assertEquals(result.status, null);
+})  
+  
     function setupBrowserWithPage() {
       const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        click: vi.fn(),
-        fill: vi.fn(),
-        selectOption: vi.fn(),
-        hover: vi.fn(),
-        check: vi.fn(),
-        uncheck: vi.fn(),
-        focus: vi.fn(),
-        $: vi.fn(),
-        keyboard: { press: vi.fn() },
-        mouse: { wheel: vi.fn() },
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        click: ((..._args: any[]) => undefined) as any,
+        fill: ((..._args: any[]) => undefined) as any,
+        selectOption: ((..._args: any[]) => undefined) as any,
+        hover: ((..._args: any[]) => undefined) as any,
+        check: ((..._args: any[]) => undefined) as any,
+        uncheck: ((..._args: any[]) => undefined) as any,
+        focus: ((..._args: any[]) => undefined) as any,
+        $: ((..._args: any[]) => undefined) as any,
+        keyboard: { press: ((..._args: any[]) => undefined) as any },
+        mouse: { wheel: ((..._args: any[]) => undefined) as any },
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
       return { mockPage, mockContext };
     }
 
-    it('handles click action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+    Deno.test('BrowserManager - action with mocked context - handles click action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'click', selector: '#btn' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Clicked #btn');
-      expect(mockPage.click).toHaveBeenCalledWith('#btn', { button: undefined, clickCount: undefined });
-    });
-
-    it('handles type action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Clicked #btn');
+      assertSpyCallArgs(mockPage.click, 0, ['#btn', { button: undefined, clickCount: undefined }]);
+})
+    Deno.test('BrowserManager - action with mocked context - handles type action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'type', selector: '#input', text: 'hello' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Typed into #input');
-      expect(mockPage.fill).toHaveBeenCalledWith('#input', 'hello');
-    });
-
-    it('handles select action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Typed into #input');
+      assertSpyCallArgs(mockPage.fill, 0, ['#input', 'hello']);
+})
+    Deno.test('BrowserManager - action with mocked context - handles select action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'select', selector: '#dropdown', value: 'opt1' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Selected "opt1"');
-    });
-
-    it('handles hover action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Selected "opt1"');
+})
+    Deno.test('BrowserManager - action with mocked context - handles hover action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'hover', selector: '#link' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Hovered over #link');
-    });
-
-    it('handles press action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Hovered over #link');
+})
+    Deno.test('BrowserManager - action with mocked context - handles press action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'press', key: 'Enter' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Pressed Enter');
-    });
-
-    it('handles press action with modifiers', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Pressed Enter');
+})
+    Deno.test('BrowserManager - action with mocked context - handles press action with modifiers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
@@ -450,324 +420,317 @@ describe('BrowserManager', () => {
         key: 'c',
         modifiers: ['Control'],
       });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Pressed Control+c');
-      expect(mockPage.keyboard.press).toHaveBeenCalledWith('Control+c');
-    });
-
-    it('handles check action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Pressed Control+c');
+      assertSpyCallArgs(mockPage.keyboard.press, 0, ['Control+c']);
+})
+    Deno.test('BrowserManager - action with mocked context - handles check action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'check', selector: '#checkbox' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Checked #checkbox');
-    });
-
-    it('handles uncheck action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Checked #checkbox');
+})
+    Deno.test('BrowserManager - action with mocked context - handles uncheck action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'uncheck', selector: '#checkbox' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Unchecked #checkbox');
-    });
-
-    it('handles focus action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Unchecked #checkbox');
+})
+    Deno.test('BrowserManager - action with mocked context - handles focus action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'focus', selector: '#input' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Focused #input');
-    });
-
-    it('handles clear action', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Focused #input');
+})
+    Deno.test('BrowserManager - action with mocked context - handles clear action', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'clear', selector: '#input' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Cleared #input');
-      expect(mockPage.fill).toHaveBeenCalledWith('#input', '');
-    });
-
-    it('handles scroll down without selector', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Cleared #input');
+      assertSpyCallArgs(mockPage.fill, 0, ['#input', '']);
+})
+    Deno.test('BrowserManager - action with mocked context - handles scroll down without selector', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'scroll', direction: 'down' });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Scrolled down by 500px');
-      expect(mockPage.mouse.wheel).toHaveBeenCalledWith(0, 500);
-    });
-
-    it('handles scroll up with custom amount', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Scrolled down by 500px');
+      assertSpyCallArgs(mockPage.mouse.wheel, 0, [0, 500]);
+})
+    Deno.test('BrowserManager - action with mocked context - handles scroll up with custom amount', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'scroll', direction: 'up', amount: 200 });
-      expect(result.ok).toBe(true);
-      expect(result.message).toContain('Scrolled up by 200px');
-      expect(mockPage.mouse.wheel).toHaveBeenCalledWith(0, -200);
-    });
-
-    it('handles scroll right', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertEquals(result.ok, true);
+      assertStringIncludes(result.message, 'Scrolled up by 200px');
+      assertSpyCallArgs(mockPage.mouse.wheel, 0, [0, -200]);
+})
+    Deno.test('BrowserManager - action with mocked context - handles scroll right', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'scroll', direction: 'right', amount: 300 });
-      expect(mockPage.mouse.wheel).toHaveBeenCalledWith(300, 0);
-    });
-
-    it('handles scroll left', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertSpyCallArgs(mockPage.mouse.wheel, 0, [300, 0]);
+})
+    Deno.test('BrowserManager - action with mocked context - handles scroll left', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.action({ type: 'scroll', direction: 'left', amount: 100 });
-      expect(mockPage.mouse.wheel).toHaveBeenCalledWith(-100, 0);
-    });
-
-    it('throws for unknown action type', async () => {
-      const { mockPage } = setupBrowserWithPage();
+      assertSpyCallArgs(mockPage.mouse.wheel, 0, [-100, 0]);
+})
+    Deno.test('BrowserManager - action with mocked context - throws for unknown action type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const { mockPage } = setupBrowserWithPage();
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
-      await expect(
+      await await assertRejects(async () => { await 
         mgr.action({ type: 'unknown-action' } as any),
-      ).rejects.toThrow('Unknown action type: unknown-action');
-    });
-  });
-
-  describe('html with mocked context', () => {
-    it('returns page content and url', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('https://example.com'),
-        title: vi.fn().mockResolvedValue('Example'),
-        content: vi.fn().mockResolvedValue('<html><body><h1>Hello</h1></body></html>'),
+      ; }, 'Unknown action type: unknown-action');
+})  
+  
+    Deno.test('BrowserManager - html with mocked context - returns page content and url', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'https://example.com'),
+        title: (async () => 'Example'),
+        content: (async () => '<html><body><h1>Hello</h1></body></html>'),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.html();
-      expect(mockPage.content).toHaveBeenCalled();
-      expect(result.html).toBe('<html><body><h1>Hello</h1></body></html>');
-      expect(result.url).toBe('https://example.com');
-    });
-  });
-
-  describe('screenshot with mocked context', () => {
-    it('calls page.screenshot with fullPage=false and type=png and returns buffer', async () => {
-      const screenshotBuffer = Buffer.from('fake-png-data');
+      assert(mockPage.content.calls.length > 0);
+      assertEquals(result.html, '<html><body><h1>Hello</h1></body></html>');
+      assertEquals(result.url, 'https://example.com');
+})  
+  
+    Deno.test('BrowserManager - screenshot with mocked context - calls page.screenshot with fullPage=false and type=png and returns buffer', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const screenshotBuffer = Buffer.from('fake-png-data');
       const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        screenshot: vi.fn().mockResolvedValue(screenshotBuffer),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        screenshot: (async () => screenshotBuffer),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.screenshot();
-      expect(mockPage.screenshot).toHaveBeenCalledWith({ type: 'png', fullPage: false });
-      expect(result).toBe(screenshotBuffer);
-      expect(Buffer.isBuffer(result)).toBe(true);
-    });
-  });
-
-  describe('pdf with mocked context', () => {
-    it('calls page.pdf with A4 format and returns buffer', async () => {
-      const pdfBuffer = Buffer.from('fake-pdf-data');
+      assertSpyCallArgs(mockPage.screenshot, 0, [{ type: 'png', fullPage: false }]);
+      assertEquals(result, screenshotBuffer);
+      assertEquals(Buffer.isBuffer(result), true);
+})  
+  
+    Deno.test('BrowserManager - pdf with mocked context - calls page.pdf with A4 format and returns buffer', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const pdfBuffer = Buffer.from('fake-pdf-data');
       const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
-        pdf: vi.fn().mockResolvedValue(pdfBuffer),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
+        pdf: (async () => pdfBuffer),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.pdf();
-      expect(mockPage.pdf).toHaveBeenCalledWith({ format: 'A4' });
-      expect(result).toBe(pdfBuffer);
-      expect(Buffer.isBuffer(result)).toBe(true);
-    });
-  });
-
-  describe('close with mocked context', () => {
-    it('closes the context and resets state', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      assertSpyCallArgs(mockPage.pdf, 0, [{ format: 'A4' }]);
+      assertEquals(result, pdfBuffer);
+      assertEquals(Buffer.isBuffer(result), true);
+})  
+  
+    Deno.test('BrowserManager - close with mocked context - closes the context and resets state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
-      expect(mgr.isAlive()).toBe(true);
+      assertEquals(mgr.isAlive(), true);
 
       await mgr.close();
 
-      expect(mockContext.close).toHaveBeenCalled();
-      expect(mgr.isAlive()).toBe(false);
+      assert(mockContext.close.calls.length > 0);
+      assertEquals(mgr.isAlive(), false);
       // After close, methods requiring a page should throw
-      await expect(mgr.html()).rejects.toThrow('No active page');
-      await expect(mgr.screenshot()).rejects.toThrow('No active page');
-    });
-
-    it('handles error during context.close gracefully', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      await await assertRejects(async () => { await mgr.html(); }, 'No active page');
+      await await assertRejects(async () => { await mgr.screenshot(); }, 'No active page');
+})
+    Deno.test('BrowserManager - close with mocked context - handles error during context.close gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn().mockRejectedValue(new Error('Browser crashed')),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: (async () => { throw new Error('Browser crashed'); }),
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       // Should not throw even when context.close fails
       await mgr.close();
-      expect(mgr.isAlive()).toBe(false);
-    });
-  });
-
-  describe('tab management with mocked context', () => {
-    it('closeTab throws for out-of-range index', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      assertEquals(mgr.isAlive(), false);
+})  
+  
+    Deno.test('BrowserManager - tab management with mocked context - closeTab throws for out-of-range index', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
-      await expect(mgr.closeTab(5)).rejects.toThrow('Tab index 5 out of range');
-      await expect(mgr.closeTab(-1)).rejects.toThrow('Tab index -1 out of range');
-    });
-
-    it('switchTab throws for out-of-range index', async () => {
-      const mockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      await await assertRejects(async () => { await mgr.closeTab(5); }, 'Tab index 5 out of range');
+      await await assertRejects(async () => { await mgr.closeTab(-1); }, 'Tab index -1 out of range');
+})
+    Deno.test('BrowserManager - tab management with mocked context - switchTab throws for out-of-range index', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const mockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([mockPage]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [mockPage]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
-      await expect(mgr.switchTab(3)).rejects.toThrow('Tab index 3 out of range');
-    });
-
-    it('newTab creates page and sets it as active', async () => {
-      const newMockPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+      await await assertRejects(async () => { await mgr.switchTab(3); }, 'Tab index 3 out of range');
+})
+    Deno.test('BrowserManager - tab management with mocked context - newTab creates page and sets it as active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const newMockPage = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const origPage = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('about:blank'),
-        title: vi.fn().mockResolvedValue(''),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'about:blank'),
+        title: (async () => ''),
       };
       const mockContext = {
-        pages: vi.fn()
-          .mockReturnValueOnce([origPage]) // bootstrap
-          .mockReturnValue([origPage, newMockPage]), // after newTab
-        newPage: vi.fn().mockResolvedValue(newMockPage),
-        close: vi.fn(),
+        pages: ((..._args: any[]) => undefined) as any
+           = (() => [origPage]) as any // bootstrap
+           = (() => [origPage, newMockPage]) as any, // after newTab
+        newPage: (async () => newMockPage),
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const result = await mgr.newTab();
-      expect(result.index).toBe(1);
-      expect(result.url).toBe('about:blank');
-    });
-
-    it('tabs returns info for each page', async () => {
-      const page1 = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('https://a.com'),
-        title: vi.fn().mockResolvedValue('Page A'),
+      assertEquals(result.index, 1);
+      assertEquals(result.url, 'about:blank');
+})
+    Deno.test('BrowserManager - tab management with mocked context - tabs returns info for each page', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const page1 = {
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'https://a.com'),
+        title: (async () => 'Page A'),
       };
       const page2 = {
-        goto: vi.fn(),
-        url: vi.fn().mockReturnValue('https://b.com'),
-        title: vi.fn().mockResolvedValue('Page B'),
+        goto: ((..._args: any[]) => undefined) as any,
+        url: (() => 'https://b.com'),
+        title: (async () => 'Page B'),
       };
       const mockContext = {
-        pages: vi.fn().mockReturnValue([page1, page2]),
-        newPage: vi.fn(),
-        close: vi.fn(),
+        pages: (() => [page1, page2]),
+        newPage: ((..._args: any[]) => undefined) as any,
+        close: ((..._args: any[]) => undefined) as any,
       };
-      vi.mocked(chromium.launchPersistentContext).mockResolvedValue(mockContext as any);
+      chromium.launchPersistentContext = (async () => mockContext as any) as any;
 
       const mgr = new BrowserManager();
       await mgr.bootstrap({});
 
       const tabs = await mgr.tabs();
-      expect(tabs).toHaveLength(2);
-      expect(tabs[0].url).toBe('https://a.com');
-      expect(tabs[0].active).toBe(true);
-      expect(tabs[1].url).toBe('https://b.com');
-      expect(tabs[1].active).toBe(false);
-    });
-  });
-});
+      assertEquals(tabs.length, 2);
+      assertEquals(tabs[0].url, 'https://a.com');
+      assertEquals(tabs[0].active, true);
+      assertEquals(tabs[1].url, 'https://b.com');
+      assertEquals(tabs[1].active, false);
+})  

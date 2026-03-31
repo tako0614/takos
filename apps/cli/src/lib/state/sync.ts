@@ -6,9 +6,9 @@
  * versions are equal, updatedAt is used as the tiebreaker.
  */
 
-import type { TakosState } from './state-types.js';
-import { readStateFromFile, writeStateToFile } from './state-file.js';
-import { hasApiEndpoint, readGroupStateFromApi, writeGroupStateToApi } from './api-client.js';
+import type { TakosState } from './state-types.ts';
+import { readStateFromFile, writeStateToFile } from './state-file.ts';
+import { hasApiEndpoint, readGroupStateFromApi, writeGroupStateToApi } from './api-client.ts';
 
 // ---------------------------------------------------------------------------
 // Types

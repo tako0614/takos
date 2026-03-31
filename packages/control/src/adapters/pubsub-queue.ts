@@ -1,4 +1,4 @@
-import { PubSub, type Message } from '@google-cloud/pubsub';
+import type { PubSub, Message } from '@google-cloud/pubsub';
 import type { Queue } from '../shared/types/bindings.ts';
 import type { ConsumableQueue, LocalQueueName, LocalQueueRecord } from '../local-platform/queue-runtime.ts';
 
@@ -20,17 +20,33 @@ export type PubSubQueueConfig = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function lazyPubSub(config: PubSubQueueConfig): () => PubSub {
-  let pubsub: PubSub | undefined;
-  return () => {
-    if (!pubsub) {
-      pubsub = new PubSub({
-        ...(config.projectId ? { projectId: config.projectId } : {}),
-        ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
-      });
+function lazyPubSub(config: PubSubQueueConfig): () => Promise<PubSub> {
+  let pubsubPromise: Promise<PubSub> | undefined;
+  return async () => {
+    if (!pubsubPromise) {
+      pubsubPromise = (async () => {
+        const { PubSub } = await import('@google-cloud/pubsub');
+        return new PubSub({
+          ...(config.projectId ? { projectId: config.projectId } : {}),
+          ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
+        });
+      })();
     }
-    return pubsub;
+    return pubsubPromise;
   };
+}
+
+function decodeMessageData(message: Message): string {
+  const data = message.data as unknown;
+  if (!data) return '{}';
+  if (typeof data === 'string') return data;
+  if (data instanceof Uint8Array) {
+    return new TextDecoder().decode(data);
+  }
+  if (typeof data === 'object' && data !== null && 'toString' in data && typeof data.toString === 'function') {
+    return (data as { toString(encoding?: string): string }).toString('utf-8');
+  }
+  return '{}';
 }
 
 const RECEIVE_TIMEOUT_MS = 20_000;
@@ -52,8 +68,8 @@ const RECEIVE_TIMEOUT_MS = 20_000;
 export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue<T> & Partial<ConsumableQueue<T>> {
   const getPubSub = lazyPubSub(config);
 
-  function getTopic() {
-    return getPubSub().topic(config.topicName);
+  async function getTopic() {
+    return (await getPubSub()).topic(config.topicName);
   }
 
   const queue = {
@@ -65,13 +81,14 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
       message: T,
       _options?: unknown,
     ): Promise<void> {
-      await getTopic().publishMessage({ json: message as Record<string, unknown> });
+      const topic = await getTopic();
+      await topic.publishMessage({ json: message as Record<string, unknown> });
     },
 
     async sendBatch(
       messages: Iterable<{ body: T }>,
     ): Promise<void> {
-      const topic = getTopic();
+      const topic = await getTopic();
       for (const msg of messages) {
         await topic.publishMessage({ json: msg.body as Record<string, unknown> });
       }
@@ -86,7 +103,7 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
         );
       }
 
-      const subscription = getPubSub().subscription(config.subscriptionName);
+      const subscription = (await getPubSub()).subscription(config.subscriptionName);
 
       // Use a temporary message listener with a timeout.
       // The subscription's streaming pull will deliver messages to the handler.
@@ -106,7 +123,7 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
           clearTimeout(timer);
           subscription.removeListener('message', onMessage);
 
-          const body = JSON.parse(message.data?.toString('utf-8') ?? '{}') as T;
+          const body = JSON.parse(decodeMessageData(message)) as T;
           const deliveryAttempt = message.deliveryAttempt ?? 1;
 
           // Immediately acknowledge — matches the pop semantics of local queues.

@@ -1,0 +1,24 @@
+{
+  "name": "takos-cli",
+  "version": "0.1.1",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@std/fmt/colors": "jsr:@std/fmt@^1/colors",
+    "commander": "npm:commander@^12.1.0",
+    "ws": "npm:ws@^8.19.0",
+    "yaml": "npm:yaml@^2.8.2"
+  },
+  "tasks": {
+    "dev": "deno run --allow-all --watch src/index.ts",
+    "start": "deno run --allow-all src/index.ts",
+    "test": "deno test --allow-all src/",
+    "test:coverage": "deno test --allow-all --coverage src/",
+    "compile": "deno compile --allow-all --output takos src/index.ts",
+    "publish:jsr": "deno publish"
+  },
+  "publish": {
+    "include": ["src/", "deno.json", "LICENSE", "README.md"]
+  }
+}

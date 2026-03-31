@@ -1,10 +1,10 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, getStateDir } from '../../lib/state/state-file.js';
-import { cliExit } from '../../lib/command-exit.js';
-import { printJson } from '../../lib/cli-utils.js';
-import type { TakosState } from '../../lib/state/state-types.js';
-import { resolveStateKey, toAccessOpts } from './helpers.js';
+import { bold, dim, red } from '@std/fmt/colors';
+import { readState, getStateDir } from '../../lib/state/state-file.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import { printJson } from '../../lib/cli-utils.ts';
+import type { TakosState } from '../../lib/state/state-types.ts';
+import { resolveStateKey, toAccessOpts } from './helpers.ts';
 
 export function registerStateShowCommand(stateCmd: Command): void {
   stateCmd
@@ -25,15 +25,15 @@ export function registerStateShowCommand(stateCmd: Command): void {
       }
 
       if (!state) {
-        console.log(chalk.red('No state found. Run `takos apply` first.'));
+        console.log(red('No state found. Run `takos apply` first.'));
         cliExit(1);
         return; // unreachable, helps TS narrow
       }
 
       const resolved = resolveStateKey(state, key);
       if (!resolved) {
-        console.log(chalk.red(`Not found in state: ${key}`));
-        console.log(chalk.dim('Use `takos state list` to see available entries.'));
+        console.log(red(`Not found in state: ${key}`));
+        console.log(dim('Use `takos state list` to see available entries.'));
         cliExit(1);
       }
 
@@ -43,7 +43,7 @@ export function registerStateShowCommand(stateCmd: Command): void {
       }
 
       console.log('');
-      console.log(chalk.bold(`${resolved.category}.${resolved.name}`));
+      console.log(bold(`${resolved.category}.${resolved.name}`));
       for (const [field, value] of Object.entries(resolved.entry)) {
         if (value !== undefined && value !== null) {
           console.log(`  ${field}: ${value}`);

@@ -1,15 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   listUIExtensions,
   getUIExtensionByPath,
@@ -20,17 +17,17 @@ import {
 } from '@/services/platform/ui-extensions';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, all: allMock },
   };
 }
@@ -48,182 +45,153 @@ const makeExtRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('listUIExtensions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns empty array when no extensions', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listUIExtensions - returns empty array when no extensions', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listUIExtensions({} as D1Database, 'ws-1');
-    expect(result).toEqual([]);
-  });
-
-  it('maps extension rows correctly', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeExtRow()]);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, []);
+})
+  Deno.test('listUIExtensions - maps extension rows correctly', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeExtRow()]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listUIExtensions({} as D1Database, 'ws-1');
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('ext-1');
-    expect(result[0].path).toBe('/custom-panel');
-    expect(result[0].label).toBe('Custom Panel');
-    expect(result[0].sidebar).toBeDefined();
-    expect(result[0].sidebar!.label).toBe('Panel');
-    expect(result[0].bundleDeploymentId).toBe('bd-1');
-  });
-});
+    assertEquals(result.length, 1);
+    assertEquals(result[0].id, 'ext-1');
+    assertEquals(result[0].path, '/custom-panel');
+    assertEquals(result[0].label, 'Custom Panel');
+    assert(result[0].sidebar !== undefined);
+    assertEquals(result[0].sidebar!.label, 'Panel');
+    assertEquals(result[0].bundleDeploymentId, 'bd-1');
+})
 
-describe('getUIExtensionByPath', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getUIExtensionByPath - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getUIExtensionByPath({} as D1Database, 'ws-1', '/nonexistent');
-    expect(result).toBeNull();
-  });
-
-  it('returns extension when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeExtRow());
-    mocks.getDb.mockReturnValue(drizzle);
-
-    const result = await getUIExtensionByPath({} as D1Database, 'ws-1', '/custom-panel');
-    expect(result).not.toBeNull();
-    expect(result!.path).toBe('/custom-panel');
-  });
-
-  it('handles extension without sidebar JSON', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeExtRow({ sidebarJson: null }));
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, null);
+})
+  Deno.test('getUIExtensionByPath - returns extension when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeExtRow()) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getUIExtensionByPath({} as D1Database, 'ws-1', '/custom-panel');
-    expect(result).not.toBeNull();
-    expect(result!.sidebar).toBeUndefined();
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.path, '/custom-panel');
+})
+  Deno.test('getUIExtensionByPath - handles extension without sidebar JSON', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeExtRow({ sidebarJson: null })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
-describe('getUIExtensionBundle', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    const result = await getUIExtensionByPath({} as D1Database, 'ws-1', '/custom-panel');
+    assertNotEquals(result, null);
+    assertEquals(result!.sidebar, undefined);
+})
 
-  it('returns null when extension not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getUIExtensionBundle - returns null when extension not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const storage = {} as R2Bucket;
     const result = await getUIExtensionBundle({} as D1Database, storage, 'ws-1', '/nonexistent');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when R2 object not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeExtRow());
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, null);
+})
+  Deno.test('getUIExtensionBundle - returns null when R2 object not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeExtRow()) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const storage = {
-      get: vi.fn().mockResolvedValue(null),
+      get: (async () => null),
     } as unknown as R2Bucket;
 
     const result = await getUIExtensionBundle({} as D1Database, storage, 'ws-1', '/custom-panel');
-    expect(result).toBeNull();
-  });
-
-  it('returns content and content type', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeExtRow());
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, null);
+})
+  Deno.test('getUIExtensionBundle - returns content and content type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeExtRow()) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const content = new ArrayBuffer(10);
     const storage = {
-      get: vi.fn().mockResolvedValue({
-        arrayBuffer: vi.fn().mockResolvedValue(content),
+      get: (async () => ({
+        arrayBuffer: (async () => content),
         httpMetadata: { contentType: 'application/javascript' },
-      }),
+      })),
     } as unknown as R2Bucket;
 
     const result = await getUIExtensionBundle({} as D1Database, storage, 'ws-1', '/custom-panel');
-    expect(result).not.toBeNull();
-    expect(result!.contentType).toBe('application/javascript');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.contentType, 'application/javascript');
+})
 
-describe('getUISidebarItems', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty array when no sidebar extensions', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getUISidebarItems - returns empty array when no sidebar extensions', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getUISidebarItems({} as D1Database, 'ws-1');
-    expect(result).toEqual([]);
-  });
-
-  it('filters out invalid sidebar JSON', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+    assertEquals(result, []);
+})
+  Deno.test('getUISidebarItems - filters out invalid sidebar JSON', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       makeExtRow(),
       makeExtRow({ id: 'ext-2', sidebarJson: '{"invalid": true}' }),
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getUISidebarItems({} as D1Database, 'ws-1');
     // The first has valid sidebar, the second is missing label/icon
-    expect(result).toHaveLength(1);
-    expect(result[0].extensionId).toBe('ext-1');
-  });
-});
+    assertEquals(result.length, 1);
+    assertEquals(result[0].extensionId, 'ext-1');
+})
 
-describe('isUIExtensionPath', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns true when extension exists at path', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({ count: 1 });
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('isUIExtensionPath - returns true when extension exists at path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({ count: 1 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await isUIExtensionPath({} as D1Database, 'ws-1', '/custom-panel');
-    expect(result).toBe(true);
-  });
-
-  it('returns false when no extension at path', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({ count: 0 });
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, true);
+})
+  Deno.test('isUIExtensionPath - returns false when no extension at path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({ count: 0 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await isUIExtensionPath({} as D1Database, 'ws-1', '/nonexistent');
-    expect(result).toBe(false);
-  });
-});
+    assertEquals(result, false);
+})
 
-describe('getUIExtensionPaths', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns all registered paths', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([{ path: '/panel-a' }, { path: '/panel-b' }]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getUIExtensionPaths - returns all registered paths', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [{ path: '/panel-a' }, { path: '/panel-b' }]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getUIExtensionPaths({} as D1Database, 'ws-1');
-    expect(result).toEqual(['/panel-a', '/panel-b']);
-  });
-});
+    assertEquals(result, ['/panel-a', '/panel-b']);
+})

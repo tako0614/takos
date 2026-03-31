@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { createSignal } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import type {
   SourceItem,
   SourceItemInstallation,
@@ -9,28 +10,28 @@ import { useSourceFetchActions } from './useSourceFetchActions';
 
 export interface UseSourceFetchOptions {
   isAuthenticated: boolean;
-  effectiveSpaceId: string | null;
-  debouncedQuery: string;
-  sort: string;
-  category: string;
-  officialOnly: boolean;
-  filter: string;
+  effectiveSpaceId: Accessor<string | null>;
+  debouncedQuery: Accessor<string>;
+  sort: Accessor<string>;
+  category: Accessor<string>;
+  officialOnly: Accessor<boolean>;
+  filter: Accessor<string>;
   onNavigateToRepo: (username: string, repoName: string) => void;
   onRequireLogin: () => void;
 }
 
 export interface UseSourceFetchResult {
   // Owned state
-  items: SourceItem[];
-  setItems: React.Dispatch<React.SetStateAction<SourceItem[]>>;
-  loading: boolean;
-  hasMore: boolean;
-  total: number;
-  selectedItem: SourceItem | null;
-  setSelectedItem: React.Dispatch<React.SetStateAction<SourceItem | null>>;
-  installingId: string | null;
-  requestSeqRef: React.MutableRefObject<number>;
-  appendInFlightRef: React.MutableRefObject<boolean>;
+  items: Accessor<SourceItem[]>;
+  setItems: Setter<SourceItem[]>;
+  loading: Accessor<boolean>;
+  hasMore: Accessor<boolean>;
+  total: Accessor<number>;
+  selectedItem: Accessor<SourceItem | null>;
+  setSelectedItem: Setter<SourceItem | null>;
+  installingId: Accessor<string | null>;
+  requestSeqRef: number;
+  appendInFlightRef: boolean;
   // Actions
   fetchInstallations: () => Promise<Map<string, SourceItemInstallation>>;
   fetchAll: (offset?: number, append?: boolean, requestId?: number) => Promise<void>;
@@ -57,14 +58,17 @@ export function useSourceFetch({
   onRequireLogin,
 }: UseSourceFetchOptions): UseSourceFetchResult {
   // Own the state that was previously passed in
-  const [items, setItems] = useState<SourceItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [selectedItem, setSelectedItem] = useState<SourceItem | null>(null);
-  const [installingId, setInstallingId] = useState<string | null>(null);
-  const requestSeqRef = useRef(0);
-  const appendInFlightRef = useRef(false);
+  const [items, setItems] = createSignal<SourceItem[]>([]);
+  const [loading, setLoading] = createSignal(false);
+  const [hasMore, setHasMore] = createSignal(false);
+  const [total, setTotal] = createSignal(0);
+  const [selectedItem, setSelectedItem] = createSignal<SourceItem | null>(null);
+  const [installingId, setInstallingId] = createSignal<string | null>(null);
+  let requestSeqRef = 0;
+  let appendInFlightRef = false;
+
+  // Create a mutable ref object so sub-hooks can read/write the same values
+  const refs = { get requestSeqRef() { return requestSeqRef; }, set requestSeqRef(v: number) { requestSeqRef = v; }, get appendInFlightRef() { return appendInFlightRef; }, set appendInFlightRef(v: boolean) { appendInFlightRef = v; } };
 
   const queries = useSourceFetchQueries({
     isAuthenticated,
@@ -78,8 +82,7 @@ export function useSourceFetch({
     setHasMore,
     setTotal,
     setSelectedItem,
-    requestSeqRef,
-    appendInFlightRef,
+    refs,
   });
 
   const actions = useSourceFetchActions({
@@ -91,7 +94,7 @@ export function useSourceFetch({
     setItems,
     setSelectedItem,
     setInstallingId,
-    requestSeqRef,
+    refs,
     fetchMine: queries.fetchMine,
   });
 
@@ -105,8 +108,10 @@ export function useSourceFetch({
     selectedItem,
     setSelectedItem,
     installingId,
-    requestSeqRef,
-    appendInFlightRef,
+    get requestSeqRef() { return requestSeqRef; },
+    set requestSeqRef(v: number) { requestSeqRef = v; },
+    get appendInFlightRef() { return appendInFlightRef; },
+    set appendInFlightRef(v: boolean) { appendInFlightRef = v; },
     // Actions
     ...queries,
     ...actions,

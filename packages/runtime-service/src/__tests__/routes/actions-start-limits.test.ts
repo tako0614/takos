@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createTestApp, testRequest } from '../setup.js';
+import { createTestApp, testRequest } from '../setup.ts';
 
-vi.hoisted(() => {
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+
+{
   process.env.TAKOS_API_URL = 'https://takos.example.test';
-});
+};
 
-import actionsRoutes from '../../routes/actions/index.js';
-import { SANDBOX_LIMITS } from '../../shared/config.js';
+import actionsRoutes from '../../routes/actions/index.ts';
+import { SANDBOX_LIMITS } from '../../shared/config.ts';
 
 function createStartBody(jobName: string, spaceId: string, stepCount = 1) {
   return {
@@ -23,9 +24,9 @@ function createStartBody(jobName: string, spaceId: string, stepCount = 1) {
   };
 }
 
-describe('actions start step limits', () => {
-  it('rejects start when step count exceeds maxStepsPerJob', async () => {
-    const app = createTestApp();
+
+  Deno.test('actions start step limits - rejects start when step count exceeds maxStepsPerJob', async () => {
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
     const jobId = `steps-over-limit-${Date.now()}`;
@@ -39,17 +40,16 @@ describe('actions start step limits', () => {
       ),
     });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
+    assertEquals(response.status, 400);
+    assertEquals(response.body, {
       error: {
         code: 'BAD_REQUEST',
         message: `Steps exceed per-job limit (max ${SANDBOX_LIMITS.maxStepsPerJob})`,
       },
     });
-  });
-
-  it('accepts start when step count equals maxStepsPerJob', async () => {
-    const app = createTestApp();
+})
+  Deno.test('actions start step limits - accepts start when step count equals maxStepsPerJob', async () => {
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
     const jobId = `steps-at-limit-${Date.now()}`;
@@ -65,8 +65,8 @@ describe('actions start step limits', () => {
         ),
       });
 
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
+      assertEquals(response.status, 200);
+      assertObjectMatch(response.body, {
         jobId,
         status: 'running',
         message: 'Job started successfully',
@@ -77,12 +77,10 @@ describe('actions start step limits', () => {
         path: `/actions/jobs/${jobId}`,
       });
     }
-  });
-});
+})
 
-describe('actions start concurrency limits', () => {
-  it('applies maxConcurrentJobs per workspace', async () => {
-    const app = createTestApp();
+  Deno.test('actions start concurrency limits - applies maxConcurrentJobs per workspace', async () => {
+  const app = createTestApp();
     app.route('/', actionsRoutes);
 
     const startedJobIds: string[] = [];
@@ -99,7 +97,7 @@ describe('actions start concurrency limits', () => {
           body: createStartBody(`job-${i}`, workspaceA),
         });
 
-        expect(response.status).toBe(200);
+        assertEquals(response.status, 200);
         startedJobIds.push(jobId);
       }
 
@@ -110,7 +108,7 @@ describe('actions start concurrency limits', () => {
         body: createStartBody('job-other-workspace', workspaceB),
       });
 
-      expect(otherWorkspaceResponse.status).toBe(200);
+      assertEquals(otherWorkspaceResponse.status, 200);
       startedJobIds.push(otherWorkspaceJobId);
 
       const overflowJobId = `${prefix}-overflow`;
@@ -120,8 +118,8 @@ describe('actions start concurrency limits', () => {
         body: createStartBody('overflow-job', workspaceA),
       });
 
-      expect(overflowResponse.status).toBe(429);
-      expect(overflowResponse.body).toEqual({
+      assertEquals(overflowResponse.status, 429);
+      assertEquals(overflowResponse.body, {
         error: {
           code: 'RATE_LIMITED',
           message: `Concurrent job limit reached (max ${SANDBOX_LIMITS.maxConcurrentJobs})`,
@@ -135,5 +133,4 @@ describe('actions start concurrency limits', () => {
         });
       }
     }
-  });
-});
+})

@@ -116,12 +116,12 @@ export function WorkerSettingsPanel({
     }`;
 
   return (
-    <div className="space-y-6">
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
+    <div class="space-y-6">
+      <div class="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
         {SETTINGS_TABS.map(({ id, labelKey }) => (
           <button
-            key={id}
-            className={settingsTabClass(settingsTab === id)}
+
+            class={settingsTabClass(settingsTab === id)}
             onClick={() => onSettingsTabChange(id)}
           >
             {t(labelKey)}
@@ -156,7 +156,7 @@ export function WorkerSettingsPanel({
       )}
 
       {loadingWorkerSettings ? (
-        <div className="flex items-center gap-2 text-zinc-500"><Icons.Loader className="w-4 h-4 animate-spin" /><span>{t('loading')}</span></div>
+        <div class="flex items-center gap-2 text-zinc-500"><Icons.Loader class="w-4 h-4 animate-spin" /><span>{t('loading')}</span></div>
       ) : (
         <>
           {settingsTab === 'env' && (

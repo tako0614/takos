@@ -132,7 +132,7 @@ function runWranglerSecret(
 
     const child = spawn('pnpm', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
+      env: Deno.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 
@@ -164,7 +164,7 @@ async function listWranglerSecrets(
 
     const child = spawn('pnpm', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: process.env,
+      env: Deno.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 

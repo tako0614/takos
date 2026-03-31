@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { rpc, rpcJson } from '../lib/rpc';
 import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata';
 
@@ -29,7 +28,7 @@ export function useChatAttachments({
   spaceId,
   threadId,
 }: UseChatAttachmentsOptions): UseChatAttachmentsResult {
-  const ensureAttachmentFolder = useCallback(async (path: string): Promise<void> => {
+  const ensureAttachmentFolder = async (path: string): Promise<void> => {
     const segments = path.split('/').filter(Boolean);
     let parentPath = '/';
 
@@ -40,8 +39,8 @@ export function useChatAttachments({
       });
 
       if (!res.ok) {
-        const data = await rpcJson<{ error?: string }>(res).catch(() => ({}));
-        const error = data.error || 'Failed to create attachment folder';
+        const data = await rpcJson<{ error?: string }>(res).catch(() => ({} as { error?: string }));
+        const error = (data as { error?: string }).error || 'Failed to create attachment folder';
         if (!error.includes('already exists')) {
           throw new Error(error);
         }
@@ -49,9 +48,9 @@ export function useChatAttachments({
 
       parentPath = parentPath === '/' ? `/${segment}` : `${parentPath}/${segment}`;
     }
-  }, [spaceId]);
+  };
 
-  const uploadChatAttachments = useCallback(async (selectedFiles: File[]): Promise<ChatAttachmentMetadata[]> => {
+  const uploadChatAttachments = async (selectedFiles: File[]): Promise<ChatAttachmentMetadata[]> => {
     if (selectedFiles.length === 0) return [];
 
     const attachmentRoot = '/chat-attachments';
@@ -73,7 +72,7 @@ export function useChatAttachments({
       });
 
       if (!uploadRes.ok) {
-        const data = await rpcJson<{ error?: string }>(uploadRes).catch(() => ({}));
+        const data = await rpcJson<{ error?: string }>(uploadRes).catch(() => ({} as { error?: string }));
         throw new Error(data.error || `Failed to prepare upload for ${file.name}`);
       }
 
@@ -100,7 +99,7 @@ export function useChatAttachments({
       });
 
       if (!confirmRes.ok) {
-        const data = await rpcJson<{ error?: string }>(confirmRes).catch(() => ({}));
+        const data = await rpcJson<{ error?: string }>(confirmRes).catch(() => ({} as { error?: string }));
         throw new Error(data.error || `Failed to finalize upload for ${file.name}`);
       }
 
@@ -124,7 +123,7 @@ export function useChatAttachments({
     }
 
     return uploaded;
-  }, [ensureAttachmentFolder, spaceId, threadId]);
+  };
 
   return {
     ensureAttachmentFolder,

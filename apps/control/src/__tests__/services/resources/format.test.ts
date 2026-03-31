@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { toApiResource, toApiResourceAccess, toApiServiceBinding } from '@/services/resources/format';
 
-describe('toApiResource', () => {
-  it('maps internal resource to API format', () => {
-    const result = toApiResource({
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('toApiResource - maps internal resource to API format', () => {
+  const result = toApiResource({
       id: 'res-1',
       ownerId: 'user-1',
       spaceId: 'space-1',
@@ -21,24 +22,23 @@ describe('toApiResource', () => {
       updatedAt: '2026-01-01T06:00:00.000Z',
     });
 
-    expect(result.id).toBe('res-1');
-    expect(result.owner_id).toBe('user-1');
-    expect(result.space_id).toBe('space-1');
-    expect(result.name).toBe('my-database');
-    expect(result.type).toBe('d1');
-    expect(result.capability).toBe('sql');
-    expect(result.implementation).toBe('d1');
-    expect(result.status).toBe('active');
-    expect(result.provider_resource_id).toBe('cf-123');
-    expect(result.provider_resource_name).toBe('my-db');
-    expect(result.config).toBe('{"key":"value"}');
-    expect(result.metadata).toBe('{"meta":"data"}');
-    expect(result.size_bytes).toBe(1024);
-    expect(result.item_count).toBe(50);
-  });
-
-  it('handles null fields', () => {
-    const result = toApiResource({
+    assertEquals(result.id, 'res-1');
+    assertEquals(result.owner_id, 'user-1');
+    assertEquals(result.space_id, 'space-1');
+    assertEquals(result.name, 'my-database');
+    assertEquals(result.type, 'd1');
+    assertEquals(result.capability, 'sql');
+    assertEquals(result.implementation, 'd1');
+    assertEquals(result.status, 'active');
+    assertEquals(result.provider_resource_id, 'cf-123');
+    assertEquals(result.provider_resource_name, 'my-db');
+    assertEquals(result.config, '{"key":"value"}');
+    assertEquals(result.metadata, '{"meta":"data"}');
+    assertEquals(result.size_bytes, 1024);
+    assertEquals(result.item_count, 50);
+})
+  Deno.test('toApiResource - handles null fields', () => {
+  const result = toApiResource({
       id: 'res-1',
       ownerId: 'user-1',
       spaceId: null,
@@ -56,19 +56,18 @@ describe('toApiResource', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result.space_id).toBeNull();
-    expect(result.type).toBe('r2');
-    expect(result.capability).toBe('object_store');
-    expect(result.implementation).toBe('r2');
-    expect(result.provider_resource_id).toBeNull();
-    expect(result.provider_resource_name).toBeNull();
-    expect(result.size_bytes).toBeNull();
-    expect(result.item_count).toBeNull();
-    expect(result.last_used_at).toBeNull();
-  });
-
-  it('handles Date objects for timestamps', () => {
-    const result = toApiResource({
+    assertEquals(result.space_id, null);
+    assertEquals(result.type, 'r2');
+    assertEquals(result.capability, 'object_store');
+    assertEquals(result.implementation, 'r2');
+    assertEquals(result.provider_resource_id, null);
+    assertEquals(result.provider_resource_name, null);
+    assertEquals(result.size_bytes, null);
+    assertEquals(result.item_count, null);
+    assertEquals(result.last_used_at, null);
+})
+  Deno.test('toApiResource - handles Date objects for timestamps', () => {
+  const result = toApiResource({
       id: 'res-1',
       ownerId: 'user-1',
       spaceId: null,
@@ -86,15 +85,13 @@ describe('toApiResource', () => {
       updatedAt: new Date('2026-03-01T00:00:00.000Z'),
     });
 
-    expect(result.last_used_at).toBe('2026-06-15T00:00:00.000Z');
-    expect(result.created_at).toBe('2026-01-01T00:00:00.000Z');
-    expect(result.updated_at).toBe('2026-03-01T00:00:00.000Z');
-  });
-});
+    assertEquals(result.last_used_at, '2026-06-15T00:00:00.000Z');
+    assertEquals(result.created_at, '2026-01-01T00:00:00.000Z');
+    assertEquals(result.updated_at, '2026-03-01T00:00:00.000Z');
+})
 
-describe('toApiResourceAccess', () => {
-  it('maps internal resource access to API format', () => {
-    const result = toApiResourceAccess({
+  Deno.test('toApiResourceAccess - maps internal resource access to API format', () => {
+  const result = toApiResourceAccess({
       id: 'ra-1',
       resourceId: 'res-1',
       accountId: 'space-1',
@@ -103,15 +100,14 @@ describe('toApiResourceAccess', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result.id).toBe('ra-1');
-    expect(result.resource_id).toBe('res-1');
-    expect(result.space_id).toBe('space-1');
-    expect(result.permission).toBe('read');
-    expect(result.granted_by).toBe('user-1');
-  });
-
-  it('handles null granted_by', () => {
-    const result = toApiResourceAccess({
+    assertEquals(result.id, 'ra-1');
+    assertEquals(result.resource_id, 'res-1');
+    assertEquals(result.space_id, 'space-1');
+    assertEquals(result.permission, 'read');
+    assertEquals(result.granted_by, 'user-1');
+})
+  Deno.test('toApiResourceAccess - handles null granted_by', () => {
+  const result = toApiResourceAccess({
       id: 'ra-1',
       resourceId: 'res-1',
       accountId: 'space-1',
@@ -120,13 +116,11 @@ describe('toApiResourceAccess', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result.granted_by).toBeNull();
-  });
-});
+    assertEquals(result.granted_by, null);
+})
 
-describe('toApiServiceBinding', () => {
-  it('maps internal service binding to API format', () => {
-    const result = toApiServiceBinding({
+  Deno.test('toApiServiceBinding - maps internal service binding to API format', () => {
+  const result = toApiServiceBinding({
       id: 'wb-1',
       serviceId: 'w-1',
       resourceId: 'res-1',
@@ -136,16 +130,15 @@ describe('toApiServiceBinding', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result.id).toBe('wb-1');
-    expect(result.service_id).toBe('w-1');
-    expect(result.resource_id).toBe('res-1');
-    expect(result.binding_name).toBe('MY_DB');
-    expect(result.binding_type).toBe('d1');
-    expect(result.config).toBe('{"database_id":"abc"}');
-  });
-
-  it('handles Date createdAt', () => {
-    const result = toApiServiceBinding({
+    assertEquals(result.id, 'wb-1');
+    assertEquals(result.service_id, 'w-1');
+    assertEquals(result.resource_id, 'res-1');
+    assertEquals(result.binding_name, 'MY_DB');
+    assertEquals(result.binding_type, 'd1');
+    assertEquals(result.config, '{"database_id":"abc"}');
+})
+  Deno.test('toApiServiceBinding - handles Date createdAt', () => {
+  const result = toApiServiceBinding({
       id: 'wb-1',
       serviceId: 'w-1',
       resourceId: 'res-1',
@@ -155,6 +148,5 @@ describe('toApiServiceBinding', () => {
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
     });
 
-    expect(result.created_at).toBe('2026-01-01T00:00:00.000Z');
-  });
-});
+    assertEquals(result.created_at, '2026-01-01T00:00:00.000Z');
+})

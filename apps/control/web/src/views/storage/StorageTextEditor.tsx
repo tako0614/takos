@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { createSignal, createEffect, onCleanup, lazy, Suspense, Show } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
 import { useFileContent } from '../../hooks/useFileContent';
@@ -12,19 +12,7 @@ import { StorageEmptyState } from './StorageEmptyState';
 
 const MonacoEditor = lazy(() => import('../../lib/MonacoEditor'));
 
-export function StorageTextEditor({
-  spaceId,
-  file,
-  downloadUrl,
-  allHandlers,
-  activeHandler,
-  showHandlerMenu,
-  setShowHandlerMenu,
-  onSelectHandler,
-  onClearDefault,
-  onClose,
-  onSave,
-}: {
+export function StorageTextEditor(props: {
   spaceId: string;
   file: StorageFile;
   downloadUrl: string | null;
@@ -39,40 +27,40 @@ export function StorageTextEditor({
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { content, encoding, loading, error, saving, loadContent, saveContent } = useFileContent(spaceId);
-  const [editedContent, setEditedContent] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const editorRef = useRef<unknown>(null);
+  const { content, encoding, loading, error, saving, loadContent, saveContent } = useFileContent(props.spaceId);
+  const [editedContent, setEditedContent] = createSignal<string | null>(null);
+  const [isDirty, setIsDirty] = createSignal(false);
+  let editorRef: unknown = null;
 
-  useEffect(() => {
-    loadContent(file.id);
-  }, [file.id, loadContent]);
+  createEffect(() => {
+    loadContent(props.file.id);
+  });
 
-  useEffect(() => {
-    if (content !== null) {
-      setEditedContent(content);
+  createEffect(() => {
+    if (content() !== null) {
+      setEditedContent(content());
       setIsDirty(false);
     }
-  }, [content]);
+  });
 
-  const handleEditorChange = useCallback((value: string | undefined) => {
+  const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
       setEditedContent(value);
-      setIsDirty(value !== content);
+      setIsDirty(value !== content());
     }
-  }, [content]);
+  };
 
-  const handleSave = useCallback(async () => {
-    if (!isDirty || editedContent === null) return;
-    const success = await saveContent(file.id, editedContent);
+  const handleSave = async () => {
+    if (!isDirty() || editedContent() === null) return;
+    const success = await saveContent(props.file.id, editedContent()!);
     if (success) {
       setIsDirty(false);
       showToast('success', t('saved') || 'Saved');
-      onSave?.();
+      props.onSave?.();
     }
-  }, [isDirty, editedContent, file.id, saveContent, showToast, t, onSave]);
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -80,75 +68,81 @@ export function StorageTextEditor({
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleSave]);
+    onCleanup(() => window.removeEventListener('keydown', handler));
+  });
 
-  const language = detectLanguage(file.name);
+  const language = () => detectLanguage(props.file.name);
   const prefersDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 
-  const extraButtons = isDirty ? (
+  const extraButtons = () => isDirty() ? (
     <Button
       variant="primary"
       size="sm"
       onClick={handleSave}
-      isLoading={saving}
-      leftIcon={<Icons.Save className="w-4 h-4" />}
+      isLoading={saving()}
+      leftIcon={<Icons.Save class="w-4 h-4" />}
     >
       {t('save') || 'Save'}
     </Button>
-  ) : null;
+  ) : undefined;
 
   return (
     <StorageViewerShell
-      file={file}
-      downloadUrl={downloadUrl}
-      allHandlers={allHandlers}
-      activeHandler={activeHandler}
-      showHandlerMenu={showHandlerMenu}
-      setShowHandlerMenu={setShowHandlerMenu}
-      onSelectHandler={onSelectHandler}
-      onClearDefault={onClearDefault}
-      onClose={onClose}
+      file={props.file}
+      downloadUrl={props.downloadUrl}
+      allHandlers={props.allHandlers}
+      activeHandler={props.activeHandler}
+      showHandlerMenu={props.showHandlerMenu}
+      setShowHandlerMenu={props.setShowHandlerMenu}
+      onSelectHandler={props.onSelectHandler}
+      onClearDefault={props.onClearDefault}
+      onClose={props.onClose}
       t={t}
-      extraButtons={extraButtons}
+      extraButtons={extraButtons()}
     >
-      {loading ? (
-        <div className="flex items-center justify-center h-full">
-          <Icons.Loader className="w-8 h-8 animate-spin text-zinc-500" />
+      <Show when={!loading()} fallback={
+        <div class="flex items-center justify-center h-full">
+          <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" />
         </div>
-      ) : error ? (
-        <div className="p-4 m-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
-          {error}
-        </div>
-      ) : encoding === 'utf-8' && editedContent !== null ? (
-        <Suspense fallback={
-          <div className="flex items-center justify-center h-full">
-            <Icons.Loader className="w-8 h-8 animate-spin text-zinc-500" />
+      }>
+        <Show when={!error()} fallback={
+          <div class="p-4 m-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
+            {error()}
           </div>
         }>
-          <MonacoEditor
-            height="100%"
-            language={language}
-            theme={prefersDark ? 'vs-dark' : 'vs'}
-            value={editedContent}
-            onChange={handleEditorChange}
-            onMount={(editor) => { editorRef.current = editor; }}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 13,
-              lineNumbers: 'on',
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 2,
-            }}
-          />
-        </Suspense>
-      ) : encoding === 'base64' ? (
-        <StorageEmptyState file={file} downloadUrl={downloadUrl} t={t} label={t('binaryFile')} />
-      ) : (
-        <StorageEmptyState file={file} downloadUrl={downloadUrl} t={t} />
-      )}
+          <Show when={encoding() === 'utf-8' && editedContent() !== null} fallback={
+            <Show when={encoding() === 'base64'} fallback={
+              <StorageEmptyState file={props.file} downloadUrl={props.downloadUrl} t={t} />
+            }>
+              <StorageEmptyState file={props.file} downloadUrl={props.downloadUrl} t={t} label={t('binaryFile')} />
+            </Show>
+          }>
+            <Suspense fallback={
+              <div class="flex items-center justify-center h-full">
+                <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" />
+              </div>
+            }>
+              <MonacoEditor
+                height="100%"
+                language={language()}
+                theme={prefersDark ? 'vs-dark' : 'vs'}
+                value={editedContent()!}
+                onChange={handleEditorChange}
+                onMount={(editor: unknown) => { editorRef = editor; }}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: 'on',
+                  wordWrap: 'on',
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                }}
+              />
+            </Suspense>
+          </Show>
+        </Show>
+      </Show>
     </StorageViewerShell>
   );
 }

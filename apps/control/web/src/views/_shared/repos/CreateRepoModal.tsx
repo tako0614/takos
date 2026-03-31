@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { createSignal } from 'solid-js';
 import { useI18n } from '../../../store/i18n';
 import { Icons } from '../../../lib/Icons';
 
@@ -9,14 +9,14 @@ interface CreateRepoModalProps {
 
 export function CreateRepoModal({ onClose, onCreate }: CreateRepoModalProps) {
   const { t } = useI18n();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<'public' | 'private'>('private');
+  const [name, setName] = createSignal('');
+  const [description, setDescription] = createSignal('');
+  const [visibility, setVisibility] = createSignal<'public' | 'private'>('private');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    onCreate(name.trim(), description.trim(), visibility);
+    if (!name().trim()) return;
+    onCreate(name().trim(), description().trim(), visibility());
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -26,61 +26,61 @@ export function CreateRepoModal({ onClose, onCreate }: CreateRepoModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose} onKeyDown={handleKeyDown}>
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose} onKeyDown={handleKeyDown}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-repo-modal-title"
-        className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-lg"
+        class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
-          <h2 id="create-repo-modal-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('createRepository') || 'Create Repository'}</h2>
+        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+          <h2 id="create-repo-modal-title" class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('createRepository') || 'Create Repository'}</h2>
           <button
             type="button"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900"
+            class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900"
             onClick={onClose}
             aria-label={t('close') || 'Close'}
           >
-            <Icons.X className="w-5 h-5" />
+            <Icons.X class="w-5 h-5" />
           </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="repo-name" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                {t('repositoryName') || 'Repository name'} <span className="text-zinc-500">*</span>
+          <div class="px-6 py-4 space-y-4">
+            <div class="space-y-2">
+              <label for="repo-name" class="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                {t('repositoryName') || 'Repository name'} <span class="text-zinc-500">*</span>
               </label>
               <input
                 id="repo-name"
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={name()}
+                onInput={(e) => setName(e.target.value)}
                 placeholder="my-awesome-project"
-                autoFocus
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors"
+                autofocus
+                class="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors"
                 aria-required="true"
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="repo-description" className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                {t('description') || 'Description'} <span className="text-zinc-500">({t('optional') || 'optional'})</span>
+            <div class="space-y-2">
+              <label for="repo-description" class="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                {t('description') || 'Description'} <span class="text-zinc-500">({t('optional') || 'optional'})</span>
               </label>
               <textarea
                 id="repo-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                value={description()}
+                onInput={(e) => setDescription(e.target.value)}
                 placeholder={t('repositoryDescriptionPlaceholder') || 'A short description of your repository'}
                 rows={3}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
+                class="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
               />
             </div>
-            <div className="space-y-2">
-              <span className="block text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('visibility') || 'Visibility'}</span>
-              <div className="space-y-2">
+            <div class="space-y-2">
+              <span class="block text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('visibility') || 'Visibility'}</span>
+              <div class="space-y-2">
                 <label
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    visibility === 'public'
+                  class={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    visibility() === 'public'
                       ? 'border-zinc-900 dark:border-zinc-100 bg-white/10'
                       : 'border-zinc-200 dark:border-zinc-700 hover:bg-white/10'
                   }`}
@@ -89,19 +89,19 @@ export function CreateRepoModal({ onClose, onCreate }: CreateRepoModalProps) {
                     type="radio"
                     name="visibility"
                     value="public"
-                    checked={visibility === 'public'}
+                    checked={visibility() === 'public'}
                     onChange={() => setVisibility('public')}
-                    className="sr-only"
+                    class="sr-only"
                   />
-                  <Icons.Globe className="w-5 h-5 text-zinc-900" />
-                  <div className="flex-1">
-                    <strong className="block text-sm text-zinc-900 dark:text-zinc-100">Public</strong>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Anyone can see this repository</span>
+                  <Icons.Globe class="w-5 h-5 text-zinc-900" />
+                  <div class="flex-1">
+                    <strong class="block text-sm text-zinc-900 dark:text-zinc-100">Public</strong>
+                    <span class="text-xs text-zinc-500 dark:text-zinc-400">Anyone can see this repository</span>
                   </div>
                 </label>
                 <label
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    visibility === 'private'
+                  class={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    visibility() === 'private'
                       ? 'border-zinc-900 dark:border-zinc-100 bg-white/10'
                       : 'border-zinc-200 dark:border-zinc-700 hover:bg-white/10'
                   }`}
@@ -110,32 +110,32 @@ export function CreateRepoModal({ onClose, onCreate }: CreateRepoModalProps) {
                     type="radio"
                     name="visibility"
                     value="private"
-                    checked={visibility === 'private'}
+                    checked={visibility() === 'private'}
                     onChange={() => setVisibility('private')}
-                    className="sr-only"
+                    class="sr-only"
                   />
-                  <Icons.Lock className="w-5 h-5 text-zinc-500" />
-                  <div className="flex-1">
-                    <strong className="block text-sm text-zinc-900 dark:text-zinc-100">Private</strong>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Only you can see this repository</span>
+                  <Icons.Lock class="w-5 h-5 text-zinc-500" />
+                  <div class="flex-1">
+                    <strong class="block text-sm text-zinc-900 dark:text-zinc-100">Private</strong>
+                    <span class="text-xs text-zinc-500 dark:text-zinc-400">Only you can see this repository</span>
                   </div>
                 </label>
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700">
+          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700">
             <button
               type="button"
-              className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
+              class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
               onClick={onClose}
             >
               {t('cancel') || 'Cancel'}
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-zinc-900 dark:bg-zinc-700 text-white rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 focus:ring-offset-zinc-950"
-              disabled={!name.trim()}
-              aria-disabled={!name.trim()}
+              class="px-4 py-2 bg-zinc-900 dark:bg-zinc-700 text-white rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 focus:ring-offset-zinc-950"
+              disabled={!name().trim()}
+              aria-disabled={!name().trim()}
             >
               {t('createRepository') || 'Create Repository'}
             </button>

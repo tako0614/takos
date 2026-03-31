@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,116 +6,50 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockSelectGet = vi.fn();
-const mockSelectAll = vi.fn();
-const platformServiceMocks = vi.hoisted(() => ({
-  resolveServiceReferenceRecord: vi.fn(),
-  getServiceRouteRecord: vi.fn(),
-}));
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal();
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => chain),
-    innerJoin: vi.fn(() => chain),
-    get: vi.fn(() => mockSelectGet()),
-    all: vi.fn(() => mockSelectAll()),
-  };
-  return {
-    ...actual,
-    getDb: () => ({
-      select: vi.fn(() => chain),
-      insert: vi.fn(() => ({
-        values: vi.fn(() => ({
-          run: vi.fn(async () => ({})),
-        })),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn(async () => ({})),
-        })),
-      })),
-      delete: vi.fn(() => ({
-        where: vi.fn(async () => ({})),
-      })),
-    }),
-  };
+const mockSelectGet = ((..._args: any[]) => undefined) as any;
+const mockSelectAll = ((..._args: any[]) => undefined) as any;
+const platformServiceMocks = ({
+  resolveServiceReferenceRecord: ((..._args: any[]) => undefined) as any,
+  getServiceRouteRecord: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 const mockDesiredState = {
-  listLocalEnvVarSummaries: vi.fn(),
-  replaceLocalEnvVars: vi.fn(),
-  listResourceBindings: vi.fn(),
-  replaceResourceBindings: vi.fn(),
-  getRuntimeConfig: vi.fn(),
-  saveRuntimeConfig: vi.fn(),
-  getRoutingTarget: vi.fn(),
+  listLocalEnvVarSummaries: ((..._args: any[]) => undefined) as any,
+  replaceLocalEnvVars: ((..._args: any[]) => undefined) as any,
+  listResourceBindings: ((..._args: any[]) => undefined) as any,
+  replaceResourceBindings: ((..._args: any[]) => undefined) as any,
+  getRuntimeConfig: ((..._args: any[]) => undefined) as any,
+  saveRuntimeConfig: ((..._args: any[]) => undefined) as any,
+  getRoutingTarget: ((..._args: any[]) => undefined) as any,
 };
 
 const mockCommonEnvDeps = {
   reconciler: {
-    reconcileServiceCommonEnv: vi.fn(),
+    reconcileServiceCommonEnv: ((..._args: any[]) => undefined) as any,
   },
 };
 
-vi.mock('@/services/platform/worker-desired-state', () => ({
-  ServiceDesiredStateService: vi.fn(() => mockDesiredState),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
 const mockDeploymentService = {
-  getDeploymentHistory: vi.fn(),
-  getDeploymentById: vi.fn(),
-  getDeploymentEvents: vi.fn(),
-  getMaskedEnvVars: vi.fn(),
-  getBindings: vi.fn(),
-  rollback: vi.fn(),
+  getDeploymentHistory: ((..._args: any[]) => undefined) as any,
+  getDeploymentById: ((..._args: any[]) => undefined) as any,
+  getDeploymentEvents: ((..._args: any[]) => undefined) as any,
+  getMaskedEnvVars: ((..._args: any[]) => undefined) as any,
+  getBindings: ((..._args: any[]) => undefined) as any,
+  rollback: ((..._args: any[]) => undefined) as any,
 };
 
-vi.mock('@/services/deployment/index', () => ({
-  DeploymentService: vi.fn(() => mockDeploymentService),
-}));
-
-vi.mock('@/services/platform/workers', () => ({
-  resolveServiceReferenceRecord: platformServiceMocks.resolveServiceReferenceRecord,
-  getServiceRouteRecord: platformServiceMocks.getServiceRouteRecord,
-}));
-
-vi.mock('@/services/common-env', () => ({
-  CommonEnvService: vi.fn(() => ({
-    reconcileServiceCommonEnv: vi.fn(),
-  })),
-  createCommonEnvDeps: vi.fn(() => mockCommonEnvDeps),
-}));
-
-vi.mock('@/services/common-env/crypto', () => ({
-  normalizeCommonEnvName: vi.fn((name: string) => name),
-}));
-
-vi.mock('@/services/routing', () => ({
-  upsertHostnameRouting: vi.fn(),
-  deleteHostnameRouting: vi.fn(),
-}));
-
-vi.mock('@/platform/providers/cloudflare/custom-domains', () => ({
-  deleteCloudflareCustomHostname: vi.fn(),
-}));
-
-vi.mock('@/shared/utils', () => ({
-  generateId: vi.fn(() => 'gen-id'),
-  now: vi.fn(() => '2026-01-01T00:00:00.000Z'),
-  safeJsonParseOrDefault: vi.fn((raw: unknown, fallback: unknown) => {
-    if (typeof raw !== 'string') return fallback;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
-  }),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/index'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/workers'
+// [Deno] vi.mock removed - manually stub imports from '@/services/common-env'
+// [Deno] vi.mock removed - manually stub imports from '@/services/common-env/crypto'
+// [Deno] vi.mock removed - manually stub imports from '@/services/routing'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/custom-domains'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import { getServiceRouteRecord, resolveServiceReferenceRecord } from '@/services/platform/workers';
 
 import {
@@ -166,9 +99,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
       TENANT_BASE_DOMAIN: 'takos.dev',
     } as unknown as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -177,159 +110,141 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Aggregate definitions
 // ---------------------------------------------------------------------------
 
-describe('PLATFORM_TOOLS and PLATFORM_HANDLERS', () => {
-  it('exports combined tool list with all sub-modules', () => {
-    const names = PLATFORM_TOOLS.map((t) => t.name);
+
+  Deno.test('PLATFORM_TOOLS and PLATFORM_HANDLERS - exports combined tool list with all sub-modules', () => {
+  const names = PLATFORM_TOOLS.map((t) => t.name);
     // Worker settings
-    expect(names).toContain('service_env_get');
-    expect(names).toContain('service_env_set');
-    expect(names).toContain('service_bindings_get');
-    expect(names).toContain('service_bindings_set');
-    expect(names).toContain('service_runtime_get');
-    expect(names).toContain('service_runtime_set');
+    assertStringIncludes(names, 'service_env_get');
+    assertStringIncludes(names, 'service_env_set');
+    assertStringIncludes(names, 'service_bindings_get');
+    assertStringIncludes(names, 'service_bindings_set');
+    assertStringIncludes(names, 'service_runtime_get');
+    assertStringIncludes(names, 'service_runtime_set');
     // Domains
-    expect(names).toContain('domain_list');
-    expect(names).toContain('domain_add');
-    expect(names).toContain('domain_verify');
-    expect(names).toContain('domain_remove');
+    assertStringIncludes(names, 'domain_list');
+    assertStringIncludes(names, 'domain_add');
+    assertStringIncludes(names, 'domain_verify');
+    assertStringIncludes(names, 'domain_remove');
     // Deployments
-    expect(names).toContain('service_list');
-    expect(names).toContain('service_create');
-    expect(names).toContain('service_delete');
+    assertStringIncludes(names, 'service_list');
+    assertStringIncludes(names, 'service_create');
+    assertStringIncludes(names, 'service_delete');
     // Deployment history
-    expect(names).toContain('deployment_history');
-    expect(names).toContain('deployment_get');
-    expect(names).toContain('deployment_rollback');
-  });
-
-  it('all tools have deploy category', () => {
-    for (const def of PLATFORM_TOOLS) {
-      expect(def.category).toBe('deploy');
+    assertStringIncludes(names, 'deployment_history');
+    assertStringIncludes(names, 'deployment_get');
+    assertStringIncludes(names, 'deployment_rollback');
+})
+  Deno.test('PLATFORM_TOOLS and PLATFORM_HANDLERS - all tools have deploy category', () => {
+  for (const def of PLATFORM_TOOLS) {
+      assertEquals(def.category, 'deploy');
     }
-  });
-
-  it('PLATFORM_HANDLERS maps all tools', () => {
-    for (const def of PLATFORM_TOOLS) {
-      expect(PLATFORM_HANDLERS).toHaveProperty(def.name);
+})
+  Deno.test('PLATFORM_TOOLS and PLATFORM_HANDLERS - PLATFORM_HANDLERS maps all tools', () => {
+  for (const def of PLATFORM_TOOLS) {
+      assert(def.name in PLATFORM_HANDLERS);
     }
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // Worker settings definitions
 // ---------------------------------------------------------------------------
 
-describe('service settings definitions', () => {
-  it('service_env_get requires service_name', () => {
-    expect(SERVICE_ENV_GET.parameters.required).toEqual(['service_name']);
-  });
 
-  it('service_env_set requires service_name and env', () => {
-    expect(SERVICE_ENV_SET.parameters.required).toEqual(['service_name', 'env']);
-  });
-
-  it('service_runtime_set requires service_name', () => {
-    expect(SERVICE_RUNTIME_SET.parameters.required).toEqual(['service_name']);
-  });
-
-  it('service_bindings_set exposes Cloudflare-native binding kinds', () => {
-    const bindingsItems = SERVICE_BINDINGS_SET.parameters.properties.bindings.items;
-    expect(bindingsItems).toBeDefined();
+  Deno.test('service settings definitions - service_env_get requires service_name', () => {
+  assertEquals(SERVICE_ENV_GET.parameters.required, ['service_name']);
+})
+  Deno.test('service settings definitions - service_env_set requires service_name and env', () => {
+  assertEquals(SERVICE_ENV_SET.parameters.required, ['service_name', 'env']);
+})
+  Deno.test('service settings definitions - service_runtime_set requires service_name', () => {
+  assertEquals(SERVICE_RUNTIME_SET.parameters.required, ['service_name']);
+})
+  Deno.test('service settings definitions - service_bindings_set exposes Cloudflare-native binding kinds', () => {
+  const bindingsItems = SERVICE_BINDINGS_SET.parameters.properties.bindings.items;
+    assert(bindingsItems !== undefined);
     if (!bindingsItems || !('properties' in bindingsItems) || !bindingsItems.properties?.type) {
       throw new Error('bindings item schema must define type');
     }
     const enumValues = bindingsItems.properties.type.enum;
-    expect(enumValues).toEqual(expect.arrayContaining(['queue', 'analyticsEngine']));
-  });
-});
-
+    assertEquals(enumValues, (['queue', 'analyticsEngine']));
+})
 // ---------------------------------------------------------------------------
 // workerEnvGetHandler
 // ---------------------------------------------------------------------------
 
-describe('workerEnvGetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when service not found', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue(null);
-    mockSelectGet.mockResolvedValue(null);
+  
+  Deno.test('workerEnvGetHandler - throws when service not found', async () => {
+  resolveServiceReferenceRecord = (async () => null) as any;
+    mockSelectGet = (async () => null) as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       workerEnvGetHandler({ service_name: 'missing' }, makeContext()),
-    ).rejects.toThrow('Service not found');
-  });
-
-  it('returns env vars for a service slot', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+    ; }, 'Service not found');
+})
+  Deno.test('workerEnvGetHandler - returns env vars for a service slot', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
-    mockDesiredState.listLocalEnvVarSummaries.mockResolvedValue([
+    } as any)) as any;
+    mockDesiredState.listLocalEnvVarSummaries = (async () => [
       { name: 'API_KEY', type: 'secret_text' },
       { name: 'DEBUG', type: 'plain_text' },
-    ]);
+    ]) as any;
 
     const result = await workerEnvGetHandler(
       { service_name: 'my-worker' },
       makeContext(),
     );
-    expect(result).toContain('API_KEY');
-    expect(result).toContain('secret_text');
-    expect(result).toContain('DEBUG');
-    expect(result).toContain('plain_text');
-  });
-});
-
+    assertStringIncludes(result, 'API_KEY');
+    assertStringIncludes(result, 'secret_text');
+    assertStringIncludes(result, 'DEBUG');
+    assertStringIncludes(result, 'plain_text');
+})
 // ---------------------------------------------------------------------------
 // workerEnvSetHandler
 // ---------------------------------------------------------------------------
 
-describe('workerEnvSetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('rejects mutation on deployment artifacts', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue(null);
-    mockSelectGet.mockResolvedValue({
+  
+  Deno.test('workerEnvSetHandler - rejects mutation on deployment artifacts', async () => {
+  resolveServiceReferenceRecord = (async () => null) as any;
+    mockSelectGet = (async () => ({
       id: 'd-1',
       workerId: 'w-1',
       accountId: 'ws-test',
-    });
+    })) as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       workerEnvSetHandler(
         { service_name: 'deploy-ref', env: [{ name: 'X', value: 'Y' }] },
         makeContext(),
       ),
-    ).rejects.toThrow('immutable');
-  });
-
-  it('saves env vars for a service slot', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+    ; }, 'immutable');
+})
+  Deno.test('workerEnvSetHandler - saves env vars for a service slot', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
+    } as any)) as any;
 
     const result = await workerEnvSetHandler(
       { service_name: 'my-worker', env: [{ name: 'KEY', value: 'VAL' }] },
       makeContext(),
     );
 
-    expect(result).toContain('Saved 1 environment variable');
-    expect(mockDesiredState.replaceLocalEnvVars).toHaveBeenCalled();
-  });
-});
+    assertStringIncludes(result, 'Saved 1 environment variable');
+    assert(mockDesiredState.replaceLocalEnvVars.calls.length > 0);
+})
 
-describe('workerBindingsSetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('normalizes queue and analytics bindings to canonical service binding types', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+  
+  Deno.test('workerBindingsSetHandler - normalizes queue and analytics bindings to canonical service binding types', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
+    } as any)) as any;
     mockSelectGet
-      .mockResolvedValueOnce({ id: 'res-q', type: 'queue' })
-      .mockResolvedValueOnce({ id: 'res-a', type: 'analyticsEngine' });
+       = (async () => ({ id: 'res-q', type: 'queue' })) as any
+       = (async () => ({ id: 'res-a', type: 'analyticsEngine' })) as any;
 
     await workerBindingsSetHandler(
       {
@@ -342,21 +257,20 @@ describe('workerBindingsSetHandler', () => {
       makeContext(),
     );
 
-    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+    assertSpyCallArgs(mockDesiredState.replaceResourceBindings, 0, [{
       workerId: 'w-1',
       bindings: [
         { name: 'JOB_QUEUE', type: 'queue', resourceId: 'res-q' },
         { name: 'EVENTS', type: 'analytics_store', resourceId: 'res-a' },
       ],
-    });
-  });
-
-  it('stores workflow binding metadata from the resource definition', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+    }]);
+})
+  Deno.test('workerBindingsSetHandler - stores workflow binding metadata from the resource definition', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
-    mockSelectGet.mockResolvedValueOnce({
+    } as any)) as any;
+    mockSelectGet = (async () => ({
       id: 'res-wf',
       type: 'workflow',
       name: 'publish-flow',
@@ -367,7 +281,7 @@ describe('workerBindingsSetHandler', () => {
           export: 'PublishWorkflow',
         },
       }),
-    });
+    })) as any;
 
     await workerBindingsSetHandler(
       {
@@ -379,7 +293,7 @@ describe('workerBindingsSetHandler', () => {
       makeContext(),
     );
 
-    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+    assertSpyCallArgs(mockDesiredState.replaceResourceBindings, 0, [{
       workerId: 'w-1',
       bindings: [
         {
@@ -394,15 +308,14 @@ describe('workerBindingsSetHandler', () => {
           },
         },
       ],
-    });
-  });
-
-  it('stores durable namespace binding metadata from the resource definition', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+    }]);
+})
+  Deno.test('workerBindingsSetHandler - stores durable namespace binding metadata from the resource definition', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
-    mockSelectGet.mockResolvedValueOnce({
+    } as any)) as any;
+    mockSelectGet = (async () => ({
       id: 'res-do',
       type: 'durableObject',
       name: 'counter-do',
@@ -413,7 +326,7 @@ describe('workerBindingsSetHandler', () => {
           scriptName: 'edge-worker',
         },
       }),
-    });
+    })) as any;
 
     await workerBindingsSetHandler(
       {
@@ -425,7 +338,7 @@ describe('workerBindingsSetHandler', () => {
       makeContext(),
     );
 
-    expect(mockDesiredState.replaceResourceBindings).toHaveBeenCalledWith({
+    assertSpyCallArgs(mockDesiredState.replaceResourceBindings, 0, [{
       workerId: 'w-1',
       bindings: [
         {
@@ -440,251 +353,201 @@ describe('workerBindingsSetHandler', () => {
           },
         },
       ],
-    });
-  });
-});
-
+    }]);
+})
 // ---------------------------------------------------------------------------
 // workerRuntimeSetHandler
 // ---------------------------------------------------------------------------
 
-describe('workerRuntimeSetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('saves runtime config', async () => {
-    vi.mocked(resolveServiceReferenceRecord).mockResolvedValue({
+  
+  Deno.test('workerRuntimeSetHandler - saves runtime config', async () => {
+  resolveServiceReferenceRecord = (async () => ({
       id: 'w-1',
       accountId: 'ws-test',
-    } as any);
+    } as any)) as any;
 
     const result = await workerRuntimeSetHandler(
       { service_name: 'my-worker', compatibility_date: '2026-01-01' },
       makeContext(),
     );
 
-    expect(result).toContain('Updated runtime configuration');
-    expect(mockDesiredState.saveRuntimeConfig).toHaveBeenCalled();
-  });
-});
-
+    assertStringIncludes(result, 'Updated runtime configuration');
+    assert(mockDesiredState.saveRuntimeConfig.calls.length > 0);
+})
 // ---------------------------------------------------------------------------
 // Domain definitions
 // ---------------------------------------------------------------------------
 
-describe('domain definitions', () => {
-  it('domain_list requires service_id', () => {
-    expect(DOMAIN_LIST.parameters.required).toEqual(['service_id']);
-  });
 
-  it('domain_add requires service_id and domain', () => {
-    expect(DOMAIN_ADD.parameters.required).toEqual(['service_id', 'domain']);
-  });
+  Deno.test('domain definitions - domain_list requires service_id', () => {
+  assertEquals(DOMAIN_LIST.parameters.required, ['service_id']);
+})
+  Deno.test('domain definitions - domain_add requires service_id and domain', () => {
+  assertEquals(DOMAIN_ADD.parameters.required, ['service_id', 'domain']);
+})
+  Deno.test('domain definitions - domain_verify requires service_id and domain', () => {
+  assertEquals(DOMAIN_VERIFY.parameters.required, ['service_id', 'domain']);
+})
+  Deno.test('domain definitions - domain_remove requires service_id and domain', () => {
+  assertEquals(DOMAIN_REMOVE.parameters.required, ['service_id', 'domain']);
+})
 
-  it('domain_verify requires service_id and domain', () => {
-    expect(DOMAIN_VERIFY.parameters.required).toEqual(['service_id', 'domain']);
-  });
-
-  it('domain_remove requires service_id and domain', () => {
-    expect(DOMAIN_REMOVE.parameters.required).toEqual(['service_id', 'domain']);
-  });
-});
-
-describe('domainListHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('returns no domains message when empty', async () => {
-    mockSelectAll.mockResolvedValue([]);
+  
+  Deno.test('domainListHandler - returns no domains message when empty', async () => {
+  mockSelectAll = (async () => []) as any;
 
     const result = await domainListHandler({ service_id: 'w-1' }, makeContext());
-    expect(result).toContain('No custom domains');
-  });
-
-  it('lists domains with status icons', async () => {
-    mockSelectAll.mockResolvedValue([
+    assertStringIncludes(result, 'No custom domains');
+})
+  Deno.test('domainListHandler - lists domains with status icons', async () => {
+  mockSelectAll = (async () => [
       { domain: 'app.example.com', status: 'active', createdAt: '2026-01-01' },
       { domain: 'staging.example.com', status: 'pending', createdAt: '2026-01-02' },
-    ]);
+    ]) as any;
 
     const result = await domainListHandler({ service_id: 'w-1' }, makeContext());
-    expect(result).toContain('app.example.com');
-    expect(result).toContain('staging.example.com');
-  });
-});
+    assertStringIncludes(result, 'app.example.com');
+    assertStringIncludes(result, 'staging.example.com');
+})
 
-describe('domainAddHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('rejects invalid domain format', async () => {
-    await expect(
+  
+  Deno.test('domainAddHandler - rejects invalid domain format', async () => {
+  await await assertRejects(async () => { await 
       domainAddHandler({ service_id: 'w-1', domain: 'not valid!' }, makeContext()),
-    ).rejects.toThrow('Invalid domain format');
-  });
-});
+    ; }, 'Invalid domain format');
+})
 
-describe('domainRemoveHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
+  
+  Deno.test('domainRemoveHandler - throws when domain not found', async () => {
+  mockSelectGet = (async () => null) as any;
 
-  it('throws when domain not found', async () => {
-    mockSelectGet.mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       domainRemoveHandler(
         { service_id: 'w-1', domain: 'missing.example.com' },
         makeContext(),
       ),
-    ).rejects.toThrow('Domain not found');
-  });
-});
-
+    ; }, 'Domain not found');
+})
 // ---------------------------------------------------------------------------
 // Worker deployment definitions
 // ---------------------------------------------------------------------------
 
-describe('service deployment definitions', () => {
-  it('service_list has no required params', () => {
-    expect(SERVICE_LIST.parameters.required).toBeUndefined();
-  });
 
-  it('service_create requires name and type', () => {
-    expect(SERVICE_CREATE.parameters.required).toEqual(['name', 'type']);
-  });
+  Deno.test('service deployment definitions - service_list has no required params', () => {
+  assertEquals(SERVICE_LIST.parameters.required, undefined);
+})
+  Deno.test('service deployment definitions - service_create requires name and type', () => {
+  assertEquals(SERVICE_CREATE.parameters.required, ['name', 'type']);
+})
+  Deno.test('service deployment definitions - service_delete requires service_id and confirm', () => {
+  assertEquals(SERVICE_DELETE.parameters.required, ['service_id', 'confirm']);
+})
 
-  it('service_delete requires service_id and confirm', () => {
-    expect(SERVICE_DELETE.parameters.required).toEqual(['service_id', 'confirm']);
-  });
-});
-
-describe('workerListHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('returns no workers message when empty', async () => {
-    mockSelectAll.mockResolvedValue([]);
+  
+  Deno.test('workerListHandler - returns no workers message when empty', async () => {
+  mockSelectAll = (async () => []) as any;
 
     const result = await workerListHandler({}, makeContext());
-    expect(result).toBe('No services found.');
-  });
-});
+    assertEquals(result, 'No services found.');
+})
 
-describe('workerCreateHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('creates a service slot and returns details', async () => {
-    const result = await workerCreateHandler(
+  
+  Deno.test('workerCreateHandler - creates a service slot and returns details', async () => {
+  const result = await workerCreateHandler(
       { name: 'My App', type: 'app' },
       makeContext(),
     );
 
-    expect(result).toContain('Service slot created');
-    expect(result).toContain('gen-id');
-    expect(result).toContain('My App');
-    expect(result).toContain('app');
-  });
-});
+    assertStringIncludes(result, 'Service slot created');
+    assertStringIncludes(result, 'gen-id');
+    assertStringIncludes(result, 'My App');
+    assertStringIncludes(result, 'app');
+})
 
-describe('workerDeleteHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('throws when confirm is not true', async () => {
-    await expect(
+  
+  Deno.test('workerDeleteHandler - throws when confirm is not true', async () => {
+  await await assertRejects(async () => { await 
       workerDeleteHandler({ service_id: 'w-1', confirm: false }, makeContext()),
-    ).rejects.toThrow('Must set confirm=true');
-  });
+    ; }, 'Must set confirm=true');
+})
+  Deno.test('workerDeleteHandler - throws when service not found', async () => {
+  getServiceRouteRecord = (async () => null) as any;
 
-  it('throws when service not found', async () => {
-    vi.mocked(getServiceRouteRecord).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       workerDeleteHandler({ service_id: 'w-1', confirm: true }, makeContext()),
-    ).rejects.toThrow('Service not found');
-  });
-});
-
+    ; }, 'Service not found');
+})
 // ---------------------------------------------------------------------------
 // Deployment history definitions
 // ---------------------------------------------------------------------------
 
-describe('deployment history definitions', () => {
-  it('deployment_history requires service_id', () => {
-    expect(DEPLOYMENT_HISTORY.parameters.required).toEqual(['service_id']);
-  });
 
-  it('deployment_get requires service_id and deployment_id', () => {
-    expect(DEPLOYMENT_GET.parameters.required).toEqual(['service_id', 'deployment_id']);
-  });
+  Deno.test('deployment history definitions - deployment_history requires service_id', () => {
+  assertEquals(DEPLOYMENT_HISTORY.parameters.required, ['service_id']);
+})
+  Deno.test('deployment history definitions - deployment_get requires service_id and deployment_id', () => {
+  assertEquals(DEPLOYMENT_GET.parameters.required, ['service_id', 'deployment_id']);
+})
+  Deno.test('deployment history definitions - deployment_rollback requires service_id', () => {
+  assertEquals(DEPLOYMENT_ROLLBACK.parameters.required, ['service_id']);
+})
 
-  it('deployment_rollback requires service_id', () => {
-    expect(DEPLOYMENT_ROLLBACK.parameters.required).toEqual(['service_id']);
-  });
-});
-
-describe('deploymentHistoryHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('throws when service_id is empty', async () => {
-    await expect(
+  
+  Deno.test('deploymentHistoryHandler - throws when service_id is empty', async () => {
+  await await assertRejects(async () => { await 
       deploymentHistoryHandler({ service_id: '' }, makeContext()),
-    ).rejects.toThrow('service_id is required');
-  });
-
-  it('returns deployment history as JSON', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'w-1' }); // ensureWorkerInWorkspace
-    mockDeploymentService.getDeploymentHistory.mockResolvedValue([
+    ; }, 'service_id is required');
+})
+  Deno.test('deploymentHistoryHandler - returns deployment history as JSON', async () => {
+  mockSelectGet = (async () => ({ id: 'w-1' })) as any; // ensureWorkerInWorkspace
+    mockDeploymentService.getDeploymentHistory = (async () => [
       { id: 'd-1', version: 1, status: 'deployed', created_at: '2026-01-01' },
-    ]);
+    ]) as any;
 
     const result = JSON.parse(
       await deploymentHistoryHandler({ service_id: 'w-1' }, makeContext()),
     );
-    expect(result.count).toBe(1);
-    expect(result.deployments).toHaveLength(1);
-  });
-});
+    assertEquals(result.count, 1);
+    assertEquals(result.deployments.length, 1);
+})
 
-describe('deploymentGetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('throws when service_id is empty', async () => {
-    await expect(
+  
+  Deno.test('deploymentGetHandler - throws when service_id is empty', async () => {
+  await await assertRejects(async () => { await 
       deploymentGetHandler({ service_id: '', deployment_id: 'd-1' }, makeContext()),
-    ).rejects.toThrow('service_id is required');
-  });
-
-  it('throws when deployment_id is empty', async () => {
-    await expect(
+    ; }, 'service_id is required');
+})
+  Deno.test('deploymentGetHandler - throws when deployment_id is empty', async () => {
+  await await assertRejects(async () => { await 
       deploymentGetHandler({ service_id: 'w-1', deployment_id: '' }, makeContext()),
-    ).rejects.toThrow('deployment_id is required');
-  });
+    ; }, 'deployment_id is required');
+})
+  Deno.test('deploymentGetHandler - throws when deployment not found', async () => {
+  mockSelectGet = (async () => ({ id: 'w-1' })) as any; // ensureWorkerInWorkspace
+    mockDeploymentService.getDeploymentById = (async () => null) as any;
 
-  it('throws when deployment not found', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'w-1' }); // ensureWorkerInWorkspace
-    mockDeploymentService.getDeploymentById.mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       deploymentGetHandler({ service_id: 'w-1', deployment_id: 'd-1' }, makeContext()),
-    ).rejects.toThrow('Deployment not found');
-  });
-});
+    ; }, 'Deployment not found');
+})
 
-describe('deploymentRollbackHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('throws when service_id is empty', async () => {
-    await expect(
+  
+  Deno.test('deploymentRollbackHandler - throws when service_id is empty', async () => {
+  await await assertRejects(async () => { await 
       deploymentRollbackHandler({ service_id: '' }, makeContext()),
-    ).rejects.toThrow('service_id is required');
-  });
-
-  it('performs rollback', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'w-1' }); // ensureWorkerInWorkspace
-    mockDeploymentService.rollback.mockResolvedValue({
+    ; }, 'service_id is required');
+})
+  Deno.test('deploymentRollbackHandler - performs rollback', async () => {
+  mockSelectGet = (async () => ({ id: 'w-1' })) as any; // ensureWorkerInWorkspace
+    mockDeploymentService.rollback = (async () => ({
       id: 'd-2',
       status: 'deploying',
-    });
+    })) as any;
 
     const result = JSON.parse(
       await deploymentRollbackHandler({ service_id: 'w-1' }, makeContext()),
     );
-    expect(result.success).toBe(true);
-    expect(result.deployment.id).toBe('d-2');
-  });
-});
+    assertEquals(result.success, true);
+    assertEquals(result.deployment.id, 'd-2');
+})

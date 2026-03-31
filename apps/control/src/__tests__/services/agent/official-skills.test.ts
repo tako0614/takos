@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   listOfficialSkillDefinitions,
   listLocalizedOfficialSkills,
@@ -13,134 +11,114 @@ import {
   CATEGORY_LABELS,
 } from '@/services/agent/official-skills';
 
-describe('listOfficialSkillDefinitions', () => {
-  it('returns all official skills with unique IDs', () => {
-    const skills = listOfficialSkillDefinitions();
-    const ids = skills.map((s) => s.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toContain('research-brief');
-    expect(ids).toContain('writing-draft');
-    expect(ids).toContain('planning-structurer');
-    expect(ids).toContain('slides-author');
-    expect(ids).toContain('repo-app-operator');
-  });
 
-  it('returns deep clones of the definitions', () => {
-    const first = listOfficialSkillDefinitions();
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
+  Deno.test('listOfficialSkillDefinitions - returns all official skills with unique IDs', () => {
+  const skills = listOfficialSkillDefinitions();
+    const ids = skills.map((s) => s.id);
+    assertEquals(new Set(ids).size, ids.length);
+    assertStringIncludes(ids, 'research-brief');
+    assertStringIncludes(ids, 'writing-draft');
+    assertStringIncludes(ids, 'planning-structurer');
+    assertStringIncludes(ids, 'slides-author');
+    assertStringIncludes(ids, 'repo-app-operator');
+})
+  Deno.test('listOfficialSkillDefinitions - returns deep clones of the definitions', () => {
+  const first = listOfficialSkillDefinitions();
     const second = listOfficialSkillDefinitions();
     first[0].activation_tags.push('injected');
-    expect(second[0].activation_tags).not.toContain('injected');
-  });
-
-  it('every skill has both ja and en locales', () => {
-    const skills = listOfficialSkillDefinitions();
+    assert(!(second[0].activation_tags).includes('injected'));
+})
+  Deno.test('listOfficialSkillDefinitions - every skill has both ja and en locales', () => {
+  const skills = listOfficialSkillDefinitions();
     for (const skill of skills) {
-      expect(skill.locales.ja.triggers.length).toBeGreaterThan(0);
-      expect(skill.locales.en.triggers.length).toBeGreaterThan(0);
-      expect(skill.locales.ja.name).toBeTruthy();
-      expect(skill.locales.en.name).toBeTruthy();
-      expect(skill.locales.ja.instructions).toBeTruthy();
-      expect(skill.locales.en.instructions).toBeTruthy();
+      assert(skill.locales.ja.triggers.length > 0);
+      assert(skill.locales.en.triggers.length > 0);
+      assert(skill.locales.ja.name);
+      assert(skill.locales.en.name);
+      assert(skill.locales.ja.instructions);
+      assert(skill.locales.en.instructions);
     }
-  });
-
-  it('every skill has a valid execution contract', () => {
-    const skills = listOfficialSkillDefinitions();
+})
+  Deno.test('listOfficialSkillDefinitions - every skill has a valid execution contract', () => {
+  const skills = listOfficialSkillDefinitions();
     for (const skill of skills) {
-      expect(skill.execution_contract.output_modes.length).toBeGreaterThan(0);
-      expect(skill.execution_contract.preferred_tools.length).toBeGreaterThan(0);
+      assert(skill.execution_contract.output_modes.length > 0);
+      assert(skill.execution_contract.preferred_tools.length > 0);
     }
-  });
-});
+})
 
-describe('listLocalizedOfficialSkills', () => {
-  it('returns skills in the requested locale', () => {
-    const jaSkills = listLocalizedOfficialSkills('ja');
-    expect(jaSkills.every((s) => s.locale === 'ja')).toBe(true);
-    expect(jaSkills[0].name).toMatch(/[\u3000-\u9fff]/); // contains CJK
+  Deno.test('listLocalizedOfficialSkills - returns skills in the requested locale', () => {
+  const jaSkills = listLocalizedOfficialSkills('ja');
+    assertEquals(jaSkills.every((s) => s.locale === 'ja'), true);
+    assert(/[\u3000-\u9fff]/.test(jaSkills[0].name)); // contains CJK
 
     const enSkills = listLocalizedOfficialSkills('en');
-    expect(enSkills.every((s) => s.locale === 'en')).toBe(true);
-    expect(enSkills[0].name).toMatch(/^[A-Za-z\s]+$/);
-  });
-});
+    assertEquals(enSkills.every((s) => s.locale === 'en'), true);
+    assert(/^[A-Za-z\s]+$/.test(enSkills[0].name));
+})
 
-describe('getOfficialSkillById', () => {
-  it('returns the skill for a valid id', () => {
-    const skill = getOfficialSkillById('slides-author', 'en');
-    expect(skill).not.toBeNull();
-    expect(skill!.id).toBe('slides-author');
-    expect(skill!.locale).toBe('en');
-    expect(skill!.name).toBe('Slides Author');
-  });
+  Deno.test('getOfficialSkillById - returns the skill for a valid id', () => {
+  const skill = getOfficialSkillById('slides-author', 'en');
+    assertNotEquals(skill, null);
+    assertEquals(skill!.id, 'slides-author');
+    assertEquals(skill!.locale, 'en');
+    assertEquals(skill!.name, 'Slides Author');
+})
+  Deno.test('getOfficialSkillById - returns null for an unknown id', () => {
+  assertEquals(getOfficialSkillById('nonexistent', 'en'), null);
+})
 
-  it('returns null for an unknown id', () => {
-    expect(getOfficialSkillById('nonexistent', 'en')).toBeNull();
-  });
-});
-
-describe('localizeOfficialSkill', () => {
-  it('localizes to ja', () => {
-    const definitions = listOfficialSkillDefinitions();
+  Deno.test('localizeOfficialSkill - localizes to ja', () => {
+  const definitions = listOfficialSkillDefinitions();
     const localized = localizeOfficialSkill(definitions[0], 'ja');
-    expect(localized.locale).toBe('ja');
-    expect(localized.name).toBe(definitions[0].locales.ja.name);
-    expect(localized.triggers).toEqual(definitions[0].locales.ja.triggers);
-  });
-
-  it('localizes to en', () => {
-    const definitions = listOfficialSkillDefinitions();
+    assertEquals(localized.locale, 'ja');
+    assertEquals(localized.name, definitions[0].locales.ja.name);
+    assertEquals(localized.triggers, definitions[0].locales.ja.triggers);
+})
+  Deno.test('localizeOfficialSkill - localizes to en', () => {
+  const definitions = listOfficialSkillDefinitions();
     const localized = localizeOfficialSkill(definitions[0], 'en');
-    expect(localized.locale).toBe('en');
-    expect(localized.name).toBe(definitions[0].locales.en.name);
-  });
-
-  it('returns a deep clone of execution_contract', () => {
-    const definitions = listOfficialSkillDefinitions();
+    assertEquals(localized.locale, 'en');
+    assertEquals(localized.name, definitions[0].locales.en.name);
+})
+  Deno.test('localizeOfficialSkill - returns a deep clone of execution_contract', () => {
+  const definitions = listOfficialSkillDefinitions();
     const localized = localizeOfficialSkill(definitions[0], 'en');
     localized.execution_contract.preferred_tools.push('injected');
     const fresh = localizeOfficialSkill(definitions[0], 'en');
-    expect(fresh.execution_contract.preferred_tools).not.toContain('injected');
-  });
-});
+    assert(!(fresh.execution_contract.preferred_tools).includes('injected'));
+})
 
-describe('isSkillLocale', () => {
-  it('returns true for ja and en', () => {
-    expect(isSkillLocale('ja')).toBe(true);
-    expect(isSkillLocale('en')).toBe(true);
-  });
+  Deno.test('isSkillLocale - returns true for ja and en', () => {
+  assertEquals(isSkillLocale('ja'), true);
+    assertEquals(isSkillLocale('en'), true);
+})
+  Deno.test('isSkillLocale - returns false for other values', () => {
+  assertEquals(isSkillLocale('fr'), false);
+    assertEquals(isSkillLocale(null), false);
+    assertEquals(isSkillLocale(undefined), false);
+})
 
-  it('returns false for other values', () => {
-    expect(isSkillLocale('fr')).toBe(false);
-    expect(isSkillLocale(null)).toBe(false);
-    expect(isSkillLocale(undefined)).toBe(false);
-  });
-});
+  Deno.test('resolveSkillLocale - prefers explicit locale', () => {
+  assertEquals(resolveSkillLocale({ preferredLocale: 'ja' }), 'ja');
+    assertEquals(resolveSkillLocale({ preferredLocale: 'en' }), 'en');
+})
+  Deno.test('resolveSkillLocale - falls back to acceptLanguage', () => {
+  assertEquals(resolveSkillLocale({ acceptLanguage: 'ja-JP,ja;q=0.9' }), 'ja');
+    assertEquals(resolveSkillLocale({ acceptLanguage: 'en-US,en;q=0.9' }), 'en');
+})
+  Deno.test('resolveSkillLocale - detects Japanese from text samples', () => {
+  assertEquals(resolveSkillLocale({ textSamples: ['スライドを作って'] }), 'ja');
+})
+  Deno.test('resolveSkillLocale - defaults to en when no signal', () => {
+  assertEquals(resolveSkillLocale({}), 'en');
+    assertEquals(resolveSkillLocale(), 'en');
+})
 
-describe('resolveSkillLocale', () => {
-  it('prefers explicit locale', () => {
-    expect(resolveSkillLocale({ preferredLocale: 'ja' })).toBe('ja');
-    expect(resolveSkillLocale({ preferredLocale: 'en' })).toBe('en');
-  });
-
-  it('falls back to acceptLanguage', () => {
-    expect(resolveSkillLocale({ acceptLanguage: 'ja-JP,ja;q=0.9' })).toBe('ja');
-    expect(resolveSkillLocale({ acceptLanguage: 'en-US,en;q=0.9' })).toBe('en');
-  });
-
-  it('detects Japanese from text samples', () => {
-    expect(resolveSkillLocale({ textSamples: ['スライドを作って'] })).toBe('ja');
-  });
-
-  it('defaults to en when no signal', () => {
-    expect(resolveSkillLocale({})).toBe('en');
-    expect(resolveSkillLocale()).toBe('en');
-  });
-});
-
-describe('normalizeCustomSkillMetadata', () => {
-  it('normalizes a complete valid metadata object', () => {
-    const result = normalizeCustomSkillMetadata({
+  Deno.test('normalizeCustomSkillMetadata - normalizes a complete valid metadata object', () => {
+  const result = normalizeCustomSkillMetadata({
       locale: 'ja',
       category: 'research',
       activation_tags: ['tag1', 'tag2'],
@@ -153,114 +131,95 @@ describe('normalizeCustomSkillMetadata', () => {
       },
     });
 
-    expect(result.locale).toBe('ja');
-    expect(result.category).toBe('research');
-    expect(result.activation_tags).toEqual(['tag1', 'tag2']);
-    expect(result.execution_contract?.output_modes).toEqual(['chat', 'artifact']);
-  });
-
-  it('returns empty object for non-object input', () => {
-    expect(normalizeCustomSkillMetadata(null)).toEqual({});
-    expect(normalizeCustomSkillMetadata('string')).toEqual({});
-    expect(normalizeCustomSkillMetadata([1, 2])).toEqual({});
-  });
-
-  it('filters invalid output modes and durable hints', () => {
-    const result = normalizeCustomSkillMetadata({
+    assertEquals(result.locale, 'ja');
+    assertEquals(result.category, 'research');
+    assertEquals(result.activation_tags, ['tag1', 'tag2']);
+    assertEquals(result.execution_contract?.output_modes, ['chat', 'artifact']);
+})
+  Deno.test('normalizeCustomSkillMetadata - returns empty object for non-object input', () => {
+  assertEquals(normalizeCustomSkillMetadata(null), {});
+    assertEquals(normalizeCustomSkillMetadata('string'), {});
+    assertEquals(normalizeCustomSkillMetadata([1, 2]), {});
+})
+  Deno.test('normalizeCustomSkillMetadata - filters invalid output modes and durable hints', () => {
+  const result = normalizeCustomSkillMetadata({
       execution_contract: {
         output_modes: ['chat', 'bogus', 'artifact'],
         durable_output_hints: ['artifact', 'invalid'],
       },
     });
-    expect(result.execution_contract?.output_modes).toEqual(['chat', 'artifact']);
-    expect(result.execution_contract?.durable_output_hints).toEqual(['artifact']);
-  });
-
-  it('ignores invalid locale and category', () => {
-    const result = normalizeCustomSkillMetadata({
+    assertEquals(result.execution_contract?.output_modes, ['chat', 'artifact']);
+    assertEquals(result.execution_contract?.durable_output_hints, ['artifact']);
+})
+  Deno.test('normalizeCustomSkillMetadata - ignores invalid locale and category', () => {
+  const result = normalizeCustomSkillMetadata({
       locale: 'fr',
       category: 'invalid-cat',
     });
-    expect(result.locale).toBeUndefined();
-    expect(result.category).toBeUndefined();
-  });
-
-  it('limits activation_tags to 20', () => {
-    const tags = Array.from({ length: 30 }, (_, i) => `tag${i}`);
+    assertEquals(result.locale, undefined);
+    assertEquals(result.category, undefined);
+})
+  Deno.test('normalizeCustomSkillMetadata - limits activation_tags to 20', () => {
+  const tags = Array.from({ length: 30 }, (_, i) => `tag${i}`);
     const result = normalizeCustomSkillMetadata({ activation_tags: tags });
-    expect(result.activation_tags!.length).toBe(20);
-  });
-});
+    assertEquals(result.activation_tags!.length, 20);
+})
 
-describe('validateCustomSkillMetadata', () => {
-  it('returns no errors for valid input', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({
+  Deno.test('validateCustomSkillMetadata - returns no errors for valid input', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({
       locale: 'en',
       category: 'writing',
     });
-    expect(Object.keys(fieldErrors)).toHaveLength(0);
-  });
-
-  it('reports errors for invalid locale', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({ locale: 123 });
-    expect(fieldErrors.locale).toBeDefined();
-  });
-
-  it('reports errors for invalid category', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({ category: 'invalid' });
-    expect(fieldErrors.category).toBeDefined();
-  });
-
-  it('reports error for non-object metadata', () => {
-    const { fieldErrors } = validateCustomSkillMetadata('string');
-    expect(fieldErrors.metadata).toBeDefined();
-  });
-
-  it('reports error for non-array activation_tags', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({ activation_tags: 'not-array' });
-    expect(fieldErrors.activation_tags).toBeDefined();
-  });
-
-  it('reports error for non-object execution_contract', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({ execution_contract: 'bad' });
-    expect(fieldErrors.execution_contract).toBeDefined();
-  });
-
-  it('reports error for invalid durable_output_hints values', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({
+    assertEquals(Object.keys(fieldErrors).length, 0);
+})
+  Deno.test('validateCustomSkillMetadata - reports errors for invalid locale', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({ locale: 123 });
+    assert(fieldErrors.locale !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports errors for invalid category', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({ category: 'invalid' });
+    assert(fieldErrors.category !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports error for non-object metadata', () => {
+  const { fieldErrors } = validateCustomSkillMetadata('string');
+    assert(fieldErrors.metadata !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports error for non-array activation_tags', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({ activation_tags: 'not-array' });
+    assert(fieldErrors.activation_tags !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports error for non-object execution_contract', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({ execution_contract: 'bad' });
+    assert(fieldErrors.execution_contract !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports error for invalid durable_output_hints values', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({
       execution_contract: { durable_output_hints: ['invalid'] },
     });
-    expect(fieldErrors['execution_contract.durable_output_hints']).toBeDefined();
-  });
-
-  it('reports error for invalid output_modes values', () => {
-    const { fieldErrors } = validateCustomSkillMetadata({
+    assert(fieldErrors['execution_contract.durable_output_hints'] !== undefined);
+})
+  Deno.test('validateCustomSkillMetadata - reports error for invalid output_modes values', () => {
+  const { fieldErrors } = validateCustomSkillMetadata({
       execution_contract: { output_modes: ['bogus'] },
     });
-    expect(fieldErrors['execution_contract.output_modes']).toBeDefined();
-  });
-});
+    assert(fieldErrors['execution_contract.output_modes'] !== undefined);
+})
 
-describe('getCategoryLabel', () => {
-  it('returns labels for all known categories', () => {
-    expect(getCategoryLabel('research').label).toBe('Research');
-    expect(getCategoryLabel('writing').label).toBe('Writing');
-    expect(getCategoryLabel('planning').label).toBe('Planning');
-    expect(getCategoryLabel('slides').label).toBe('Slides');
-    expect(getCategoryLabel('software').label).toBe('Software');
-    expect(getCategoryLabel('custom').label).toBe('Custom');
-  });
+  Deno.test('getCategoryLabel - returns labels for all known categories', () => {
+  assertEquals(getCategoryLabel('research').label, 'Research');
+    assertEquals(getCategoryLabel('writing').label, 'Writing');
+    assertEquals(getCategoryLabel('planning').label, 'Planning');
+    assertEquals(getCategoryLabel('slides').label, 'Slides');
+    assertEquals(getCategoryLabel('software').label, 'Software');
+    assertEquals(getCategoryLabel('custom').label, 'Custom');
+})
+  Deno.test('getCategoryLabel - returns custom label for unknown category', () => {
+  // Cast to bypass type safety to test fallback
+    assertEquals(getCategoryLabel('unknown' as 'custom').label, 'Custom');
+})
 
-  it('returns custom label for unknown category', () => {
-    // Cast to bypass type safety to test fallback
-    expect(getCategoryLabel('unknown' as 'custom').label).toBe('Custom');
-  });
-});
-
-describe('CATEGORY_LABELS', () => {
-  it('contains entries for all official categories plus custom', () => {
-    expect(Object.keys(CATEGORY_LABELS)).toEqual(
-      expect.arrayContaining(['research', 'writing', 'planning', 'slides', 'software', 'custom']),
+  Deno.test('CATEGORY_LABELS - contains entries for all official categories plus custom', () => {
+  assertEquals(Object.keys(CATEGORY_LABELS), 
+      (['research', 'writing', 'planning', 'slides', 'software', 'custom']),
     );
-  });
-});
+})

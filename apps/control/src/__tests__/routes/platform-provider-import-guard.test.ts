@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { assertEquals } from 'jsr:@std/assert';
 
 const controlSrcRoot = resolve(
   import.meta.dirname,
@@ -34,9 +34,9 @@ function collectTypeScriptFiles(dir: string): string[] {
   return files;
 }
 
-describe('server routes provider import guard', () => {
-  it('does not import cloudflare service internals or container runtime directly', () => {
-    const offenders = collectTypeScriptFiles(routesRoot)
+
+  Deno.test('server routes provider import guard - does not import cloudflare service internals or container runtime directly', () => {
+  const offenders = collectTypeScriptFiles(routesRoot)
       .map((filePath) => {
         const source = readFileSync(filePath, 'utf8');
         const matches = forbiddenImportPatterns
@@ -46,6 +46,5 @@ describe('server routes provider import guard', () => {
       })
       .filter((value): value is { filePath: string; matches: string[] } => value !== null);
 
-    expect(offenders).toEqual([]);
-  });
-});
+    assertEquals(offenders, []);
+})

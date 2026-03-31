@@ -4,19 +4,19 @@
  * Manage resources as first-class inventory and data-plane objects.
  */
 import fs from 'node:fs/promises';
-import chalk from 'chalk';
+import { bold, dim, green, red } from '@std/fmt/colors';
 import type { Command } from 'commander';
-import { cliExit } from '../lib/command-exit.js';
-import { api } from '../lib/api.js';
-import type { ResourceType } from '../lib/entities/resource.js';
-import { resolveSpaceId } from '../lib/cli-utils.js';
+import { cliExit } from '../lib/command-exit.ts';
+import { api } from '../lib/api.ts';
+import type { ResourceType } from '../lib/entities/resource.ts';
+import { resolveSpaceId } from '../lib/cli-utils.ts';
 import {
   ensureGroupInSpace,
   findResourceInSpace,
   findServiceInSpace,
   listResourcesInSpace,
   setResourceGroup,
-} from '../lib/platform-surface.js';
+} from '../lib/platform-surface.ts';
 
 type ResourceCapability =
   | 'd1'
@@ -140,19 +140,19 @@ export function registerResourceCommand(program: Command): void {
           type: options.type,
         });
       } catch (error) {
-        console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+        console.log(red(error instanceof Error ? error.message : String(error)));
         cliExit(1);
         return;
       }
 
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { createResource } = await import('../lib/entities/resource.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { createResource } = await import('../lib/entities/resource.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
 
         if (!OFFLINE_RESOURCE_TYPES.has(resourceType)) {
-          console.log(chalk.red(`Offline resource create does not support type: ${resourceType}`));
+          console.log(red(`Offline resource create does not support type: ${resourceType}`));
           cliExit(1);
           return;
         }
@@ -168,7 +168,7 @@ export function registerResourceCommand(program: Command): void {
           };
           const mappedType = RESOURCE_TYPE_MAP[resourceType];
           if (!mappedType) {
-            console.log(chalk.red(`Unsupported resource type for offline create: ${resourceType}`));
+            console.log(red(`Unsupported resource type for offline create: ${resourceType}`));
             cliExit(1);
             return;
           }
@@ -187,10 +187,10 @@ export function registerResourceCommand(program: Command): void {
             return;
           }
 
-          const idInfo = result.id ? chalk.dim(` (${result.id})`) : '';
-          console.log(`${chalk.green('✓')} ${result.name} [${result.type}] ${result.status}${idInfo}`);
+          const idInfo = result.id ? dim(` (${result.id})`) : '';
+          console.log(`${green('✓')} ${result.name} [${result.type}] ${result.status}${idInfo}`);
         } catch (error) {
-          console.log(chalk.red(`Failed to create resource: ${error instanceof Error ? error.message : String(error)}`));
+          console.log(red(`Failed to create resource: ${error instanceof Error ? error.message : String(error)}`));
           cliExit(1);
         }
         return;
@@ -218,7 +218,7 @@ export function registerResourceCommand(program: Command): void {
       );
 
       if (!res.ok) {
-        console.log(chalk.red(`Error: ${res.error}`));
+        console.log(red(`Error: ${res.error}`));
         cliExit(1);
       }
 
@@ -227,9 +227,9 @@ export function registerResourceCommand(program: Command): void {
         return;
       }
 
-      console.log(`${chalk.green('✓')} ${res.data.resource.name} [${res.data.resource.type}] ${res.data.resource.status}`);
+      console.log(`${green('✓')} ${res.data.resource.name} [${res.data.resource.type}] ${res.data.resource.status}`);
       if (group) {
-        console.log(chalk.dim(`  group=${group.name}`));
+        console.log(dim(`  group=${group.name}`));
       }
     });
 
@@ -244,9 +244,9 @@ export function registerResourceCommand(program: Command): void {
         const resource = await requireResource(spaceId, name);
         const group = await ensureGroupInSpace(spaceId, options.group);
         await setResourceGroup(resource.id, group.id);
-        console.log(chalk.green(`Attached resource '${name}' to group '${group.name}'.`));
+        console.log(green(`Attached resource '${name}' to group '${group.name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to attach resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to attach resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -260,9 +260,9 @@ export function registerResourceCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const resource = await requireResource(spaceId, name);
         await setResourceGroup(resource.id, null);
-        console.log(chalk.green(`Detached resource '${name}' from its group.`));
+        console.log(green(`Detached resource '${name}' from its group.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to detach resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to detach resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -276,7 +276,7 @@ export function registerResourceCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (options: { group: string; space?: string; json?: boolean; offline?: boolean }) => {
       if (options.offline) {
-        const { listResources } = await import('../lib/entities/resource.js');
+        const { listResources } = await import('../lib/entities/resource.ts');
         try {
           const resources = await listResources(options.group);
           if (options.json) {
@@ -284,19 +284,19 @@ export function registerResourceCommand(program: Command): void {
             return;
           }
           if (resources.length === 0) {
-            console.log(chalk.dim('No resources tracked.'));
+            console.log(dim('No resources tracked.'));
             return;
           }
           console.log('');
-          console.log(chalk.bold('Resources:'));
+          console.log(bold('Resources:'));
           for (const resource of resources) {
-            const idLabel = resource.id ? chalk.dim(` (${resource.id})`) : '';
+            const idLabel = resource.id ? dim(` (${resource.id})`) : '';
             console.log(`  ${resource.name} [${resource.type}]${idLabel}`);
           }
           console.log('');
-          console.log(chalk.dim(`${resources.length} resource(s)`));
+          console.log(dim(`${resources.length} resource(s)`));
         } catch (error) {
-          console.log(chalk.red(`Failed to list resources: ${error instanceof Error ? error.message : String(error)}`));
+          console.log(red(`Failed to list resources: ${error instanceof Error ? error.message : String(error)}`));
           cliExit(1);
         }
         return;
@@ -309,19 +309,19 @@ export function registerResourceCommand(program: Command): void {
           return;
         }
         if (resources.length === 0) {
-          console.log(chalk.dim('No resources found.'));
+          console.log(dim('No resources found.'));
           return;
         }
         console.log('');
-        console.log(chalk.bold('Resources:'));
+        console.log(bold('Resources:'));
         for (const resource of resources) {
-          const groupLabel = resource.group_id ? chalk.dim(` group=${resource.group_id}`) : '';
-          console.log(`  ${resource.name} [${resource.type}] ${chalk.dim(resource.id)}${groupLabel}`);
+          const groupLabel = resource.group_id ? dim(` group=${resource.group_id}`) : '';
+          console.log(`  ${resource.name} [${resource.type}] ${dim(resource.id)}${groupLabel}`);
         }
         console.log('');
-        console.log(chalk.dim(`${resources.length} resource(s)`));
+        console.log(dim(`${resources.length} resource(s)`));
       } catch (error) {
-        console.log(chalk.red(`Failed to list resources: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to list resources: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -342,7 +342,7 @@ export function registerResourceCommand(program: Command): void {
         }
         console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to show resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to show resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -357,15 +357,15 @@ export function registerResourceCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (name: string, options: { group: string; space?: string; accountId?: string; apiToken?: string; offline?: boolean }) => {
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deleteResource } = await import('../lib/entities/resource.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deleteResource } = await import('../lib/entities/resource.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
         try {
           await deleteResource(name, { group: options.group, accountId, apiToken });
-          console.log(chalk.green(`Removed resource '${name}' from offline state.`));
+          console.log(green(`Removed resource '${name}' from offline state.`));
         } catch (error) {
-          console.log(chalk.red(`Failed to delete resource: ${error instanceof Error ? error.message : String(error)}`));
+          console.log(red(`Failed to delete resource: ${error instanceof Error ? error.message : String(error)}`));
           cliExit(1);
         }
         return;
@@ -375,9 +375,9 @@ export function registerResourceCommand(program: Command): void {
         const resource = await requireResource(resolveSpaceId(options.space), name);
         const res = await api<void>(`/api/resources/${encodeURIComponent(resource.id)}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Deleted resource '${name}'.`));
+        console.log(green(`Deleted resource '${name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to delete resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to delete resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -402,9 +402,9 @@ export function registerResourceCommand(program: Command): void {
           },
         });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Bound '${name}' to '${target.slug ?? target.id}' as ${options.binding}.`));
+        console.log(green(`Bound '${name}' to '${target.slug ?? target.id}' as ${options.binding}.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to bind resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to bind resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -425,9 +425,9 @@ export function registerResourceCommand(program: Command): void {
           { method: 'DELETE' },
         );
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Unbound '${name}' from '${target.slug ?? target.id}'.`));
+        console.log(green(`Unbound '${name}' from '${target.slug ?? target.id}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to unbind resource: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to unbind resource: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -445,7 +445,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to list tables: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to list tables: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -464,7 +464,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to run query: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to run query: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -484,7 +484,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to list objects: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to list objects: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -500,7 +500,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to read object: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to read object: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -522,9 +522,9 @@ export function registerResourceCommand(program: Command): void {
           },
         });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Stored object '${key}' in '${name}'.`));
+        console.log(green(`Stored object '${key}' in '${name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to store object: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to store object: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -538,9 +538,9 @@ export function registerResourceCommand(program: Command): void {
           method: 'DELETE',
         });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Deleted object '${key}' from '${name}'.`));
+        console.log(green(`Deleted object '${key}' from '${name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to delete object: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to delete object: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -560,7 +560,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to list KV entries: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to list KV entries: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -576,7 +576,7 @@ export function registerResourceCommand(program: Command): void {
         if (options.json) process.stdout.write(`${JSON.stringify(res.data, null, 2)}\n`);
         else console.log(JSON.stringify(res.data, null, 2));
       } catch (error) {
-        console.log(chalk.red(`Failed to read KV entry: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to read KV entry: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -594,9 +594,9 @@ export function registerResourceCommand(program: Command): void {
           body: { value },
         });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Stored KV entry '${key}' in '${name}'.`));
+        console.log(green(`Stored KV entry '${key}' in '${name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to store KV entry: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to store KV entry: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });
@@ -610,9 +610,9 @@ export function registerResourceCommand(program: Command): void {
           method: 'DELETE',
         });
         if (!res.ok) throw new Error(res.error);
-        console.log(chalk.green(`Deleted KV entry '${key}' from '${name}'.`));
+        console.log(green(`Deleted KV entry '${key}' from '${name}'.`));
       } catch (error) {
-        console.log(chalk.red(`Failed to delete KV entry: ${error instanceof Error ? error.message : String(error)}`));
+        console.log(red(`Failed to delete KV entry: ${error instanceof Error ? error.message : String(error)}`));
         cliExit(1);
       }
     });

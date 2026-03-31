@@ -1,45 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getUserByUsername: vi.fn(),
-  getUserStats: vi.fn(),
-  isFollowing: vi.fn(),
-  batchStarCheck: vi.fn(),
-  getDb: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/routes/profiles/shared', () => ({
-  getUserByUsername: mocks.getUserByUsername,
-  getUserStats: mocks.getUserStats,
-  isFollowing: mocks.isFollowing,
-  batchStarCheck: mocks.batchStarCheck,
-  getUserPrivacySettings: vi.fn(),
-  isMutedBy: vi.fn(),
-}));
-
-vi.mock('@/db', () => ({
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/db/schema', () => ({
-  repositories: {
-    id: 'id', accountId: 'accountId', name: 'name',
-    description: 'description', visibility: 'visibility',
-    defaultBranch: 'defaultBranch', stars: 'stars', forks: 'forks',
-    updatedAt: 'updatedAt',
-  },
-  repoStars: { repoId: 'repoId', userId: 'userId' },
-  accounts: { id: 'id', slug: 'slug' },
-}));
-
-vi.mock('drizzle-orm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('drizzle-orm')>();
-  return { ...actual };
+const mocks = ({
+  getUserByUsername: ((..._args: any[]) => undefined) as any,
+  getUserStats: ((..._args: any[]) => undefined) as any,
+  isFollowing: ((..._args: any[]) => undefined) as any,
+  batchStarCheck: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/routes/profiles/shared'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/db/schema'
+// [Deno] vi.mock removed - manually stub imports from 'drizzle-orm'
 import profiles from '@/routes/profiles/index';
 
 function createUser(): User {
@@ -69,43 +45,39 @@ function createApp(user?: User) {
 
 function mockDbChain(results: unknown[] = []) {
   const chain: any = {
-    select: vi.fn(() => chain),
-    from: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => chain),
-    offset: vi.fn(() => chain),
-    all: vi.fn().mockResolvedValue(results),
-    get: vi.fn().mockResolvedValue(results[0] ?? null),
+    select: () => chain,
+    from: () => chain,
+    where: () => chain,
+    orderBy: () => chain,
+    limit: () => chain,
+    offset: () => chain,
+    all: (async () => results),
+    get: (async () => results[0] ?? null),
   };
-  mocks.getDb.mockReturnValue(chain);
+  mocks.getDb = (() => chain) as any;
   return chain;
 }
 
-describe('profiles view routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('GET /:username', () => {
-    it('returns profile with repos for existing user', async () => {
-      mocks.getUserByUsername.mockResolvedValue({
+  
+    Deno.test('profiles view routes - GET /:username - returns profile with repos for existing user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => ({
         id: 'u-target',
         username: 'targetuser',
         name: 'Target User',
         bio: 'A bio',
         picture: null,
         created_at: '2026-01-01T00:00:00.000Z',
-      });
-      mocks.getUserStats.mockResolvedValue({
+      })) as any;
+      mocks.getUserStats = (async () => ({
         public_repo_count: 3,
         followers_count: 10,
         following_count: 5,
-      });
-      mocks.isFollowing.mockResolvedValue(false);
-      mocks.batchStarCheck.mockResolvedValue(new Set());
+      })) as any;
+      mocks.isFollowing = (async () => false) as any;
+      mocks.batchStarCheck = (async () => new Set()) as any;
       mockDbChain([]);
 
       const app = createApp(createUser());
@@ -115,14 +87,14 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { profile: { username: string; is_self: boolean }; recent_repos: unknown[] };
-      expect(json.profile.username).toBe('targetuser');
-      expect(json.profile.is_self).toBe(false);
-    });
-
-    it('returns 404 for non-existent user', async () => {
-      mocks.getUserByUsername.mockResolvedValue(null);
+      assertEquals(json.profile.username, 'targetuser');
+      assertEquals(json.profile.is_self, false);
+})
+    Deno.test('profiles view routes - GET /:username - returns 404 for non-existent user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -131,25 +103,25 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('correctly identifies self view', async () => {
-      mocks.getUserByUsername.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('profiles view routes - GET /:username - correctly identifies self view', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => ({
         id: 'user-1', // same as createUser
         username: 'user1',
         name: 'User One',
         bio: null,
         picture: null,
         created_at: '2026-03-01T00:00:00.000Z',
-      });
-      mocks.getUserStats.mockResolvedValue({
+      })) as any;
+      mocks.getUserStats = (async () => ({
         public_repo_count: 0,
         followers_count: 0,
         following_count: 0,
-      });
-      mocks.isFollowing.mockResolvedValue(false);
-      mocks.batchStarCheck.mockResolvedValue(new Set());
+      })) as any;
+      mocks.isFollowing = (async () => false) as any;
+      mocks.batchStarCheck = (async () => new Set()) as any;
       mockDbChain([]);
 
       const app = createApp(createUser());
@@ -159,27 +131,27 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { profile: { is_self: boolean } };
-      expect(json.profile.is_self).toBe(true);
-    });
-
-    it('works for anonymous users', async () => {
-      mocks.getUserByUsername.mockResolvedValue({
+      assertEquals(json.profile.is_self, true);
+})
+    Deno.test('profiles view routes - GET /:username - works for anonymous users', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => ({
         id: 'u-target',
         username: 'targetuser',
         name: 'Target',
         bio: null,
         picture: null,
         created_at: '2026-01-01T00:00:00.000Z',
-      });
-      mocks.getUserStats.mockResolvedValue({
+      })) as any;
+      mocks.getUserStats = (async () => ({
         public_repo_count: 0,
         followers_count: 0,
         following_count: 0,
-      });
-      mocks.isFollowing.mockResolvedValue(false);
-      mocks.batchStarCheck.mockResolvedValue(new Set());
+      })) as any;
+      mocks.isFollowing = (async () => false) as any;
+      mocks.batchStarCheck = (async () => new Set()) as any;
       mockDbChain([]);
 
       const app = createApp(); // no user
@@ -189,15 +161,14 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { profile: { is_self: boolean } };
-      expect(json.profile.is_self).toBe(false);
-    });
-  });
-
-  describe('GET /:username/repos', () => {
-    it('returns 404 for non-existent user', async () => {
-      mocks.getUserByUsername.mockResolvedValue(null);
+      assertEquals(json.profile.is_self, false);
+})  
+  
+    Deno.test('profiles view routes - GET /:username/repos - returns 404 for non-existent user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => null) as any;
 
       const app = createApp();
       const res = await app.fetch(
@@ -206,22 +177,22 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns repos with pagination metadata', async () => {
-      mocks.getUserByUsername.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('profiles view routes - GET /:username/repos - returns repos with pagination metadata', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getUserByUsername = (async () => ({
         id: 'u-target',
         username: 'targetuser',
         name: 'Target',
         bio: null,
         picture: null,
         created_at: '2026-01-01T00:00:00.000Z',
-      });
-      mocks.batchStarCheck.mockResolvedValue(new Set());
+      })) as any;
+      mocks.batchStarCheck = (async () => new Set()) as any;
 
       const chain = mockDbChain([]);
-      chain.get.mockResolvedValue({ count: 0 });
+      chain.get = (async () => ({ count: 0 })) as any;
 
       const app = createApp();
       const res = await app.fetch(
@@ -230,11 +201,9 @@ describe('profiles view routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { repos: unknown[]; total: number; has_more: boolean };
-      expect(json).toHaveProperty('repos');
-      expect(json).toHaveProperty('total');
-      expect(json).toHaveProperty('has_more');
-    });
-  });
-});
+      assert('repos' in json);
+      assert('total' in json);
+      assert('has_more' in json);
+})  

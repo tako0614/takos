@@ -1,19 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { listInvoices, retrieveInvoice, sendInvoice } from '@/services/billing/stripe';
 
-describe('stripe invoice helpers', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
 
-  it('listInvoices calls Stripe API with customer and limit', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: [{ id: 'in_1', customer: 'cus_1' }], has_more: false }), {
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('stripe invoice helpers - listInvoices calls Stripe API with customer and limit', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({ data: [{ id: 'in_1', customer: 'cus_1' }], has_more: false }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
-      })
-    );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+      }));
+    (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
 
     const result = await listInvoices({
       secretKey: 'sk_test',
@@ -21,61 +18,64 @@ describe('stripe invoice helpers', () => {
       limit: 10,
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       invoices: [{ id: 'in_1', customer: 'cus_1' }],
       has_more: false,
     });
-    expect(fetchMock).toHaveBeenCalledWith(
+    assertSpyCallArgs(fetchMock, 0, [
       'https://api.stripe.com/v1/invoices?customer=cus_1&limit=10',
-      expect.objectContaining({
-        headers: expect.objectContaining({
+      ({
+        headers: ({
           Authorization: 'Bearer sk_test',
         }),
       })
-    );
-  });
+    ]);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('stripe invoice helpers - retrieveInvoice calls Stripe API', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({ id: 'in_1', customer: 'cus_1' }), { status: 200 }));
+    (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
 
-  it('retrieveInvoice calls Stripe API', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ id: 'in_1', customer: 'cus_1' }), { status: 200 })
-    );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
-
-    await expect(
+    await assertEquals(await 
       retrieveInvoice({ secretKey: 'sk_test', invoiceId: 'in_1' })
-    ).resolves.toEqual({ id: 'in_1', customer: 'cus_1' });
+    , { id: 'in_1', customer: 'cus_1' });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    assertSpyCallArgs(fetchMock, 0, [
       'https://api.stripe.com/v1/invoices/in_1',
-      expect.objectContaining({
-        headers: expect.objectContaining({
+      ({
+        headers: ({
           Authorization: 'Bearer sk_test',
         }),
       })
-    );
-  });
+    ]);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('stripe invoice helpers - sendInvoice posts to Stripe send endpoint', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({ id: 'in_1', customer: 'cus_1' }), { status: 200 }));
+    (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
 
-  it('sendInvoice posts to Stripe send endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ id: 'in_1', customer: 'cus_1' }), { status: 200 })
-    );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
-
-    await expect(
+    await assertEquals(await 
       sendInvoice({ secretKey: 'sk_test', invoiceId: 'in_1' })
-    ).resolves.toEqual({ id: 'in_1', customer: 'cus_1' });
+    , { id: 'in_1', customer: 'cus_1' });
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    assertSpyCallArgs(fetchMock, 0, [
       'https://api.stripe.com/v1/invoices/in_1/send',
-      expect.objectContaining({
+      ({
         method: 'POST',
-        headers: expect.objectContaining({
+        headers: ({
           Authorization: 'Bearer sk_test',
           'Content-Type': 'application/x-www-form-urlencoded',
         }),
         body: '',
       })
-    );
-  });
-});
-
+    ]);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})

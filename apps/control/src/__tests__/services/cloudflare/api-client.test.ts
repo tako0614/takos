@@ -1,5 +1,3 @@
-import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
-
 import {
   CloudflareApiClient,
   createCloudflareApiClient,
@@ -7,46 +5,39 @@ import {
 } from '@/services/cloudflare/api-client';
 import type { CloudflareAPIError } from '@/services/wfp/client';
 
-describe('createCloudflareApiClient', () => {
-  it('returns CloudflareApiClient when CF_ACCOUNT_ID and CF_API_TOKEN are set', () => {
-    const client = createCloudflareApiClient({
+
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+
+  Deno.test('createCloudflareApiClient - returns CloudflareApiClient when CF_ACCOUNT_ID and CF_API_TOKEN are set', () => {
+  const client = createCloudflareApiClient({
       CF_ACCOUNT_ID: 'acc-1',
       CF_API_TOKEN: 'tok-1',
       CF_ZONE_ID: 'zone-1',
     });
-    expect(client).toBeInstanceOf(CloudflareApiClient);
-    expect(client!.accountId).toBe('acc-1');
-    expect(client!.zoneId).toBe('zone-1');
-  });
-
-  it('returns null when CF_ACCOUNT_ID is missing', () => {
-    const client = createCloudflareApiClient({
+    assert(client instanceof CloudflareApiClient);
+    assertEquals(client!.accountId, 'acc-1');
+    assertEquals(client!.zoneId, 'zone-1');
+})
+  Deno.test('createCloudflareApiClient - returns null when CF_ACCOUNT_ID is missing', () => {
+  const client = createCloudflareApiClient({
       CF_API_TOKEN: 'tok-1',
     });
-    expect(client).toBeNull();
-  });
-
-  it('returns null when CF_API_TOKEN is missing', () => {
-    const client = createCloudflareApiClient({
+    assertEquals(client, null);
+})
+  Deno.test('createCloudflareApiClient - returns null when CF_API_TOKEN is missing', () => {
+  const client = createCloudflareApiClient({
       CF_ACCOUNT_ID: 'acc-1',
     });
-    expect(client).toBeNull();
-  });
-
-  it('creates client without zoneId', () => {
-    const client = createCloudflareApiClient({
+    assertEquals(client, null);
+})
+  Deno.test('createCloudflareApiClient - creates client without zoneId', () => {
+  const client = createCloudflareApiClient({
       CF_ACCOUNT_ID: 'acc-1',
       CF_API_TOKEN: 'tok-1',
     });
-    expect(client).not.toBeNull();
-    expect(client!.zoneId).toBeUndefined();
-  });
-});
-
-describe('CloudflareApiClient', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+    assertNotEquals(client, null);
+    assertEquals(client!.zoneId, undefined);
+})
 
   const config: CloudflareApiConfig = {
     accountId: 'test-acc',
@@ -55,42 +46,42 @@ describe('CloudflareApiClient', () => {
   };
 
   function mockFetchSuccess<T>(result: T) {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({
+    const fetchMock = (async () => new Response(JSON.stringify({
         success: true,
         result,
         errors: [],
         messages: [],
-      }), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+      }), { status: 200 }),);
+    (globalThis as any).fetch = fetchMock;
     return fetchMock;
   }
 
-  describe('fetch', () => {
-    it('sends Authorization and Content-Type headers', async () => {
-      const fetchMock = mockFetchSuccess({ data: 'ok' });
+  
+    Deno.test('CloudflareApiClient - fetch - sends Authorization and Content-Type headers', async () => {
+  try {
+  const fetchMock = mockFetchSuccess({ data: 'ok' });
       const client = new CloudflareApiClient(config);
       const response = await client.fetch<{ data: string }>('/test/path');
 
-      expect(response.result.data).toBe('ok');
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain('api.cloudflare.com');
-      expect(url).toContain('/test/path');
-      expect(init.headers.Authorization).toBe('Bearer test-token');
-      expect(init.headers['Content-Type']).toBe('application/json');
-    });
-
-    it('throws classified error on non-ok response', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+      assertEquals(response.result.data, 'ok');
+      const [url, init] = fetchMock.calls[0];
+      assertStringIncludes(url, 'api.cloudflare.com');
+      assertStringIncludes(url, '/test/path');
+      assertEquals(init.headers.Authorization, 'Bearer test-token');
+      assertEquals(init.headers['Content-Type'], 'application/json');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - fetch - throws classified error on non-ok response', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({
           success: false,
           errors: [{ code: 403, message: 'Forbidden' }],
           messages: [],
           result: null,
-        }), { status: 403 }),
-      );
-      vi.stubGlobal('fetch', fetchMock);
+        }), { status: 403 }),);
+      (globalThis as any).fetch = fetchMock;
 
       const client = new CloudflareApiClient(config);
       try {
@@ -98,141 +89,167 @@ describe('CloudflareApiClient', () => {
         expect.unreachable();
       } catch (err) {
         const cfErr = err as CloudflareAPIError;
-        expect(cfErr.statusCode).toBe(403);
-        expect(cfErr.isRetryable).toBe(false);
+        assertEquals(cfErr.statusCode, 403);
+        assertEquals(cfErr.isRetryable, false);
       }
-    });
-
-    it('throws classified error when success is false in body', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - fetch - throws classified error when success is false in body', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({
           success: false,
           errors: [{ code: 100, message: 'Validation error' }],
           messages: [],
           result: null,
-        }), { status: 200 }),
-      );
-      vi.stubGlobal('fetch', fetchMock);
+        }), { status: 200 }),);
+      (globalThis as any).fetch = fetchMock;
 
       const client = new CloudflareApiClient(config);
-      await expect(client.fetch('/bad')).rejects.toThrow();
-    });
-
-    it('throws timeout error when request aborts', async () => {
-      const fetchMock = vi.fn().mockImplementation(() => {
+      await await assertRejects(async () => { await client.fetch('/bad'); });
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - fetch - throws timeout error when request aborts', async () => {
+  try {
+  const fetchMock = () => {
         const err = new Error('Aborted');
         err.name = 'AbortError';
         return Promise.reject(err);
-      });
-      vi.stubGlobal('fetch', fetchMock);
+      };
+      (globalThis as any).fetch = fetchMock;
 
       const client = new CloudflareApiClient(config);
-      await expect(client.fetch('/slow', {}, 1000)).rejects.toThrow('timeout');
-    });
-  });
-
-  describe('fetchRaw', () => {
-    it('returns raw Response without JSON parsing', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        new Response('raw-value', { status: 200 }),
-      );
-      vi.stubGlobal('fetch', fetchMock);
+      await await assertRejects(async () => { await client.fetch('/slow', {}, 1000); }, 'timeout');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - fetchRaw - returns raw Response without JSON parsing', async () => {
+  try {
+  const fetchMock = (async () => new Response('raw-value', { status: 200 }),);
+      (globalThis as any).fetch = fetchMock;
 
       const client = new CloudflareApiClient(config);
       const response = await client.fetchRaw('/raw/path');
       const text = await response.text();
 
-      expect(text).toBe('raw-value');
-      const init = fetchMock.mock.calls[0][1];
-      expect(init.headers.Authorization).toBe('Bearer test-token');
-    });
-  });
-
-  describe('accountGet', () => {
-    it('sends GET to /accounts/{accountId}/<subpath>', async () => {
-      const fetchMock = mockFetchSuccess({ items: [1, 2, 3] });
+      assertEquals(text, 'raw-value');
+      const init = fetchMock.calls[0][1];
+      assertEquals(init.headers.Authorization, 'Bearer test-token');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - accountGet - sends GET to /accounts/{accountId}/<subpath>', async () => {
+  try {
+  const fetchMock = mockFetchSuccess({ items: [1, 2, 3] });
       const client = new CloudflareApiClient(config);
       const result = await client.accountGet<{ items: number[] }>('/workers/scripts');
 
-      expect(result.items).toEqual([1, 2, 3]);
-      const url = fetchMock.mock.calls[0][0] as string;
-      expect(url).toContain(`/accounts/${config.accountId}/workers/scripts`);
-    });
-  });
-
-  describe('accountPost', () => {
-    it('sends POST with JSON body to account path', async () => {
-      const fetchMock = mockFetchSuccess({ id: 'new-resource' });
+      assertEquals(result.items, [1, 2, 3]);
+      const url = fetchMock.calls[0][0] as string;
+      assertStringIncludes(url, `/accounts/${config.accountId}/workers/scripts`);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - accountPost - sends POST with JSON body to account path', async () => {
+  try {
+  const fetchMock = mockFetchSuccess({ id: 'new-resource' });
       const client = new CloudflareApiClient(config);
       const result = await client.accountPost<{ id: string }>('/d1/database', { name: 'my-db' });
 
-      expect(result.id).toBe('new-resource');
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain(`/accounts/${config.accountId}/d1/database`);
-      expect(init.method).toBe('POST');
-      expect(init.body).toBe(JSON.stringify({ name: 'my-db' }));
-    });
-  });
-
-  describe('accountDelete', () => {
-    it('sends DELETE to account path', async () => {
-      const fetchMock = mockFetchSuccess(null);
+      assertEquals(result.id, 'new-resource');
+      const [url, init] = fetchMock.calls[0];
+      assertStringIncludes(url, `/accounts/${config.accountId}/d1/database`);
+      assertEquals(init.method, 'POST');
+      assertEquals(init.body, JSON.stringify({ name: 'my-db' }));
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - accountDelete - sends DELETE to account path', async () => {
+  try {
+  const fetchMock = mockFetchSuccess(null);
       const client = new CloudflareApiClient(config);
       await client.accountDelete('/d1/database/db-1');
 
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain(`/accounts/${config.accountId}/d1/database/db-1`);
-      expect(init.method).toBe('DELETE');
-    });
-  });
-
-  describe('zonePost', () => {
-    it('sends POST to /zones/{zoneId}/<subpath>', async () => {
-      const fetchMock = mockFetchSuccess({ id: 'hostname-1' });
+      const [url, init] = fetchMock.calls[0];
+      assertStringIncludes(url, `/accounts/${config.accountId}/d1/database/db-1`);
+      assertEquals(init.method, 'DELETE');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - zonePost - sends POST to /zones/{zoneId}/<subpath>', async () => {
+  try {
+  const fetchMock = mockFetchSuccess({ id: 'hostname-1' });
       const client = new CloudflareApiClient(config);
       const result = await client.zonePost<{ id: string }>('/custom_hostnames', { hostname: 'api.example.com' });
 
-      expect(result.id).toBe('hostname-1');
-      const url = fetchMock.mock.calls[0][0] as string;
-      expect(url).toContain(`/zones/${config.zoneId}/custom_hostnames`);
-    });
-
-    it('throws when zoneId is not configured', async () => {
-      const client = new CloudflareApiClient({ ...config, zoneId: undefined });
-      await expect(client.zonePost('/custom_hostnames')).rejects.toThrow('CF_ZONE_ID not configured');
-    });
-  });
-
-  describe('zoneGet', () => {
-    it('sends GET to zone path', async () => {
-      const fetchMock = mockFetchSuccess([]);
+      assertEquals(result.id, 'hostname-1');
+      const url = fetchMock.calls[0][0] as string;
+      assertStringIncludes(url, `/zones/${config.zoneId}/custom_hostnames`);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - zonePost - throws when zoneId is not configured', async () => {
+  try {
+  const client = new CloudflareApiClient({ ...config, zoneId: undefined });
+      await await assertRejects(async () => { await client.zonePost('/custom_hostnames'); }, 'CF_ZONE_ID not configured');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - zoneGet - sends GET to zone path', async () => {
+  try {
+  const fetchMock = mockFetchSuccess([]);
       const client = new CloudflareApiClient(config);
       await client.zoneGet('/custom_hostnames');
 
-      const url = fetchMock.mock.calls[0][0] as string;
-      expect(url).toContain(`/zones/${config.zoneId}/custom_hostnames`);
-    });
-
-    it('throws when zoneId is not configured', async () => {
-      const client = new CloudflareApiClient({ ...config, zoneId: undefined });
-      await expect(client.zoneGet('/anything')).rejects.toThrow('CF_ZONE_ID not configured');
-    });
-  });
-
-  describe('zoneDelete', () => {
-    it('sends DELETE to zone path', async () => {
-      const fetchMock = mockFetchSuccess(null);
+      const url = fetchMock.calls[0][0] as string;
+      assertStringIncludes(url, `/zones/${config.zoneId}/custom_hostnames`);
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - zoneGet - throws when zoneId is not configured', async () => {
+  try {
+  const client = new CloudflareApiClient({ ...config, zoneId: undefined });
+      await await assertRejects(async () => { await client.zoneGet('/anything'); }, 'CF_ZONE_ID not configured');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  
+  
+    Deno.test('CloudflareApiClient - zoneDelete - sends DELETE to zone path', async () => {
+  try {
+  const fetchMock = mockFetchSuccess(null);
       const client = new CloudflareApiClient(config);
       await client.zoneDelete('/custom_hostnames/h1');
 
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain(`/zones/${config.zoneId}/custom_hostnames/h1`);
-      expect(init.method).toBe('DELETE');
-    });
-
-    it('throws when zoneId is not configured', async () => {
-      const client = new CloudflareApiClient({ ...config, zoneId: undefined });
-      await expect(client.zoneDelete('/anything')).rejects.toThrow('CF_ZONE_ID not configured');
-    });
-  });
-});
+      const [url, init] = fetchMock.calls[0];
+      assertStringIncludes(url, `/zones/${config.zoneId}/custom_hostnames/h1`);
+      assertEquals(init.method, 'DELETE');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+    Deno.test('CloudflareApiClient - zoneDelete - throws when zoneId is not configured', async () => {
+  try {
+  const client = new CloudflareApiClient({ ...config, zoneId: undefined });
+      await await assertRejects(async () => { await client.zoneDelete('/anything'); }, 'CF_ZONE_ID not configured');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})  

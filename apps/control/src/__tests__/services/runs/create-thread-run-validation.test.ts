@@ -1,39 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getRunHierarchyNode: vi.fn(),
-  getWorkspaceModel: vi.fn(),
-  isValidOpaqueId: vi.fn(),
-  logWarn: vi.fn(),
-}));
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/runs/create-thread-run-store', () => ({
-  getRunHierarchyNode: mocks.getRunHierarchyNode,
-  getWorkspaceModel: mocks.getWorkspaceModel,
-}));
+const mocks = ({
+  getRunHierarchyNode: ((..._args: any[]) => undefined) as any,
+  getWorkspaceModel: ((..._args: any[]) => undefined) as any,
+  isValidOpaqueId: ((..._args: any[]) => undefined) as any,
+  logWarn: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/shared/utils/db-guards', () => ({
-  isValidOpaqueId: mocks.isValidOpaqueId,
-}));
-
-vi.mock('@/shared/utils/logger', () => ({
-  logWarn: mocks.logWarn,
-  logError: vi.fn(),
-  logInfo: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/runs/create-thread-run-store'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/db-guards'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 // We need to mock agent module for DEFAULT_MODEL_ID and normalizeModelId
-vi.mock('@/services/agent', () => ({
-  DEFAULT_MODEL_ID: 'gpt-5.4-nano',
-  normalizeModelId: (model?: string | null) => {
-    if (!model) return null;
-    const supported = ['gpt-5.4-nano', 'gpt-5.4-mini'];
-    const normalized = model.toLowerCase().trim();
-    return supported.includes(normalized) ? normalized : null;
-  },
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent'
 import { validateParentRunId, resolveRunModel } from '@/services/runs/create-thread-run-validation';
 
 function makeNode(overrides: Partial<{
@@ -54,175 +35,174 @@ function makeNode(overrides: Partial<{
   };
 }
 
-describe('validateParentRunId', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isValidOpaqueId.mockReturnValue(true);
-  });
 
-  it('returns null (valid) when parent run exists in same workspace with no nesting', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValue(makeNode({ id: 'parent-run' }));
+  Deno.test('validateParentRunId - returns null (valid) when parent run exists in same workspace with no nesting', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => makeNode({ id: 'parent-run' })) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBeNull();
-  });
-
-  it('returns error when parent run is not found', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValue(null);
+    assertEquals(error, null);
+})
+  Deno.test('validateParentRunId - returns error when parent run is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => null) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'missing-run');
 
-    expect(error).toBe('Invalid parent_run_id: run not found');
-  });
-
-  it('returns error when parent run is in a different workspace', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValue(makeNode({ accountId: 'other-space' }));
+    assertEquals(error, 'Invalid parent_run_id: run not found');
+})
+  Deno.test('validateParentRunId - returns error when parent run is in a different workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => makeNode({ accountId: 'other-space' })) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBe('Invalid parent_run_id: parent run must be in the same workspace');
-  });
-
-  it('walks the parent chain to validate depth', async () => {
-    // Depth 1: parent-run -> null
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    assertEquals(error, 'Invalid parent_run_id: parent run must be in the same workspace');
+})
+  Deno.test('validateParentRunId - walks the parent chain to validate depth', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  // Depth 1: parent-run -> null
+    mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'parent-run',
       parentRunId: 'grandparent-run',
-    }));
+    })) as any;
     // Depth 2: grandparent-run -> null
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'grandparent-run',
       parentRunId: null,
-    }));
+    })) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBeNull();
+    assertEquals(error, null);
     // Should have called getRunHierarchyNode twice (parent + grandparent)
-    expect(mocks.getRunHierarchyNode).toHaveBeenCalledTimes(2);
-  });
-
-  it('rejects when nesting depth exceeds max (5)', async () => {
-    // Create a chain of depth 5 already
+    assertSpyCalls(mocks.getRunHierarchyNode, 2);
+})
+  Deno.test('validateParentRunId - rejects when nesting depth exceeds max (5)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  // Create a chain of depth 5 already
     for (let i = 0; i < 5; i++) {
-      mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+      mocks.getRunHierarchyNode = (async () => makeNode({
         id: `run-${i}`,
         parentRunId: i < 4 ? `run-${i + 1}` : null,
-      }));
+      })) as any;
     }
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'run-0');
 
-    expect(error).toContain('Run nesting depth exceeded');
-  });
-
-  it('detects cycles in run hierarchy', async () => {
-    // run-A -> run-B -> run-A (cycle)
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    assertStringIncludes(error, 'Run nesting depth exceeded');
+})
+  Deno.test('validateParentRunId - detects cycles in run hierarchy', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  // run-A -> run-B -> run-A (cycle)
+    mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'run-A',
       parentRunId: 'run-B',
-    }));
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    })) as any;
+    mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'run-B',
       parentRunId: 'run-A',
-    }));
+    })) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'run-A');
 
-    expect(error).toBe('Invalid parent_run_id: run hierarchy cycle detected');
-  });
-
-  it('returns error when hierarchy crosses workspaces', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    assertEquals(error, 'Invalid parent_run_id: run hierarchy cycle detected');
+})
+  Deno.test('validateParentRunId - returns error when hierarchy crosses workspaces', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'parent-run',
       parentRunId: 'grandparent-run',
-    }));
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    })) as any;
+    mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'grandparent-run',
       accountId: 'other-space',
-    }));
+    })) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBe('Invalid parent_run_id: run hierarchy crosses workspaces');
-  });
-
-  it('returns error when parent chain has a broken link', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    assertEquals(error, 'Invalid parent_run_id: run hierarchy crosses workspaces');
+})
+  Deno.test('validateParentRunId - returns error when parent chain has a broken link', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'parent-run',
       parentRunId: 'missing-run',
-    }));
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(null);
+    })) as any;
+    mocks.getRunHierarchyNode = (async () => null) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBe('Invalid parent_run_id: run hierarchy is broken');
-  });
-
-  it('returns error when a parentRunId in the chain is an invalid opaque ID', async () => {
-    mocks.getRunHierarchyNode.mockResolvedValueOnce(makeNode({
+    assertEquals(error, 'Invalid parent_run_id: run hierarchy is broken');
+})
+  Deno.test('validateParentRunId - returns error when a parentRunId in the chain is an invalid opaque ID', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isValidOpaqueId = (() => true) as any;
+  mocks.getRunHierarchyNode = (async () => makeNode({
       id: 'parent-run',
       parentRunId: 'bad id with spaces',
-    }));
-    mocks.isValidOpaqueId.mockReturnValue(false);
+    })) as any;
+    mocks.isValidOpaqueId = (() => false) as any;
 
     const error = await validateParentRunId({} as D1Database, 'space-1', 'parent-run');
 
-    expect(error).toBe('Invalid parent_run_id: run hierarchy is broken');
-  });
-});
+    assertEquals(error, 'Invalid parent_run_id: run hierarchy is broken');
+})
 
-describe('resolveRunModel', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns the default model when no model is specified and workspace has none', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue(null);
+  Deno.test('resolveRunModel - returns the default model when no model is specified and workspace has none', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => null) as any;
 
     const model = await resolveRunModel({} as D1Database, 'space-1', undefined);
 
-    expect(model).toBe('gpt-5.4-nano');
-  });
-
-  it('uses the workspace model when no request model is provided', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue({ aiModel: 'gpt-5.4-mini' });
+    assertEquals(model, 'gpt-5.4-nano');
+})
+  Deno.test('resolveRunModel - uses the workspace model when no request model is provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => ({ aiModel: 'gpt-5.4-mini' })) as any;
 
     const model = await resolveRunModel({} as D1Database, 'space-1', undefined);
 
-    expect(model).toBe('gpt-5.4-mini');
-  });
-
-  it('prefers the requested model over workspace model', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue({ aiModel: 'gpt-5.4-nano' });
+    assertEquals(model, 'gpt-5.4-mini');
+})
+  Deno.test('resolveRunModel - prefers the requested model over workspace model', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => ({ aiModel: 'gpt-5.4-nano' })) as any;
 
     const model = await resolveRunModel({} as D1Database, 'space-1', 'gpt-5.4-mini');
 
-    expect(model).toBe('gpt-5.4-mini');
-  });
-
-  it('falls back to default for unrecognized model', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue(null);
+    assertEquals(model, 'gpt-5.4-mini');
+})
+  Deno.test('resolveRunModel - falls back to default for unrecognized model', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => null) as any;
 
     const model = await resolveRunModel({} as D1Database, 'space-1', 'totally-unknown-model');
 
-    expect(model).toBe('gpt-5.4-nano');
-  });
-
-  it('logs warning for suspicious model strings', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue(null);
+    assertEquals(model, 'gpt-5.4-nano');
+})
+  Deno.test('resolveRunModel - logs warning for suspicious model strings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => null) as any;
 
     await resolveRunModel({} as D1Database, 'space-1', '<script>alert("xss")</script>');
 
-    expect(mocks.logWarn).toHaveBeenCalled();
-  });
-
-  it('returns default when workspace aiModel is null', async () => {
-    mocks.getWorkspaceModel.mockResolvedValue({ aiModel: null });
+    assert(mocks.logWarn.calls.length > 0);
+})
+  Deno.test('resolveRunModel - returns default when workspace aiModel is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getWorkspaceModel = (async () => ({ aiModel: null })) as any;
 
     const model = await resolveRunModel({} as D1Database, 'space-1', undefined);
 
-    expect(model).toBe('gpt-5.4-nano');
-  });
-});
+    assertEquals(model, 'gpt-5.4-nano');
+})

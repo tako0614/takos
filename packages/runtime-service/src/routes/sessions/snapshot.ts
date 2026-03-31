@@ -5,10 +5,10 @@ import { Hono } from 'hono';
 import {
   resolvePathWithin,
   verifyPathWithinAfterAccess,
-} from '../../runtime/paths.js';
-import { isProbablyBinary } from '../../runtime/validation.js';
-import { resolveSessionWorkDir } from './session-utils.js';
-import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.js';
+} from '../../runtime/paths.ts';
+import { isProbablyBinary } from '../../runtime/validation.ts';
+import { resolveSessionWorkDir } from './session-utils.ts';
+import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { forbidden, internalError } from 'takos-common/middleware/hono';
 
 function handleRouteError(c: import('hono').Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {

@@ -1,6 +1,6 @@
 import { hc } from 'hono/client';
 import type { ClientResponse } from 'hono/client';
-import type { ApiRoutes } from '../../../routes/rpc-types';
+import type { ApiRoutes } from 'takos-control/rpc-types';
 
 export const rpc = hc<ApiRoutes>('/api');
 
@@ -20,6 +20,7 @@ interface RpcEndpoint {
   $get: (args: { param: Record<string, string>; query?: Record<string, string> }) => Promise<ClientResponse<unknown>>;
   $post: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
   $put: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
+  $patch: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
   $delete: (args: { param: Record<string, string> }) => Promise<ClientResponse<unknown>>;
 }
 
@@ -32,7 +33,7 @@ interface RpcEndpoint {
  * rpcPath(rpc, 'repos', ':repoId', 'tree', ':ref').$get({ param: { repoId, ref } })
  * ```
  */
-function rpcPath(base: unknown, ...segments: string[]): RpcEndpoint {
+export function rpcPath(base: unknown, ...segments: string[]): RpcEndpoint {
   let current = base;
   for (const seg of segments) {
     current = (current as Record<string, unknown>)[seg];

@@ -1,41 +1,38 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
+import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
+
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   getWorkspaceByIdOrSlug,
   getWorkspaceModelSettings,
@@ -43,15 +40,12 @@ import {
   getRepositoryById,
 } from '@/services/identity/spaces';
 
-describe('spaces service (Drizzle)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  describe('getWorkspaceByIdOrSlug', () => {
-    it('returns mapped workspace when found by id', async () => {
-      db._.get.mockResolvedValueOnce({
+  
+    Deno.test('spaces service (Drizzle) - getWorkspaceByIdOrSlug - returns mapped workspace when found by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'ws-1',
         type: 'team',
         name: 'My Team',
@@ -64,29 +58,31 @@ describe('spaces service (Drizzle)', () => {
         securityPosture: 'standard',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-02T00:00:00.000Z',
-      });
+      })) as any;
 
       const ws = await getWorkspaceByIdOrSlug({} as D1Database, 'ws-1');
 
-      expect(ws).not.toBeNull();
-      expect(ws!.id).toBe('ws-1');
-      expect(ws!.kind).toBe('team');
-      expect(ws!.name).toBe('My Team');
-      expect(ws!.slug).toBe('my-team');
-      expect(ws!.owner_principal_id).toBe('user-1');
-      expect(ws!.ai_model).toBe('gpt-5.4-nano');
-      expect(ws!.security_posture).toBe('standard');
-    });
-
-    it('returns null when not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
+      assertNotEquals(ws, null);
+      assertEquals(ws!.id, 'ws-1');
+      assertEquals(ws!.kind, 'team');
+      assertEquals(ws!.name, 'My Team');
+      assertEquals(ws!.slug, 'my-team');
+      assertEquals(ws!.owner_principal_id, 'user-1');
+      assertEquals(ws!.ai_model, 'gpt-5.4-nano');
+      assertEquals(ws!.security_posture, 'standard');
+})
+    Deno.test('spaces service (Drizzle) - getWorkspaceByIdOrSlug - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const ws = await getWorkspaceByIdOrSlug({} as D1Database, 'nonexistent');
-      expect(ws).toBeNull();
-    });
-
-    it('maps user type to user kind', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(ws, null);
+})
+    Deno.test('spaces service (Drizzle) - getWorkspaceByIdOrSlug - maps user type to user kind', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'user-1',
         type: 'user',
         name: 'Alice',
@@ -99,16 +95,17 @@ describe('spaces service (Drizzle)', () => {
         securityPosture: null,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const ws = await getWorkspaceByIdOrSlug({} as D1Database, 'alice');
-      expect(ws!.kind).toBe('user');
+      assertEquals(ws!.kind, 'user');
       // When ownerAccountId is null, owner_principal_id defaults to workspace id
-      expect(ws!.owner_principal_id).toBe('user-1');
-    });
-
-    it('maps restricted_egress security posture', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(ws!.owner_principal_id, 'user-1');
+})
+    Deno.test('spaces service (Drizzle) - getWorkspaceByIdOrSlug - maps restricted_egress security posture', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'ws-secure',
         type: 'team',
         name: 'Secure Team',
@@ -121,45 +118,47 @@ describe('spaces service (Drizzle)', () => {
         securityPosture: 'restricted_egress',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const ws = await getWorkspaceByIdOrSlug({} as D1Database, 'ws-secure');
-      expect(ws!.security_posture).toBe('restricted_egress');
-    });
-  });
+      assertEquals(ws!.security_posture, 'restricted_egress');
+})  
+  
+    Deno.test('spaces service (Drizzle) - getWorkspaceModelSettings - returns model settings when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
+        ai_model: 'gpt-5.4-nano',
+        ai_provider: 'openai',
+        security_posture: 'standard',
+      })) as any;
 
-  describe('getWorkspaceModelSettings', () => {
-    it('returns model settings when found', async () => {
-      db._.get.mockResolvedValueOnce({
+      const settings = await getWorkspaceModelSettings({} as D1Database, 'ws-1');
+      assertEquals(settings, {
         ai_model: 'gpt-5.4-nano',
         ai_provider: 'openai',
         security_posture: 'standard',
       });
+})
+    Deno.test('spaces service (Drizzle) - getWorkspaceModelSettings - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const settings = await getWorkspaceModelSettings({} as D1Database, 'ws-1');
-      expect(settings).toEqual({
-        ai_model: 'gpt-5.4-nano',
-        ai_provider: 'openai',
-        security_posture: 'standard',
-      });
-    });
-
-    it('returns null when not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
-
-      const settings = await getWorkspaceModelSettings({} as D1Database, 'ws-1');
-      expect(settings).toBeNull();
-    });
-
-    it('returns null for invalid space ID', async () => {
-      const settings = await getWorkspaceModelSettings({} as D1Database, '');
-      expect(settings).toBeNull();
-    });
-  });
-
-  describe('getUserByEmail', () => {
-    it('returns mapped user when found', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(settings, null);
+})
+    Deno.test('spaces service (Drizzle) - getWorkspaceModelSettings - returns null for invalid space ID', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const settings = await getWorkspaceModelSettings({} as D1Database, '');
+      assertEquals(settings, null);
+})  
+  
+    Deno.test('spaces service (Drizzle) - getUserByEmail - returns mapped user when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'user-1',
         email: 'alice@example.com',
         name: 'Alice',
@@ -170,26 +169,28 @@ describe('spaces service (Drizzle)', () => {
         setupCompleted: true,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const user = await getUserByEmail({} as D1Database, 'alice@example.com');
-      expect(user).not.toBeNull();
-      expect(user!.id).toBe('user-1');
-      expect(user!.email).toBe('alice@example.com');
-      expect(user!.username).toBe('alice');
-      expect(user!.principal_id).toBe('user-1');
-      expect(user!.principal_kind).toBe('user');
-    });
-
-    it('returns null when user not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
+      assertNotEquals(user, null);
+      assertEquals(user!.id, 'user-1');
+      assertEquals(user!.email, 'alice@example.com');
+      assertEquals(user!.username, 'alice');
+      assertEquals(user!.principal_id, 'user-1');
+      assertEquals(user!.principal_kind, 'user');
+})
+    Deno.test('spaces service (Drizzle) - getUserByEmail - returns null when user not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const user = await getUserByEmail({} as D1Database, 'nonexistent@example.com');
-      expect(user).toBeNull();
-    });
-
-    it('handles null email field gracefully', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(user, null);
+})
+    Deno.test('spaces service (Drizzle) - getUserByEmail - handles null email field gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'user-1',
         email: null,
         name: 'NoEmail',
@@ -200,16 +201,16 @@ describe('spaces service (Drizzle)', () => {
         setupCompleted: false,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const user = await getUserByEmail({} as D1Database, 'test@example.com');
-      expect(user!.email).toBe('');
-    });
-  });
-
-  describe('getRepositoryById', () => {
-    it('returns mapped repository when found', async () => {
-      db._.get.mockResolvedValueOnce({
+      assertEquals(user!.email, '');
+})  
+  
+    Deno.test('spaces service (Drizzle) - getRepositoryById - returns mapped repository when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
         id: 'repo-1',
         accountId: 'ws-1',
         name: 'main',
@@ -222,22 +223,21 @@ describe('spaces service (Drizzle)', () => {
         gitEnabled: false,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
-      });
+      })) as any;
 
       const repo = await getRepositoryById({} as D1Database, 'repo-1');
-      expect(repo).not.toBeNull();
-      expect(repo!.id).toBe('repo-1');
-      expect(repo!.space_id).toBe('ws-1');
-      expect(repo!.name).toBe('main');
-      expect(repo!.default_branch).toBe('main');
-      expect(repo!.visibility).toBe('private');
-    });
-
-    it('returns null when not found', async () => {
-      db._.get.mockResolvedValueOnce(null);
+      assertNotEquals(repo, null);
+      assertEquals(repo!.id, 'repo-1');
+      assertEquals(repo!.space_id, 'ws-1');
+      assertEquals(repo!.name, 'main');
+      assertEquals(repo!.default_branch, 'main');
+      assertEquals(repo!.visibility, 'private');
+})
+    Deno.test('spaces service (Drizzle) - getRepositoryById - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
       const repo = await getRepositoryById({} as D1Database, 'nonexistent');
-      expect(repo).toBeNull();
-    });
-  });
-});
+      assertEquals(repo, null);
+})  

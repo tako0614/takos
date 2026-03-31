@@ -1,5 +1,3 @@
-import { describe, expect, it, vi } from 'vitest';
-
 import {
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
@@ -13,45 +11,44 @@ import {
   generateProxyToken,
 } from '@/runtime/container-hosts/executor-proxy-config';
 
-describe('dispatchAgentExecutorStart', () => {
-  it('keeps only CONTROL_RPC_BASE_URL in container env vars', () => {
-    expect(buildAgentExecutorContainerEnvVars({
+
+import { assertEquals, assert, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('dispatchAgentExecutorStart - keeps only CONTROL_RPC_BASE_URL in container env vars', () => {
+  assertEquals(buildAgentExecutorContainerEnvVars({
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
-    })).toEqual({
+    }), {
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
     });
-  });
-
-  it('allows an empty CONTROL_RPC_BASE_URL for adapter-owned resolution', () => {
-    expect(buildAgentExecutorContainerEnvVars({
+})
+  Deno.test('dispatchAgentExecutorStart - allows an empty CONTROL_RPC_BASE_URL for adapter-owned resolution', () => {
+  assertEquals(buildAgentExecutorContainerEnvVars({
       CONTROL_RPC_BASE_URL: undefined,
-    })).toEqual({
+    }), {
       CONTROL_RPC_BASE_URL: '',
     });
-  });
-
-  it('generates a random control RPC token (not JWT)', () => {
-    const controlConfig = buildAgentExecutorProxyConfig({
+})
+  Deno.test('dispatchAgentExecutorStart - generates a random control RPC token (not JWT)', () => {
+  const controlConfig = buildAgentExecutorProxyConfig({
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
     }, {
       runId: 'run-secret',
       serviceId: 'worker-secret',
     });
 
-    expect(controlConfig.controlRpcToken).toBeTruthy();
-    expect(controlConfig.controlRpcBaseUrl).toBe('https://control-rpc.example.internal');
-    expect(controlConfig.controlRpcToken.length).toBeGreaterThan(20);
-  });
-
-  it('generateProxyToken returns base64url without padding', () => {
-    const token = generateProxyToken();
-    expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(token.length).toBeGreaterThan(20);
-  });
-
-  it('forwards only canonical control RPC fields through the /start payload', async () => {
-    const startAndWaitForPorts = vi.fn().mockResolvedValue(undefined);
-    const fetch = vi.fn().mockResolvedValue(new Response('{"status":"accepted","runId":"run-secret"}', { status: 202 }));
+    assert(controlConfig.controlRpcToken);
+    assertEquals(controlConfig.controlRpcBaseUrl, 'https://control-rpc.example.internal');
+    assert(controlConfig.controlRpcToken.length > 20);
+})
+  Deno.test('dispatchAgentExecutorStart - generateProxyToken returns base64url without padding', () => {
+  const token = generateProxyToken();
+    assert(/^[A-Za-z0-9_-]+$/.test(token));
+    assert(token.length > 20);
+})
+  Deno.test('dispatchAgentExecutorStart - forwards only canonical control RPC fields through the /start payload', async () => {
+  const startAndWaitForPorts = (async () => undefined);
+    const fetch = (async () => new Response('{"status":"accepted","runId":"run-secret"}', { status: 202 }));
     const controlConfig = buildAgentExecutorProxyConfig({
       CONTROL_RPC_BASE_URL: 'https://control-rpc.example.internal',
     }, {
@@ -68,17 +65,16 @@ describe('dispatchAgentExecutorStart', () => {
       controlConfig,
     );
 
-    const request = fetch.mock.calls[0][0] as Request;
+    const request = fetch.calls[0][0] as Request;
     const payload = await request.json() as Record<string, unknown>;
-    expect(payload).toMatchObject({
+    assertObjectMatch(payload, {
       controlRpcBaseUrl: 'https://control-rpc.example.internal',
     });
-    expect(payload.controlRpcToken).toBeTruthy();
-  });
-
-  it('waits for port 8080 and posts the start payload inside the container DO', async () => {
-    const startAndWaitForPorts = vi.fn().mockResolvedValue(undefined);
-    const fetch = vi.fn().mockResolvedValue(new Response('{"status":"accepted","runId":"run-1"}', { status: 202 }));
+    assert(payload.controlRpcToken);
+})
+  Deno.test('dispatchAgentExecutorStart - waits for port 8080 and posts the start payload inside the container DO', async () => {
+  const startAndWaitForPorts = (async () => undefined);
+    const fetch = (async () => new Response('{"status":"accepted","runId":"run-1"}', { status: 202 }));
     const controlConfig: AgentExecutorControlConfig = {
       controlRpcBaseUrl: 'https://control-rpc.example.internal',
       controlRpcToken: 'control-rpc-token',
@@ -95,29 +91,28 @@ describe('dispatchAgentExecutorStart', () => {
       controlConfig,
     );
 
-    expect(startAndWaitForPorts).toHaveBeenCalledWith(8080);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    assertSpyCallArgs(startAndWaitForPorts, 0, [8080]);
+    assertSpyCalls(fetch, 1);
 
-    const request = fetch.mock.calls[0][0] as Request;
-    expect(request.url).toBe('https://executor/start');
-    expect(request.method).toBe('POST');
-    expect(request.headers.get('Content-Type')).toBe('application/json');
-    await expect(request.json()).resolves.toEqual({
+    const request = fetch.calls[0][0] as Request;
+    assertEquals(request.url, 'https://executor/start');
+    assertEquals(request.method, 'POST');
+    assertEquals(request.headers.get('Content-Type'), 'application/json');
+    await assertEquals(await request.json(), {
       ...payload,
       serviceId: 'worker-1',
       ...controlConfig,
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: true,
       status: 202,
       body: '{"status":"accepted","runId":"run-1"}',
     });
-  });
-
-  it('preserves non-2xx start failures for host-side logging', async () => {
-    const startAndWaitForPorts = vi.fn().mockResolvedValue(undefined);
-    const fetch = vi.fn().mockResolvedValue(new Response('Proxy not configured', { status: 503 }));
+})
+  Deno.test('dispatchAgentExecutorStart - preserves non-2xx start failures for host-side logging', async () => {
+  const startAndWaitForPorts = (async () => undefined);
+    const fetch = (async () => new Response('Proxy not configured', { status: 503 }));
     const controlConfig: AgentExecutorControlConfig = {
       controlRpcBaseUrl: 'https://control-rpc.example.internal',
       controlRpcToken: 'control-rpc-token',
@@ -133,20 +128,19 @@ describe('dispatchAgentExecutorStart', () => {
       controlConfig,
     );
 
-    expect(startAndWaitForPorts).toHaveBeenCalledWith(8080);
-    expect(result).toEqual({
+    assertSpyCallArgs(startAndWaitForPorts, 0, [8080]);
+    assertEquals(result, {
       ok: false,
       status: 503,
       body: 'Proxy not configured',
     });
-  });
-
-  it('returns the container acceptance response to the caller', async () => {
-    const dispatchStart = vi.fn().mockResolvedValue({
+})
+  Deno.test('dispatchAgentExecutorStart - returns the container acceptance response to the caller', async () => {
+  const dispatchStart = (async () => ({
       ok: true,
       status: 202,
       body: '{"status":"accepted","runId":"run-3"}',
-    });
+    }));
 
     const response = await forwardAgentExecutorDispatch(
       { dispatchStart } as AgentExecutorDispatchStub,
@@ -156,16 +150,15 @@ describe('dispatchAgentExecutorStart', () => {
       },
     );
 
-    expect(dispatchStart).toHaveBeenCalledWith({
+    assertSpyCallArgs(dispatchStart, 0, [{
       runId: 'run-3',
       workerId: 'worker-3',
-    });
-    expect(response.status).toBe(202);
-    await expect(response.text()).resolves.toBe('{"status":"accepted","runId":"run-3"}');
-  });
-
-  it('turns startup exceptions into dispatch failures so the runner can retry', async () => {
-    const dispatchStart = vi.fn().mockRejectedValue(new Error('boom'));
+    }]);
+    assertEquals(response.status, 202);
+    await assertEquals(await response.text(), '{"status":"accepted","runId":"run-3"}');
+})
+  Deno.test('dispatchAgentExecutorStart - turns startup exceptions into dispatch failures so the runner can retry', async () => {
+  const dispatchStart = (async () => { throw new Error('boom'); });
 
     const response = await forwardAgentExecutorDispatch(
       { dispatchStart } as AgentExecutorDispatchStub,
@@ -175,9 +168,8 @@ describe('dispatchAgentExecutorStart', () => {
       },
     );
 
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 500);
+    await assertEquals(await response.json(), {
       error: 'Failed to start container: boom',
     });
-  });
-});
+})

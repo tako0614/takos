@@ -1,41 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  searchWorkspace: vi.fn(),
-  quickSearchPaths: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-  computeSHA256: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/source/search', () => ({
-  searchWorkspace: mocks.searchWorkspace,
-  quickSearchPaths: mocks.quickSearchPaths,
-}));
-
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  searchWorkspace: ((..._args: any[]) => undefined) as any,
+  quickSearchPaths: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  computeSHA256: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/shared/utils/hash', () => ({
-  computeSHA256: mocks.computeSHA256,
-}));
-
-vi.mock('@/middleware/cache', () => ({
-  CacheTags: { SEARCH: 'search' },
-  CacheTTL: { SEARCH: 60 },
-}));
-
-vi.mock('@/shared/utils/logger', () => ({
-  logError: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/search'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/hash'
+// [Deno] vi.mock removed - manually stub imports from '@/middleware/cache'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import searchRoute from '@/routes/search';
 
 function createUser(): User {
@@ -63,22 +44,18 @@ function createApp(user: User) {
   return app;
 }
 
-describe('search routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
-    mocks.computeSHA256.mockResolvedValue('fakehash123456789');
-  });
-
-  describe('POST /api/spaces/:spaceId/search', () => {
-    it('returns search results', async () => {
-      mocks.searchWorkspace.mockResolvedValue({
+  
+    Deno.test('search routes - POST /api/spaces/:spaceId/search - returns search results', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  mocks.searchWorkspace = (async () => ({
         results: [{ path: 'test.ts', score: 0.9 }],
         total: 1,
         semanticAvailable: true,
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -91,15 +68,17 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('query', 'test query');
-      expect(json).toHaveProperty('results');
-      expect(json).toHaveProperty('total', 1);
-    });
-
-    it('returns 400 for empty query', async () => {
-      const app = createApp(createUser());
+      assert('query' in json); assertEquals((json as any)['query'], 'test query');
+      assert('results' in json);
+      assert('total' in json); assertEquals((json as any)['total'], 1);
+})
+    Deno.test('search routes - POST /api/spaces/:spaceId/search - returns 400 for empty query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/search', {
           method: 'POST',
@@ -110,11 +89,13 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 400 for missing query', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 400);
+})
+    Deno.test('search routes - POST /api/spaces/:spaceId/search - returns 400 for missing query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/search', {
           method: 'POST',
@@ -125,11 +106,13 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 400 for invalid JSON body', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 400);
+})
+    Deno.test('search routes - POST /api/spaces/:spaceId/search - returns 400 for invalid JSON body', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/search', {
           method: 'POST',
@@ -140,13 +123,13 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 404 when workspace access denied', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),
-      );
+      assertEquals(res.status, 400);
+})
+    Deno.test('search routes - POST /api/spaces/:spaceId/search - returns 404 when workspace access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  mocks.requireSpaceAccess = (async () => new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -159,13 +142,14 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/search/quick', () => {
-    it('returns quick search results', async () => {
-      mocks.quickSearchPaths.mockResolvedValue([{ path: 'test.ts' }]);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('search routes - GET /api/spaces/:spaceId/search/quick - returns quick search results', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  mocks.quickSearchPaths = (async () => [{ path: 'test.ts' }]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -174,34 +158,36 @@ describe('search routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('results');
-    });
-
-    it('returns empty results for query shorter than 2 chars', async () => {
-      const app = createApp(createUser());
+      assert('results' in json);
+})
+    Deno.test('search routes - GET /api/spaces/:spaceId/search/quick - returns empty results for query shorter than 2 chars', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/search/quick?q=t'),
         env as unknown as Env,
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ results: [] });
-      expect(mocks.quickSearchPaths).not.toHaveBeenCalled();
-    });
-
-    it('returns empty results for missing query', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { results: [] });
+      assertSpyCalls(mocks.quickSearchPaths, 0);
+})
+    Deno.test('search routes - GET /api/spaces/:spaceId/search/quick - returns empty results for missing query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.computeSHA256 = (async () => 'fakehash123456789') as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/search/quick'),
         env as unknown as Env,
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ results: [] });
-    });
-  });
-});
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { results: [] });
+})  

@@ -1,5 +1,5 @@
-import type { RefreshableProvider } from './refresh.js';
-import { CF_API } from '../group-deploy/cloudflare-utils.js';
+import type { RefreshableProvider } from './refresh.ts';
+import { CF_API } from '../group-deploy/cloudflare-utils.ts';
 
 function buildHeaders(apiToken: string): { Authorization: string } {
   return {
