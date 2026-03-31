@@ -1,22 +1,22 @@
 # Takos
 
-Takos core monorepo.
+Takos core monorepo です。
 
-The package trees under `packages/` are the source of truth. `apps/*` are thin
-composition layers, deployment entrypoints, and app-local wrappers around those
-packages.
+`packages/` 配下のパッケージツリーが正本です。`apps/*` はそれらを組み合わせる thin composition layer、deploy entrypoint、app-local wrapper です。
 
-## What Is In This Repo
+## このリポジトリの構成
 
-- `packages/control/*`: control-plane, host, and local-platform package trees
-- `packages/runtime-service`, `packages/browser-service`: service packages (browser-service is a self-contained deployable service; runtime-service is used by the apps/runtime wrapper)
-- `packages/common`, `packages/actions-engine`, `packages/cloudflare-compat`: shared libraries
-- `apps/control`: Cloudflare worker composition, frontend build, and deployment templates
-- `apps/runtime`: thin Node/container wrapper over runtime-service
+- `packages/control/*`: control-plane、host、local-platform パッケージツリー
+- `packages/runtime-service`、`packages/browser-service`: サービスパッケージ（browser-service は単体で deploy 可能、runtime-service は apps/runtime ラッパー経由で使用）
+- `packages/rust-agent-engine`: executor container で使用する object-first の Rust agent core
+- `packages/common`、`packages/actions-engine`、`packages/cloudflare-compat`: 共有ライブラリ
+- `apps/control`: Cloudflare worker composition、frontend build、deploy template
+- `apps/rust-agent`: `packages/rust-agent-engine` と Takos control RPC/tool bridge を組み合わせる Rust executor container
+- `apps/runtime`: runtime-service の薄い Node/container ラッパー
 - `apps/cli`: public CLI
-- `scripts/`: build, validation, and maintenance tooling
+- `scripts/`: build、validation、メンテナンスツール
 
-## Requirements
+## 前提
 
 - Node.js 20+
 - pnpm 9+
@@ -29,19 +29,19 @@ corepack pnpm build:all
 corepack pnpm test:all
 ```
 
-Docs preview:
+docs プレビュー:
 
 ```bash
 corepack pnpm docs:dev
 ```
 
-For local control-plane development:
+ローカル control-plane 開発:
 
 ```bash
 corepack pnpm dev:takos
 ```
 
-For the local stack:
+ローカルスタック:
 
 ```bash
 cp .env.local.example .env.local
@@ -51,30 +51,24 @@ corepack pnpm local:smoke
 # TAKOS_LOCAL_ENV_FILE=/path/to/local.env corepack pnpm local:up
 ```
 
-## Documentation
+## ドキュメント
 
-Takos docs live in-repo under `docs/` and are rendered with
-VitePress. Keep `README.md` as the short entrypoint and put longer setup,
-runtime, deployment, and contributor guidance in the docs site.
+Takos docs はリポジトリ内の `docs/` にあり、VitePress で描画されます。`README.md` は短い入口に留め、詳しいセットアップ、runtime、deploy、contributor ガイドは docs サイトに置きます。
 
-`takos-private/` can consume this repo as a sibling checkout and should only use
-package exports, not `apps/*` source paths.
+`takos-private/` はこのリポジトリを sibling checkout として参照でき、package export のみを使います。`apps/*` のソースパスは直接参照しません。
 
-## Deployment Configuration
+## デプロイ設定
 
-Cloudflare deployment templates live under `apps/control/`.
+Cloudflare deploy template は `apps/control/` に配置されています。
 
 - `wrangler*.toml`
 - `.env.example`
 - `SECRETS.md`
 
-Local stack configuration lives in `.env.local.example`. Helm/self-host
-packaging lives in `deploy/helm/takos/`.
+ローカルスタック設定は `.env.local.example` にあります。Helm / self-host パッケージングは `deploy/helm/takos/` に配置されています。
 
-The local executor path defaults to the Rust container service `rust-agent`,
-reached from `executor-host` through `TAKOS_LOCAL_EXECUTOR_URL`.
+ローカル executor パスはデフォルトで Rust container service `rust-agent` を参照し、`executor-host` から `TAKOS_LOCAL_EXECUTOR_URL` 経由で到達します。
 
 ## Contributing
 
-See `CONTRIBUTING.md`, `docs/`, and `SECURITY.md` for
-contributor expectations, product/spec docs, and security reporting guidance.
+`CONTRIBUTING.md`、`docs/`、`SECURITY.md` に contributor expectations、product/spec docs、security reporting のガイドがあります。

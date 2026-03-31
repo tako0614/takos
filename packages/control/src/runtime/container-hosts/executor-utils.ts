@@ -239,6 +239,8 @@ const CONTROL_RPC_PATH_MAP: Record<string, string> = {
   '/rpc/control/current-session': '/internal/executor-rpc/current-session',
   '/rpc/control/is-cancelled': '/internal/executor-rpc/is-cancelled',
   '/rpc/control/conversation-history': '/internal/executor-rpc/conversation-history',
+  '/rpc/control/skill-runtime-context': '/internal/executor-rpc/skill-runtime-context',
+  '/rpc/control/skill-catalog': '/internal/executor-rpc/skill-catalog',
   '/rpc/control/skill-plan': '/internal/executor-rpc/skill-plan',
   '/rpc/control/memory-activation': '/internal/executor-rpc/memory-activation',
   '/rpc/control/memory-finalize': '/internal/executor-rpc/memory-finalize',

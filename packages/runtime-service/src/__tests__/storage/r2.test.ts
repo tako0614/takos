@@ -1,96 +1,114 @@
-import { Buffer } from 'node:buffer';
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import path from 'node:path';
-// [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
-import { downloadSpaceFiles, uploadSpaceFiles, s3Client } from '../../storage/r2.ts';
+import { Buffer } from "node:buffer";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import path from "node:path";
+import { assertEquals } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 
-import { assertEquals } from 'jsr:@std/assert';
-import { stub, assertSpyCalls } from 'jsr:@std/testing/mock';
+const originalTakosApiUrl = Deno.env.get("TAKOS_API_URL");
+if (!originalTakosApiUrl) {
+  Deno.env.set("TAKOS_API_URL", "https://takos.jp");
+}
+const { downloadSpaceFiles, s3Client, uploadSpaceFiles } = await import(
+  new URL("../../storage/r2.ts", import.meta.url).href
+);
+if (!originalTakosApiUrl) {
+  Deno.env.delete("TAKOS_API_URL");
+}
 
-async function createTempDir(prefix: string): Promise<string> {
+function createTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
+Deno.test("r2 symlink boundary hardening - skips upload paths that symlink outside base directory", async () => {
+  const workspaceDir = await createTempDir("takos-r2-upload-ws-");
+  const outsideDir = await createTempDir("takos-r2-upload-outside-");
+  const outsideFile = path.join(outsideDir, "outside.txt");
+  const symlinkPath = path.join(workspaceDir, "escape.txt");
+  const sendSpy = stub(s3Client, "send");
 
-  Deno.test('r2 symlink boundary hardening - skips upload paths that symlink outside base directory', async () => {
   try {
-  const workspaceDir = await createTempDir('takos-r2-upload-ws-');
-    const outsideDir = await createTempDir('takos-r2-upload-outside-');
-    const outsideFile = path.join(outsideDir, 'outside.txt');
-    const symlinkPath = path.join(workspaceDir, 'escape.txt');
+    await fs.writeFile(outsideFile, "outside");
+    await fs.symlink(outsideFile, symlinkPath);
 
-    try {
-      await fs.writeFile(outsideFile, 'outside');
-      await fs.symlink(outsideFile, symlinkPath);
+    const logs: string[] = [];
+    const uploaded = await uploadSpaceFiles("ws-upload", workspaceDir, [
+      "escape.txt",
+    ], logs);
 
-      const sendSpy = stub(s3Client, 'send');
-      const logs: string[] = [];
-
-      const uploaded = await uploadSpaceFiles('ws-upload', workspaceDir, ['escape.txt'], logs);
-
-      assertEquals(uploaded, 0);
-      assertSpyCalls(sendSpy, 0);
-      assertEquals(logs.some((line) => line.includes('symlink escape attempt')), true);
-    } finally {
-      await fs.rm(workspaceDir, { recursive: true, force: true });
-      await fs.rm(outsideDir, { recursive: true, force: true });
-    }
+    assertEquals(uploaded, 0);
+    assertSpyCalls(sendSpy, 0);
+    assertEquals(
+      logs.some((line) => line.includes("symlink escape attempt")),
+      true,
+    );
   } finally {
-  /* TODO: restore mocks manually */ void 0;
+    sendSpy.restore();
+    await fs.rm(workspaceDir, { recursive: true, force: true });
+    await fs.rm(outsideDir, { recursive: true, force: true });
   }
-})
-  Deno.test('r2 symlink boundary hardening - skips download paths that traverse through escaping symlink components', async () => {
+});
+
+Deno.test("r2 symlink boundary hardening - skips download paths that traverse through escaping symlink components", async () => {
+  const workspaceDir = await createTempDir("takos-r2-download-ws-");
+  const outsideDir = await createTempDir("takos-r2-download-outside-");
+  const outsideFile = path.join(outsideDir, "evil.txt");
+  const escapeLink = path.join(workspaceDir, "escape-dir");
+  const sendStub = stub(
+    s3Client,
+    "send",
+    ((command: { constructor?: { name?: string } }) => {
+      const commandName = command.constructor?.name;
+
+      if (commandName === "ListObjectsV2Command") {
+        return Promise.resolve({
+          Contents: [
+            {
+              Key: "workspaces/ws-download/files/object-1",
+              Size: 5,
+            },
+          ],
+          NextContinuationToken: undefined,
+        });
+      }
+
+      if (commandName === "GetObjectCommand") {
+        return Promise.resolve({
+          Body: {
+            transformToByteArray: () => Promise.resolve(Buffer.from("hello")),
+          },
+          Metadata: {
+            "file-path": "escape-dir/evil.txt",
+          },
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected command: ${commandName}`));
+    }) as typeof s3Client.send,
+  );
+
   try {
-  const workspaceDir = await createTempDir('takos-r2-download-ws-');
-    const outsideDir = await createTempDir('takos-r2-download-outside-');
-    const escapeLink = path.join(workspaceDir, 'escape-dir');
+    await fs.symlink(outsideDir, escapeLink);
 
-    try {
-      await fs.symlink(outsideDir, escapeLink);
+    const logs: string[] = [];
+    const downloaded = await downloadSpaceFiles(
+      "ws-download",
+      workspaceDir,
+      logs,
+    );
+    const outsideFileExists = await fs.stat(outsideFile).then(() => true).catch(
+      () => false,
+    );
 
-      stub(s3Client, 'send') = async (command: object) => {
-        const commandName = (command as { constructor?: { name?: string } }).constructor?.name;
-
-        if (commandName === 'ListObjectsV2Command') {
-          return {
-            Contents: [
-              {
-                Key: 'workspaces/ws-download/files/object-1',
-                Size: 5,
-              },
-            ],
-            NextContinuationToken: undefined,
-          };
-        }
-
-        if (commandName === 'GetObjectCommand') {
-          return {
-            Body: {
-              transformToByteArray: async () => Buffer.from('hello'),
-            },
-            Metadata: {
-              'file-path': 'escape-dir/evil.txt',
-            },
-          };
-        }
-
-        throw new Error(`Unexpected command: ${commandName}`);
-      } as any;
-
-      const logs: string[] = [];
-      const downloaded = await downloadSpaceFiles('ws-download', workspaceDir, logs);
-      const outsideFile = path.join(outsideDir, 'evil.txt');
-      const outsideFileExists = await fs.stat(outsideFile).then(() => true).catch(() => false);
-
-      assertEquals(downloaded, 0);
-      assertEquals(outsideFileExists, false);
-      assertEquals(logs.some((line) => line.includes('symlink escape attempt')), true);
-    } finally {
-      await fs.rm(workspaceDir, { recursive: true, force: true });
-      await fs.rm(outsideDir, { recursive: true, force: true });
-    }
+    assertEquals(downloaded, 0);
+    assertEquals(outsideFileExists, false);
+    assertEquals(
+      logs.some((line) => line.includes("symlink escape attempt")),
+      true,
+    );
   } finally {
-  /* TODO: restore mocks manually */ void 0;
+    sendStub.restore();
+    await fs.rm(workspaceDir, { recursive: true, force: true });
+    await fs.rm(outsideDir, { recursive: true, force: true });
   }
-})
+});

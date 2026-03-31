@@ -62,6 +62,8 @@ export function getRequiredProxyCapability(path: string): ProxyCapability | null
     || path === '/rpc/control/run-context'
     || path === '/rpc/control/no-llm-complete'
     || path === '/rpc/control/conversation-history'
+    || path === '/rpc/control/skill-runtime-context'
+    || path === '/rpc/control/skill-catalog'
     || path === '/rpc/control/skill-plan'
     || path === '/rpc/control/memory-activation'
     || path === '/rpc/control/memory-finalize'

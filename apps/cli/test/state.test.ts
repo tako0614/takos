@@ -1,21 +1,23 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { assert, assertEquals, assertRejects, assertStringIncludes, assertThrows } from 'jsr:@std/assert';
 import type { AppManifest } from '../src/lib/app-manifest.ts';
 import { computeDiff, computeWorkerDiff } from '../src/lib/state/diff.ts';
 import { formatPlan } from '../src/lib/state/plan.ts';
 import { readStateFromFile as readState, writeStateToFile as writeState } from '../src/lib/state/state-file.ts';
 import type { TakosState } from '../src/lib/state/state-types.ts';
 
-// ── helpers ──
-
-import { assertEquals, assert, assertThrows, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
-
 const tempDirs: string[] = [];
+
 async function makeTempDir(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-state-'));
   tempDirs.push(dir);
   return dir;
+}
+
+async function cleanupTempDirs(): Promise<void> {
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 }
 
 function makeState(overrides: Partial<TakosState> = {}): TakosState {
@@ -44,7 +46,6 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
       version: '1.0.0',
       workers: {
         web: {
-          type: 'worker',
           build: {
             fromWorkflow: {
               path: '.takos/workflows/build.yml',
@@ -60,21 +61,19 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
   };
 }
 
-// ── state-file tests ──
-
-
-  Deno.test('state-file - readState returns null when state file does not exist', async () => {
+Deno.test('state-file - readState returns null when state file does not exist', async () => {
   try {
-  const dir = await makeTempDir();
+    const dir = await makeTempDir();
     const result = await readState(dir, 'default');
     assertEquals(result, null);
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('state-file - writeState + readState roundtrip', async () => {
+});
+
+Deno.test('state-file - writeState + readState roundtrip', async () => {
   try {
-  const dir = await makeTempDir();
+    const dir = await makeTempDir();
     const state = makeState({
       resources: {
         db: { type: 'd1', id: 'abc123', binding: 'DB', createdAt: '2026-01-01T00:00:00Z' },
@@ -88,12 +87,13 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     const loaded = await readState(dir, 'default');
     assertEquals(loaded, state);
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('state-file - writeState creates directory if missing', async () => {
+});
+
+Deno.test('state-file - writeState creates directory if missing', async () => {
   try {
-  const dir = await makeTempDir();
+    const dir = await makeTempDir();
     const nested = path.join(dir, 'nested', 'deep');
     const state = makeState();
 
@@ -101,26 +101,25 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     const loaded = await readState(nested, 'default');
     assertEquals(loaded, state);
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('state-file - readState propagates non-ENOENT errors', async () => {
+});
+
+Deno.test('state-file - readState propagates non-ENOENT errors', async () => {
   try {
-  // 存在するがディレクトリなので JSON パースエラーになる
     const dir = await makeTempDir();
     const stateFilePath = path.join(dir, 'state.default.json');
-    await fs.mkdir(stateFilePath, { recursive: true }); // ファイルではなくディレクトリ
-    await await assertRejects(async () => { await readState(dir, 'default'); });
+    await fs.mkdir(stateFilePath, { recursive: true });
+
+    await assertRejects(() => readState(dir, 'default'));
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-// ── diff tests ──
+});
 
-
-  Deno.test('computeDiff - initial deploy (current = null) marks everything as create', () => {
+Deno.test('computeDiff - initial deploy (current = null) marks everything as create', async () => {
   try {
-  const manifest = makeManifest({
+    const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
         cache: { type: 'kv' },
@@ -130,13 +129,12 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     const result = computeDiff(manifest, null);
 
     assertEquals(result.hasChanges, true);
-    assertEquals(result.summary.create, 3); // 2 resources + 1 worker
+    assertEquals(result.summary.create, 3);
     assertEquals(result.summary.update, 0);
     assertEquals(result.summary.delete, 0);
     assertEquals(result.summary.unchanged, 0);
 
-    const dbEntry = result.entries.find((e) => e.name === 'db');
-    assertEquals(dbEntry, {
+    assertEquals(result.entries.find((e) => e.name === 'db'), {
       name: 'db',
       category: 'resource',
       action: 'create',
@@ -144,8 +142,7 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
       reason: 'new',
     });
 
-    const workerEntry = result.entries.find((e) => e.name === 'web');
-    assertEquals(workerEntry, {
+    assertEquals(result.entries.find((e) => e.name === 'web'), {
       name: 'web',
       category: 'worker',
       action: 'create',
@@ -153,12 +150,13 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
       reason: 'new',
     });
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - unchanged resources and workers', () => {
+});
+
+Deno.test('computeDiff - unchanged resources and workers', async () => {
   try {
-  const manifest = makeManifest({
+    const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
       },
@@ -179,12 +177,13 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     assertEquals(result.summary.unchanged, 2);
     assertEquals(result.entries.every((e) => e.action === 'unchanged'), true);
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - detects deleted resources and workers', () => {
+});
+
+Deno.test('computeDiff - detects deleted resources and workers', async () => {
   try {
-  const manifest = makeManifest({
+    const manifest = makeManifest({
       resources: {},
       workers: {},
     });
@@ -203,22 +202,20 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     assertEquals(result.hasChanges, true);
     assertEquals(result.summary.delete, 2);
 
-    const dbDel = result.entries.find((e) => e.name === 'db');
-    assertEquals(dbDel?.action, 'delete');
-    assertEquals(dbDel?.reason, 'removed from manifest');
-
-    const workerDel = result.entries.find((e) => e.name === 'old');
-    assertEquals(workerDel?.action, 'delete');
-    assertEquals(workerDel?.reason, 'removed from manifest');
+    assertEquals(result.entries.find((e) => e.name === 'db')?.action, 'delete');
+    assertEquals(result.entries.find((e) => e.name === 'db')?.reason, 'removed from manifest');
+    assertEquals(result.entries.find((e) => e.name === 'old')?.action, 'delete');
+    assertEquals(result.entries.find((e) => e.name === 'old')?.reason, 'removed from manifest');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - throws on resource type change', () => {
+});
+
+Deno.test('computeDiff - throws on resource type change', async () => {
   try {
-  const manifest = makeManifest({
+    const manifest = makeManifest({
       resources: {
-        db: { type: 'r2' }, // was d1
+        db: { type: 'r2' },
       },
     });
 
@@ -228,23 +225,25 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
       },
     });
 
-    assertThrows(() => { () => computeDiff(manifest, current); }, 
-      /Resource "db" type changed from "d1" to "r2"/,
+    assertThrows(
+      () => computeDiff(manifest, current),
+      Error,
+      'Resource "db" type changed from "d1" to "r2"',
     );
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - handles mixed create, unchanged, delete', () => {
+});
+
+Deno.test('computeDiff - handles mixed create, unchanged, delete', async () => {
   try {
-  const manifest = makeManifest({
+    const manifest = makeManifest({
       resources: {
-        db: { type: 'd1', binding: 'DB' },       // unchanged
-        newcache: { type: 'kv' },                 // create
+        db: { type: 'd1', binding: 'DB' },
+        newcache: { type: 'kv' },
       },
       workers: {
-        web: {                                     // unchanged
-          type: 'worker',
+        web: {
           build: {
             fromWorkflow: {
               path: '.takos/workflows/build.yml',
@@ -254,8 +253,7 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
             },
           },
         },
-        api: {                                     // create
-          type: 'worker',
+        api: {
           build: {
             fromWorkflow: {
               path: '.takos/workflows/build.yml',
@@ -282,28 +280,21 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
 
     assertEquals(result.hasChanges, true);
     assertEquals(result.summary, { create: 2, update: 0, delete: 1, unchanged: 2 });
-
     assertEquals(result.entries.find((e) => e.name === 'newcache')?.action, 'create');
     assertEquals(result.entries.find((e) => e.name === 'api')?.action, 'create');
     assertEquals(result.entries.find((e) => e.name === 'oldqueue')?.action, 'delete');
     assertEquals(result.entries.find((e) => e.name === 'db')?.action, 'unchanged');
     assertEquals(result.entries.find((e) => e.name === 'web')?.action, 'unchanged');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - handles containers and services in extended manifest', () => {
+});
+
+Deno.test('computeDiff - handles containers and services in extended manifest', async () => {
   try {
-  // containers / services は CLI の AppManifest 型には未定義だが、
-    // GroupDeployOptions 経由の manifest には存在しうる
-    const manifest = makeManifest() as AppManifest & {
-      spec: AppManifest['spec'] & {
-        containers: Record<string, unknown>;
-        services: Record<string, unknown>;
-      };
-    };
-    (manifest.spec as any).containers = { runner: { dockerfile: 'Dockerfile' } };
-    (manifest.spec as any).services = { backend: { dockerfile: 'Dockerfile' } };
+    const manifest = makeManifest();
+    manifest.spec.containers = { runner: { dockerfile: 'Dockerfile' } as any };
+    manifest.spec.services = { backend: { dockerfile: 'Dockerfile' } as any };
 
     const result = computeDiff(manifest, null);
 
@@ -322,12 +313,13 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
       reason: 'new',
     });
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeDiff - detects deleted containers and services', () => {
+});
+
+Deno.test('computeDiff - detects deleted containers and services', async () => {
   try {
-  const manifest = makeManifest();
+    const manifest = makeManifest();
 
     const current = makeState({
       containers: {
@@ -343,24 +335,23 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     assertEquals(result.entries.find((e) => e.name === 'runner')?.action, 'delete');
     assertEquals(result.entries.find((e) => e.name === 'backend')?.action, 'delete');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-// ── computeWorkerDiff tests ──
+});
 
-
-  Deno.test('computeWorkerDiff - returns create for new worker', () => {
+Deno.test('computeWorkerDiff - returns create for new worker', async () => {
   try {
-  const entry = computeWorkerDiff('api', 'sha256:new', null);
+    const entry = computeWorkerDiff('api', 'sha256:new', null);
     assertEquals(entry.action, 'create');
     assertEquals(entry.reason, 'new');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeWorkerDiff - returns update when codeHash differs', () => {
+});
+
+Deno.test('computeWorkerDiff - returns update when codeHash differs', async () => {
   try {
-  const current = makeState({
+    const current = makeState({
       workers: {
         api: { scriptName: 'api', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:old' },
       },
@@ -369,12 +360,13 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     assertEquals(entry.action, 'update');
     assertEquals(entry.reason, 'code changed');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('computeWorkerDiff - returns unchanged when codeHash matches', () => {
+});
+
+Deno.test('computeWorkerDiff - returns unchanged when codeHash matches', async () => {
   try {
-  const current = makeState({
+    const current = makeState({
       workers: {
         api: { scriptName: 'api', deployedAt: '2026-01-01T00:00:00Z', codeHash: 'sha256:same' },
       },
@@ -382,27 +374,26 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     const entry = computeWorkerDiff('api', 'sha256:same', current);
     assertEquals(entry.action, 'unchanged');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-// ── formatPlan tests ──
+});
 
-
-  Deno.test('formatPlan - returns "no changes" message when entries are empty', () => {
+Deno.test('formatPlan - returns "no changes" message when entries are empty', async () => {
   try {
-  const result = formatPlan({
+    const result = formatPlan({
       entries: [],
       hasChanges: false,
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     });
     assertEquals(result, '変更はありません。');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('formatPlan - formats entries with correct symbols', () => {
+});
+
+Deno.test('formatPlan - formats entries with correct symbols', async () => {
   try {
-  const result = formatPlan({
+    const result = formatPlan({
       entries: [
         { name: 'db', category: 'resource', action: 'create', type: 'd1', reason: 'new' },
         { name: 'web', category: 'worker', action: 'update', type: 'worker', reason: 'code changed' },
@@ -430,19 +421,19 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
     assertStringIncludes(lines[3], 'kv');
     assertStringIncludes(lines[3], '変更なし');
 
-    // summary line
     const summaryLine = lines[lines.length - 1];
     assertStringIncludes(summaryLine, '作成: 1');
     assertStringIncludes(summaryLine, '更新: 1');
     assertStringIncludes(summaryLine, '削除: 1');
     assertStringIncludes(summaryLine, '変更なし: 1');
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
-  Deno.test('formatPlan - omits zero counts from summary', () => {
+});
+
+Deno.test('formatPlan - omits zero counts from summary', async () => {
   try {
-  const result = formatPlan({
+    const result = formatPlan({
       entries: [
         { name: 'db', category: 'resource', action: 'create', type: 'd1', reason: 'new' },
       ],
@@ -452,10 +443,10 @@ function makeManifest(spec: Partial<AppManifest['spec']> = {}): AppManifest {
 
     const summaryLine = result.split('\n').pop()!;
     assertEquals(summaryLine, '作成: 1');
-    assert(!(summaryLine).includes('更新'));
-    assert(!(summaryLine).includes('削除'));
-    assert(!(summaryLine).includes('変更なし'));
+    assert(!summaryLine.includes('更新'));
+    assert(!summaryLine.includes('削除'));
+    assert(!summaryLine.includes('変更なし'));
   } finally {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+    await cleanupTempDirs();
   }
-})
+});

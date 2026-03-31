@@ -46,11 +46,28 @@ type MiniflareModule = {
   Miniflare: new (options: unknown) => MiniflareInstance;
 };
 
+type ProviderQueueAdapter = {
+  send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>): Promise<void>;
+  receive?(): Promise<{ body: unknown; attempts?: number } | null>;
+};
+
+type LocalPlatformTestHooks = {
+  __TAKOS_TEST_MINIFLARE__?: MiniflareModule;
+  __TAKOS_TEST_PROVIDER_QUEUE_ADAPTER__?: (
+    binding: ProviderQueueBinding,
+  ) => Promise<ProviderQueueAdapter | null> | ProviderQueueAdapter | null;
+};
+
 type ResolvedTenantWorker = {
   fetcher: TenantWorkerFetcher;
   runtime: MiniflareInstance;
   dispose(): Promise<void>;
 };
+
+function getLocalPlatformTestHooks(): LocalPlatformTestHooks {
+  return globalThis as typeof globalThis & LocalPlatformTestHooks;
+}
 
 function resolveMiniflareHost(): string {
   const explicit = Deno.env.get('TAKOS_MINIFLARE_HOST')?.trim();
@@ -112,11 +129,13 @@ type ProviderQueueBinding = WorkerBinding & {
 
 async function createProviderQueueAdapter(
   binding: ProviderQueueBinding,
-): Promise<null | {
-  send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
-  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>): Promise<void>;
-  receive?(): Promise<{ body: unknown; attempts?: number } | null>;
-}> {
+): Promise<ProviderQueueAdapter | null> {
+  const queueAdapterOverride = getLocalPlatformTestHooks()
+    .__TAKOS_TEST_PROVIDER_QUEUE_ADAPTER__;
+  if (queueAdapterOverride) {
+    return await queueAdapterOverride(binding);
+  }
+
   switch (binding.queue_backend) {
     case 'sqs': {
       if (!binding.queue_url) {
@@ -173,7 +192,8 @@ export async function createLocalTenantRuntimeRegistry(options: LocalTenantWorke
   ): Promise<TenantWorkflowInvocationResult>;
   dispose(): Promise<void>;
 }> {
-  const miniflareModule = await import('miniflare');
+  const miniflareModule = getLocalPlatformTestHooks().__TAKOS_TEST_MINIFLARE__
+    ?? await import('miniflare');
   const { Miniflare } = miniflareModule as unknown as MiniflareModule;
   const bundleCacheRoot = resolveRoot(options.bundleCacheRoot, 'bundles');
   const deploymentRuntimeCache = new Map<string, Promise<ResolvedTenantWorker>>();

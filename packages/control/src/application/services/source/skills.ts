@@ -362,6 +362,36 @@ export async function listEnabledCustomSkillContext(db: D1Database, spaceId: str
   return rows.map((skill) => toCustomSkillContext(toSkillRow(skill)));
 }
 
+export async function listDetailedSkillContext(
+  db: D1Database,
+  spaceId: string,
+  localeInput?: { preferredLocale?: string | null; acceptLanguage?: string | null; textSamples?: string[] },
+  availableToolNames: string[] = [],
+): Promise<{ locale: SkillLocale; skills: SkillContext[] }> {
+  const locale = resolveSkillLocale(localeInput);
+  const [customSkills, availability] = await Promise.all([
+    listEnabledCustomSkillContext(db, spaceId),
+    getSkillAvailabilityDetails(db, spaceId),
+  ]);
+
+  return {
+    locale,
+    skills: [
+      ...applySkillAvailability(
+        listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+        {
+          ...availability,
+          availableToolNames,
+        },
+      ),
+      ...applySkillAvailability(customSkills, {
+        ...availability,
+        availableToolNames,
+      }),
+    ],
+  };
+}
+
 export async function listSkillCatalog(
   db: D1Database,
   spaceId: string,
