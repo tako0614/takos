@@ -1,11 +1,35 @@
 # Takos
 
-**アプリを宣言的にデプロイするプラットフォーム。**
+**自分で持ち、運用し、改変も移行もできるソフトウェア基盤。**
 
-`.takos/app.yml` を書くだけで、Worker・Container・データベース・ストレージをまとめてデプロイできます。「何をデプロイするか」を宣言すれば、リソース作成・binding 接続・ドメイン設定・環境変数の注入まで Takos が自動で行います。
+Takos は、AI エージェント・アプリケーション・Worker・ワークフローを、ユーザー自身が所有・運用できる形で構築・実行・配布するためのプラットフォームです。コード管理、デプロイ、実行、ツール拡張、ワークフロー自動化を一つの基盤に統合し、その全てをユーザーが理解・追跡・改変できる状態に保ちます。
+
+既存の SaaS やプラットフォームが「便利だが中身が見えないもの」を提供するのに対し、Takos が提供するのは「自分で持ち、運用し、必要に応じて改変や移行もできるソフトウェア基盤」です。
+
+## なぜ Takos が必要か
+
+プラットフォームは便利であると同時に、支配の道具にもなり得ます。Twitter は突然 API を有料化し、Google Play はアルゴリズム変更でアプリの到達範囲を一夜で変え、SaaS は価格を倍にしても移行コストの壁がユーザーを引き留めます。これらは個別の問題ではなく、**ユーザーが基盤を所有していないから、基盤を持つ側の決定に従うしかない**という同じ構造から生まれています。
+
+Takos はこの問題に対し、「基盤そのものをユーザーが所有できる形にする」というアプローチをとります。動いている内容を確認でき、変更を追跡でき、壊れたら自分で直せ、不要になれば別の環境に持ち出せる。それが Takos の言う「所有」です。
+
+### OSS としての Takos
+
+Takos は AGPL v3 のオープンソースソフトウェアです。これは理念の表明ではなく、「所有」の帰結です。基盤のコードが非公開であれば、その約束を検証する手段がありません。OSS であることで、ユーザーは Takos の動作を自分で検証し、セルフホストにより特定のインフラへの依存を排し、フォークして独自の要件に合わせた基盤を構築できます。
+
+Takos は誰か一人が全てを設計し運用するものではありません。OSS であることは、みんなで作り、みんなで育て、みんなで使うための前提条件です。
+
+### takos.jp との関係
+
+[takos.jp](https://takos.jp) で提供されるサービスは Takos のホステッド版の一つに過ぎません。takos.jp の運営者はベンダーであり、プラットフォームの支配者ではありません。価格や条件が合わなくなったら、データとコードを持って離脱できます。企業が社内向けに運用する Takos、教育機関が学生向けに提供する Takos、コミュニティが共同運営する Takos——それぞれが独立したインスタンスでありながら、同じ OSS の上に成り立ちます。
+
+## 何ができるか
+
+### 宣言的デプロイ
+
+`.takos/app.yml` を書くだけで、Worker・Container・データベース・ストレージをまとめてデプロイできます。
 
 ```yaml
-# .takos/app.yml — これだけで Worker + D1 + R2 がデプロイされる
+# .takos/app.yml
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -43,11 +67,7 @@ spec:
 takos apply --env staging    # これで完了
 ```
 
-## 特徴
-
-### 宣言的デプロイ
-
-`app.yml` 1 ファイルに Workers、Containers、Services、リソース、ルーティング、環境変数をすべて宣言します。`takos apply` を実行すると、差分を検出してリソースの作成・更新・binding の接続・ドメイン割り当てを自動で行います。手順書やスクリプトの管理は不要です。
+リソース作成・binding 接続・ドメイン設定・環境変数の注入まで自動で行います。
 
 ### Workers + Containers + Services
 
@@ -58,7 +78,6 @@ takos apply --env staging    # これで完了
 - **Services** — 常時起動の独立コンテナ。オプションで IPv4 を割り当て可能
 
 ```yaml
-# Worker から Container にアクセスする例
 containers:
   browser:
     dockerfile: Dockerfile
@@ -90,7 +109,7 @@ workers:
 
 ### テンプレート変数
 
-デプロイ後に確定する URL・IP・リソース ID を環境変数に自動注入できます。サービス間の接続を宣言的に解決します。
+デプロイ後に確定する URL・IP・リソース ID を環境変数に自動注入できます。
 
 ```yaml
 env:
@@ -105,7 +124,7 @@ env:
 
 ### MCP Server
 
-アプリを MCP (Model Context Protocol) サーバーとして公開できます。認証トークンも自動生成されるため、AI エージェントがアプリの機能を自動検出して利用できます。
+アプリを MCP (Model Context Protocol) サーバーとしてワンライン宣言で自動公開できます。認証トークンも自動生成されるため、AI エージェントがアプリの機能を自動検出して利用できます。
 
 ```yaml
 capabilities: [mcp]
@@ -121,9 +140,27 @@ resources:
     generate: true
 ```
 
+### AI Agent 実行基盤
+
+Thread / Run / Artifact モデルによるエージェント実行基盤を内蔵しています。
+
+- **Thread** — 会話コンテキスト。メッセージ履歴・要約・キーポイント・成果物を保持
+- **Run** — Thread 上の単一実行。`pending → queued → running → completed` のライフサイクル
+- **Artifact** — Run の出力。`code`, `config`, `doc`, `patch`, `report` などの型を持つ
+- **Memory** — `episode`, `semantic`, `procedural` の 3 種類の記憶
+- **Reminder** — 時間・条件・コンテキストトリガーによるリマインダー
+
+SSE と WebSocket によるリアルタイムストリーミングに対応。Coding agent としても機能し、アプリケーションをゼロから構築できます。
+
+### App Store
+
+アプリを Store に公開してワンクリックでインストール可能にできます。Store は ActivityPub + ForgeFed ベースの分散カタログで、Git データは各リポジトリに残したままメタデータだけを共有します。
+
+npm や crates.io のようなレジストリに近いですが、対象はライブラリに限りません。アプリケーション、Worker、ツール、ワークフロー、プロンプト、設定テンプレートまで、ソフトウェアに関わるあらゆるものが同じ流通の仕組みの上を流れます。特別な審査やゲートキーパーを前提としません。
+
 ### OAuth クライアント自動登録
 
-マニフェストに OAuth クライアントを宣言すると、デプロイ時に自動登録され、`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` が Worker に注入されます。
+マニフェストに宣言するだけでデプロイ時に自動登録され、`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` が Worker に注入されます。
 
 ```yaml
 oauth:
@@ -146,27 +183,25 @@ fileHandlers:
     openPath: /files/:id
 ```
 
-### App Store
-
-アプリを Store に公開してワンクリックでインストール可能にできます。Store は ActivityPub + ForgeFed ベースの分散カタログで、Git データは各リポジトリに残したままメタデータだけを共有します。
-
-公式パッケージやシードリポジトリもサポートしており、ワークスペース作成時にテンプレートとして利用できます。
-
 ### マルチテナント
 
-Dispatch namespace でテナントごとに Worker を分離します。Space (ワークスペース) 単位でメンバー・リポジトリ・リソース・ファイルを管理し、ロールベースのアクセス制御 (owner / admin / editor / viewer) を提供します。
+Dispatch namespace でテナントごとに Worker を分離。Space (ワークスペース) 単位でメンバー・リポジトリ・リソース・ファイルを管理し、ロールベースのアクセス制御 (owner / admin / editor / viewer) を提供します。
 
-### AI Agent 実行基盤
+### インフラ非依存
 
-Thread / Run / Artifact モデルによるエージェント実行基盤を内蔵しています。
+Cloudflare の技術をベースにしていますが、実行環境自体は特定のインフラに依存しない設計です。Miniflare と Docker による抽象化で、AWS・GCP・Kubernetes・セルフホスト環境でも動作します。
 
-- **Thread** — 会話コンテキスト。メッセージ履歴・要約・キーポイント・成果物を保持
-- **Run** — Thread 上の単一実行。`pending → queued → running → completed` のライフサイクル
-- **Artifact** — Run の出力。`code`, `config`, `doc`, `patch`, `report` などの型を持つ
-- **Memory** — `episode`, `semantic`, `procedural` の 3 種類の記憶
-- **Reminder** — 時間・条件・コンテキストトリガーによるリマインダー
+## 利用例
 
-SSE (`GET /api/runs/:id/sse`) と WebSocket によるリアルタイムストリーミングに対応しています。
+**自分の SNS を自分で管理する** — ActivityPub や AT Protocol 対応の分散型 SNS をホスト。Takos エコシステムで開発された一人用 ActivityPub SNS「[Yurucommu](../yurucommu)」との親和性が高い。
+
+**OSS ライブラリを AI tool 化する** — アプリケーションになっていない便利なライブラリを Worker にしてデプロイすることで、AI の tool として活用できる。
+
+**全く新しいアプリケーションをゼロから構築する** — Coding agent としても機能し、アプリケーションを構築。OSS にすればエコシステムに貢献できる。
+
+**コミュニティ専用ツールのホスト** — 部活の出欠管理アプリ、小規模店舗の予約問い合わせアプリなど。
+
+**MCP サーバーを作る** — AI 時代において Web の UI は縮小し、MCP サーバーでサービスを提供することが主流になると予想される。Takos は MCP サービスの構築に最適。
 
 ## 3 分で始める
 
@@ -193,9 +228,7 @@ takos whoami
 takos apply --env staging
 ```
 
-URL がターミナルに表示されるのでブラウザで確認できます。
-
-詳しいチュートリアルは [docs サイト](https://docs.takos.jp) を参照してください。
+URL がターミナルに表示されるのでブラウザで確認できます。詳しいチュートリアルは [docs サイト](https://docs.takos.jp) を参照してください。
 
 ## アーキテクチャ
 
@@ -309,6 +342,10 @@ deno task docs:dev    # http://localhost:5173 でプレビュー
 - **ホスティング** — Cloudflare、AWS、GCP、Kubernetes、セルフホスト、ローカル開発
 - **プラットフォーム** — Store、Threads/Runs、Spaces、ActivityPub
 - **サンプル集** — シンプル Worker、Worker+DB、Worker+Container、MCP Server、マルチサービス
+
+## License
+
+GNU AGPL v3。詳細は `LICENSE` を参照してください。
 
 ## Contributing
 

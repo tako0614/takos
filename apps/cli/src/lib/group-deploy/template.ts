@@ -7,6 +7,7 @@ export function buildTemplateContext(
   result: GroupDeployResult,
   manifest: GroupDeployOptions['manifest'],
   options: GroupDeployOptions,
+  extra?: { appToken?: string },
 ): TemplateContext {
   const routes: Record<string, { url: string; domain: string; path: string }> = {};
   const baseDomain = options.baseDomain || `${manifest.metadata.name}.app.example.com`;
@@ -48,7 +49,12 @@ export function buildTemplateContext(
     resources[res.name] = { id: res.id };
   }
 
-  return { routes, containers, services, workers, resources };
+  const takos = {
+    apiUrl: Deno.env.get('TAKOS_API_URL') || '',
+    accessToken: extra?.appToken,
+  };
+
+  return { routes, containers, services, workers, resources, takos };
 }
 
 export function resolveTemplateString(template: string, context: TemplateContext): string {
