@@ -4,8 +4,8 @@
  * Extracted from runner.ts to separate LLM provider concerns from the core run loop.
  */
 
-import type { Env } from '../../../shared/types';
-import { LLMClient, getProviderFromModel, type ModelProvider } from './llm';
+import type { Env } from '../../../shared/types/index.ts';
+import { LLMClient, getProviderFromModel, type ModelProvider } from './llm.ts';
 
 export interface LLMManagerConfig {
   apiKey: string | undefined;

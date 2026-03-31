@@ -1,10 +1,10 @@
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import type { Resource, Worker } from '../../types';
-import { Breadcrumb } from '../../components/ui/Breadcrumb';
-import { WorkerOverviewTab } from './detail/WorkerOverviewTab';
-import { WorkerSettingsPanel } from './detail/WorkerSettingsPanel';
-import { DeploymentLogsTab } from './detail/DeploymentLogsTab';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import type { Resource, Worker } from '../../types/index.ts';
+import { Breadcrumb } from '../../components/ui/Breadcrumb.tsx';
+import { WorkerOverviewTab } from './detail/WorkerOverviewTab.tsx';
+import { WorkerSettingsPanel } from './detail/WorkerSettingsPanel.tsx';
+import { DeploymentLogsTab } from './detail/DeploymentLogsTab.tsx';
 import type {
   Binding,
   EnvVar,
@@ -13,13 +13,13 @@ import type {
   WorkerDomain,
   WorkerSettingsTab,
   VerificationInfo,
-} from './worker-models';
+} from './worker-models.ts';
 import {
   getWorkerDisplayHostname,
   getWorkerDisplayName,
   getWorkerStatusIndicatorClass,
   getWorkerUrl,
-} from './utils/workerUtils';
+} from './utils/workerUtils.ts';
 
 export interface WorkerDetailProps {
   worker: Worker;

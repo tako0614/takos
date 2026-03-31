@@ -1,15 +1,15 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import { Show, For } from 'solid-js';
-import type { OAuthClientDev } from './OAuthSettingsModal';
-import { useI18n } from '../../store/i18n';
-import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { formatShortDate } from '../../lib/format';
-import { Icons } from '../../lib/Icons';
-import { Card } from '../ui/Card';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import type { OAuthClientDev } from './OAuthSettingsModal.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useConfirmDialog } from '../../store/confirm-dialog.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { formatShortDate } from '../../lib/format.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Card } from '../ui/Card.tsx';
+import { Badge } from '../ui/Badge.tsx';
+import { Button } from '../ui/Button.tsx';
+import { Input } from '../ui/Input.tsx';
 
 /**
  * Frontend-local scope list. The authoritative scope list lives in

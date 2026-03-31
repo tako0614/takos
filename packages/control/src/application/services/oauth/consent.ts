@@ -1,13 +1,13 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { oauthConsents, oauthClients } from '../../../infra/db';
-import type { OAuthConsent, JsonStringArray } from '../../../shared/types/oauth';
-import { parseJsonStringArray } from '../../../shared/types/oauth';
-import { generateId } from './pkce';
-import { getDb } from '../../../infra/db';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { oauthConsents, oauthClients } from '../../../infra/db/index.ts';
+import type { OAuthConsent, JsonStringArray } from '../../../shared/types/oauth.ts';
+import { parseJsonStringArray } from '../../../shared/types/oauth.ts';
+import { generateId } from './pkce.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, inArray, desc } from 'drizzle-orm';
-import { revokeAllUserClientTokens } from './token';
-import { textDate } from '../../../shared/utils/db-guards';
+import { revokeAllUserClientTokens } from './token.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 type OAuthConsentRow = SelectOf<typeof oauthConsents>;
 

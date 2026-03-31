@@ -2,7 +2,7 @@ import type {
   AppContainer,
   HealthCheck,
   Volume,
-} from '../app-manifest-types';
+} from '../app-manifest-types.ts';
 import {
   asRecord,
   asRequiredString,
@@ -10,7 +10,7 @@ import {
   asStringArray,
   asStringMap,
   normalizeRepoPath,
-} from '../app-manifest-utils';
+} from '../app-manifest-utils.ts';
 
 type ContainerProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
 

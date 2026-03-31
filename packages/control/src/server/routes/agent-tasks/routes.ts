@@ -1,20 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, AgentTaskStatus } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Env, AgentTaskStatus } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { createThread } from '../../../application/services/threads/thread-service';
-import { analyzeTask } from '../../../application/services/agent/workflow';
-import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../../application/services/agent';
-import { BUILTIN_TOOLS } from '../../../application/tools/builtin';
-import { getDb } from '../../../infra/db';
-import { agentTasks, threads, runs } from '../../../infra/db/schema';
+import { zValidator } from '../zod-validator.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { createThread } from '../../../application/services/threads/thread-service.ts';
+import { analyzeTask } from '../../../application/services/agent/workflow.ts';
+import { getProviderFromModel, DEFAULT_MODEL_ID, normalizeModelId, filterAgentAllowedToolNames } from '../../../application/services/agent/index.ts';
+import { BUILTIN_TOOLS } from '../../../application/tools/builtin/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { agentTasks, threads, runs } from '../../../infra/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 import {
   VALID_STATUSES,
   VALID_PRIORITIES,
@@ -24,7 +24,7 @@ import {
   fetchTask,
   enrichTasks,
   enrichTask,
-} from './handlers';
+} from './handlers.ts';
 
 const BUILTIN_TOOL_NAMES = filterAgentAllowedToolNames(BUILTIN_TOOLS.map((tool) => tool.name));
 

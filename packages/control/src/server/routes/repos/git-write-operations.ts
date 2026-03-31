@@ -1,8 +1,8 @@
 import type { ExecutionContext } from '../../../shared/types/bindings.ts';
-import * as gitStore from '../../../application/services/git-smart';
-import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { toGitBucket, type RepoBucketBinding, type GitBucket } from './routes';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { toGitBucket, type RepoBucketBinding, type GitBucket } from './routes.ts';
 
 type WorkflowTriggerBucket = NonNullable<
   NonNullable<Parameters<typeof triggerPushWorkflows>[0]['bucket']>

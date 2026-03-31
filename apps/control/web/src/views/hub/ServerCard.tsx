@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import type { McpServerRecord } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import type { McpServerRecord } from '../../types/index.ts';
 
 export type ServerStatus = 'connected' | 'disabled' | 'token_expired' | 'no_token';
 

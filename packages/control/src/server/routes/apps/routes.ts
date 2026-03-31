@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
+import type { Env, User } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import {
   getRequestedSpaceIdentifier,
   parseJsonBody,
   requireSpaceAccess,
-} from '../route-auth';
+} from '../route-auth.ts';
 import { BadRequestError, AuthenticationError, NotFoundError, AuthorizationError } from 'takos-common/errors';
-import { getDb } from '../../../infra/db';
-import { apps as appsTable, accounts } from '../../../infra/db/schema';
-import { services } from '../../../infra/db/schema-services';
+import { getDb } from '../../../infra/db/index.ts';
+import { apps as appsTable, accounts } from '../../../infra/db/schema.ts';
+import { services } from '../../../infra/db/schema-services.ts';
 import { eq, and } from 'drizzle-orm';
 
 type Variables = {

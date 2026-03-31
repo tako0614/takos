@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   getStorageItem,
   createFileRecord,
@@ -10,9 +10,9 @@ import {
   uploadPendingFileContent,
   MAX_FILE_SIZE,
   PRESIGN_EXPIRY_SECONDS,
-} from '../../../application/services/source/space-storage';
+} from '../../../application/services/source/space-storage.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
-import { requireOAuthScope, handleStorageError } from './storage-operations';
+import { requireOAuthScope, handleStorageError } from './storage-operations.ts';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Create file with content ---

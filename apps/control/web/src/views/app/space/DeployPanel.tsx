@@ -1,19 +1,19 @@
 import { createSignal } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { Icons } from '../../../lib/Icons';
-import { rpc, rpcJson, rpcPath } from '../../../lib/rpc';
-import type { TranslationKey } from '../../../i18n';
-import { DEPLOY_NAV_SECTIONS, type DeploySection, type Resource, type User, type UserSettings, type Worker, type Space } from '../../../types';
-import { WorkersTab } from '../../workers/tabs/WorkersTab';
-import { ResourcesTab } from '../../workers/tabs/ResourcesTab';
-import { WorkerDetailContainer } from '../../workers/detail/WorkerDetailContainer';
-import { ResourceDetailContainer } from '../../workers/detail/ResourceDetailContainer';
-import { CreateResourceModal } from '../../workers/modals/CreateResourceModal';
-import { useSpaceWorkers } from '../../../hooks/useSpaceWorkers';
-import { useSpaceResources } from '../../../hooks/useSpaceResources';
+import { useI18n } from '../../../store/i18n.ts';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { rpc, rpcJson, rpcPath } from '../../../lib/rpc.ts';
+import type { TranslationKey } from '../../../i18n.ts';
+import { DEPLOY_NAV_SECTIONS, type DeploySection, type Resource, type User, type UserSettings, type Worker, type Space } from '../../../types/index.ts';
+import { WorkersTab } from '../../workers/tabs/WorkersTab.tsx';
+import { ResourcesTab } from '../../workers/tabs/ResourcesTab.tsx';
+import { WorkerDetailContainer } from '../../workers/detail/WorkerDetailContainer.tsx';
+import { ResourceDetailContainer } from '../../workers/detail/ResourceDetailContainer.tsx';
+import { CreateResourceModal } from '../../workers/modals/CreateResourceModal.tsx';
+import { useSpaceWorkers } from '../../../hooks/useSpaceWorkers.ts';
+import { useSpaceResources } from '../../../hooks/useSpaceResources.ts';
 
 interface DeployPanelProps {
   spaceId: string;
@@ -58,7 +58,7 @@ export function DeployPanel({
 
   const { cfWorkers: workers, setCfWorkers, loadingCfWorkers: loadingWorkers, refreshWorkers, deleteWorker } = useSpaceWorkers(spaceId);
   const [selectedWorker, setSelectedWorker] = createSignal<Worker | null>(null);
-  const [workerTab, setWorkerTab] = createSignal<import('../../workers/worker-models').WorkerDetailTab>('overview');
+  const [workerTab, setWorkerTab] = createSignal<import('../../workers/worker-models.ts').WorkerDetailTab>('overview');
 
   const { resources, loadingResources, refreshResources } = useSpaceResources(spaceId);
   const [selectedResource, setSelectedResource] = createSignal<Resource | null>(null);

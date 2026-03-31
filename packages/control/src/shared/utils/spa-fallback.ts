@@ -1,4 +1,4 @@
-import type { Env } from '../types';
+import type { Env } from '../types/index.ts';
 
 /**
  * Serve the SPA index.html from the ASSETS binding.

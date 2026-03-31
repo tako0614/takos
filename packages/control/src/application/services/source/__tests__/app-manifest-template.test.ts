@@ -2,7 +2,7 @@ import {
   resolveTemplates,
   validateTemplateReferences,
   type TemplateContext,
-} from '../app-manifest-template';
+} from '../app-manifest-template.ts';
 
 
 import { assertEquals, assertThrows, assertStringIncludes } from 'jsr:@std/assert';

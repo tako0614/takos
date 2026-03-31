@@ -5,8 +5,8 @@
  */
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { MergeConflictType, MergeConflict } from '../git-objects';
-import { buildTreeFromPaths, flattenTree } from './tree-ops';
+import type { MergeConflictType, MergeConflict } from '../git-objects.ts';
+import { buildTreeFromPaths, flattenTree } from './tree-ops.ts';
 
 interface TreeFileEntry {
   sha: string;

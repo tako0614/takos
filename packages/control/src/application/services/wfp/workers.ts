@@ -7,25 +7,25 @@
  * assets.ts.
  */
 
-import type { WfpClient } from './client';
-import type { WFPConfig } from './client';
+import type { WfpClient } from './client.ts';
+import type { WFPConfig } from './client.ts';
 import type {
   AssetManifestEntry,
   AssetUploadFile,
   AssetsUploadSession,
-} from './assets';
+} from './assets.ts';
 import {
   createAssetsUploadSession,
   uploadAssets,
   uploadAllAssets,
-} from './assets';
+} from './assets.ts';
 import type {
   WfpContext,
   WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './wfp-contracts';
-import { buildWorkerMetadata } from './worker-metadata';
+} from './wfp-contracts.ts';
+import { buildWorkerMetadata } from './worker-metadata.ts';
 
 // ---------------------------------------------------------------------------
 // Worker CRUD
@@ -120,7 +120,7 @@ export async function workerExists(ctx: WfpContext, workerName: string): Promise
     await ctx.cfFetch(ctx.scriptPath(workerName));
     return true;
   } catch (error) {
-    const cfError = error as import('./client').CloudflareAPIError;
+    const cfError = error as import('./client.ts').CloudflareAPIError;
     if (cfError.statusCode === 404) {
       return false;
     }

@@ -5,27 +5,27 @@ export {
   runD1DailyBackup,
   runD1BackupInventory,
   runD1BackupIntegrityCheck,
-} from './backup-maintenance';
+} from './backup-maintenance.ts';
 
 export {
   type CustomDomainReverificationSummary,
   runCustomDomainReverification,
   type ReconcileStuckDomainsSummary,
   reconcileStuckDomains,
-} from './custom-domain-maintenance';
+} from './custom-domain-maintenance.ts';
 
 export {
   type CleanupDeadSessionsSummary,
   cleanupDeadSessions,
-} from './session-maintenance';
+} from './session-maintenance.ts';
 
 export {
   type SnapshotGcSpaceResult,
   type SnapshotGcBatchSummary,
   runSnapshotGcBatch,
-} from './snapshot-maintenance';
+} from './snapshot-maintenance.ts';
 
 export {
   type ResourceOrphanGcSummary,
   gcOrphanedResources,
-} from './resource-orphan-gc';
+} from './resource-orphan-gc.ts';

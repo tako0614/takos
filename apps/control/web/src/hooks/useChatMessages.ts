@@ -1,10 +1,10 @@
 import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
-import type { Message, Run } from '../types';
-import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata';
-import { buildChatMessageMetadata } from '../views/chat/messageMetadata';
-import { buildChatAttachmentPath } from './useChatAttachments';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import type { Message, Run } from '../types/index.ts';
+import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata.ts';
+import { buildChatMessageMetadata } from '../views/chat/messageMetadata.ts';
+import { buildChatAttachmentPath } from './useChatAttachments.ts';
 
 export interface UseChatMessagesOptions {
   threadId: string;

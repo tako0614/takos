@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
 import type * as DbModule from '@/db';
-import { createMockEnv } from '../../../../test/integration/setup';
+import { createMockEnv } from '../../../../test/integration/setup.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
 import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
@@ -81,8 +81,8 @@ function installDbMock() {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
     mocks.checkResourceAccess = (async () => true) as any;
     mocks.isPortableResourceProvider = (providerName?: string | null) => providerName != null && providerName !== 'cloudflare' as any;
     mocks.createOptionalCloudflareWfpProvider;
@@ -134,12 +134,12 @@ function installDbMock() {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
     mocks.checkResourceAccess = (async () => true) as any;
     mocks.isPortableResourceProvider = (providerName?: string | null) => providerName != null && providerName !== 'cloudflare' as any;
     mocks.createOptionalCloudflareWfpProvider;
-  process.env.POSTGRES_URL = 'postgresql://takos:takos@postgres:5432/takos';
+  Deno.env.set('POSTGRES_URL', 'postgresql://takos:takos@postgres:5432/takos');
     mocks.resourceRow = {
       id: 'res-sql-pg',
       ownerAccountId: TEST_USER_ID,
@@ -192,8 +192,8 @@ function installDbMock() {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
     mocks.checkResourceAccess = (async () => true) as any;
     mocks.isPortableResourceProvider = (providerName?: string | null) => providerName != null && providerName !== 'cloudflare' as any;
     mocks.createOptionalCloudflareWfpProvider;
@@ -260,8 +260,8 @@ function installDbMock() {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
     mocks.checkResourceAccess = (async () => true) as any;
     mocks.isPortableResourceProvider = (providerName?: string | null) => providerName != null && providerName !== 'cloudflare' as any;
     mocks.createOptionalCloudflareWfpProvider;
@@ -315,8 +315,8 @@ function installDbMock() {
     installDbMock();
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
     mocks.checkResourceAccess = (async () => true) as any;
     mocks.isPortableResourceProvider = (providerName?: string | null) => providerName != null && providerName !== 'cloudflare' as any;
     mocks.createOptionalCloudflareWfpProvider;

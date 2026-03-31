@@ -1,17 +1,17 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Run } from '../../../shared/types';
-import { getDb, runs, accountMemberships, accounts } from '../../../infra/db';
+import type { Run } from '../../../shared/types/index.ts';
+import { getDb, runs, accountMemberships, accounts } from '../../../infra/db/index.ts';
 import { eq, and, gt, inArray, count, isNull, isNotNull } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../identity/principals';
-import { isInvalidArrayBufferError } from '../../../shared/utils/db-guards';
+import { resolveActorPrincipalId } from '../identity/principals.ts';
+import { isInvalidArrayBufferError } from '../../../shared/utils/db-guards.ts';
 import {
   asRunRow,
   runRowToApi,
   type D1CountRow,
   type RunHierarchyNode,
   type SpaceModelLookup,
-} from './run-serialization';
-import { logError, logWarn } from '../../../shared/utils/logger';
+} from './run-serialization.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 
 const TOP_LEVEL_RUN_RATE_LIMIT = {
   maxRunsPerMinute: 30,

@@ -6,14 +6,14 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { getDb, repositories } from '../../../infra/db';
+import { getDb, repositories } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import * as gitStore from '../git-smart';
-import { isProbablyBinaryContent } from '../../../shared/utils/content-type';
-import { logWarn } from '../../../shared/utils/logger';
-import type { SessionFileEntry, SyncResult, SessionRepoMount, SessionSnapshot } from './git-sync-types';
+import * as gitStore from '../git-smart/index.ts';
+import { isProbablyBinaryContent } from '../../../shared/utils/content-type.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import type { SessionFileEntry, SyncResult, SessionRepoMount, SessionSnapshot } from './git-sync-types.ts';
 
-export type { SessionFileEntry, SyncResult } from './git-sync-types';
+export type { SessionFileEntry, SyncResult } from './git-sync-types.ts';
 
 /** Extract an error message from a failed HTTP response. */
 export async function extractResponseError(response: Response, fallbackMessage: string): Promise<string> {

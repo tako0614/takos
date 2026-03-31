@@ -1,9 +1,9 @@
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { generateId, slugifyName } from '../../../shared/utils';
-import { bytesToHex } from '../../../shared/utils/encoding-utils';
-import { validateUsername } from '../../../shared/utils/domain-validation';
-import { getDb } from '../../../infra/db';
-import { accounts } from '../../../infra/db/schema';
+import { generateId, slugifyName } from '../../../shared/utils/index.ts';
+import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
+import { validateUsername } from '../../../shared/utils/domain-validation.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
 
 const ALLOWED_RETURN_PATHS: readonly string[] = [

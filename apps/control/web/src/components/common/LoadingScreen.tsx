@@ -1,4 +1,4 @@
-import { useI18n } from '../../store/i18n';
+import { useI18n } from '../../store/i18n.ts';
 export function LoadingScreen() {
   const { t } = useI18n();
   return (

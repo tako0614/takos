@@ -5,10 +5,10 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitCommit } from '../git-objects';
-import { resolveRef } from './refs';
-import { getCommit, getCommitLog } from './commit-index';
-import { getTree } from './tree-ops';
+import type { GitCommit } from '../git-objects.ts';
+import { resolveRef } from './refs.ts';
+import { getCommit, getCommitLog } from './commit-index.ts';
+import { getTree } from './tree-ops.ts';
 
 export type ResolveReadableCommitFailureReason = 'ref_not_found' | 'commit_not_found' | 'tree_not_found';
 

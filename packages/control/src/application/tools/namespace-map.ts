@@ -1,4 +1,4 @@
-import type { CapabilityNamespace, RiskLevel } from './capability-types';
+import type { CapabilityNamespace, RiskLevel } from './capability-types.ts';
 
 type ToolNamespaceMeta = {
   namespace: CapabilityNamespace;

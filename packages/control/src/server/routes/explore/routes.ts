@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import repoRoutes from './repos';
-import packageRoutes from './packages';
-import userRoutes from './users';
+import type { Env, User } from '../../../shared/types/index.ts';
+import repoRoutes from './repos.ts';
+import packageRoutes from './packages.ts';
+import userRoutes from './users.ts';
 
 type Variables = {
   user?: User;

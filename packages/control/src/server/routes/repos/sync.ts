@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody, requireSpaceAccess } from '../route-auth';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import * as gitStore from '../../../application/services/git-smart';
-import { checkRepoAccess, toApiRepositoryFromDb } from '../../../application/services/source/repos';
-import { getTreeFlattenLimitError } from './routes';
-import { getDb } from '../../../infra/db';
-import { repositories } from '../../../infra/db/schema';
+import { parseJsonBody, requireSpaceAccess } from '../route-auth.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { checkRepoAccess, toApiRepositoryFromDb } from '../../../application/services/source/repos.ts';
+import { getTreeFlattenLimitError } from './routes.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repositories } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
 
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
 function normalizeBranchName(input: string): string {

@@ -1,5 +1,5 @@
-import { logError } from '../../../shared/utils/logger';
-import type { LLMClient } from '../agent';
+import { logError } from '../../../shared/utils/logger.ts';
+import type { LLMClient } from '../agent/index.ts';
 
 const JSON_ARRAY_PATTERN = /\[[\s\S]*\]/;
 

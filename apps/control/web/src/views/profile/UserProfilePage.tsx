@@ -1,14 +1,14 @@
-import { ProfileHeader } from '../../components/profile/ProfileHeader';
-import { ProfileLoadMoreButton } from '../../components/profile/ProfileLoadMoreButton';
-import { ProfileActivityTab } from '../../components/profile/ProfileActivityTab';
-import { ProfileReposTab } from '../../components/profile/ProfileReposTab';
-import { ProfileRequestsTab } from '../../components/profile/ProfileRequestsTab';
-import { ProfileStarsTab } from '../../components/profile/ProfileStarsTab';
-import { ProfileTabs } from '../../components/profile/ProfileTabs';
-import { ProfileErrorState, ProfileLoadingState } from '../../components/profile/ProfileStates';
-import { ProfileEmptyIcon, ProfileUserList } from '../../components/profile/ProfileUserList';
-import { useUserProfile } from '../../hooks/useUserProfile';
-import type { UserProfilePageProps } from '../../types/profile';
+import { ProfileHeader } from '../../components/profile/ProfileHeader.tsx';
+import { ProfileLoadMoreButton } from '../../components/profile/ProfileLoadMoreButton.tsx';
+import { ProfileActivityTab } from '../../components/profile/ProfileActivityTab.tsx';
+import { ProfileReposTab } from '../../components/profile/ProfileReposTab.tsx';
+import { ProfileRequestsTab } from '../../components/profile/ProfileRequestsTab.tsx';
+import { ProfileStarsTab } from '../../components/profile/ProfileStarsTab.tsx';
+import { ProfileTabs } from '../../components/profile/ProfileTabs.tsx';
+import { ProfileErrorState, ProfileLoadingState } from '../../components/profile/ProfileStates.tsx';
+import { ProfileEmptyIcon, ProfileUserList } from '../../components/profile/ProfileUserList.tsx';
+import { useUserProfile } from '../../hooks/useUserProfile.ts';
+import type { UserProfilePageProps } from '../../types/profile.ts';
 
 export function UserProfilePage({
   username,

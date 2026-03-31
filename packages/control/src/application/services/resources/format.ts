@@ -1,6 +1,6 @@
-import type { Resource, ResourceAccess, ResourcePermission, ResourceStatus, ResourceType, ServiceBinding } from '../../../shared/types';
-import { textDateNullable } from '../../../shared/utils/db-guards';
-import { getStoredResourceImplementation, toResourceCapability, toPublicResourceType } from './capabilities';
+import type { Resource, ResourceAccess, ResourcePermission, ResourceStatus, ResourceType, ServiceBinding } from '../../../shared/types/index.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import { getStoredResourceImplementation, toResourceCapability, toPublicResourceType } from './capabilities.ts';
 
 export function toApiResource(r: {
   id: string;

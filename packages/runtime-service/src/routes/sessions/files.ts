@@ -1,8 +1,9 @@
-import * as fs from 'fs/promises';
-import { constants as fsConstants } from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import * as path from 'node:path';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import { MAX_SESSION_FILE_READ_BYTES } from '../../shared/config.ts';
 import {
   verifyNoSymlinkPathComponents,
@@ -14,8 +15,9 @@ import { isProbablyBinary } from '../../runtime/validation.ts';
 import { resolveSessionWorkDir } from './session-utils.ts';
 import { OwnerBindingError, SymlinkNotAllowedError, SymlinkEscapeError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
+import { Buffer } from "node:buffer";
 
-function handleRouteError(c: Context, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
+function handleRouteError(c: Context<RuntimeEnv>, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);
   if (opts?.checkSymlink && isBoundaryViolationError(err)) {
     return forbidden(c, err instanceof SymlinkWriteError ? 'Cannot write to symlinks' : 'Path escapes workspace boundary');
@@ -24,7 +26,7 @@ function handleRouteError(c: Context, err: unknown, label: string, opts?: { chec
   return internalError(c, `${label} failed`);
 }
 
-function handleReadFileError(c: Context, err: unknown): Response | null {
+function handleReadFileError(c: Context<RuntimeEnv>, err: unknown): Response | null {
   const e = err as NodeJS.ErrnoException;
   if (e.code === 'ENOENT') return notFound(c, 'File not found');
   if (e.code === 'FILE_TOO_LARGE') return c.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'File too large' } }, 413);
@@ -113,7 +115,7 @@ async function secureOpenFileForWrite(fullPath: string): Promise<fs.FileHandle> 
 }
 
 async function resolveSessionFile(
-  c: Context,
+  c: Context<RuntimeEnv>,
   body: Record<string, unknown>,
   requiredFields: string[]
 ): Promise<{ workDir: string; fullPath: string; filePath: string } | { error: Response }> {
@@ -132,10 +134,10 @@ async function resolveSessionFile(
 }
 
 async function writeFileToSession(
-  c: Context,
+  c: Context<RuntimeEnv>,
   body: Record<string, unknown>,
-  content: Buffer | string,
-  encoding: BufferEncoding | undefined,
+  content: Uint8Array | string,
+  encoding: string | undefined,
   label: string
 ): Promise<Response> {
   try {
@@ -149,7 +151,7 @@ async function writeFileToSession(
     try {
       await verifyPathWithinAfterAccess(workDir, fullPath, 'path');
       if (typeof content === 'string') {
-        await fileHandle.writeFile(content, encoding);
+        await fileHandle.writeFile(content, encoding as Parameters<typeof fileHandle.writeFile>[1]);
       } else {
         await fileHandle.writeFile(content);
       }
@@ -167,7 +169,7 @@ async function writeFileToSession(
 // File routes
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/session/file/read', async (c) => {
   try {

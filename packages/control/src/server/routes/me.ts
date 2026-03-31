@@ -1,27 +1,27 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../shared/types';
-import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils';
-import { validateUsername } from '../../shared/utils/domain-validation';
-import { getDb } from '../../infra/db';
-import { accounts, oauthTokens, oauthAuditLogs, personalAccessTokens } from '../../infra/db/schema';
+import type { Env, User } from '../../shared/types/index.ts';
+import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils/index.ts';
+import { validateUsername } from '../../shared/utils/domain-validation.ts';
+import { getDb } from '../../infra/db/index.ts';
+import { accounts, oauthTokens, oauthAuditLogs, personalAccessTokens } from '../../infra/db/schema.ts';
 import { eq, and, ne, desc } from 'drizzle-orm';
-import { getUserConsentsWithClients, revokeConsent } from '../../application/services/oauth/consent';
-import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client';
-import type { ClientRegistrationRequest } from '../../shared/types/oauth';
-import { parseJsonStringArray } from '../../shared/types/oauth';
-import { logOAuthEvent } from '../../application/services/oauth/audit';
-import { parseJsonBody, type BaseVariables } from './route-auth';
-import { parsePagination } from '../../shared/utils';
+import { getUserConsentsWithClients, revokeConsent } from '../../application/services/oauth/consent.ts';
+import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client.ts';
+import type { ClientRegistrationRequest } from '../../shared/types/oauth.ts';
+import { parseJsonStringArray } from '../../shared/types/oauth.ts';
+import { logOAuthEvent } from '../../application/services/oauth/audit.ts';
+import { parseJsonBody, type BaseVariables } from './route-auth.ts';
+import { parsePagination } from '../../shared/utils/index.ts';
 import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
-import { logWarn } from '../../shared/utils/logger';
+import { logWarn } from '../../shared/utils/logger.ts';
 import {
   ensureUserSettings,
   updateUserSettings,
   formatUserSettingsResponse,
-} from '../../application/services/identity/user-settings';
-import { toUserResponse } from '../../application/services/identity/response-formatters';
-import { getOrCreatePersonalWorkspace } from '../../application/services/identity/spaces';
-import { computeSHA256 } from '../../shared/utils/hash';
+} from '../../application/services/identity/user-settings.ts';
+import { toUserResponse } from '../../application/services/identity/response-formatters.ts';
+import { getOrCreatePersonalWorkspace } from '../../application/services/identity/spaces.ts';
+import { computeSHA256 } from '../../shared/utils/hash.ts';
 
 // ── PAT token helpers ──────────────────────────────────────────────────────
 function generateRandomBytes(length: number): Uint8Array {

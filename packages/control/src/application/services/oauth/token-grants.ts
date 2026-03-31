@@ -4,13 +4,13 @@ import type {
   OAuthAccessTokenPayload,
   TokenResponse,
   OAuthClient,
-} from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth';
-import { generateRandomString, generateId } from './pkce';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { getDb } from '../../../infra/db';
-import { oauthTokens } from '../../../infra/db';
-import type { AccessTokenJwtPayload } from './token-helpers';
+} from '../../../shared/types/oauth.ts';
+import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth.ts';
+import { generateRandomString, generateId } from './pkce.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { oauthTokens } from '../../../infra/db/index.ts';
+import type { AccessTokenJwtPayload } from './token-helpers.ts';
 
 export async function generateAccessToken(params: {
   privateKeyPem: string;

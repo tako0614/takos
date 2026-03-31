@@ -5,7 +5,7 @@ import {
   getTakosMigrationSQL,
 } from '@/services/wfp/service';
 import type { WFPConfig } from '@/services/wfp/client';
-import { MockR2Bucket } from '../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../test/integration/setup.ts';
 
 // ---------------------------------------------------------------------------
 // createWfpService

@@ -1,6 +1,6 @@
 import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import path from 'path';
-import * as fs from 'fs/promises';
+import path from 'node:path';
+import * as fs from 'node:fs/promises';
 import {
   S3_ENDPOINT,
   S3_REGION,

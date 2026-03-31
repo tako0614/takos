@@ -1,8 +1,8 @@
-import { getDb, threads, messages } from '../../../infra/db';
+import { getDb, threads, messages } from '../../../infra/db/index.ts';
 import { eq, and, ne, like, desc, asc, inArray } from 'drizzle-orm';
-import { queryRelevantThreadMessages, THREAD_MESSAGE_VECTOR_KIND } from '../agent';
-import type { Env, ThreadStatus } from '../../../shared/types';
-import { logWarn } from '../../../shared/utils/logger';
+import { queryRelevantThreadMessages, THREAD_MESSAGE_VECTOR_KIND } from '../agent/index.ts';
+import type { Env, ThreadStatus } from '../../../shared/types/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
 function buildSnippet(

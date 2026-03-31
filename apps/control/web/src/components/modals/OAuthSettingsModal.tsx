@@ -1,11 +1,11 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Modal } from '../ui/Modal';
-import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs';
-import { OAuthConsentTab } from './OAuthConsentTab';
-import { OAuthClientTab } from './OAuthClientTab';
-import { OAuthTokenTab } from './OAuthTokenTab';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Modal } from '../ui/Modal.tsx';
+import { Tabs, TabList, Tab, TabPanel } from '../ui/Tabs.tsx';
+import { OAuthConsentTab } from './OAuthConsentTab.tsx';
+import { OAuthClientTab } from './OAuthClientTab.tsx';
+import { OAuthTokenTab } from './OAuthTokenTab.tsx';
 
 export interface OAuthConsent {
   id: string;

@@ -1,9 +1,9 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { useToast } from '../store/toast';
-import { useI18n } from '../store/i18n';
+import { useToast } from '../store/toast.ts';
+import { useI18n } from '../store/i18n.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import type { CustomTool } from '../types';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import type { CustomTool } from '../types/index.ts';
 
 interface UseCustomToolsOptions {
   spaceId: string;

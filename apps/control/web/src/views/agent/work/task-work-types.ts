@@ -1,5 +1,5 @@
-import type { AgentTaskPriority, AgentTaskStatus } from '../../../types';
-import type { ModelSelectOption } from '../../../lib/modelCatalog';
+import type { AgentTaskPriority, AgentTaskStatus } from '../../../types/index.ts';
+import type { ModelSelectOption } from '../../../lib/modelCatalog.ts';
 
 export type ModelOption = string | { id: string; name?: string; description?: string };
 export type { ModelSelectOption };

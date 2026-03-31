@@ -1,27 +1,27 @@
 import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
-import { useI18n, type TranslationKey } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
+import { useI18n, type TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 import type {
   Message,
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../types';
+} from '../types/index.ts';
 import type {
   ChatRunArtifactMap,
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/chat-types';
-import { useMessagePolling } from './useMessagePolling';
-import { useWebSocketConnection, type SessionDiffState } from './useWebSocketConnection';
-import { useFileAttachment } from './useFileAttachment';
-import { useChatModelSelection } from './useChatModelSelection';
-import { useChatAttachments } from './useChatAttachments';
-import { useChatMessages } from './useChatMessages';
+} from '../views/chat/chat-types.ts';
+import { useMessagePolling } from './useMessagePolling.ts';
+import { useWebSocketConnection, type SessionDiffState } from './useWebSocketConnection.ts';
+import { useFileAttachment } from './useFileAttachment.ts';
+import { useChatModelSelection } from './useChatModelSelection.ts';
+import { useChatAttachments } from './useChatAttachments.ts';
+import { useChatMessages } from './useChatMessages.ts';
 
-export type { SessionDiffState } from './useWebSocketConnection';
+export type { SessionDiffState } from './useWebSocketConnection.ts';
 
 export interface UseChatSessionOptions {
   threadId: string;
@@ -33,7 +33,7 @@ export interface UseChatSessionOptions {
 }
 
 export interface UseChatSessionResult {
-  availableModels: import('../lib/modelCatalog').ModelSelectOption[];
+  availableModels: import('../lib/modelCatalog.ts').ModelSelectOption[];
   selectedModel: string;
   setSelectedModel: (model: string) => void;
   messages: Message[];

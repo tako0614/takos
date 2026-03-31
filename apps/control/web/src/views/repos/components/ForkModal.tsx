@@ -1,14 +1,14 @@
 import { createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { Modal, ModalFooter } from '../../../components/ui/Modal';
-import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
-import type { Repository, Space } from '../../../types';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useToast } from '../../../store/toast';
-import { Icons } from '../../../lib/Icons';
-import { useAuth } from '../../../hooks/useAuth';
+import { useI18n } from '../../../store/i18n.ts';
+import { Modal, ModalFooter } from '../../../components/ui/Modal.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Input } from '../../../components/ui/Input.tsx';
+import type { Repository, Space } from '../../../types/index.ts';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useToast } from '../../../store/toast.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useAuth } from '../../../hooks/useAuth.ts';
 
 interface ForkApiResponse {
   repository: Repository;

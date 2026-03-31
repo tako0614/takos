@@ -8,15 +8,15 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { eq, and, ne } from 'drizzle-orm';
-import type { Env, User } from '../../../shared/types';
-import { getDb, accounts, authIdentities } from '../../../infra/db';
+import type { Env, User } from '../../../shared/types/index.ts';
+import { getDb, accounts, authIdentities } from '../../../infra/db/index.ts';
 import {
   deleteAuthSession,
   isValidAvatarUrl,
-} from '../../../application/services/identity/auth-utils';
+} from '../../../application/services/identity/auth-utils.ts';
 
 import { BadRequestError, AuthenticationError, ConflictError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 
 type Variables = {
   user?: User;

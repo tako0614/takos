@@ -1,23 +1,23 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
+import type { Env, User } from '../../../shared/types/index.ts';
 import {
   listExploreRepos,
   listTrendingRepos,
   listNewRepos,
   listRecentRepos,
-} from '../../../application/services/source/explore';
-import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
-import { getDb } from '../../../infra/db';
-import { accounts, repositories, repoStars } from '../../../infra/db/schema';
+} from '../../../application/services/source/explore.ts';
+import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { parsePagination } from '../../../shared/utils';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { NotFoundError } from 'takos-common/errors';
 import {
   findRepoByUsernameAndName,
   parseExploreFilters,
   validateExploreFilters,
-} from './explore-filters';
+} from './explore-filters.ts';
 
 type Variables = {
   user?: User;

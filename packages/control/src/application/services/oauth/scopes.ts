@@ -1,4 +1,4 @@
-import { OAUTH_SCOPES } from '../../../shared/types/oauth';
+import { OAUTH_SCOPES } from '../../../shared/types/oauth.ts';
 
 export function parseScopes(scopeString: string): string[] {
   if (!scopeString || !scopeString.trim()) {

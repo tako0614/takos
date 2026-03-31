@@ -21,8 +21,8 @@ export type {
   RefUpdateResult,
   MergeConflictType,
   MergeConflict,
-} from './git-objects';
-export { FILE_MODES, SHA1_PATTERN, isValidSha } from './git-objects';
+} from './git-objects.ts';
+export { FILE_MODES, SHA1_PATTERN, isValidSha } from './git-objects.ts';
 
 // --- Core object operations ---
 export {
@@ -38,14 +38,14 @@ export {
   encodeCommit,
   encodeTreeContent,
   encodeCommitContent,
-} from './core/object';
+} from './core/object.ts';
 
 export {
   sha1,
   hexToBytes,
   hexFromBuffer,
   concatBytes,
-} from './core/sha1';
+} from './core/sha1.ts';
 
 // --- Object store ---
 export {
@@ -63,7 +63,7 @@ export {
   deleteObject,
   deflate,
   inflate,
-} from './core/object-store';
+} from './core/object-store.ts';
 
 // --- Refs ---
 export {
@@ -82,7 +82,7 @@ export {
   deleteTag,
   resolveRef,
   listAllRefs,
-} from './core/refs';
+} from './core/refs.ts';
 
 // --- Commits ---
 export {
@@ -97,7 +97,7 @@ export {
   countCommitsBetween,
   collectReachableObjects,
   collectReachableObjectShas,
-} from './core/commit-index';
+} from './core/commit-index.ts';
 
 // --- Tree operations ---
 export {
@@ -113,19 +113,19 @@ export {
   flattenTree,
   createEmptyTree,
   createSingleFileTree,
-} from './core/tree-ops';
+} from './core/tree-ops.ts';
 
 // --- Merge ---
 export {
   mergeTrees3Way,
-} from './core/merge';
+} from './core/merge.ts';
 
 // --- Readable commit ---
 export {
   resolveReadableCommitFromRef,
   type ResolveReadableCommitResult,
   type ResolveReadableCommitFailureReason,
-} from './core/readable-commit';
+} from './core/readable-commit.ts';
 
 // --- High-level operations ---
 export {
@@ -133,4 +133,4 @@ export {
   forkRepository,
   checkSyncStatus,
   commitFile,
-} from './operations';
+} from './operations.ts';

@@ -70,15 +70,15 @@ const redisMock = {
 };
 
 // [Deno] vi.mock removed - manually stub imports from 'redis'
-import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder';
+import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder.ts';
 import type { RoutingTarget } from '../../application/services/routing/routing-models.ts';
 
 
   const originalEnv = {
-    REDIS_URL: process.env.REDIS_URL,
+    REDIS_URL: Deno.env.get('REDIS_URL'),
   };
   Deno.test('local redis-backed bindings - uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
-  process.env.REDIS_URL = 'redis://localhost:6379';
+  Deno.env.set('REDIS_URL', 'redis://localhost:6379');
     redisMock.calls.length = 0;
     redisMock.stores.clear();
     await resetNodePlatformStateForTests();
@@ -129,9 +129,9 @@ import type { RoutingTarget } from '../../application/services/routing/routing-m
   } finally {
   const { REDIS_URL } = originalEnv;
     if (REDIS_URL === undefined) {
-      delete process.env.REDIS_URL;
+      Deno.env.delete('REDIS_URL');
     } else {
-      process.env.REDIS_URL = REDIS_URL;
+      Deno.env.set('REDIS_URL', REDIS_URL);
     }
     /* TODO: call fakeTime.restore() */ void 0;
     await resetNodePlatformStateForTests();

@@ -1,8 +1,8 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { RepoDetail } from './components/RepoDetail';
-import { Icons } from '../../lib/Icons';
-import type { Repository } from '../../types';
-import { rpc, rpcJson } from '../../lib/rpc';
+import { RepoDetail } from './components/RepoDetail.tsx';
+import { Icons } from '../../lib/Icons.tsx';
+import type { Repository } from '../../types/index.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
 
 interface RepoDetailPageProps {
   spaceId?: string;

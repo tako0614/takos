@@ -1,21 +1,21 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useI18n } from '../../store/i18n';
-import { CreateRepoModal } from '../shared/repos/CreateRepoModal';
-import type { Space } from '../../types';
-import { RepoDetailPanel } from './components/RepoDetailPanel';
-import { useSourceData } from '../../hooks/useSourceData';
-import { useSourceViewUiState } from '../../hooks/useSourceViewUiState';
-import { SourceSearchBar } from './SourceSearchBar';
+import { Icons } from '../../lib/Icons.tsx';
+import { useBreakpoint } from '../../hooks/useBreakpoint.ts';
+import { useI18n } from '../../store/i18n.ts';
+import { CreateRepoModal } from '../shared/repos/CreateRepoModal.tsx';
+import type { Space } from '../../types/index.ts';
+import { RepoDetailPanel } from './components/RepoDetailPanel.tsx';
+import { useSourceData } from '../../hooks/useSourceData.ts';
+import { useSourceViewUiState } from '../../hooks/useSourceViewUiState.ts';
+import { SourceSearchBar } from './SourceSearchBar.tsx';
 import {
   SourceFilterStatusBar,
   DesktopFilterBar,
   MobileFilterBar,
   MobileFiltersModal,
-} from './SourceFilters';
-import { SourceBrowseView } from './SourceBrowseView';
-import { SourceHomeView } from './SourceHomeView';
+} from './SourceFilters.tsx';
+import { SourceBrowseView } from './SourceBrowseView.tsx';
+import { SourceHomeView } from './SourceHomeView.tsx';
 
 interface SourcePageProps {
   spaces: Space[];

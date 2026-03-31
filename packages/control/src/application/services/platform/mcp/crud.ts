@@ -6,16 +6,16 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { InsertOf, SelectOf } from '../../../../shared/types/drizzle-utils';
-import { getDb, mcpServers } from '../../../../infra/db';
+import type { InsertOf, SelectOf } from '../../../../shared/types/drizzle-utils.ts';
+import { getDb, mcpServers } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils';
-import type { Env } from '../../../../shared/types';
-import type { McpServerRecord, McpIssuerEnv, RegisterExternalMcpServerResult } from './mcp-models';
-import { getInternalMcpIssuer, mapMcpServerRow } from './mcp-models';
-import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation';
-import { saltFor, encryptToken } from './crypto';
-import { discoverOAuthMetadata, createMcpOAuthPending } from './oauth';
+import { generateId } from '../../../../shared/utils/index.ts';
+import type { Env } from '../../../../shared/types/index.ts';
+import type { McpServerRecord, McpIssuerEnv, RegisterExternalMcpServerResult } from './mcp-models.ts';
+import { getInternalMcpIssuer, mapMcpServerRow } from './mcp-models.ts';
+import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation.ts';
+import { saltFor, encryptToken } from './crypto.ts';
+import { discoverOAuthMetadata, createMcpOAuthPending } from './oauth.ts';
 
 // ---------------------------------------------------------------------------
 // Managed server upsert & reconciliation

@@ -2,7 +2,7 @@ import type {
   CapabilityDescriptor,
   CapabilityKind,
   CapabilityNamespace,
-} from './capability-types';
+} from './capability-types.ts';
 
 export class CapabilityRegistry {
   private descriptors: Map<string, CapabilityDescriptor> = new Map();

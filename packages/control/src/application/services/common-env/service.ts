@@ -3,4 +3,4 @@
  *
  * New code should import from `./deps`.
  */
-export { createCommonEnvDeps, type CommonEnvDeps } from './deps';
+export { createCommonEnvDeps, type CommonEnvDeps } from './deps.ts';

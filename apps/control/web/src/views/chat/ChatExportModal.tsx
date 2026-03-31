@@ -1,7 +1,7 @@
-import { useI18n } from '../../store/i18n';
-import { Modal } from '../../components/ui/Modal';
-import { Button } from '../../components/ui/Button';
-import { Icons } from '../../lib/Icons';
+import { useI18n } from '../../store/i18n.ts';
+import { Modal } from '../../components/ui/Modal.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import { Icons } from '../../lib/Icons.tsx';
 
 export interface ChatExportModalProps {
   isOpen: boolean;

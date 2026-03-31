@@ -1,13 +1,13 @@
-import { common } from './ja/common';
-import { auth } from './ja/auth';
-import { chat } from './ja/chat';
-import { settings } from './ja/settings';
-import { agent } from './ja/agent';
-import { deploy } from './ja/deploy';
-import { repository } from './ja/repository';
-import { source } from './ja/source';
-import { storage } from './ja/storage';
-import { tools } from './ja/tools';
+import { common } from './ja/common.ts';
+import { auth } from './ja/auth.ts';
+import { chat } from './ja/chat.ts';
+import { settings } from './ja/settings.ts';
+import { agent } from './ja/agent.ts';
+import { deploy } from './ja/deploy.ts';
+import { repository } from './ja/repository.ts';
+import { source } from './ja/source.ts';
+import { storage } from './ja/storage.ts';
+import { tools } from './ja/tools.ts';
 
 export const ja = {
     ...common,

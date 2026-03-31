@@ -2,7 +2,7 @@
  * Internal types and constants for the Agent Runner module.
  */
 
-import { MAX_TOTAL_TOOL_CALLS_PER_RUN, MAX_TOOL_EXECUTIONS_HISTORY } from '../../../shared/config/limits';
+import { MAX_TOTAL_TOOL_CALLS_PER_RUN, MAX_TOOL_EXECUTIONS_HISTORY } from '../../../shared/config/limits.ts';
 
 export const MAX_TOTAL_TOOL_CALLS = MAX_TOTAL_TOOL_CALLS_PER_RUN;
 

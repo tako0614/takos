@@ -5,7 +5,7 @@
  * validation for skill content and user inputs.
  */
 
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 
 // ── Rate-limiting state ─────────────────────────────────────────────────
 

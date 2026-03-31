@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types';
-import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
+import type { Env } from '../../../shared/types/index.ts';
+import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
 import {
   createSkill,
   deleteSkillByName,
@@ -17,12 +17,12 @@ import {
   updateSkillEnabled,
   updateSkillByName,
   updateSkillEnabledByName,
-} from '../../../application/services/source/skills';
-import { getDb } from '../../../infra/db';
-import { skills as skillsTable } from '../../../infra/db/schema';
+} from '../../../application/services/source/skills.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { skills as skillsTable } from '../../../infra/db/schema.ts';
 import { eq, and, ne } from 'drizzle-orm';
 import { BadRequestError, NotFoundError, ConflictError, ValidationError } from 'takos-common/errors';
-import { getSpaceOperationPolicy } from '../../../application/tools/tool-policy';
+import { getSpaceOperationPolicy } from '../../../application/tools/tool-policy.ts';
 
 const skills = new Hono<SpaceAccessRouteEnv>();
 

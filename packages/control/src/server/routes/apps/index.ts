@@ -1,2 +1,2 @@
-export { registerAppApiRoutes } from './routes';
-export { default } from './deployments';
+export { registerAppApiRoutes } from './routes.ts';
+export { default } from './deployments.ts';

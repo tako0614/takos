@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import { logError } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { AppError, BadRequestError, InternalError, ErrorCodes } from 'takos-common/errors';
 import {
   addCustomDomain,
@@ -15,7 +15,7 @@ import {
   listCustomDomains,
   refreshSslStatus,
   verifyCustomDomain,
-} from '../../../application/services/platform/custom-domains';
+} from '../../../application/services/platform/custom-domains.ts';
 
 type AppEnv = { Bindings: Env; Variables: BaseVariables };
 type AppContext = Context<AppEnv>;

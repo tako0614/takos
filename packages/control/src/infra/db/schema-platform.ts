@@ -15,7 +15,7 @@ export {
   shortcutGroups,
   shortcuts,
   uiExtensions,
-} from './schema-platform-infra';
+} from './schema-platform-infra.ts';
 
 export {
   notificationPreferences,
@@ -24,18 +24,18 @@ export {
   sessionFiles,
   sessionRepos,
   sessions,
-} from './schema-platform-notifications';
+} from './schema-platform-notifications.ts';
 
 export {
   moderationAuditLogs,
   reports,
-} from './schema-platform-moderation';
+} from './schema-platform-moderation.ts';
 
 export {
   resourceAccess,
   resourceAccessTokens,
   resources,
-} from './schema-platform-resources';
+} from './schema-platform-resources.ts';
 
 export {
   apFollowers,
@@ -44,8 +44,8 @@ export {
   storeInventoryItems,
   storeRegistry,
   storeRegistryUpdates,
-} from './schema-platform-store';
+} from './schema-platform-store.ts';
 
 export {
   dlqEntries,
-} from './schema-platform-dlq';
+} from './schema-platform-dlq.ts';

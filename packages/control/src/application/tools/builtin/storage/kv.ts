@@ -1,5 +1,5 @@
-import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions';
-import { validateKVKey } from './validators';
+import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions.ts';
+import { validateKVKey } from './validators.ts';
 
 export const KV_GET: ToolDefinition = {
   name: 'kv_get',
@@ -166,7 +166,7 @@ export const kvListHandler: ToolHandler = async (args, context) => {
     return prefix ? `No keys found with prefix: ${prefix}` : 'No keys found in namespace';
   }
 
-  const lines = keys.map((keyItem) => {
+  const lines = keys.map((keyItem: { name: string; expiration?: number }) => {
     let line = keyItem.name;
     if (keyItem.expiration) {
       const exp = new Date(keyItem.expiration * 1000).toISOString();

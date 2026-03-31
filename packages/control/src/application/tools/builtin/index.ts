@@ -6,4 +6,4 @@ export {
   getBuiltinHandler,
   isBuiltinTool,
   getToolsByCategory,
-} from './registry';
+} from './registry.ts';

@@ -1,9 +1,9 @@
 import { atom } from 'jotai/vanilla';
-import { rpc, rpcJson } from '../lib/rpc';
-import { getErrorMessage } from '../lib/errors';
-import { normalizeSpaces } from '../lib/spaces';
-import type { TranslationKey, TranslationParams } from './i18n';
-import type { User, UserSettings, Space } from '../types';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { getErrorMessage } from '../lib/errors.ts';
+import { normalizeSpaces } from '../lib/spaces.ts';
+import type { TranslationKey, TranslationParams } from './i18n.ts';
+import type { User, UserSettings, Space } from '../types/index.ts';
 
 export type AuthState = 'loading' | 'login' | 'authenticated';
 

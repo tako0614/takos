@@ -1,6 +1,6 @@
 import { eq, ne, and, or, desc, asc, like, inArray, sql } from 'drizzle-orm';
-import { accounts, repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
-import type { Database } from '../../../infra/db';
+import { accounts, repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema.ts';
+import type { Database } from '../../../infra/db/index.ts';
 import { BadRequestError } from 'takos-common/errors';
 
 export interface ReleaseAsset {

@@ -1,9 +1,9 @@
 import { createSignal } from 'solid-js';
 import type { Setter } from 'solid-js';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import type { StorageFile } from '../types';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import type { StorageFile } from '../types/index.ts';
 
 interface UseStorageActionsParams {
   getDownloadUrl: (fileId: string) => Promise<string | null>;

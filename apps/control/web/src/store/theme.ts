@@ -1,5 +1,5 @@
 import { atom } from 'jotai/vanilla';
-import { atomWithStorageVanilla } from '../lib/storage-atom';
+import { atomWithStorageVanilla } from '../lib/storage-atom.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';

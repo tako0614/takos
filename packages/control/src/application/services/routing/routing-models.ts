@@ -9,10 +9,10 @@ export type {
   WeightedDeploymentTarget,
   HttpRoute,
   StoredHttpEndpoint,
-} from '../../../shared/types/routing';
+} from '../../../shared/types/routing.ts';
 
-import type { RoutingStore } from '../../../shared/types/routing';
-import type { RoutingTarget, RoutingRecord } from '../../../shared/types/routing';
+import type { RoutingStore } from '../../../shared/types/routing.ts';
+import type { RoutingTarget, RoutingRecord } from '../../../shared/types/routing.ts';
 
 export type RoutingDurableObjectNamespace = DurableNamespaceBinding;
 export type RoutingKvNamespace = KvStoreBinding;

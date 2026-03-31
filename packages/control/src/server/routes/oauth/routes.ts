@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import type { PublicRouteEnv } from '../route-auth';
-import { oauthBodyLimit } from '../../middleware/body-size';
-import oauthAuthorize from './authorize';
-import oauthDevice from './device';
-import oauthIntrospect from './introspect';
-import oauthRegister from './register';
-import oauthRevoke from './revoke';
-import oauthToken from './token';
-import oauthUserinfo from './userinfo';
+import type { Env } from '../../../shared/types/index.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { oauthBodyLimit } from '../../middleware/body-size.ts';
+import oauthAuthorize from './authorize.ts';
+import oauthDevice from './device.ts';
+import oauthIntrospect from './introspect.ts';
+import oauthRegister from './register.ts';
+import oauthRevoke from './revoke.ts';
+import oauthToken from './token.ts';
+import oauthUserinfo from './userinfo.ts';
 import {
   storeOAuthState,
   validateOAuthState,
@@ -17,10 +17,10 @@ import {
   auditLog,
   createAuthSession,
   cleanupUserSessions,
-} from '../../../application/services/identity/auth-utils';
-import { getDb, accounts, authIdentities } from '../../../infra/db';
-import { externalTokenPostRedirectPage } from '../auth/html';
-import { logError } from '../../../shared/utils/logger';
+} from '../../../application/services/identity/auth-utils.ts';
+import { getDb, accounts, authIdentities } from '../../../infra/db/index.ts';
+import { externalTokenPostRedirectPage } from '../auth/html.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { BadRequestError, AuthorizationError } from 'takos-common/errors';
 
 const oauth = new Hono<PublicRouteEnv>();

@@ -2,12 +2,12 @@ import type {
   AppResourceType,
   AppWorkloadBindings,
   ServiceBinding,
-} from './app-manifest-types';
+} from './app-manifest-types.ts';
 import {
   asRecord,
   asRequiredString,
   asStringArray,
-} from './app-manifest-utils';
+} from './app-manifest-utils.ts';
 
 type ResourceBindingKey =
   | 'resources'

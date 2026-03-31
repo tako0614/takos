@@ -35,7 +35,7 @@ export {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   DEFAULT_PAGE_OFFSET,
-} from './limits';
+} from './limits.ts';
 export {
   AGENT_ITERATION_TIMEOUT_MS,
   AGENT_TOTAL_TIMEOUT_MS,
@@ -51,4 +51,4 @@ export {
   STALE_WORKER_THRESHOLD_MS,
   STALE_RUN_BATCH_SIZE,
   WS_HEARTBEAT_INTERVAL_MS,
-} from './timeouts';
+} from './timeouts.ts';

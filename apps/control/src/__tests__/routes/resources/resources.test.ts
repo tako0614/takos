@@ -4,7 +4,7 @@ import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
 import type * as DbModule from '@/db';
 import type * as RouteAuthModule from '@/routes/route-auth';
-import { createMockEnv } from '../../../../test/integration/setup';
+import { createMockEnv } from '../../../../test/integration/setup.ts';
 
 import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';

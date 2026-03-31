@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../../tool-definitions';
+import type { ToolDefinition } from '../../tool-definitions.ts';
 
 export const CONTAINER_START: ToolDefinition = {
   name: 'container_start',

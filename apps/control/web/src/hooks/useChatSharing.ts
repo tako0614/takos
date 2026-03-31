@@ -1,7 +1,7 @@
 import { createSignal, createEffect } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
 
 export type ThreadShare = {
   id: string;

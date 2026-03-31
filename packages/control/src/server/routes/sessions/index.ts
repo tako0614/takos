@@ -1,23 +1,23 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types';
-import { zValidator } from '../zod-validator';
+import type { Env } from '../../../shared/types/index.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   discardSession,
   resumeSession,
   startSession,
   stopSession,
-} from './lifecycle';
+} from './lifecycle.ts';
 import {
   getSessionHealth,
   heartbeatSession,
-} from './heartbeat';
+} from './heartbeat.ts';
 import {
   authenticateServiceRequest,
   serviceAuthError,
   toJwtHeartbeatPayload,
-} from './auth';
-import type { BaseVariables } from '../route-auth';
+} from './auth.ts';
+import type { BaseVariables } from '../route-auth.ts';
 
 const sessions = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
 const startSessionSchema = z.object({ repo_id: z.string(), branch: z.string().optional() });

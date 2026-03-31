@@ -1,6 +1,6 @@
-import { generateId } from '../../../shared/utils';
-import type { Env } from '../../../shared/types';
-import { getDb, serviceCommonEnvAuditLogs } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, serviceCommonEnvAuditLogs } from '../../../infra/db/index.ts';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 
 export interface CommonEnvAuditActor {

@@ -1,5 +1,5 @@
-import type { AgentExecutorControlConfig } from './executor-dispatch';
-import { base64UrlEncode } from '../../shared/utils/encoding-utils';
+import type { AgentExecutorControlConfig } from './executor-dispatch.ts';
+import { base64UrlEncode } from '../../shared/utils/encoding-utils.ts';
 
 export interface AgentExecutorProxyConfigEnv {
   CONTROL_RPC_BASE_URL?: string;

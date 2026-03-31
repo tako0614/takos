@@ -3,7 +3,7 @@
  * for the executor-host subsystem.
  */
 
-import type { ProxyCapability } from './executor-utils';
+import type { ProxyCapability } from './executor-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Allowed path patterns for service-to-service proxy forwarding

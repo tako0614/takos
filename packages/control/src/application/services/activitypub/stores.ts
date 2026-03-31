@@ -1,6 +1,6 @@
 import { and, eq, like } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { accountMetadata, accounts, getDb } from '../../../infra/db';
+import { accountMetadata, accounts, getDb } from '../../../infra/db/index.ts';
 
 const STORE_KEY_PREFIX = 'activitypub_store:';
 

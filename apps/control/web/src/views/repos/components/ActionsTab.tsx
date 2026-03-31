@@ -1,19 +1,19 @@
 import { createSignal, createEffect, on } from 'solid-js';
 import { Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { useI18n } from '../../../store/i18n.ts';
 import {
   type WorkflowRunSummary,
   type WorkflowRunDetail,
   type JobLogState,
   LOG_CHUNK_BYTES,
-} from './actions/actions-types';
-import { DispatchWorkflowForm } from './actions/DispatchWorkflowForm';
-import { RunsList } from './actions/RunsList';
-import { RunDetail } from './actions/RunDetail';
-import { rpc, rpcJson } from '../../../lib/rpc';
+} from './actions/actions-types.ts';
+import { DispatchWorkflowForm } from './actions/DispatchWorkflowForm.tsx';
+import { RunsList } from './actions/RunsList.tsx';
+import { RunDetail } from './actions/RunDetail.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
 
 interface ActionsTabProps {
   repoId: string;

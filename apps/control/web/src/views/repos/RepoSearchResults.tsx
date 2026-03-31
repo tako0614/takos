@@ -1,7 +1,7 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import type { SearchOrder, SearchSort, SourceRepo } from '../../types/repos';
-import { RepoBrowseCard } from './RepoBrowseCard';
+import { Icons } from '../../lib/Icons.tsx';
+import type { SearchOrder, SearchSort, SourceRepo } from '../../types/repos.ts';
+import { RepoBrowseCard } from './RepoBrowseCard.tsx';
 
 function SearchRepoList(props: {
   searching: boolean;

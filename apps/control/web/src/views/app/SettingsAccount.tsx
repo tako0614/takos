@@ -1,13 +1,13 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { rpc, rpcJson } from '../../lib/rpc';
-import { Icons } from '../../lib/Icons';
-import { Button, Input } from '../../components/ui';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../store/navigation';
-import type { User } from '../../types';
-import { normalizeUsernameInput, syncRouteWithUsernameChange } from './settings-username';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button, Input } from '../../components/ui/index.ts';
+import { useAuth } from '../../hooks/useAuth.ts';
+import { useNavigation } from '../../store/navigation.ts';
+import type { User } from '../../types/index.ts';
+import { normalizeUsernameInput, syncRouteWithUsernameChange } from './settings-username.ts';
 
 export function SettingsAccount({ user }: { user: User | null }) {
   const { t } = useI18n();

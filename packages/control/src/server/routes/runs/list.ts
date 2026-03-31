@@ -1,18 +1,18 @@
 import { z } from 'zod';
-import { checkThreadAccess } from '../../../application/services/threads/thread-service';
+import { checkThreadAccess } from '../../../application/services/threads/thread-service.ts';
 import type { Hono } from 'hono';
-import type { Env } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Env } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { NotFoundError, BadRequestError } from 'takos-common/errors';
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
-import { zValidator } from '../zod-validator';
-import { getDb } from '../../../infra/db';
-import { runs } from '../../../infra/db/schema';
+import { zValidator } from '../zod-validator.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { runs } from '../../../infra/db/schema.ts';
 import { eq, and, or, lt, desc, inArray } from 'drizzle-orm';
-import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization';
-import { textDate } from '../../../shared/utils/db-guards';
+import { asRunRow, runRowToApi } from '../../../application/services/runs/run-serialization.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 const RUN_LIST_CURSOR_DELIMITER = ',';
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;

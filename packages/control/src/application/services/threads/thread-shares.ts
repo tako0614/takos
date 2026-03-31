@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { base64UrlEncode } from '../../../shared/utils';
-import { hashPassword, verifyPassword } from '../identity/auth-utils';
-import { getDb, threadShares } from '../../../infra/db';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { base64UrlEncode } from '../../../shared/utils/index.ts';
+import { hashPassword, verifyPassword } from '../identity/auth-utils.ts';
+import { getDb, threadShares } from '../../../infra/db/index.ts';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 
 export type ThreadShareMode = 'public' | 'password';

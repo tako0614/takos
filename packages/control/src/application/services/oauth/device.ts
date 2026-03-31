@@ -1,13 +1,13 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { oauthDeviceCodes } from '../../../infra/db';
-import type { OAuthDeviceCode } from '../../../shared/types/oauth';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth';
-import { generateId, generateRandomString } from './pkce';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { getDb } from '../../../infra/db';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { oauthDeviceCodes } from '../../../infra/db/index.ts';
+import type { OAuthDeviceCode } from '../../../shared/types/oauth.ts';
+import { OAUTH_CONSTANTS } from '../../../shared/types/oauth.ts';
+import { generateId, generateRandomString } from './pkce.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, isNull } from 'drizzle-orm';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards';
+import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 type OAuthDeviceCodeRow = SelectOf<typeof oauthDeviceCodes>;
 

@@ -5,13 +5,13 @@
  */
 
 import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../../shared/types/drizzle-utils';
-import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects';
-import { SHA1_PATTERN } from '../git-objects';
-import { getDb, branches, tags } from '../../../../infra/db';
+import type { SelectOf } from '../../../../shared/types/drizzle-utils.ts';
+import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects.ts';
+import { SHA1_PATTERN } from '../git-objects.ts';
+import { getDb, branches, tags } from '../../../../infra/db/index.ts';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils';
-import { isInvalidArrayBufferError, textDate } from '../../../../shared/utils/db-guards';
+import { generateId } from '../../../../shared/utils/index.ts';
+import { isInvalidArrayBufferError, textDate } from '../../../../shared/utils/db-guards.ts';
 
 const MAX_REPO_ID_LENGTH = 128;
 const REPO_ID_PATTERN = /^[a-z0-9_-]+$/i;
@@ -149,7 +149,7 @@ export async function getBranchesByNames(dbBinding: D1Database, repoId: string, 
       return (rows.results || []).map(toBranch);
     },
   );
-  return new Map(result.map(b => [b.name, b]));
+  return new Map(result.map((b: GitBranch) => [b.name, b]));
 }
 
 export async function getDefaultBranch(dbBinding: D1Database, repoId: string): Promise<GitBranch | null> {

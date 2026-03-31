@@ -1,15 +1,15 @@
-import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
-import type { WorkflowJobResult } from '../../application/services/execution/workflow-engine';
-import { logError, logWarn } from '../../shared/utils/logger';
-import type { JobExecutionState, JobQueueContext } from './workflow-types';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
+import type { WorkflowJobResult } from '../../application/services/execution/workflow-engine.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import type { JobExecutionState, JobQueueContext } from './workflow-types.ts';
 import {
   runtimeDelete,
   getRunStatus,
   getStepDisplayName,
-} from './workflow-runtime-client';
-import { evaluateCondition, evaluateExpression } from './workflow-expressions';
-import { emitWorkflowEvent } from './workflow-events';
-import { executeStep } from './workflow-steps';
+} from './workflow-runtime-client.ts';
+import { evaluateCondition, evaluateExpression } from './workflow-expressions.ts';
+import { emitWorkflowEvent } from './workflow-events.ts';
+import { executeStep } from './workflow-steps.ts';
 
 // ---------------------------------------------------------------------------
 // Job phase: skip evaluation

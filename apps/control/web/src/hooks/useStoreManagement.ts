@@ -1,5 +1,5 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
 
 export interface StoreItem {
   slug: string;

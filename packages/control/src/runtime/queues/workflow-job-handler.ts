@@ -1,32 +1,32 @@
 import {
   createWorkflowEngine,
-} from '../../application/services/execution/workflow-engine';
-import { getDb, workflowRuns, workflowJobs } from '../../infra/db';
+} from '../../application/services/execution/workflow-engine.ts';
+import { getDb, workflowRuns, workflowJobs } from '../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { logInfo, logWarn } from '../../shared/utils/logger';
+import { logInfo, logWarn } from '../../shared/utils/logger.ts';
 import type {
   WorkflowQueueEnv,
   WorkflowEngineBucket,
   RunContext,
   JobQueueContext,
-} from './workflow-types';
-import { createInitialState } from './workflow-types';
+} from './workflow-types.ts';
+import { createInitialState } from './workflow-types.ts';
 import {
   runtimeJson,
   getRunContext,
   getSpaceIdFromRepoId,
   markJobSkipped,
-} from './workflow-runtime-client';
-import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from './workflow-secrets';
-import { emitWorkflowEvent } from './workflow-events';
+} from './workflow-runtime-client.ts';
+import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from './workflow-secrets.ts';
+import { emitWorkflowEvent } from './workflow-events.ts';
 import {
   handleJobSkipped,
   executeStepLoop,
   completeJobSuccess,
   completeJobFailure,
-} from './workflow-job-phases';
-import { executeStepLoopParallel } from './parallel-steps';
-import type { WorkflowJobQueueMessage } from '../../shared/types';
+} from './workflow-job-phases.ts';
+import { executeStepLoopParallel } from './parallel-steps.ts';
+import type { WorkflowJobQueueMessage } from '../../shared/types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Main job handler

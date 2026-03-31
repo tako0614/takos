@@ -1,9 +1,9 @@
 import { createSignal, createEffect, createMemo, on, onCleanup } from 'solid-js';
 import type { Accessor, Setter } from 'solid-js';
-import { useI18n } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
-import { getPersonalSpace, getSpaceIdentifier } from '../lib/spaces';
-import type { Space } from '../types';
+import { useI18n } from '../store/i18n.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { getPersonalSpace, getSpaceIdentifier } from '../lib/spaces.ts';
+import type { Space } from '../types/index.ts';
 
 export type SourceFilter = 'all' | 'mine' | 'starred';
 export type SourceSort = 'trending' | 'new' | 'stars' | 'updated';

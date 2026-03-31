@@ -1,15 +1,15 @@
-import type { Env, DbEnv, AiEnv } from '../../../shared/types';
+import type { Env, DbEnv, AiEnv } from '../../../shared/types/index.ts';
 
 type ThreadContextEnv = DbEnv & AiEnv;
-import { getDb, accounts, threads, messages } from '../../../infra/db';
+import { getDb, accounts, threads, messages } from '../../../infra/db/index.ts';
 import { eq, and, gt, inArray, desc, asc } from 'drizzle-orm';
-import { LLMClient, getProviderFromModel } from './llm';
-import { DEFAULT_MODEL_ID } from './model-catalog';
-import type { AgentMessage } from './agent-models';
-import { logWarn } from '../../../shared/utils/logger';
+import { LLMClient, getProviderFromModel } from './llm.ts';
+import { DEFAULT_MODEL_ID } from './model-catalog.ts';
+import type { AgentMessage } from './agent-models.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 export const THREAD_MESSAGE_VECTOR_KIND = 'thread_message';
 

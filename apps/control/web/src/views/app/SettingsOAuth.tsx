@@ -1,9 +1,9 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui';
-import { OAuthSettingsModal } from '../../components/modals/OAuthSettingsModal';
-import { Section } from './SettingsShared';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/index.ts';
+import { OAuthSettingsModal } from '../../components/modals/OAuthSettingsModal.tsx';
+import { Section } from './SettingsShared.tsx';
 
 export function SettingsOAuth() {
   const { t } = useI18n();

@@ -3,7 +3,7 @@ import type {
   AppMcpServer,
   AppService,
   ServiceBinding,
-} from '../app-manifest-types';
+} from '../app-manifest-types.ts';
 import {
   asRecord,
   asRequiredString,
@@ -11,7 +11,7 @@ import {
   asStringArray,
   asStringMap,
   normalizeRepoPath,
-} from '../app-manifest-utils';
+} from '../app-manifest-utils.ts';
 type ServiceProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
 
 function parseServiceProvider(value: unknown): ServiceProvider | undefined {
@@ -19,7 +19,7 @@ function parseServiceProvider(value: unknown): ServiceProvider | undefined {
     ? value
     : undefined;
 }
-import { parseHealthCheck, parseVolumes } from './parse-containers';
+import { parseHealthCheck, parseVolumes } from './parse-containers.ts';
 
 // ============================================================
 // Service bindings list parser (services only)

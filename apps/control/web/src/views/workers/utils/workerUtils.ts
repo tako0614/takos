@@ -1,4 +1,4 @@
-import type { Worker } from '../../../types';
+import type { Worker } from '../../../types/index.ts';
 
 export function getWorkerDisplayName(worker: Pick<Worker, 'id' | 'slug' | 'service_name'>): string {
   return worker.slug?.trim() || worker.service_name?.trim() || worker.id;

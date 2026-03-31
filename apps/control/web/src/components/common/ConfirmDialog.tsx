@@ -1,8 +1,8 @@
 import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useConfirmDialogState, useConfirmDialogActions } from '../../store/confirm-dialog';
-import { Modal, ModalFooter, Button } from '../ui';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useConfirmDialogState, useConfirmDialogActions } from '../../store/confirm-dialog.ts';
+import { Modal, ModalFooter, Button } from '../ui/index.ts';
 
 interface ConfirmDialogProps {
   isOpen: boolean;

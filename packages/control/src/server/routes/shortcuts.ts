@@ -1,12 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { Env, User } from '../../shared/types';
+import type { Env, User } from '../../shared/types/index.ts';
 import {
   getRequestedSpaceIdentifier,
   requireSpaceAccess,
-} from './route-auth';
+} from './route-auth.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { zValidator } from './zod-validator';
+import { zValidator } from './zod-validator.ts';
 import {
   ALLOWED_SHORTCUT_RESOURCE_TYPES,
   createShortcut,
@@ -16,7 +16,7 @@ import {
   reorderShortcuts,
   type ShortcutResourceType,
   updateShortcut,
-} from '../../application/services/identity/shortcuts';
+} from '../../application/services/identity/shortcuts.ts';
 import {
   listShortcutGroups,
   getShortcutGroup,
@@ -26,7 +26,7 @@ import {
   addItemToGroup,
   removeItemFromGroup,
   type ShortcutItem,
-} from '../../application/services/identity/shortcut-groups';
+} from '../../application/services/identity/shortcut-groups.ts';
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------

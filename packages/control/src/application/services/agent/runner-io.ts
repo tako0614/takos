@@ -7,8 +7,8 @@
  * memory-manager) can import the type without pulling in the full runner.
  */
 
-import type { RunStatus } from '../../../shared/types';
-import type { AgentEvent, AgentMessage } from './agent-models';
+import type { RunStatus } from '../../../shared/types/index.ts';
+import type { AgentEvent, AgentMessage } from './agent-models.ts';
 
 export interface AgentRunnerIo {
   getRunBootstrap(input: {
@@ -57,22 +57,22 @@ export interface AgentRunnerIo {
     agentType: string;
     history: AgentMessage[];
     availableToolNames: string[];
-  }): Promise<import('./skills').SkillLoadResult>;
-  getMemoryActivation(input: { spaceId: string }): Promise<import('../memory-graph/graph-models').ActivationResult>;
+  }): Promise<import('./skills.ts').SkillLoadResult>;
+  getMemoryActivation(input: { spaceId: string }): Promise<import('../memory-graph/graph-models.ts').ActivationResult>;
   finalizeMemoryOverlay(input: {
     runId: string;
     spaceId: string;
-    claims: import('../memory-graph/graph-models').Claim[];
-    evidence: import('../memory-graph/graph-models').Evidence[];
+    claims: import('../memory-graph/graph-models.ts').Claim[];
+    evidence: import('../memory-graph/graph-models.ts').Evidence[];
   }): Promise<void>;
   getToolCatalog(input: { runId: string }): Promise<{
-    tools: import('../../tools/tool-definitions').ToolDefinition[];
+    tools: import('../../tools/tool-definitions.ts').ToolDefinition[];
     mcpFailedServers: string[];
   }>;
   executeTool(input: {
     runId: string;
-    toolCall: import('../../tools/tool-definitions').ToolCall;
-  }): Promise<import('../../tools/tool-definitions').ToolResult>;
+    toolCall: import('../../tools/tool-definitions.ts').ToolCall;
+  }): Promise<import('../../tools/tool-definitions.ts').ToolResult>;
   cleanupToolExecutor(input: { runId: string }): Promise<void>;
   emitRunEvent(input: {
     runId: string;

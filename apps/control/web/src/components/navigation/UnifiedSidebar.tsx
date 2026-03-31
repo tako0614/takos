@@ -1,11 +1,11 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { getSpaceIdentifier } from '../../lib/spaces';
-import { useSidebarCallbacks } from './SidebarContext';
-import { ThreadList } from './ThreadList';
-import { ProfileMenu } from './ProfileMenu';
-import type { Thread, User, View, Space } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { getSpaceIdentifier } from '../../lib/spaces.ts';
+import { useSidebarCallbacks } from './SidebarContext.tsx';
+import { ThreadList } from './ThreadList.tsx';
+import { ProfileMenu } from './ProfileMenu.tsx';
+import type { Thread, User, View, Space } from '../../types/index.ts';
 
 const ROW_BASE =
   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[36px]';

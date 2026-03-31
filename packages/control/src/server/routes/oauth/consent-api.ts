@@ -6,35 +6,35 @@
  */
 
 import { Hono, type Context } from 'hono';
-import type { User } from '../../../shared/types';
-import type { AuthorizationRequest } from '../../../shared/types/oauth';
-import { parseScopes, getScopeSummary } from '../../../application/services/oauth/scopes';
+import type { User } from '../../../shared/types/index.ts';
+import type { AuthorizationRequest } from '../../../shared/types/oauth.ts';
+import { parseScopes, getScopeSummary } from '../../../application/services/oauth/scopes.ts';
 import {
   validateAuthorizationRequest,
   generateAuthorizationCode,
   buildErrorRedirect,
   buildSuccessRedirect,
-} from '../../../application/services/oauth/authorization';
-import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent';
-import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session';
-import { getDb } from '../../../infra/db';
-import { accounts } from '../../../infra/db/schema';
+} from '../../../application/services/oauth/authorization.ts';
+import { hasFullConsent, getNewScopes, grantConsent } from '../../../application/services/oauth/consent.ts';
+import { getSession, getSessionIdFromCookie } from '../../../application/services/identity/session.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
-import { isValidLogoUrl, mapDbUser, tryLogOAuthEvent } from './request-utils';
+import { isValidLogoUrl, mapDbUser, tryLogOAuthEvent } from './request-utils.ts';
 import {
   getDeviceAuthorizationByUserCode,
   approveDeviceAuthorization,
   denyDeviceAuthorization,
   normalizeUserCode,
-} from '../../../application/services/oauth/device';
-import { getClientById } from '../../../application/services/oauth/client';
+} from '../../../application/services/oauth/device.ts';
+import { getClientById } from '../../../application/services/oauth/client.ts';
 import { AuthorizationError, AuthenticationError } from 'takos-common/errors';
 import {
   isDeviceUserCodeLimited,
   recordDeviceUserCodeAttempt,
   clearDeviceUserCodeAttempts,
-} from '../../../application/services/oauth/device-auth-rate-limit';
-import type { PublicRouteEnv } from '../route-auth';
+} from '../../../application/services/oauth/device-auth-rate-limit.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
 import { getPlatformServices } from '../../../platform/accessors.ts';
 
 type ConsentApiEnv = { Bindings: PublicRouteEnv['Bindings']; Variables: { user?: User } };

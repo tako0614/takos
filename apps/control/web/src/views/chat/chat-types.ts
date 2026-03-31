@@ -1,4 +1,4 @@
-import type { Run, ThreadHistoryArtifactSummary, ThreadHistoryFocus, ThreadHistoryTaskContext } from '../../types';
+import type { Run, ThreadHistoryArtifactSummary, ThreadHistoryFocus, ThreadHistoryTaskContext } from '../../types/index.ts';
 
 export type ChatTimelineEventType =
   | 'started'

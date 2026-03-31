@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, accounts, accountMemberships } from '../../../infra/db';
+import { getDb, accounts, accountMemberships } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import type { SpaceRole } from '../../../shared/types';
+import type { SpaceRole } from '../../../shared/types/index.ts';
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { resolveActorPrincipalId } from '../identity/principals';
+import { resolveActorPrincipalId } from '../identity/principals.ts';
 
 export type StandardCapabilityId =
   | 'storage.read'

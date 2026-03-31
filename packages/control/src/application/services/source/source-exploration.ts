@@ -1,5 +1,5 @@
-import type { Env } from '../../../shared/types';
-import { getDb, repositories, accounts, repoStars } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, repositories, accounts, repoStars } from '../../../infra/db/index.ts';
 import { eq, and, desc, asc, gte, like, inArray, count } from 'drizzle-orm';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type {
@@ -7,7 +7,7 @@ import type {
   ExploreReposResult,
   RepositoryWithAccount,
   ParsedCatalogTags,
-} from './explore-types';
+} from './explore-types.ts';
 
 // Whitelist of allowed ORDER BY columns to prevent SQL injection
 export const ALLOWED_ORDER_BY_COLUMNS = {

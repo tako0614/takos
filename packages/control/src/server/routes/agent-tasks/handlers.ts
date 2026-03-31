@@ -1,8 +1,8 @@
-import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import { normalizeModelId } from '../../../application/services/agent';
-import { getDb } from '../../../infra/db';
-import { agentTasks, threads, runs, artifacts } from '../../../infra/db/schema';
+import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import { normalizeModelId } from '../../../application/services/agent/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { agentTasks, threads, runs, artifacts } from '../../../infra/db/schema.ts';
 import { eq, desc, inArray } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------

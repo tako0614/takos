@@ -6,9 +6,9 @@
  * S3-compatible PUT endpoint), deletion, and basic usage statistics.
  */
 
-import { CF_API_BASE } from './client';
+import { CF_API_BASE } from './client.ts';
 import { InternalError } from 'takos-common/errors';
-import type { WfpContext } from './wfp-contracts';
+import type { WfpContext } from './wfp-contracts.ts';
 
 // ---------------------------------------------------------------------------
 // R2 CRUD

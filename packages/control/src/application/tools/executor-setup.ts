@@ -1,12 +1,12 @@
-import type { ToolContext, ContainerStartFailure } from './tool-definitions';
-import type { Env } from '../../shared/types';
-import type { SpaceRole } from '../../shared/types';
+import type { ToolContext, ContainerStartFailure } from './tool-definitions.ts';
+import type { Env } from '../../shared/types/index.ts';
+import type { SpaceRole } from '../../shared/types/index.ts';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../shared/types/bindings.ts';
-import { createToolResolver, type ToolResolverOptions } from './resolver';
-import { resolveAllowedCapabilities } from '../services/platform/capabilities';
-import { logError, logWarn } from '../../shared/utils/logger';
-import { ToolExecutor } from './executor';
-import { buildPerRunCapabilityRegistry } from './executor-utils';
+import { createToolResolver, type ToolResolverOptions } from './resolver.ts';
+import { resolveAllowedCapabilities } from '../services/platform/capabilities.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import { ToolExecutor } from './executor.ts';
+import { buildPerRunCapabilityRegistry } from './executor-utils.ts';
 
 /** Session state with reference counting to prevent sessionId changes during execution. */
 export class SessionState {

@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useMobileHeader } from '../../store/mobile-header';
+import { Icons } from '../../lib/Icons.tsx';
+import { useMobileHeader } from '../../store/mobile-header.ts';
 
 interface MobileHeaderProps {
   onOpenMenu: () => void;

@@ -13,12 +13,12 @@
 import {
   HostContainerRuntime,
 } from './container-runtime.ts';
-import { generateProxyToken } from './executor-proxy-config';
+import { generateProxyToken } from './executor-proxy-config.ts';
 
-import { constantTimeEqual } from '../../shared/utils/hash';
-import { validateRuntimeHostEnv, createEnvGuard } from '../../shared/utils/validate-env';
-import { logError, logWarn } from '../../shared/utils/logger';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
+import { constantTimeEqual } from '../../shared/utils/hash.ts';
+import { validateRuntimeHostEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
 
 interface RuntimeContainerStub {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;

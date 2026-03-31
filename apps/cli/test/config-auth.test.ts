@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // We need to mock Conf before importing the module under test
 import { assertEquals, assertThrows } from 'jsr:@std/assert';
@@ -52,8 +52,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('DEFAULT_API_URL - is https://takos.jp', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -68,9 +68,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -83,8 +83,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('logWarning - writes to stderr with prefix', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -102,9 +102,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -117,15 +117,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isContainerMode - returns true when TAKOS_SESSION_ID is set', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = '550e8400-e29b-41d4-a716-446655440000';
+  Deno.env.set('TAKOS_SESSION_ID', '550e8400-e29b-41d4-a716-446655440000');
     assertEquals(isContainerMode(), true);
   } finally {
   process.chdir(originalCwd);
@@ -134,9 +134,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -144,15 +144,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isContainerMode - returns true when TAKOS_TOKEN is set', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_TOKEN = 'some-token';
+  Deno.env.set('TAKOS_TOKEN', 'some-token');
     assertEquals(isContainerMode(), true);
   } finally {
   process.chdir(originalCwd);
@@ -161,9 +161,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -171,8 +171,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isContainerMode - returns true when session file exists', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -193,9 +193,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -203,8 +203,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isContainerMode - returns false when no auth is configured', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -222,9 +222,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -239,15 +239,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - uses TAKOS_SESSION_ID from environment', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -262,9 +262,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -272,15 +272,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - uses TAKOS_TOKEN from environment', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_TOKEN = 'my-api-token';
+  Deno.env.set('TAKOS_TOKEN', 'my-api-token');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -295,9 +295,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -305,16 +305,16 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - uses TAKOS_WORKSPACE_ID from environment in session mode', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
-    process.env.TAKOS_WORKSPACE_ID = 'my-workspace';
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
+    Deno.env.set('TAKOS_WORKSPACE_ID', 'my-workspace');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -329,9 +329,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -339,16 +339,16 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - uses custom TAKOS_API_URL from environment', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
-    process.env.TAKOS_API_URL = 'https://api.takos.dev';
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
+    Deno.env.set('TAKOS_API_URL', 'https://api.takos.dev');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -362,9 +362,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -372,15 +372,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - throws on invalid TAKOS_SESSION_ID format', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = 'invalid!@#';
+  Deno.env.set('TAKOS_SESSION_ID', 'invalid!@#');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -393,9 +393,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -403,16 +403,16 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - throws on invalid TAKOS_WORKSPACE_ID format', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
-    process.env.TAKOS_WORKSPACE_ID = 'invalid workspace!@#$';
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
+    Deno.env.set('TAKOS_WORKSPACE_ID', 'invalid workspace!@#$');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -425,9 +425,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -435,16 +435,16 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - throws on invalid TAKOS_API_URL domain', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
-    process.env.TAKOS_API_URL = 'https://evil.example.com';
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
+    Deno.env.set('TAKOS_API_URL', 'https://evil.example.com');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -457,9 +457,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -467,16 +467,16 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig environment variable modes - prefers TAKOS_SESSION_ID over TAKOS_TOKEN', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = validSessionId;
-    process.env.TAKOS_TOKEN = 'my-token';
+  Deno.env.set('TAKOS_SESSION_ID', validSessionId);
+    Deno.env.set('TAKOS_TOKEN', 'my-token');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -491,9 +491,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -508,8 +508,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig session file mode - reads session from file', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -533,9 +533,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -543,8 +543,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig session file mode - falls back to default API URL when session file has no api_url', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -566,9 +566,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -576,8 +576,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig session file mode - uses session file api_url when valid', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -600,9 +600,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -615,8 +615,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig external config mode - reads token from config file', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -638,9 +638,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -648,8 +648,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig external config mode - uses configured API URL from config', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -670,9 +670,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -680,8 +680,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('getConfig external config mode - falls back to default API URL for invalid domain in config', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -702,9 +702,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -717,15 +717,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isAuthenticated - returns true when token is present', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_TOKEN = 'some-token';
+  Deno.env.set('TAKOS_TOKEN', 'some-token');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -738,9 +738,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -748,15 +748,15 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isAuthenticated - returns true when session ID is present', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
   confMock._reset();
   /* mocks cleared (no-op in Deno) */ void 0;
   try {
-  process.env.TAKOS_SESSION_ID = '550e8400-e29b-41d4-a716-446655440000';
+  Deno.env.set('TAKOS_SESSION_ID', '550e8400-e29b-41d4-a716-446655440000');
     const dir = mkdtempSync(join(tmpdir(), 'takos-cli-auth-'));
     tempDirs.push(dir);
     process.chdir(dir);
@@ -769,9 +769,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }
@@ -779,8 +779,8 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   Deno.test('isAuthenticated - returns false when no auth configured', () => {
   originalEnv = {} as Record<ManagedEnvVar, string | undefined>;
   for (const envVar of MANAGED_ENV_VARS) {
-    originalEnv[envVar] = process.env[envVar];
-    delete process.env[envVar];
+    originalEnv[envVar] = Deno.env.get(envVar);
+    Deno.env.delete(envVar);
   }
   originalCwd = process.cwd();
   tempDirs = [];
@@ -799,9 +799,9 @@ function createSessionWorkspace(sessionJson: string, mode?: number): string {
   }
   for (const envVar of MANAGED_ENV_VARS) {
     if (originalEnv[envVar] === undefined) {
-      delete process.env[envVar];
+      Deno.env.delete(envVar);
     } else {
-      process.env[envVar] = originalEnv[envVar];
+      Deno.env.set(envVar, originalEnv[envVar]);
     }
   }
   }

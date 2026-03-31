@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import type { Env } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup';
+import { createMockEnv } from '../../../test/integration/setup.ts';
 import { createApiRouter, type ApiVariables } from '@/routes/api';
 
 type ApiRouteEnv = {

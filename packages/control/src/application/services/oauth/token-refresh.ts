@@ -1,12 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { OAuthToken, OAuthClient, TokenResponse } from '../../../shared/types/oauth';
-import { oauthTokens } from '../../../infra/db';
-import { getDb } from '../../../infra/db';
+import type { OAuthToken, OAuthClient, TokenResponse } from '../../../shared/types/oauth.ts';
+import { oauthTokens } from '../../../infra/db/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, isNull } from 'drizzle-orm';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { toApiToken } from './token-helpers';
-import { revokeTokenFamily, revokeRefreshTokenAndChildren } from './token-revocation';
-import { generateTokenResponse } from './token-grants';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { toApiToken } from './token-helpers.ts';
+import { revokeTokenFamily, revokeRefreshTokenAndChildren } from './token-revocation.ts';
+import { generateTokenResponse } from './token-grants.ts';
 
 export class RefreshTokenReuseDetectedError extends Error {
   constructor() {

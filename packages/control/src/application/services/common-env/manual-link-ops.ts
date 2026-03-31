@@ -1,20 +1,20 @@
 import { eq, and, inArray, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils';
-import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
-import { normalizeEnvName, uniqueEnvNames } from './crypto';
-import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
-import { listServiceLinks, type ServiceLinkRow, type SyncState } from './repository';
-import type { CommonEnvOrchestrator } from './orchestrator';
-import type { CommonEnvReconcileTrigger } from './reconcile-jobs';
-import { getChanges } from './link-state';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
+import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
+import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
+import { listServiceLinks, type ServiceLinkRow, type SyncState } from './repository.ts';
+import type { CommonEnvOrchestrator } from './orchestrator.ts';
+import type { CommonEnvReconcileTrigger } from './reconcile-jobs.ts';
+import { getChanges } from './link-state.ts';
 import {
   deleteManagedTakosTokenConfig,
   upsertManagedTakosTokenConfig,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
-} from './takos-builtins';
-import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+} from './takos-builtins.ts';
+import { getDb, serviceCommonEnvLinks } from '../../../infra/db/index.ts';
 
 
 export interface ManualLinkDeps {

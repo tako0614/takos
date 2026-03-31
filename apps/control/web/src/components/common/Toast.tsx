@@ -1,8 +1,8 @@
 import { createSignal, onMount, onCleanup, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import type { Toast } from '../../types';
-import { useToast } from '../../store/toast';
+import { Icons } from '../../lib/Icons.tsx';
+import type { Toast } from '../../types/index.ts';
+import { useToast } from '../../store/toast.ts';
 
 /** Renders the global toast list. No provider needed -- reads Jotai atoms directly. */
 export function ToastRenderer() {

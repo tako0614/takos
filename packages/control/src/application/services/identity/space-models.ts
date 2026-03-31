@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
 
-import { getDb, accounts } from '../../../infra/db';
+import { getDb, accounts } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 
 interface ModelSettings {

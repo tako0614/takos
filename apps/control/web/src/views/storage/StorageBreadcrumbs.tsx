@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
 
 interface StorageBreadcrumbsProps {
   currentPath: string;

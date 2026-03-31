@@ -1,17 +1,17 @@
-import type { SpaceRole } from '../../shared/types';
-import type { ToolDefinition } from './tool-definitions';
+import type { SpaceRole } from '../../shared/types/index.ts';
+import type { ToolDefinition } from './tool-definitions.ts';
 import type {
   ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-} from './tool-policy-types';
+} from './tool-policy-types.ts';
 import {
   SPACE_OPERATION_POLICIES,
   BUILTIN_TOOL_POLICY_METADATA,
   AGENT_DISABLED_TOOL_SET,
   type ToolPolicyMetadata,
-} from './tool-policy';
-import { TOOL_NAMESPACE_MAP } from './namespace-map';
+} from './tool-policy.ts';
+import { TOOL_NAMESPACE_MAP } from './namespace-map.ts';
 
 function inferDefaultToolClass(_toolName: string): ToolClass {
   return 'agent_native';

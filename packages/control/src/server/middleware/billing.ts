@@ -1,12 +1,12 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types';
+import type { Env, User } from '../../shared/types/index.ts';
 import {
   checkBillingQuota,
   type MeterType,
   type BillingCheckResult,
-} from '../../application/services/billing/billing';
+} from '../../application/services/billing/billing.ts';
 import { ServiceUnavailableError, PaymentRequiredError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger';
+import { logError } from '../../shared/utils/logger.ts';
 
 export type BillingVariables = {
   user?: User;

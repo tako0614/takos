@@ -8,8 +8,8 @@
  */
 
 import { InternalError } from 'takos-common/errors';
-import type { WfpContext, D1QueryResult } from './wfp-contracts';
-import { sanitizeTableName, extractD1Results } from './worker-metadata';
+import type { WfpContext, D1QueryResult } from './wfp-contracts.ts';
+import { sanitizeTableName, extractD1Results } from './worker-metadata.ts';
 
 // ---------------------------------------------------------------------------
 // D1 CRUD & query

@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, Repository, Space, SecurityPosture } from '../../../shared/types';
-import { generateId, slugifyName } from '../../../shared/utils';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { resolveUserPrincipalId } from './principals';
-import { getDb, accounts, accountMemberships, repositories } from '../../../infra/db';
+import type { Env, Repository, Space, SecurityPosture } from '../../../shared/types/index.ts';
+import { generateId, slugifyName } from '../../../shared/utils/index.ts';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { resolveUserPrincipalId } from './principals.ts';
+import { getDb, accounts, accountMemberships, repositories } from '../../../infra/db/index.ts';
 import { eq, and, or, desc } from 'drizzle-orm';
 
 type RepoSummary = { id: string; name: string | null; default_branch: string | null };
@@ -16,10 +16,10 @@ export interface SpaceListItem {
   owner_principal_id: string;
   automation_principal_id?: string | null;
   head_snapshot_id?: string | null;
-  security_posture: import('../../../shared/types').SecurityPosture;
+  security_posture: import('../../../shared/types/index.ts').SecurityPosture;
   created_at: string;
   updated_at: string;
-  member_role: import('../../../shared/types').SpaceRole;
+  member_role: import('../../../shared/types/index.ts').SpaceRole;
   repository: RepoSummary | null;
 }
 
@@ -324,7 +324,7 @@ export async function listWorkspacesForUser(
     security_posture: membership.spaceSecurityPosture === 'restricted_egress' ? 'restricted_egress' : 'standard',
     created_at: membership.spaceCreatedAt,
     updated_at: membership.spaceUpdatedAt,
-    member_role: membership.memberRole as import('../../../shared/types').SpaceRole,
+    member_role: membership.memberRole as import('../../../shared/types/index.ts').SpaceRole,
     repository: latestRepoBySpace.get(membership.spaceId) ?? null,
   }));
 }

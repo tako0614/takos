@@ -1,12 +1,12 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
-import { createCommonEnvDeps } from '../../../services/common-env';
-import { DeploymentService } from '../../../services/deployment/index';
-import { ServiceDesiredStateService } from '../../../services/platform/worker-desired-state';
-import { normalizeCommonEnvName } from '../../../services/common-env/crypto';
-import { getDb, resourceAccess, resources, serviceDeployments } from '../../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
+import { createCommonEnvDeps } from '../../../services/common-env/index.ts';
+import { DeploymentService } from '../../../services/deployment/index.ts';
+import { ServiceDesiredStateService } from '../../../services/platform/worker-desired-state.ts';
+import { normalizeCommonEnvName } from '../../../services/common-env/crypto.ts';
+import { getDb, resourceAccess, resources, serviceDeployments } from '../../../../infra/db/index.ts';
 import { and, eq, or } from 'drizzle-orm';
-import { resolveServiceReferenceRecord } from '../../../services/platform/workers';
-import { toResourceCapability } from '../../../services/resources/capabilities';
+import { resolveServiceReferenceRecord } from '../../../services/platform/workers.ts';
+import { toResourceCapability } from '../../../services/resources/capabilities.ts';
 // Inline helper: extract resource config as a Record (replaces removed getBindingConfigForResource).
 function getBindingConfigForResource(resource: { config: string }): Record<string, unknown> | null {
   if (!resource.config) return null;

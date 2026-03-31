@@ -2,11 +2,11 @@
  * Workflow Engine – storage operations (logs and artifacts)
  */
 
-import { generateId } from '../../../shared/utils';
-import { getDb, workflowJobs, workflowArtifacts } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, workflowJobs, workflowArtifacts } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { WorkflowBucket } from './workflow-engine-types';
+import type { WorkflowBucket } from './workflow-engine-types.ts';
 
 // ---------------------------------------------------------------------------
 // storeJobLogs

@@ -2,17 +2,17 @@ import { createSandboxEnv, validateRuntimeExecEnv } from '../../utils/sandbox-en
 
 import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
-const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
+const originalAwsSecret = Deno.env.get('AWS_SECRET_ACCESS_KEY');
 
   Deno.test('validateRuntimeExecEnv - accepts undefined env as empty object', () => {
   try {
   assertEquals(validateRuntimeExecEnv(undefined), { ok: true, env: {} });
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })
   Deno.test('validateRuntimeExecEnv - accepts valid env entries', () => {
@@ -27,10 +27,10 @@ const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
     });
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })
   Deno.test('validateRuntimeExecEnv - rejects invalid variable names', () => {
@@ -44,10 +44,10 @@ const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
     }
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })
   Deno.test('validateRuntimeExecEnv - rejects sensitive variable names', () => {
@@ -61,10 +61,10 @@ const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
     }
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })
   Deno.test('validateRuntimeExecEnv - rejects values with newlines', () => {
@@ -78,15 +78,15 @@ const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
     }
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })
   Deno.test('validateRuntimeExecEnv - keeps explicit workflow env values for allowed prefixes and blocks host secrets', () => {
   try {
-  process.env.AWS_SECRET_ACCESS_KEY = 'host-secret-value';
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', 'host-secret-value');
 
     const sandboxEnv = createSandboxEnv({
       GITHUB_TOKEN: 'token-from-workflow',
@@ -100,9 +100,9 @@ const originalAwsSecret = process.env.AWS_SECRET_ACCESS_KEY;
     assertEquals(sandboxEnv.AWS_SECRET_ACCESS_KEY, undefined);
   } finally {
   if (originalAwsSecret === undefined) {
-    delete process.env.AWS_SECRET_ACCESS_KEY;
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
     return;
   }
-  process.env.AWS_SECRET_ACCESS_KEY = originalAwsSecret;
+  Deno.env.set('AWS_SECRET_ACCESS_KEY', originalAwsSecret);
   }
 })

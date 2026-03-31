@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import storageDownloads from './storage-downloads';
-import storageUploads from './storage-uploads';
-import storageManagement from './storage-management';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import storageDownloads from './storage-downloads.ts';
+import storageUploads from './storage-uploads.ts';
+import storageManagement from './storage-management.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .route('/', storageDownloads)

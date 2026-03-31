@@ -1,8 +1,8 @@
-import type { Env } from '../../../shared/types';
-import type { SnapshotTree } from './models';
-import { SnapshotCompressor } from './snapshot-compressor';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { logError } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import type { SnapshotTree } from './models.ts';
+import { SnapshotCompressor } from './snapshot-compressor.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 /**
  * Handles R2 (TENANT_SOURCE) storage operations for snapshot trees and blobs.

@@ -1,4 +1,4 @@
-import type { ToolHandler } from '../tool-definitions';
+import type { ToolHandler } from '../tool-definitions.ts';
 import {
   CONTAINER_START,
   CONTAINER_STATUS,
@@ -6,12 +6,12 @@ import {
   CONTAINER_STOP,
   CREATE_REPOSITORY,
   CONTAINER_TOOLS,
-} from './container/definitions';
-import { containerStartHandler } from './container/handler-start';
-import { containerStatusHandler } from './container/handler-status';
-import { containerCommitHandler } from './container/handler-commit';
-import { containerStopHandler } from './container/handler-stop';
-import { createRepositoryHandler } from './container/handler-create-repository';
+} from './container/definitions.ts';
+import { containerStartHandler } from './container/handler-start.ts';
+import { containerStatusHandler } from './container/handler-status.ts';
+import { containerCommitHandler } from './container/handler-commit.ts';
+import { containerStopHandler } from './container/handler-stop.ts';
+import { createRepositoryHandler } from './container/handler-create-repository.ts';
 
 export {
   CONTAINER_START,

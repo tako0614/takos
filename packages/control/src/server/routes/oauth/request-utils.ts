@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
-import { logOAuthEvent } from '../../../application/services/oauth/audit';
-import { logWarn } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import { logOAuthEvent } from '../../../application/services/oauth/audit.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 /** Minimal context shape accepted by tryLogOAuthEvent — works with any Hono env that includes Env bindings. */
 type MinimalOAuthContext = {
@@ -8,7 +8,7 @@ type MinimalOAuthContext = {
   req: { header: (name: string) => string | undefined };
 };
 
-export { escapeHtml } from '../auth/html';
+export { escapeHtml } from '../auth/html.ts';
 
 export function isValidLogoUrl(url: string | undefined | null): boolean {
   if (!url) return false;

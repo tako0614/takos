@@ -1,13 +1,13 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useI18n, type TranslationKey } from '../store/i18n';
-import { Icons } from '../lib/Icons';
-import type { Space } from '../types';
-import { SkillsTab } from './agent/SkillsTab';
-import { MemoryTab } from './agent/MemoryTab';
-import { ModelTab } from './agent/ModelTab';
-import { WorkTab } from './agent/WorkTab';
-import { McpServersSection } from './hub/McpServersSection';
+import { useI18n, type TranslationKey } from '../store/i18n.ts';
+import { Icons } from '../lib/Icons.tsx';
+import type { Space } from '../types/index.ts';
+import { SkillsTab } from './agent/SkillsTab.tsx';
+import { MemoryTab } from './agent/MemoryTab.tsx';
+import { ModelTab } from './agent/ModelTab.tsx';
+import { WorkTab } from './agent/WorkTab.tsx';
+import { McpServersSection } from './hub/McpServersSection.tsx';
 
 type AgentTab = 'skills' | 'memory' | 'model' | 'work' | 'tools';
 

@@ -17,26 +17,26 @@ export type {
   Volume,
   WorkerScaling,
   ResourceLimits,
-} from './app-manifest-types';
+} from './app-manifest-types.ts';
 
 // Re-export parsing
 export {
   parseAppManifestYaml,
   parseAppManifestText,
-} from './app-manifest-parser';
+} from './app-manifest-parser/index.ts';
 
 // Re-export template engine
 export {
   resolveTemplates,
   validateTemplateReferences,
   type TemplateContext,
-} from './app-manifest-template';
+} from './app-manifest-template.ts';
 
 // Re-export validation
 export {
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
-} from './app-manifest-validation';
+} from './app-manifest-validation.ts';
 
 // Re-export bundle generation and packaging
 export {
@@ -45,4 +45,4 @@ export {
   buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson,
   selectAppManifestPathFromRepo,
-} from './app-manifest-bundle';
+} from './app-manifest-bundle.ts';

@@ -1,15 +1,15 @@
 import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
-import type { Run } from '../types';
-import { parseTimelineEventId } from '../views/chat/timeline';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import type { Run } from '../types/index.ts';
+import { parseTimelineEventId } from '../views/chat/timeline.ts';
 import {
   ACTIVE_RUN_STATUSES,
   TERMINAL_RUN_STATUSES,
   type WebSocketEventPayload,
   EVENT_DISPATCH,
   parseEventData,
-} from './useWsMessageProcessor';
+} from './useWsMessageProcessor.ts';
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -26,7 +26,7 @@ export const MAX_RECONNECT_ATTEMPTS = 8;
 export interface ConnectionProcessorDeps {
   setCurrentRun: Setter<Run | null>;
   setIsLoading: Setter<boolean>;
-  setStreaming: Setter<import('../views/chat/chat-types').ChatStreamingState>;
+  setStreaming: Setter<import('../views/chat/chat-types.ts').ChatStreamingState>;
   resetStreamingState: () => void;
   appendTimelineEntry: (
     runId: string,

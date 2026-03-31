@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, shortcutGroups, shortcutGroupItems } from '../../../infra/db';
+import { getDb, shortcutGroups, shortcutGroupItems } from '../../../infra/db/index.ts';
 import { eq, and, isNull, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 

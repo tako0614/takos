@@ -1,18 +1,18 @@
 import { createSignal, Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import type { StorageFile } from '../../types';
-import type { FileHandler, ResolvedHandler } from './storageUtils';
+import { useI18n } from '../../store/i18n.ts';
+import type { StorageFile } from '../../types/index.ts';
+import type { FileHandler, ResolvedHandler } from './storageUtils.tsx';
 import {
   BUILTIN_IMAGE_VIEWER,
   resolveHandlers,
   getDefaultHandler,
   setDefaultHandler,
   clearDefaultHandler,
-} from './storageUtils';
-import { StorageHandlerPicker } from './StorageHandlerPicker';
-import { StorageViewerShell } from './StorageViewerShell';
-import { StorageTextEditor } from './StorageTextEditor';
-import { StorageEmptyState } from './StorageEmptyState';
+} from './storageUtils.tsx';
+import { StorageHandlerPicker } from './StorageHandlerPicker.tsx';
+import { StorageViewerShell } from './StorageViewerShell.tsx';
+import { StorageTextEditor } from './StorageTextEditor.tsx';
+import { StorageEmptyState } from './StorageEmptyState.tsx';
 
 interface StorageFileViewerProps {
   spaceId: string;

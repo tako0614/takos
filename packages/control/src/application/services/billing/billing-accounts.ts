@@ -2,12 +2,12 @@
  * Billing account management: creation, plan assignment, credits, and feature access.
  */
 
-import { getDb, billingAccounts, billingTransactions } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, billingAccounts, billingTransactions } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import { InternalError, NotFoundError } from 'takos-common/errors';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { eq, sql } from 'drizzle-orm';
-import type { BillingAccountWithPlan } from './billing-types';
+import type { BillingAccountWithPlan } from './billing-types.ts';
 import {
   CANONICAL_BILLING_PLAN_IDS,
   assertBillingPlanId,
@@ -15,7 +15,7 @@ import {
   hasExpectedBillingCatalog,
   ensureDefaultBillingCatalog,
   loadBillingAccountWithPlan,
-} from './billing-plans';
+} from './billing-plans.ts';
 
 /**
  * Get or create a billing account for a user (lazy init).

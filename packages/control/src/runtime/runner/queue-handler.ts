@@ -1,16 +1,16 @@
 // Queue handler: processes run queue messages and DLQ entries.
 import type { MessageBatch } from '../../shared/types/bindings.ts';
-import type { RunQueueMessage, RunnerEnv as Env } from '../../shared/types';
-import { isValidRunQueueMessage } from '../../shared/types';
-import { getDb, runs, dlqEntries } from '../../infra/db';
+import type { RunQueueMessage, RunnerEnv as Env } from '../../shared/types/index.ts';
+import { isValidRunQueueMessage } from '../../shared/types/index.ts';
+import { getDb, runs, dlqEntries } from '../../infra/db/index.ts';
 import { eq, and, lt, ne, isNull, sql } from 'drizzle-orm';
 import {
   notifyRunFailedEvent,
   persistRunFailedEvent,
-} from '../../application/services/run-notifier';
+} from '../../application/services/run-notifier/index.ts';
 
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
-import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
+import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants.ts';
 
 export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   // Validate environment on first invocation (cached).

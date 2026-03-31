@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import repoBase from './routes';
-import repoGit from './git';
-import repoGitAdvanced from './git-advanced';
-import repoStars from './stars';
-import repoForks from './forks';
-import repoReleases from './releases';
-import repoSync from './sync';
-import repoWorkflows from './workflows';
-import actionRuns from './actions/runs';
-import actionJobs from './actions/jobs';
-import actionSecrets from './actions/secrets';
-import actionArtifacts from './actions/artifacts';
-import externalImport from './external-import';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import repoBase from './routes.ts';
+import repoGit from './git.ts';
+import repoGitAdvanced from './git-advanced.ts';
+import repoStars from './stars.ts';
+import repoForks from './forks.ts';
+import repoReleases from './releases.ts';
+import repoSync from './sync.ts';
+import repoWorkflows from './workflows.ts';
+import actionRuns from './actions/runs.ts';
+import actionJobs from './actions/jobs.ts';
+import actionSecrets from './actions/secrets.ts';
+import actionArtifacts from './actions/artifacts.ts';
+import externalImport from './external-import.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .route('/', repoBase)

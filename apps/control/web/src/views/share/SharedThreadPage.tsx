@@ -1,11 +1,11 @@
 import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
-import { rpc } from '../../lib/rpc';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { MessageBubble } from '../chat/MessageBubble';
-import type { Message } from '../../types';
+import { rpc } from '../../lib/rpc.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Input } from '../../components/ui/Input.tsx';
+import { Button } from '../../components/ui/Button.tsx';
+import { MessageBubble } from '../chat/MessageBubble.tsx';
+import type { Message } from '../../types/index.ts';
 
 type SharedThreadPayload = {
   token: string;

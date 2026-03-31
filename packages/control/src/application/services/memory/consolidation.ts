@@ -1,11 +1,11 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { MemoryType } from '../../../shared/types';
-import { LLMClient } from '../agent';
-import { getDb, memories } from '../../../infra/db';
+import type { MemoryType } from '../../../shared/types/index.ts';
+import { LLMClient } from '../agent/index.ts';
+import { getDb, memories } from '../../../infra/db/index.ts';
 import { eq, and, or, lt, isNull, desc, asc, count, sql, inArray } from 'drizzle-orm';
-import { chatAndParseJsonArray } from './llm-parser';
+import { chatAndParseJsonArray } from './llm-parser.ts';
 
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 
 interface MergeGroup {
   indices: number[];

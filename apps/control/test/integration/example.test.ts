@@ -13,8 +13,8 @@ import {
   createUserWithWorkspace,
   createThreadWithMessages,
   resetIdCounter,
-} from './helpers/factories';
-import { createMockEnv } from './setup';
+} from './helpers/factories.ts';
+import { createMockEnv } from './setup.ts';
 
 type CanonicalSpaceLike = {
 import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';

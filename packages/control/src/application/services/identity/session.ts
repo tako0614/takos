@@ -1,7 +1,7 @@
-import type { Session, OIDCState } from '../../../shared/types';
+import type { Session, OIDCState } from '../../../shared/types/index.ts';
 import type { DurableNamespaceBinding, DurableObjectStubBinding } from '../../../shared/types/bindings.ts';
-import { base64UrlEncode } from '../../../shared/utils';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { base64UrlEncode } from '../../../shared/utils/index.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 
 const SHARD_COUNT = 16;
 const MIN_SESSION_ID_LENGTH = 16;

@@ -437,5 +437,5 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
 // Re-export test utilities
 // ============================================================================
 
-export * from './helpers/factories';
-export * from './helpers/api';
+export * from './helpers/factories.ts';
+export * from './helpers/api.ts';

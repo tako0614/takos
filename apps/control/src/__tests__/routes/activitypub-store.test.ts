@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup';
+import { createMockEnv } from '../../../test/integration/setup.ts';
 
 import { assertEquals, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
 

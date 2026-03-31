@@ -4,8 +4,8 @@
  * These are used by both server routes and application services,
  * so they live in the shared layer to avoid cross-boundary imports.
  */
-import type { Env } from '../types';
-import * as gitStore from '../../application/services/git-smart';
+import type { Env } from '../types/index.ts';
+import * as gitStore from '../../application/services/git-smart/index.ts';
 
 /** The concrete R2-like binding type used by Env.GIT_OBJECTS. */
 export type RepoBucketBinding = NonNullable<Env['GIT_OBJECTS']>;

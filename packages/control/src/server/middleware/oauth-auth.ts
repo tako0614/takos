@@ -1,10 +1,10 @@
 import type { MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types';
-import { verifyAccessToken, isAccessTokenValid } from '../../application/services/oauth/token';
-import { parseScopes } from '../../application/services/oauth/scopes';
-import { getSession, getSessionIdFromCookie } from '../../application/services/identity/session';
-import { getCachedUser } from '../../application/services/identity/user-cache';
-import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens';
+import type { Env, User } from '../../shared/types/index.ts';
+import { verifyAccessToken, isAccessTokenValid } from '../../application/services/oauth/token.ts';
+import { parseScopes } from '../../application/services/oauth/scopes.ts';
+import { getSession, getSessionIdFromCookie } from '../../application/services/identity/session.ts';
+import { getCachedUser } from '../../application/services/identity/user-cache.ts';
+import { validateTakosAccessToken } from '../../application/services/identity/takos-access-tokens.ts';
 
 import { AuthenticationError } from 'takos-common/errors';
 import { getPlatformConfig, getPlatformServices } from '../../platform/accessors.ts';

@@ -6,8 +6,8 @@
  * and worker metadata assembly for dispatch namespace deployments.
  */
 
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
-import type { D1QueryResult } from './wfp-contracts';
+import { CF_COMPATIBILITY_DATE } from '../../../shared/constants/index.ts';
+import type { D1QueryResult } from './wfp-contracts.ts';
 
 /**
  * Sanitize a SQL table name to prevent injection.

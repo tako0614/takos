@@ -6,13 +6,13 @@
  * records. Extracted from DeploymentService to keep the main service file
  * focused on coordination.
  */
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import { logWarn } from '../../../shared/utils/logger';
-import type { Deployment, DeploymentEnv, RollbackInput } from './models';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import type { Deployment, DeploymentEnv, RollbackInput } from './models.ts';
 import {
   createDeploymentProvider,
   parseDeploymentTargetConfig,
-} from './provider';
+} from './provider.ts';
 import {
   createDeploymentProviderRegistry,
   resolveDeploymentProviderConfigsFromEnv,
@@ -25,8 +25,8 @@ import {
   logDeploymentEvent,
   updateDeploymentRecord,
   updateServiceDeploymentPointers,
-} from './store';
-import type { RoutingTarget } from '../routing/routing-models';
+} from './store.ts';
+import type { RoutingTarget } from '../routing/routing-models.ts';
 import {
   applyRoutingToHostnames,
   buildRoutingTarget,
@@ -34,14 +34,14 @@ import {
   fetchServiceWithDomains,
   restoreRoutingSnapshot,
   snapshotRouting,
-} from './routing';
-import { deployments, getDb, serviceDeployments } from '../../../infra/db';
+} from './routing.ts';
+import { deployments, getDb, serviceDeployments } from '../../../infra/db/index.ts';
 import { eq, and, ne, inArray } from 'drizzle-orm';
 import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
 import {
   resolveDeploymentServiceId,
   parseRuntimeConfig,
-} from './artifact-refs';
+} from './artifact-refs.ts';
 
 /**
  * Execute a rollback to a previous deployment version.
@@ -260,7 +260,7 @@ export async function executeRollback(
   // Clean up routing snapshot after successful rollback
   if (env.WORKER_BUNDLES) {
     const snapshotKey = `deployment-snapshots/rollback-${targetDeployment.id}.json`;
-    await env.WORKER_BUNDLES.delete(snapshotKey).catch((e) => {
+    await env.WORKER_BUNDLES.delete(snapshotKey).catch((e: unknown) => {
       logWarn('Failed to clean up rollback snapshot (non-critical)', { module: 'rollback-orchestrator', error: e instanceof Error ? e.message : String(e) });
     });
   }

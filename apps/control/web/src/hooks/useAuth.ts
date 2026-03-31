@@ -1,7 +1,7 @@
 import { useAtomValue, useSetAtom } from 'solid-jotai';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
-import type { User, Space, UserSettings } from '../types';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
+import type { User, Space, UserSettings } from '../types/index.ts';
 import {
   authStateAtom,
   userAtom,
@@ -16,7 +16,7 @@ import {
   type AuthState,
   type AuthActionDeps,
   type FetchSpacesOptions,
-} from '../store/auth';
+} from '../store/auth.ts';
 
 export interface AuthContextValue {
   authState: AuthState;

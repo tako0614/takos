@@ -1,32 +1,32 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { FILE_TOOLS, FILE_HANDLERS } from './file';
-import { RUNTIME_TOOLS, RUNTIME_HANDLERS } from './runtime-tool-executor';
-import { STORAGE_TOOLS, STORAGE_HANDLERS } from './storage';
-import { MEMORY_TOOLS, MEMORY_HANDLERS } from './memory';
-import { INFO_UNIT_TOOLS, INFO_UNIT_HANDLERS } from './info-unit';
-import { WEB_TOOLS, WEB_HANDLERS } from './web';
-import { ARTIFACT_TOOLS, ARTIFACT_HANDLERS } from './artifact';
-import { CONTAINER_TOOLS, CONTAINER_HANDLERS } from './container';
-import { REPO_TOOLS, REPO_HANDLERS } from './repo';
-import { PLATFORM_TOOLS, PLATFORM_HANDLERS } from './platform';
-import { DEPLOY_TOOLS, DEPLOY_HANDLERS } from './deploy';
-import { AGENT_TOOLS, AGENT_HANDLERS } from './agent';
-import { MCP_TOOLS, MCP_HANDLERS } from './mcp';
-import { WORKSPACE_FILES_TOOLS, WORKSPACE_FILES_HANDLERS } from './space-files';
-import { WORKSPACE_COMMON_ENV_TOOLS, WORKSPACE_COMMON_ENV_HANDLERS } from './space-common-env';
-import { WORKSPACE_SKILL_TOOLS, WORKSPACE_SKILL_HANDLERS } from './space-skills';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { FILE_TOOLS, FILE_HANDLERS } from './file.ts';
+import { RUNTIME_TOOLS, RUNTIME_HANDLERS } from './runtime-tool-executor.ts';
+import { STORAGE_TOOLS, STORAGE_HANDLERS } from './storage.ts';
+import { MEMORY_TOOLS, MEMORY_HANDLERS } from './memory.ts';
+import { INFO_UNIT_TOOLS, INFO_UNIT_HANDLERS } from './info-unit.ts';
+import { WEB_TOOLS, WEB_HANDLERS } from './web.ts';
+import { ARTIFACT_TOOLS, ARTIFACT_HANDLERS } from './artifact.ts';
+import { CONTAINER_TOOLS, CONTAINER_HANDLERS } from './container.ts';
+import { REPO_TOOLS, REPO_HANDLERS } from './repo.ts';
+import { PLATFORM_TOOLS, PLATFORM_HANDLERS } from './platform.ts';
+import { DEPLOY_TOOLS, DEPLOY_HANDLERS } from './deploy.ts';
+import { AGENT_TOOLS, AGENT_HANDLERS } from './agent.ts';
+import { MCP_TOOLS, MCP_HANDLERS } from './mcp.ts';
+import { WORKSPACE_FILES_TOOLS, WORKSPACE_FILES_HANDLERS } from './space-files.ts';
+import { WORKSPACE_COMMON_ENV_TOOLS, WORKSPACE_COMMON_ENV_HANDLERS } from './space-common-env.ts';
+import { WORKSPACE_SKILL_TOOLS, WORKSPACE_SKILL_HANDLERS } from './space-skills.ts';
 import {
   WORKSPACE_APP_DEPLOYMENT_TOOLS,
   WORKSPACE_APP_DEPLOYMENT_HANDLERS,
-} from './space-app-deployments';
+} from './space-app-deployments.ts';
 import {
   WORKSPACE_SOURCE_TOOLS,
   WORKSPACE_SOURCE_HANDLERS,
-} from './space-source';
-import { BROWSER_TOOLS, BROWSER_HANDLERS } from './browser';
-import { DISCOVERY_TOOLS, DISCOVERY_HANDLERS } from './discovery';
-import { MEMORY_GRAPH_TOOLS, MEMORY_GRAPH_HANDLERS } from './memory-graph';
-import { applyBuiltinToolPolicyMetadata } from '../tool-policy';
+} from './space-source.ts';
+import { BROWSER_TOOLS, BROWSER_HANDLERS } from './browser.ts';
+import { DISCOVERY_TOOLS, DISCOVERY_HANDLERS } from './discovery.ts';
+import { MEMORY_GRAPH_TOOLS, MEMORY_GRAPH_HANDLERS } from './memory-graph.ts';
+import { applyBuiltinToolPolicyMetadata } from '../tool-policy.ts';
 
 const RAW_BUILTIN_TOOLS: ToolDefinition[] = [
   ...CONTAINER_TOOLS,

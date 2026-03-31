@@ -1,17 +1,17 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { useToast } from '../../../store/toast';
-import { formatShortDate } from '../../../lib/format';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { useI18n } from '../../../store/i18n';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { Card } from '../../../components/ui/Card';
-import { Modal, ModalFooter } from '../../../components/ui/Modal';
-import { Input } from '../../../components/ui/Input';
-import { Textarea } from '../../../components/ui/Textarea';
-import { rpc, rpcJson } from '../../../lib/rpc';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useToast } from '../../../store/toast.ts';
+import { formatShortDate } from '../../../lib/format.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Badge } from '../../../components/ui/Badge.tsx';
+import { Card } from '../../../components/ui/Card.tsx';
+import { Modal, ModalFooter } from '../../../components/ui/Modal.tsx';
+import { Input } from '../../../components/ui/Input.tsx';
+import { Textarea } from '../../../components/ui/Textarea.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
 
 interface Release {
   id: string;

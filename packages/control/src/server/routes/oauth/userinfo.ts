@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import { verifyAccessToken, isAccessTokenValid } from '../../../application/services/oauth/token';
-import { parseScopes } from '../../../application/services/oauth/scopes';
-import { getDb } from '../../../infra/db';
-import { accounts } from '../../../infra/db/schema';
+import { verifyAccessToken, isAccessTokenValid } from '../../../application/services/oauth/token.ts';
+import { parseScopes } from '../../../application/services/oauth/scopes.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts } from '../../../infra/db/schema.ts';
 import { eq } from 'drizzle-orm';
-import type { PublicRouteEnv } from '../route-auth';
+import type { PublicRouteEnv } from '../route-auth.ts';
 
 
 const oauthUserinfo = new Hono<PublicRouteEnv>();

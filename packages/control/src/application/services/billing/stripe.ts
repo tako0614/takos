@@ -5,8 +5,8 @@
  * No Stripe SDK dependency.
  */
 
-import { constantTimeEqual } from '../../../shared/utils/hash';
-import { bytesToHex } from '../../../shared/utils/encoding-utils';
+import { constantTimeEqual } from '../../../shared/utils/hash.ts';
+import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 

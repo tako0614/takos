@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, accountSettings } from '../../../infra/db';
+import { getDb, accountSettings } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { DEFAULT_MODEL_ID, SUPPORTED_MODEL_IDS } from '../agent';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { DEFAULT_MODEL_ID, SUPPORTED_MODEL_IDS } from '../agent/index.ts';
 
 export interface UserSettingsRow {
   userId: string;

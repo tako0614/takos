@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
-import type { Branch } from '../../../types';
-import { Icons } from '../../../lib/Icons';
-import { useI18n } from '../../../store/i18n';
+import type { Branch } from '../../../types/index.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface RepoDetailBranchesProps {
   branches: Branch[];

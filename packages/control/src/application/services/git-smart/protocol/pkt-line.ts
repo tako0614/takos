@@ -7,7 +7,7 @@
  *   - "0001" = delimiter packet
  */
 
-import { concatBytes } from '../core/sha1';
+import { concatBytes } from '../core/sha1.ts';
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();

@@ -1,12 +1,12 @@
 import type { Accessor, Setter } from 'solid-js';
-import { useI18n } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useToast } from '../store/toast';
+import { useI18n } from '../store/i18n.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useToast } from '../store/toast.ts';
 import type {
   SourceItem,
   SourceItemInstallation,
   SourceItemTakopack,
-} from './useSourceData';
+} from './useSourceData.ts';
 
 function makeEmptyTakopack(): SourceItemTakopack {
   return {

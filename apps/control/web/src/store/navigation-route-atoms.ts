@@ -1,5 +1,5 @@
 import { atom } from 'jotai/vanilla';
-import type { RouteState } from '../types';
+import type { RouteState } from '../types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Route state atoms (driven by useRouter, synced via hook)

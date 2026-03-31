@@ -1,4 +1,4 @@
-import { MockR2Bucket } from '../../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../../test/integration/setup.ts';
 import { writePackfile } from '@/services/git-smart/protocol/packfile-writer';
 import { putBlob } from '@/services/git-smart/core/object-store';
 import { sha1Bytes } from '@/services/git-smart/core/sha1';

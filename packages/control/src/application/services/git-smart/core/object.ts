@@ -7,8 +7,8 @@
  * - commit: text format "tree <sha>\nparent <sha>\nauthor ...\ncommitter ...\n\n<message>"
  */
 
-import { sha1, concatBytes, hexToBytes, hexFromBuffer } from './sha1';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects';
+import { sha1, concatBytes, hexToBytes, hexFromBuffer } from './sha1.ts';
+import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects.ts';
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();

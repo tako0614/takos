@@ -1,9 +1,9 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
-import type { Resource, Worker } from '../types';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
+import type { Resource, Worker } from '../types/index.ts';
 import type {
   Binding,
   EnvVar,
@@ -11,7 +11,7 @@ import type {
   WorkerDomain,
   WorkerSettingsTab,
   VerificationInfo,
-} from '../views/workers/worker-models';
+} from '../views/workers/worker-models.ts';
 
 export function useWorkerSettings(
   worker: Worker | null,

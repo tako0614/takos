@@ -1,10 +1,10 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
-import { DeploymentService } from '../../../services/deployment/index';
-import { getDb, services } from '../../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
+import { DeploymentService } from '../../../services/deployment/index.ts';
+import { getDb, services } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 import type { WorkerBinding } from '../../../../platform/providers/cloudflare/wfp.ts';
-import { safeJsonParseOrDefault } from '../../../../shared/utils';
-import { logWarn } from '../../../../shared/utils/logger';
+import { safeJsonParseOrDefault } from '../../../../shared/utils/index.ts';
+import { logWarn } from '../../../../shared/utils/logger.ts';
 
 export const DEPLOYMENT_HISTORY: ToolDefinition = {
   name: 'deployment_history',

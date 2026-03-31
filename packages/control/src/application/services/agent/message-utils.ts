@@ -12,7 +12,7 @@ import {
   AIMessage,
   ToolMessage,
 } from '@langchain/core/messages';
-import { logWarn } from '../../../shared/utils/logger';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 // ── Message text extraction ─────────────────────────────────────────────
 

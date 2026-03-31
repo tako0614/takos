@@ -10,18 +10,18 @@
  * by calling {@link executeStepLoopParallel} instead.
  */
 
-import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
-import type { JobExecutionState, JobQueueContext } from './workflow-types';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
+import type { JobExecutionState, JobQueueContext } from './workflow-types.ts';
 import {
   runtimeDelete,
   getRunStatus,
   getStepDisplayName,
-} from './workflow-runtime-client';
-import { evaluateCondition } from './workflow-expressions';
-import { emitWorkflowEvent } from './workflow-events';
-import { executeStep } from './workflow-steps';
-import { executeStepLoop } from './workflow-job-phases';
-import { logInfo, logWarn } from '../../shared/utils/logger';
+} from './workflow-runtime-client.ts';
+import { evaluateCondition } from './workflow-expressions.ts';
+import { emitWorkflowEvent } from './workflow-events.ts';
+import { executeStep } from './workflow-steps.ts';
+import { executeStepLoop } from './workflow-job-phases.ts';
+import { logInfo, logWarn } from '../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Step type — mirrors the inline type from WorkflowJobDefinition.steps

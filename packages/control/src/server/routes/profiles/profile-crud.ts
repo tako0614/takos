@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parsePagination, paginatedResponse } from '../../../shared/utils';
-import { fetchProfileActivity } from '../../../application/services/identity/profile-activity';
-import { type OptionalAuthRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
+import { parsePagination, paginatedResponse } from '../../../shared/utils/index.ts';
+import { fetchProfileActivity } from '../../../application/services/identity/profile-activity.ts';
+import { type OptionalAuthRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
 import { NotFoundError, AuthorizationError, BadRequestError } from 'takos-common/errors';
-import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries';
-import { getDb } from '../../../infra/db';
-import { accounts, repositories, repoStars } from '../../../infra/db/schema';
+import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
-import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-utils';
-import type { UserProfileResponse, ProfileRepoResponse } from './dto';
-import { textDate } from '../../../shared/utils/db-guards';
+import { getBlockFlags, isMutedByViewer, hasPendingFollowRequest } from './block-follow-utils.ts';
+import type { UserProfileResponse, ProfileRepoResponse } from './dto.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export const profileCrudRoutes = new Hono<OptionalAuthRouteEnv>()
 

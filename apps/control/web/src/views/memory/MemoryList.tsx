@@ -1,7 +1,7 @@
 import { createSignal, createMemo } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import type { Memory, Reminder } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import type { Memory, Reminder } from '../../types/index.ts';
 
 export interface MemoryListProps {
   memories: Memory[];

@@ -1,4 +1,4 @@
-import type { Space } from '../types';
+import type { Space } from '../types/index.ts';
 
 const normalize = (value?: string) => (value || '').trim().toLowerCase();
 

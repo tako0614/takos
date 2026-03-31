@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
-import type { ResourceCapability, ResourceType } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
+import type { ResourceCapability, ResourceType } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { AppError, BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
+import { zValidator } from '../zod-validator.ts';
 import {
   checkResourceAccess,
   countResourceBindings,
@@ -22,17 +22,17 @@ import {
   provisionManagedResource,
   deleteManagedResource,
   updateResourceMetadata,
-} from '../../../application/services/resources';
-import { getDb } from '../../../infra/db';
-import { accountMemberships, resourceAccess, resources, accounts, groups } from '../../../infra/db/schema';
+} from '../../../application/services/resources/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accountMemberships, resourceAccess, resources, accounts, groups } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../../../application/services/identity/principals';
-import { logError } from '../../../shared/utils/logger';
+import { resolveActorPrincipalId } from '../../../application/services/identity/principals.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, AuthorizationError, InternalError } from 'takos-common/errors';
 import { getPlatformServices } from '../../../platform/accessors.ts';
-import { getStoredResourceImplementation, toPublicResourceType, toResourceCapability } from '../../../application/services/resources/capabilities';
+import { getStoredResourceImplementation, toPublicResourceType, toResourceCapability } from '../../../application/services/resources/capabilities.ts';
 import { removeGroupDesiredResource, upsertGroupDesiredResource } from '../../../application/services/deployment/group-desired-projector.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
 
 const resourcesBase = new Hono<AuthenticatedRouteEnv>();
 

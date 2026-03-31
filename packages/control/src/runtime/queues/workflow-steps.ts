@@ -1,6 +1,6 @@
 import type { Step } from 'takos-actions-engine';
-import type { StepExecutionContext, StepExecutionResult, RuntimeStepResponse } from './workflow-types';
-import { runtimeJson } from './workflow-runtime-client';
+import type { StepExecutionContext, StepExecutionResult, RuntimeStepResponse } from './workflow-types.ts';
+import { runtimeJson } from './workflow-runtime-client.ts';
 
 // ---------------------------------------------------------------------------
 // Step execution

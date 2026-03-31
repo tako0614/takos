@@ -1,11 +1,11 @@
-import type { PullRequestStatus, AuthorType } from '../../../shared/types';
-import type { SelectOf } from '../../../shared/types/drizzle-utils';
-import type { pullRequests } from '../../../infra/db/schema';
-import { accounts } from '../../../infra/db/schema';
-import { getDb, type Database } from '../../../infra/db';
+import type { PullRequestStatus, AuthorType } from '../../../shared/types/index.ts';
+import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
+import type { pullRequests } from '../../../infra/db/schema.ts';
+import { accounts } from '../../../infra/db/schema.ts';
+import { getDb, type Database } from '../../../infra/db/index.ts';
 import { inArray } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards';
+import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
 type PrRecord = SelectOf<typeof pullRequests>;
 
 export type UserLiteDto = {
@@ -208,7 +208,7 @@ export async function buildPullRequestDtoFull(
   db: Database,
   pullRequest: PullRequestRecord,
 ): Promise<PullRequestDto> {
-  const { prReviews, prComments } = await import('../../../infra/db/schema');
+  const { prReviews, prComments } = await import('../../../infra/db/schema.ts');
   const { count, eq } = await import('drizzle-orm');
 
   const [reviewResult, commentResult] = await Promise.all([

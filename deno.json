@@ -15,7 +15,8 @@
   "nodeModulesDir": "auto",
   "compilerOptions": {
     "strict": true,
-    "lib": ["deno.window", "dom", "dom.iterable"]
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "types": ["node"]
   },
   "tasks": {
     "build:all": "echo 'No tsc build needed — Deno runs .ts directly'",

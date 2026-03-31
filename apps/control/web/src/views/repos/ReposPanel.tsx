@@ -1,11 +1,11 @@
 import { Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { CreateRepoModal } from '../shared/repos/CreateRepoModal';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { CreateRepoModal } from '../shared/repos/CreateRepoModal.tsx';
 
-import { RepoCollection } from './RepoCollection';
-import { RepoSearchResults } from './RepoSearchResults';
-import { useReposData } from '../../hooks/useReposData';
+import { RepoCollection } from './RepoCollection.tsx';
+import { RepoSearchResults } from './RepoSearchResults.tsx';
+import { useReposData } from '../../hooks/useReposData.ts';
 
 interface ReposPanelProps {
   spaceId: string;

@@ -14,7 +14,7 @@ const mocks = ({
 import { SnapshotManager } from '@/services/sync/snapshot';
 import type { Env } from '@/types';
 import type { SnapshotTree } from '@/services/sync/types';
-import { MockR2Bucket } from '../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../test/integration/setup.ts';
 
 function createChainableMock(overrides: Record<string, unknown> = {}) {
   const c: Record<string, unknown> = {};

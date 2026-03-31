@@ -1,11 +1,11 @@
-import type { Env } from '../../../shared/types';
-import { getDb, runEvents } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { getDb, runEvents } from '../../../infra/db/index.ts';
 import {
   buildRunFailedPayload,
   type RunTerminalPayload,
-} from './run-events-contract';
-import { buildRunNotifierEmitRequest, getRunNotifierStub } from './client';
-import { buildRunNotifierEmitPayload } from './run-notifier-payload';
+} from './run-events-contract.ts';
+import { buildRunNotifierEmitRequest, getRunNotifierStub } from './client.ts';
+import { buildRunNotifierEmitPayload } from './run-notifier-payload.ts';
 
 export interface PersistedRunFailedEvent {
   payload: RunTerminalPayload;

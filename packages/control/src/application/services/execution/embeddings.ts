@@ -1,8 +1,8 @@
 import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, SpaceFile } from '../../../shared/types';
-import { getDb, files as filesTable } from '../../../infra/db';
+import type { Env, SpaceFile } from '../../../shared/types/index.ts';
+import { getDb, files as filesTable } from '../../../infra/db/index.ts';
 import { eq, and, ne, isNull, inArray, desc } from 'drizzle-orm';
-import { flattenTree, getBlob } from '../git-smart';
+import { flattenTree, getBlob } from '../git-smart/index.ts';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 const MAX_CHUNK_SIZE = 512;
@@ -184,11 +184,11 @@ export class EmbeddingsService {
     });
 
     const fileIds = [...new Set(searchResult.matches
-      .map((m) => {
+      .map((m: { metadata?: Record<string, unknown> }) => {
         const metadata = (m.metadata || {}) as Record<string, unknown>;
         return typeof metadata.fileId === 'string' ? metadata.fileId : null;
       })
-      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .filter((id: string | null): id is string => typeof id === 'string' && id.length > 0)
     )];
 
     const results: EmbeddingSearchResult[] = [];

@@ -1,5 +1,5 @@
-import { ja } from './i18n/ja';
-import { en } from './i18n/en';
+import { ja } from './i18n/ja.ts';
+import { en } from './i18n/en.ts';
 
 export type Language = 'ja' | 'en';
 

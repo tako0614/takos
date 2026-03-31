@@ -1,13 +1,13 @@
-import type { ToolHandler } from '../../tool-definitions';
-import { RuntimeSessionManager } from '../../../services/sync';
-import { generateId } from '../../../../shared/utils';
-import { getDb, sessions, sessionRepos, repositories, runs } from '../../../../infra/db';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { RuntimeSessionManager } from '../../../services/sync/index.ts';
+import { generateId } from '../../../../shared/utils/index.ts';
+import { getDb, sessions, sessionRepos, repositories, runs } from '../../../../infra/db/index.ts';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import {
   normalizeMountPath,
   validateStringInput,
-} from './session';
-import { logInfo } from '../../../../shared/utils/logger';
+} from './session.ts';
+import { logInfo } from '../../../../shared/utils/logger.ts';
 
 export const containerStartHandler: ToolHandler = async (args, context) => {
   context.setLastContainerStartFailure(undefined);

@@ -1,11 +1,11 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../../../lib/Icons';
-import { useI18n } from '../../../../store/i18n';
-import type { WorkflowRunDetail, JobLogState } from './actions-types';
-import { statusBadge } from './actions-types';
-import { JobCard } from './JobCard';
-import { Button } from '../../../../components/ui/Button';
-import { Card } from '../../../../components/ui/Card';
+import { Icons } from '../../../../lib/Icons.tsx';
+import { useI18n } from '../../../../store/i18n.ts';
+import type { WorkflowRunDetail, JobLogState } from './actions-types.ts';
+import { statusBadge } from './actions-types.ts';
+import { JobCard } from './JobCard.tsx';
+import { Button } from '../../../../components/ui/Button.tsx';
+import { Card } from '../../../../components/ui/Card.tsx';
 
 interface RunDetailProps {
   run: WorkflowRunDetail | null;

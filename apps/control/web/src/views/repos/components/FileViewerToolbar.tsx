@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { formatFileSize } from '../../../lib/format';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import { formatFileSize } from '../../../lib/format.ts';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface FileViewerToolbarProps {
   filePath: string;

@@ -1,5 +1,5 @@
 import type { R2Bucket, R2ObjectBody } from '../../../shared/types/bindings.ts';
-import { gzipCompressString, gzipDecompressToString } from '../../../shared/utils/gzip';
+import { gzipCompressString, gzipDecompressToString } from '../../../shared/utils/gzip.ts';
 
 export type PersistedUsageEvent = {
   meter_type: string;
@@ -84,7 +84,7 @@ export async function getUsageEventsFromR2(
   const keys = await listUsageSegments(bucket, runId);
   const objects = await Promise.all(keys.map((key) => bucket.get(key)));
   const segments = await Promise.all(
-    objects.map((obj) => (obj ? readSegmentObject(obj) : Promise.resolve([] as PersistedUsageEvent[]))),
+    objects.map((obj: R2ObjectBody | null) => (obj ? readSegmentObject(obj) : Promise.resolve([] as PersistedUsageEvent[]))),
   );
 
   const out: PersistedUsageEvent[] = [];

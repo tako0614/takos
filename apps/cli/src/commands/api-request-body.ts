@@ -1,5 +1,5 @@
-import { basename } from 'path';
-import { readFileSync } from 'fs';
+import { basename } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 export function parseKeyValue(value: string): { key: string; value: string } {
   const separatorIndex = value.indexOf('=');

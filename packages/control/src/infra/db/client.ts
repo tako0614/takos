@@ -7,7 +7,7 @@
 
 import { drizzle } from 'drizzle-orm/d1';
 import type { D1Database } from '../../shared/types/bindings.ts';
-import * as schema from './schema';
+import * as schema from './schema.ts';
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 

@@ -1,14 +1,14 @@
 import { useAtomValue, useSetAtom } from 'solid-jotai';
 import { createEffect } from 'solid-js';
-import { getSpaceIdentifier } from '../lib/spaces';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useBreakpoint } from '../hooks/useBreakpoint';
-import { useI18n } from './i18n';
-import { useToast } from './toast';
-import { useConfirmDialog } from './confirm-dialog';
-import { spacesAtom } from './auth';
-import { useRouter } from '../hooks/useRouter';
-import type { Thread, Space } from '../types';
+import { getSpaceIdentifier } from '../lib/spaces.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useBreakpoint } from '../hooks/useBreakpoint.ts';
+import { useI18n } from './i18n.ts';
+import { useToast } from './toast.ts';
+import { useConfirmDialog } from './confirm-dialog.ts';
+import { spacesAtom } from './auth.ts';
+import { useRouter } from '../hooks/useRouter.ts';
+import type { Thread, Space } from '../types/index.ts';
 import {
   routeAtom,
   navigateFnAtom,
@@ -25,7 +25,7 @@ import {
   selectedSpaceIdAtom,
   waitingForSpaceResolutionAtom,
   fetchAllThreadsAtom,
-} from './navigation-atoms';
+} from './navigation-atoms.ts';
 
 // ---------------------------------------------------------------------------
 // Compatibility hook: useNavigation()

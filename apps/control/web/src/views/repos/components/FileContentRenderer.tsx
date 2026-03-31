@@ -1,9 +1,9 @@
 import { Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { formatFileSize } from '../../../lib/format';
-import { useI18n } from '../../../store/i18n';
-import { CodeViewer } from './CodeViewer';
-import type { BlameResponse } from './CodeViewer';
+import { Icons } from '../../../lib/Icons.tsx';
+import { formatFileSize } from '../../../lib/format.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { CodeViewer } from './CodeViewer.tsx';
+import type { BlameResponse } from './CodeViewer.tsx';
 
 interface FileContentRendererProps {
   fileName: string;

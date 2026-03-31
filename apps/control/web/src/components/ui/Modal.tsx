@@ -1,8 +1,8 @@
 import { createEffect, createUniqueId, onCleanup, splitProps, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
-import { useI18n } from '../../store/i18n';
+import { useBreakpoint } from '../../hooks/useBreakpoint.ts';
+import { useDialogLifecycle } from '../../hooks/useDialogLifecycle.ts';
+import { useI18n } from '../../store/i18n.ts';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 

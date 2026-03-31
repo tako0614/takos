@@ -1,5 +1,5 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { isPathWithinBase } from '../paths.ts';
 import { successResult } from './process-spawner.ts';
 import type { ExecutorStepResult, ActionContext } from './executor.ts';

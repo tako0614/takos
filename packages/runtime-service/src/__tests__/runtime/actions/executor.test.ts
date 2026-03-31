@@ -1,6 +1,6 @@
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import path from 'path';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import path from 'node:path';
 // [Deno] vi.mock removed - manually stub imports from '../../../runtime/actions/sandbox.ts'
 // [Deno] vi.mock removed - manually stub imports from '../../../runtime/actions/builtin/index.ts'
 // [Deno] vi.mock removed - manually stub imports from '../../../shared/config.ts'
@@ -45,7 +45,7 @@ runs:
       await fs.symlink(outsideDir, escapeLink);
       await writeCompositeAction(actionDir, 'escape-link');
 
-      const executor = new StepExecutor(workspaceDir, { PATH: process.env.PATH || '' });
+      const executor = new StepExecutor(workspaceDir, { PATH: Deno.env.get('PATH') || '' });
       const result = await executor.executeAction('./action', {});
 
       assertEquals(result.conclusion, 'failure');
@@ -66,7 +66,7 @@ runs:
       await fs.symlink(safeTargetDir, safeLink);
       await writeCompositeAction(actionDir, 'safe-link');
 
-      const executor = new StepExecutor(workspaceDir, { PATH: process.env.PATH || '' });
+      const executor = new StepExecutor(workspaceDir, { PATH: Deno.env.get('PATH') || '' });
       const result = await executor.executeAction('./action', {});
 
       assertEquals(result.conclusion, 'success');
@@ -89,7 +89,7 @@ runs:
       await fs.symlink(outsideScript, scriptLink);
       await writeNodeAction(actionDir, 'main.js');
 
-      const executor = new StepExecutor(workspaceDir, { PATH: process.env.PATH || '' });
+      const executor = new StepExecutor(workspaceDir, { PATH: Deno.env.get('PATH') || '' });
       const result = await executor.executeAction('./action', {});
 
       assertEquals(result.conclusion, 'failure');

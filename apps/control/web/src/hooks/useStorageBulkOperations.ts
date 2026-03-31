@@ -1,9 +1,9 @@
 import { createSignal } from 'solid-js';
 import type { Setter } from 'solid-js';
-import { useToast } from '../store/toast';
-import { useI18n } from '../store/i18n';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import type { StorageFile } from '../types';
+import { useToast } from '../store/toast.ts';
+import { useI18n } from '../store/i18n.ts';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import type { StorageFile } from '../types/index.ts';
 
 interface UseStorageBulkOperationsParams {
   files: () => StorageFile[];

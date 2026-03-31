@@ -1,12 +1,12 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { getSpaceIdentifier } from '../../lib/spaces';
-import type { Space } from '../../types';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../components/ui/Card';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { getSpaceIdentifier } from '../../lib/spaces.ts';
+import type { Space } from '../../types/index.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../../components/ui/Card.tsx';
 
 export interface SpaceMember {
   username: string;

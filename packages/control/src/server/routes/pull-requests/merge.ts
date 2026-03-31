@@ -1,13 +1,13 @@
-import type { User } from '../../../shared/types';
+import type { User } from '../../../shared/types/index.ts';
 
-import * as gitStore from '../../../application/services/git-smart';
-import { type Database } from '../../../infra/db';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { type Database } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { pullRequests, branches } from '../../../infra/db/schema';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { toPullRequestRecord, type PullRequestRecord } from './dto';
-import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket';
-import { GIT_REBASE_MAX_COMMITS } from '../../../shared/config/limits';
+import { pullRequests, branches } from '../../../infra/db/schema.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { toPullRequestRecord, type PullRequestRecord } from './dto.ts';
+import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket.ts';
+import { GIT_REBASE_MAX_COMMITS } from '../../../shared/config/limits.ts';
 
 type MergeApplyFailure = { success: false; error: 'branch_not_found' | 'ref_conflict'; current: string | null };
 type MergeApplySuccess = { success: true; pullRequest: PullRequestRecord };

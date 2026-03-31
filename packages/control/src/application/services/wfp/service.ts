@@ -9,7 +9,7 @@
  * thin factory that wires them together with a shared WfpContext.
  */
 
-import type { WfpEnv } from './client';
+import type { WfpEnv } from './client.ts';
 import {
   WfpClient,
   createWfpConfig,
@@ -17,40 +17,40 @@ import {
   type WFPConfig,
   type CFAPIResponse,
   type CloudflareAPIError,
-} from './client';
-import { logWarn } from '../../../shared/utils/logger';
-import { formatBinding, formatBindingForUpdate } from './bindings';
+} from './client.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { formatBinding, formatBindingForUpdate } from './bindings.ts';
 
 // Re-export public types from their canonical locations
 export type {
   WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './wfp-contracts';
+} from './wfp-contracts.ts';
 export type {
   AssetManifestEntry,
   AssetUploadFile,
   AssetsUploadSession,
   AssetsUploadCompletion,
-} from './assets';
+} from './assets.ts';
 
 // Re-export standalone functions
-export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator';
+export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator.ts';
 
 // Re-export the binding helpers for direct usage
-export { formatBinding, formatBindingForUpdate } from './bindings';
+export { formatBinding, formatBindingForUpdate } from './bindings.ts';
 
 // Import types needed by the factory
-import type { WfpContext } from './wfp-contracts';
+import type { WfpContext } from './wfp-contracts.ts';
 
 // Import submodule functions
-import * as workerOps from './workers';
-import * as d1Ops from './d1';
-import * as r2Ops from './r2';
-import * as kvOps from './kv';
-import * as queueOps from './queues';
-import * as vectorizeOps from './vectorize';
-import * as orchestratorOps from './orchestrator';
+import * as workerOps from './workers.ts';
+import * as d1Ops from './d1.ts';
+import * as r2Ops from './r2.ts';
+import * as kvOps from './kv.ts';
+import * as queueOps from './queues.ts';
+import * as vectorizeOps from './vectorize.ts';
+import * as orchestratorOps from './orchestrator.ts';
 
 // ---------------------------------------------------------------------------
 // Internal: context construction

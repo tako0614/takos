@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps, updatedAtColumn } from './schema-utils';
+import { createdAtColumn, timestamps, updatedAtColumn } from './schema-utils.ts';
 
 // 50. McpOAuthPending
 export const mcpOauthPending = sqliteTable('mcp_oauth_pending', {

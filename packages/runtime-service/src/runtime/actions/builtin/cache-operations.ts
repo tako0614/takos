@@ -1,7 +1,7 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { spawn } from 'child_process';
-import { createHash } from 'crypto';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { type ActionContext } from '../executor.ts';
 import { pushLog } from '../../logging.ts';

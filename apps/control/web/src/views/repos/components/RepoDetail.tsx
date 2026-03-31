@@ -1,21 +1,21 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { Repository, Branch } from '../../../types';
-import { CommitList } from './CommitList';
-import { RepoCodeSearch } from './RepoCodeSearch';
-import { PRList } from './PRList';
-import { ReleaseList } from './ReleaseList';
-import { ActionsTab } from './ActionsTab';
-import { BranchesTab } from './BranchesTab';
-import { ForkModal } from './ForkModal';
-import { RepoDetailFiles } from './RepoDetailFiles';
-import { RepoDetailBranches } from './RepoDetailBranches';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { useI18n } from '../../../store/i18n';
-import { rpc, rpcJson, repoBlob } from '../../../lib/rpc';
-import { toSafeHref } from '../../../lib/safeHref';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Repository, Branch } from '../../../types/index.ts';
+import { CommitList } from './CommitList.tsx';
+import { RepoCodeSearch } from './RepoCodeSearch.tsx';
+import { PRList } from './PRList.tsx';
+import { ReleaseList } from './ReleaseList.tsx';
+import { ActionsTab } from './ActionsTab.tsx';
+import { BranchesTab } from './BranchesTab.tsx';
+import { ForkModal } from './ForkModal.tsx';
+import { RepoDetailFiles } from './RepoDetailFiles.tsx';
+import { RepoDetailBranches } from './RepoDetailBranches.tsx';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { rpc, rpcJson, repoBlob } from '../../../lib/rpc.ts';
+import { toSafeHref } from '../../../lib/safeHref.ts';
 
 type TabType = 'code' | 'search' | 'commits' | 'branches' | 'pull-requests' | 'releases' | 'actions';
 

@@ -5,17 +5,17 @@
  * and improve testability.
  */
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state.ts';
 import type {
   ArtifactKind,
   Deployment,
   CreateDeploymentInput,
   DeploymentTarget,
-} from './models';
+} from './models.ts';
 import {
   parseDeploymentTargetConfig,
-} from './provider';
+} from './provider.ts';
 import { BadRequestError, ConflictError } from 'takos-common/errors';
 
 export function resolveDeploymentArtifactBaseRef(serviceId: string, target?: DeploymentTarget): string {

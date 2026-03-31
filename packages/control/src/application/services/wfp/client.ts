@@ -8,7 +8,7 @@
  * handling, and sensitive-data sanitisation of error messages.
  */
 
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 
 export type WfpEnv = Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN' | 'WFP_DISPATCH_NAMESPACE'>;
 

@@ -1,12 +1,12 @@
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import type { Worker } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Worker } from '../../../types/index.ts';
 import {
   getWorkerDisplayHostname,
   getWorkerDisplayName,
   getWorkerStatusBgClass,
   getWorkerUrl,
-} from '../utils/workerUtils';
+} from '../utils/workerUtils.ts';
 
 export interface WorkersTabProps {
   workers: Worker[];

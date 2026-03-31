@@ -1,7 +1,7 @@
-import { useI18n } from '../../../store/i18n';
-import type { TranslationKey } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import type { Resource, Worker } from '../../../types';
+import { useI18n } from '../../../store/i18n.ts';
+import type { TranslationKey } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Resource, Worker } from '../../../types/index.ts';
 import type {
   Binding,
   EnvVar,
@@ -9,13 +9,13 @@ import type {
   WorkerDomain,
   WorkerSettingsTab,
   VerificationInfo,
-} from '../worker-models';
-import { GeneralTab } from './GeneralTab';
-import { DomainsTab } from './DomainsTab';
-import { EnvironmentTab } from './EnvironmentTab';
-import { BindingsTab } from './BindingsTab';
-import { RuntimeConfigTab } from './RuntimeConfigTab';
-import { DangerZone } from './DangerZone';
+} from '../worker-models.ts';
+import { GeneralTab } from './GeneralTab.tsx';
+import { DomainsTab } from './DomainsTab.tsx';
+import { EnvironmentTab } from './EnvironmentTab.tsx';
+import { BindingsTab } from './BindingsTab.tsx';
+import { RuntimeConfigTab } from './RuntimeConfigTab.tsx';
+import { DangerZone } from './DangerZone.tsx';
 
 export interface WorkerSettingsPanelProps {
   worker: Worker;

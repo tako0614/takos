@@ -1,4 +1,4 @@
-import { bytesToHex } from './encoding-utils';
+import { bytesToHex } from './encoding-utils.ts';
 
 export async function computeSHA256(
   content: string | ArrayBuffer | Uint8Array

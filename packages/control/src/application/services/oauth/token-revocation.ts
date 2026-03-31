@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { oauthTokens } from '../../../infra/db';
-import { getDb } from '../../../infra/db';
+import { oauthTokens } from '../../../infra/db/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, lt } from 'drizzle-orm';
-import { computeSHA256 } from '../../../shared/utils/hash';
-import { buildRevocationData, buildAuthorizationCodeTokenFamily } from './token-helpers';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
+import { buildRevocationData, buildAuthorizationCodeTokenFamily } from './token-helpers.ts';
 
 export async function revokeTokenByHash(
   dbBinding: D1Database,

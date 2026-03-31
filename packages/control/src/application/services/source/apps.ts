@@ -1,7 +1,7 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { getDb, files, apps } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, files, apps } from '../../../infra/db/index.ts';
 import { eq, and, like } from 'drizzle-orm';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -63,7 +63,7 @@ export async function deployFrontendFromWorkspace(
   if (input.clear) {
     const existingObjs = await bucket.list({ prefix: `apps/${appName}/` });
     if (existingObjs.objects.length > 0) {
-      await bucket.delete(existingObjs.objects.map(obj => obj.key));
+      await bucket.delete(existingObjs.objects.map((obj: { key: string }) => obj.key));
     }
   }
 

@@ -17,8 +17,8 @@ import {
   type CFAPIResponse,
   classifyAPIError,
   createTimeoutError,
-} from '../wfp/client';
-import { withTimeout } from '../../../shared/utils/with-timeout';
+} from '../wfp/client.ts';
+import { withTimeout } from '../../../shared/utils/with-timeout.ts';
 
 export interface CloudflareApiConfig {
   accountId: string;

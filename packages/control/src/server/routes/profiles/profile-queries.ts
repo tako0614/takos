@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
-import { getDb } from '../../../infra/db';
-import { accountFollows, accountMutes, accountSettings, accounts, repositories, repoStars } from '../../../infra/db/schema';
-import type { Repository, Space } from '../../../shared/types';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
+import { getDb } from '../../../infra/db/index.ts';
+import { accountFollows, accountMutes, accountSettings, accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
+import type { Repository, Space } from '../../../shared/types/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
 
 export interface ProfileUser {
   id: string;

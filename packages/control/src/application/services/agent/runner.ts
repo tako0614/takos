@@ -19,41 +19,41 @@
  *   - memory-manager.ts     : memory runtime integration, memory graph processing
  */
 
-import type { RunStatus, Env } from '../../../shared/types';
+import type { RunStatus, Env } from '../../../shared/types/index.ts';
 import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models';
-import type { ToolExecutorLike } from '../../tools/executor';
-import { RunCancelledError } from './run-lifecycle';
-import { getAgentConfig } from './runner-config';
-import { DEFAULT_MODEL_ID } from './model-catalog';
-import type { RunTerminalPayload } from '../run-notifier';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import { RunCancelledError } from './run-lifecycle.ts';
+import { getAgentConfig } from './runner-config.ts';
+import { DEFAULT_MODEL_ID } from './model-catalog.ts';
+import type { RunTerminalPayload } from '../run-notifier/index.ts';
 import { AppError } from 'takos-common/errors';
-import { autoCloseSession as autoCloseSessionImpl } from './session-closer';
+import { autoCloseSession as autoCloseSessionImpl } from './session-closer.ts';
 
 // IO interface (canonical source: runner-io.ts)
-import type { AgentRunnerIo } from './runner-io';
-export type { AgentRunnerIo } from './runner-io';
+import type { AgentRunnerIo } from './runner-io.ts';
+export type { AgentRunnerIo } from './runner-io.ts';
 
 // Event helpers
 import {
   type EventEmitterState,
   emitEventImpl,
   buildTerminalEventPayloadImpl,
-} from './runner-events';
+} from './runner-events.ts';
 
 // Status helpers
-import { normalizeRunStatus } from './runner-history';
+import { normalizeRunStatus } from './runner-history.ts';
 
 // Manager state
-import { createLLMState, type LLMState } from './llm-manager';
-import type { SkillState, SkillPlanDeps } from './skill-plan';
-import type { MemoryState, MemoryManagerDeps } from './memory-manager';
+import { createLLMState, type LLMState } from './llm-manager.ts';
+import type { SkillState, SkillPlanDeps } from './skill-plan.ts';
+import type { MemoryState, MemoryManagerDeps } from './memory-manager.ts';
 
 // Orchestration
-import { runOrchestration, type OrchestrationDeps } from './runner-orchestration';
+import { runOrchestration, type OrchestrationDeps } from './runner-orchestration.ts';
 
 // Extracted modules used for type only
-import type { ToolExecution } from './runner-utils';
+import type { ToolExecution } from './runner-utils.ts';
 
 // ── Re-exports for backward compatibility ────────────────────────────
 
@@ -61,7 +61,7 @@ export {
   type EventEmitterState,
   emitEventImpl,
   buildTerminalEventPayloadImpl,
-} from './runner-events';
+} from './runner-events.ts';
 
 export {
   updateRunStatusImpl,
@@ -69,9 +69,9 @@ export {
   type ConversationHistoryDeps,
   normalizeRunStatus,
   buildConversationHistory,
-} from './runner-history';
+} from './runner-history.ts';
 
-export { executeRun } from './execute-run';
+export { executeRun } from './execute-run.ts';
 
 // ── AgentRunner class ────────────────────────────────────────────────
 

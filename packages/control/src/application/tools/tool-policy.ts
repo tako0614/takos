@@ -1,17 +1,17 @@
-import type { SpaceRole } from '../../shared/types';
-import type { ToolDefinition } from './tool-definitions';
+import type { SpaceRole } from '../../shared/types/index.ts';
+import type { ToolDefinition } from './tool-definitions.ts';
 import type {
   SensitiveReadPolicy,
   ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-} from './tool-policy-types';
+} from './tool-policy-types.ts';
 export type {
   SensitiveReadPolicy,
   ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-} from './tool-policy-types';
+} from './tool-policy-types.ts';
 export {
   WORKSPACE_STORAGE_OPS,
   WORKSPACE_COMMON_ENV_OPS,
@@ -22,7 +22,7 @@ export {
   SKILL_OPS,
   APP_DEPLOYMENT_OPS,
   MCP_SERVER_OPS,
-} from './tool-policy-types';
+} from './tool-policy-types.ts';
 
 export interface ToolPolicyMetadata {
   tool_class: ToolClass;
@@ -576,4 +576,4 @@ export {
   isToolAllowedForAgent,
   filterAgentAllowedToolNames,
   validateBuiltinToolPolicies,
-} from './tool-policy-utils';
+} from './tool-policy-utils.ts';

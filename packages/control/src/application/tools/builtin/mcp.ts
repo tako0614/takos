@@ -7,14 +7,14 @@
  * mcp_remove_server - Remove a registered MCP server
  */
 
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
 import {
   registerExternalMcpServer,
   listMcpServers,
   deleteMcpServer,
   updateMcpServer,
-} from '../../services/platform/mcp';
-import { getDb, mcpServers } from '../../../infra/db';
+} from '../../services/platform/mcp.ts';
+import { getDb, mcpServers } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------

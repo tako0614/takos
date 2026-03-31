@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { parseJsonBody } from '../route-auth';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import * as gitStore from '../../../application/services/git-smart';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { toGitBucket } from './routes';
+import { parseJsonBody } from '../route-auth.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { toGitBucket } from './routes.ts';
 import { BadRequestError, NotFoundError, AuthorizationError, ConflictError, InternalError, isAppError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
-import { WRITE_ROLES, sigTimestampToIso, getCommitSha } from './git-shared';
+import { logError } from '../../../shared/utils/logger.ts';
+import { WRITE_ROLES, sigTimestampToIso, getCommitSha } from './git-shared.ts';
 
 const gitRefs = new Hono<AuthenticatedRouteEnv>()
   .get('/repos/:repoId/branches', zValidator('query', z.object({

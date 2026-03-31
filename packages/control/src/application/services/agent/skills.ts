@@ -20,10 +20,10 @@ export {
   getOutputModeKeywords,
   scoreSkill,
   selectRelevantSkills,
-} from './skill-scoring';
+} from './skill-scoring.ts';
 
 // ── Resolution ──────────────────────────────────────────────────────────
-export type { SkillSource, SkillCategory } from './skill-resolution';
+export type { SkillSource, SkillCategory } from './skill-resolution.ts';
 export type {
   SkillAvailabilityStatus,
   SkillAvailabilityContext,
@@ -32,7 +32,7 @@ export type {
   SkillSelection,
   SkillResolutionContext,
   ResolvedSkillPlan,
-} from './skill-resolution';
+} from './skill-resolution.ts';
 export {
   toSkillCatalogEntry,
   evaluateSkillAvailability,
@@ -42,13 +42,13 @@ export {
   formatContractList,
   buildSkillEnhancedPrompt,
   resolveSkillPlan,
-} from './skill-resolution';
+} from './skill-resolution.ts';
 
 // ── Loader ──────────────────────────────────────────────────────────────
-export type { SkillLoadResult } from './skill-loader';
+export type { SkillLoadResult } from './skill-loader.ts';
 export {
   loadEquippedSkills,
   buildSkillResolutionContext,
   resolveSkillPlanForRun,
   emitSkillLoadOutcome,
-} from './skill-loader';
+} from './skill-loader.ts';

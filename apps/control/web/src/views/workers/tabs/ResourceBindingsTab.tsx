@@ -1,9 +1,9 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import { Button } from '../../../components/ui/Button';
-import type { Resource } from '../../../types';
-import { useResourceBindings } from '../../../hooks/useResourceBindings';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import type { Resource } from '../../../types/index.ts';
+import { useResourceBindings } from '../../../hooks/useResourceBindings.ts';
 
 interface ResourceBindingsTabProps {
   resource: Resource;

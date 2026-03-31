@@ -1,20 +1,20 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, IndexJobQueueMessage } from '../../../shared/types';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import type { AgentContext } from '../agent/agent-models';
-import type { ActivationResult, Claim, Evidence, ToolObserver } from './graph-models';
-import { RunOverlay } from './overlay';
+import type { Env, IndexJobQueueMessage } from '../../../shared/types/index.ts';
+import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import type { AgentContext } from '../agent/agent-models.ts';
+import type { ActivationResult, Claim, Evidence, ToolObserver } from './graph-models.ts';
+import { RunOverlay } from './overlay.ts';
 import {
   getActiveClaims,
   getPathsForClaim,
   countEvidenceForClaims,
   upsertClaim,
   insertEvidence,
-} from './claim-store';
-import { buildActivationBundles, renderActivationSegment } from './activation';
-import { createToolObserver } from './observer';
-import { generateId } from '../../../shared/utils';
-import { logWarn } from '../../../shared/utils/logger';
+} from './claim-store.ts';
+import { buildActivationBundles, renderActivationSegment } from './activation.ts';
+import { createToolObserver } from './observer.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 const EMPTY_ACTIVATION: ActivationResult = { bundles: [], segment: '', hasContent: false };
 

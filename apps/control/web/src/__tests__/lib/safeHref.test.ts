@@ -1,4 +1,4 @@
-import { toSafeHref } from '../../lib/safeHref';
+import { toSafeHref } from '../../lib/safeHref.ts';
 
 
 import { assertEquals } from 'jsr:@std/assert';

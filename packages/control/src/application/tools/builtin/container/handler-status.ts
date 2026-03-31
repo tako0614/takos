@@ -1,8 +1,8 @@
-import type { ToolHandler } from '../../tool-definitions';
-import { getDb, sessions, sessionRepos, repositories } from '../../../../infra/db';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { getDb, sessions, sessionRepos, repositories } from '../../../../infra/db/index.ts';
 import { eq, asc } from 'drizzle-orm';
-import { callSessionApi, checkSessionHealth } from './session';
-import { buildContainerStatusUnavailableMessage } from './availability';
+import { callSessionApi, checkSessionHealth } from './session.ts';
+import { buildContainerStatusUnavailableMessage } from './availability.ts';
 
 export const containerStatusHandler: ToolHandler = async (_args, context) => {
   if (!context.sessionId) {

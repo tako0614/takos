@@ -1,8 +1,8 @@
-import type { Run } from '../types';
-import { parseEventData, EVENT_DISPATCH } from './useWsMessageProcessor';
-import type { UseWsConnectionManagerOptions, UseWsConnectionManagerResult } from './useWsConnectionManager';
-import { useWsConnectionManager } from './useWsConnectionManager';
-import { useSseConnectionManager } from './useSseConnectionManager';
+import type { Run } from '../types/index.ts';
+import { parseEventData, EVENT_DISPATCH } from './useWsMessageProcessor.ts';
+import type { UseWsConnectionManagerOptions, UseWsConnectionManagerResult } from './useWsConnectionManager.ts';
+import { useWsConnectionManager } from './useWsConnectionManager.ts';
+import { useSseConnectionManager } from './useSseConnectionManager.ts';
 
 type MutableRefObject<T> = { current: T };
 

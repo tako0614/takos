@@ -4,8 +4,8 @@
 
 import { and, eq } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, repoGrants } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, repoGrants } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 
 export type Capability = 'visit' | 'read' | 'write' | 'admin';
 

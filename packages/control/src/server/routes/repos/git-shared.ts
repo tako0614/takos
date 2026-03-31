@@ -1,9 +1,9 @@
 import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { getTreeFlattenLimitError, type RepoBucketBinding } from './routes';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { getTreeFlattenLimitError, type RepoBucketBinding } from './routes.ts';
 import { InternalError, PayloadTooLargeError } from 'takos-common/errors';
-import type * as gitStore from '../../../application/services/git-smart';
-import { logWarn } from '../../../shared/utils/logger';
+import type * as gitStore from '../../../application/services/git-smart/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export type RepoContext = Context<AuthenticatedRouteEnv>;
 

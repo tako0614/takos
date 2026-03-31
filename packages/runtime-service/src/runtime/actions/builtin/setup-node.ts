@@ -1,5 +1,5 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { type ActionContext } from '../executor.ts';
 import { pushLog } from '../../logging.ts';
 import { resolvePathWithin } from '../../paths.ts';

@@ -6,6 +6,7 @@ import {
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import type { KVNamespace } from '../shared/types/bindings.ts';
+import { Buffer } from "node:buffer";
 
 export type DynamoKvStoreConfig = {
   region: string;

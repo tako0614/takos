@@ -1,9 +1,9 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { Commit } from '../../../types';
-import { formatDetailedRelativeDate } from '../../../lib/format';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Commit } from '../../../types/index.ts';
+import { formatDetailedRelativeDate } from '../../../lib/format.ts';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useI18n } from '../../../store/i18n.ts';
 
 interface CommitListProps {
   repoId: string;

@@ -6,15 +6,15 @@
  */
 
 import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import {
   importExternalRepository,
   fetchRemoteUpdates,
-} from '../../../application/services/source/external-import';
-import { buildAuthHeader } from '../../../application/services/source/external-import-utils';
-import { getDb, repositories } from '../../../infra/db';
+} from '../../../application/services/source/external-import.ts';
+import { buildAuthHeader } from '../../../application/services/source/external-import-utils.ts';
+import { getDb, repositories } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
 

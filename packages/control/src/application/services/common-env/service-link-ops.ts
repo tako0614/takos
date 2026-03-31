@@ -1,27 +1,27 @@
 import { eq, and, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import type { D1TransactionManager } from '../../../shared/utils/db-transaction';
-import { normalizeEnvName, uniqueEnvNames } from './crypto';
-import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
+import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
+import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
 import {
   listServiceLinks,
   listSpaceCommonEnvNames,
   type LinkSource,
   type ServiceLinkRow,
   type SyncState,
-} from './repository';
+} from './repository.ts';
 import {
   buildLinkStateByName,
   getChanges,
   getEffectiveLinks,
-} from './link-state';
+} from './link-state.ts';
 import {
   listTakosBuiltinStatuses,
   type TakosBuiltinStatus,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
-} from './takos-builtins';
-import { getDb, serviceCommonEnvLinks } from '../../../infra/db';
+} from './takos-builtins.ts';
+import { getDb, serviceCommonEnvLinks } from '../../../infra/db/index.ts';
 
 
 export interface ServiceLinkDeps {

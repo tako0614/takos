@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import { ModelSwitcher } from './ModelSwitcher';
+import { ModelSwitcher } from './ModelSwitcher.tsx';
 
 interface ChatHeaderProps {
   selectedModel: string;

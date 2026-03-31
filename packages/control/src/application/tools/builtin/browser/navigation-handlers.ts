@@ -4,15 +4,15 @@
  * Consolidates: browser_open, browser_goto, browser_close.
  */
 
-import type { ToolHandler } from '../../tool-definitions';
+import type { ToolHandler } from '../../tool-definitions.ts';
 import {
   getBrowserSessionId,
   setBrowserSessionId,
   clearBrowserSessionId,
   requireBrowserSessionId,
   browserHostFetch,
-} from './session';
-import { bytesToHex } from '../../../../shared/utils/encoding-utils';
+} from './session.ts';
+import { bytesToHex } from '../../../../shared/utils/encoding-utils.ts';
 
 /* ------------------------------------------------------------------ */
 /*  browser_open                                                       */

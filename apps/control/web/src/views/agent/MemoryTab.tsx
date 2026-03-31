@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Button } from '../../components/ui';
-import { useMemoryData } from '../../hooks/useMemoryData';
-import { MemoryList } from './MemoryList';
-import { ReminderList } from './ReminderList';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button } from '../../components/ui/index.ts';
+import { useMemoryData } from '../../hooks/useMemoryData.ts';
+import { MemoryList } from './MemoryList.tsx';
+import { ReminderList } from './ReminderList.tsx';
 
 export function MemoryTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();

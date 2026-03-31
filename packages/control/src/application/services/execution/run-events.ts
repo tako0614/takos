@@ -1,5 +1,5 @@
-import { getDb, runEvents } from '../../../infra/db';
-import type { Env } from '../../../shared/types';
+import { getDb, runEvents } from '../../../infra/db/index.ts';
+import type { Env } from '../../../shared/types/index.ts';
 import type { PlatformServices } from '../../../platform/platform-config.ts';
 
 import {
@@ -7,8 +7,8 @@ import {
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
   type RunNotifierEmitPayload,
-} from '../run-notifier';
-import { logWarn } from '../../../shared/utils/logger';
+} from '../run-notifier/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // SSE notifier accessor

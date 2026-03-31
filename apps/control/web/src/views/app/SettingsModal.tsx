@@ -1,7 +1,7 @@
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { SettingsView } from './SettingsView';
-import type { User, UserSettings } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { SettingsView } from './SettingsView.tsx';
+import type { User, UserSettings } from '../../types/index.ts';
 
 interface SettingsModalProps {
   user: User | null;

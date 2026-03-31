@@ -6,9 +6,9 @@ import {
   serviceRuntimeFlags,
   serviceRuntimeLimits,
   serviceMcpEndpoints,
-} from '../../../infra/db';
+} from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { normalizeLimits, parseRuntimeRow } from './resource-bindings';
+import { normalizeLimits, parseRuntimeRow } from './resource-bindings.ts';
 import type {
   DesiredStateEnv,
   ServiceManagedMcpServerState,
@@ -18,7 +18,7 @@ import type {
   ServiceRuntimeFlagRow,
   ServiceRuntimeLimitRow,
   ServiceRuntimeMcpEndpointRow,
-} from './desired-state-types';
+} from './desired-state-types.ts';
 
 export async function getRuntimeConfig(
   env: DesiredStateEnv,

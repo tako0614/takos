@@ -1,12 +1,12 @@
 import { createSignal, createMemo } from 'solid-js';
 import { Show, For } from 'solid-js';
-import type { Message, ToolExecution } from '../../types';
-import { Icons } from '../../lib/Icons';
-import { MarkdownRenderer } from './MarkdownRenderer';
-import { PersistedToolCalls } from './Tooling';
-import { useI18n } from '../../store/i18n';
-import { parseChatMessageMetadata } from './messageMetadata';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import type { Message, ToolExecution } from '../../types/index.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { MarkdownRenderer } from './MarkdownRenderer.tsx';
+import { PersistedToolCalls } from './Tooling.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { parseChatMessageMetadata } from './messageMetadata.ts';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.ts';
 
 interface MessageBubbleProps {
   message: Message;

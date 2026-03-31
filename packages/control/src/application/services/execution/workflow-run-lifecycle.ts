@@ -8,18 +8,18 @@ import {
   validateWorkflow,
   createExecutionPlan,
 } from 'takos-actions-engine';
-import { generateId } from '../../../shared/utils';
-import * as gitStore from '../git-smart';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows, workflowSecrets } from '../../../infra/db';
+import { generateId } from '../../../shared/utils/index.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows, workflowSecrets } from '../../../infra/db/index.ts';
 import { eq, and, ne, max, inArray, count } from 'drizzle-orm';
-import { buildWorkflowDispatchEnv } from '../actions';
+import { buildWorkflowDispatchEnv } from '../actions/index.ts';
 import { BadRequestError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
-import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
-import type { WorkflowBucket, StartRunOptions, WorkflowRunRecord } from './workflow-engine-types';
+import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
+import type { WorkflowBucket, StartRunOptions, WorkflowRunRecord } from './workflow-engine-types.ts';
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import { toWorkflowJobDefinition, toRunRecord } from './workflow-engine-converters';
-import { WORKFLOW_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { logWarn } from '../../../shared/utils/logger';
+import { toWorkflowJobDefinition, toRunRecord } from './workflow-engine-converters.ts';
+import { WORKFLOW_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // startRun

@@ -1,5 +1,5 @@
 import type { ExecutionContext } from 'hono';
-import type { AppContext, BaseVariables } from '../route-auth';
+import type { AppContext, BaseVariables } from '../route-auth.ts';
 
 export type IndexContext = AppContext<BaseVariables>;
 

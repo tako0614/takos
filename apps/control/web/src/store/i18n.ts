@@ -1,7 +1,7 @@
 import { atom } from 'jotai/vanilla';
 import { useAtomValue, useSetAtom } from 'solid-jotai';
-import { atomWithStorageVanilla } from '../lib/storage-atom';
-import { type Language, type TranslationKey, type TranslationParams, getTranslation } from '../i18n';
+import { atomWithStorageVanilla } from '../lib/storage-atom.ts';
+import { type Language, type TranslationKey, type TranslationParams, getTranslation } from '../i18n.ts';
 
 export type { TranslationKey, TranslationParams };
 

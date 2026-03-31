@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { WORKER_SETTINGS_TOOLS, WORKER_SETTINGS_HANDLERS } from './platform/worker-settings';
-import { DOMAIN_TOOLS, DOMAIN_HANDLERS } from './platform/domains';
-import { DEPLOYMENT_TOOLS, DEPLOYMENT_HANDLERS } from './platform/deployments';
-import { DEPLOYMENT_HISTORY_TOOLS, DEPLOYMENT_HISTORY_HANDLERS } from './platform/deployment-history';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { WORKER_SETTINGS_TOOLS, WORKER_SETTINGS_HANDLERS } from './platform/worker-settings.ts';
+import { DOMAIN_TOOLS, DOMAIN_HANDLERS } from './platform/domains.ts';
+import { DEPLOYMENT_TOOLS, DEPLOYMENT_HANDLERS } from './platform/deployments.ts';
+import { DEPLOYMENT_HISTORY_TOOLS, DEPLOYMENT_HISTORY_HANDLERS } from './platform/deployment-history.ts';
 
 export {
   WORKER_ENV_GET as SERVICE_ENV_GET,
@@ -17,7 +17,7 @@ export {
   workerBindingsSetHandler,
   workerRuntimeGetHandler,
   workerRuntimeSetHandler,
-} from './platform/worker-settings';
+} from './platform/worker-settings.ts';
 
 export {
   DOMAIN_LIST,
@@ -28,7 +28,7 @@ export {
   domainAddHandler,
   domainVerifyHandler,
   domainRemoveHandler,
-} from './platform/domains';
+} from './platform/domains.ts';
 
 export {
   WORKER_LIST as SERVICE_LIST,
@@ -37,7 +37,7 @@ export {
   workerListHandler,
   workerCreateHandler,
   workerDeleteHandler,
-} from './platform/deployments';
+} from './platform/deployments.ts';
 
 export {
   DEPLOYMENT_HISTORY,
@@ -46,7 +46,7 @@ export {
   deploymentHistoryHandler,
   deploymentGetHandler,
   deploymentRollbackHandler,
-} from './platform/deployment-history';
+} from './platform/deployment-history.ts';
 
 export const PLATFORM_TOOLS: ToolDefinition[] = [
   ...WORKER_SETTINGS_TOOLS,

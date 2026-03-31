@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
+import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   listStorageFiles,
   getStorageItem,
@@ -11,13 +11,13 @@ import {
   moveStorageItem,
   bulkDeleteStorageItems,
   deleteR2Objects,
-} from '../../../application/services/source/space-storage';
-import type { StorageFileResponse } from '../../../application/services/source/space-storage';
-import { getDb } from '../../../infra/db';
+} from '../../../application/services/source/space-storage.ts';
+import type { StorageFileResponse } from '../../../application/services/source/space-storage.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema';
+import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations';
+import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations.ts';
 
 const app = new Hono<AuthenticatedRouteEnv>()
   .use('/:spaceId/storage/bulk-delete', storageBulkLimiter.middleware())

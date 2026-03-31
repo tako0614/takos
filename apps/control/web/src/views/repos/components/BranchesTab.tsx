@@ -1,13 +1,13 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { Branch } from '../../../types';
-import { useToast } from '../../../store/toast';
-import { useConfirmDialog } from '../../../store/confirm-dialog';
-import { Button } from '../../../components/ui/Button';
-import { Badge } from '../../../components/ui/Badge';
-import { rpc, rpcJson } from '../../../lib/rpc';
-import { useI18n } from '../../../store/i18n';
-import { formatDetailedRelativeDate } from '../../../lib/format';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Branch } from '../../../types/index.ts';
+import { useToast } from '../../../store/toast.ts';
+import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Badge } from '../../../components/ui/Badge.tsx';
+import { rpc, rpcJson } from '../../../lib/rpc.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { formatDetailedRelativeDate } from '../../../lib/format.ts';
 
 interface BranchWithCommit extends Branch {
   latest_commit?: {

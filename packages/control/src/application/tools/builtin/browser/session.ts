@@ -5,7 +5,7 @@
  * One session per run, stored in a module-level cache.
  */
 
-import type { ToolContext } from '../../tool-definitions';
+import type { ToolContext } from '../../tool-definitions.ts';
 
 /**
  * In-memory store: runId → browserSessionId.

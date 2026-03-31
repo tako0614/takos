@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import type { SessionDiff } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import type { SessionDiff } from '../../types/index.ts';
 
 export function SessionDiffPanel(props: {
   sessionDiff: { sessionId: string; sessionStatus?: string; diff?: SessionDiff };

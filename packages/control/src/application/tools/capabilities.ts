@@ -1,4 +1,4 @@
-import type { StandardCapabilityId } from '../services/platform/capabilities';
+import type { StandardCapabilityId } from '../services/platform/capabilities.ts';
 
 /**
  * Tool -> Capability mapping (Agent Tool checks).

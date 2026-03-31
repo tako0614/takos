@@ -1,17 +1,17 @@
-import { getDb } from '../../../infra/db';
-import { workflowJobs, workflowRuns } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { workflowJobs, workflowRuns } from '../../../infra/db/schema.ts';
 import { and, desc, eq } from 'drizzle-orm';
 import { GoneError } from 'takos-common/errors';
-import type { Env } from '../../../shared/types';
-import { checkRepoAccess } from '../source/repos';
-import * as gitStore from '../git-smart';
-import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts';
+import type { Env } from '../../../shared/types/index.ts';
+import { checkRepoAccess } from '../source/repos.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts.ts';
 import {
   type AppDeploymentBuildSource,
   type AppManifest,
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
-} from '../source/app-manifest';
+} from '../source/app-manifest.ts';
 
 type RepoRefType = 'branch' | 'tag' | 'commit';
 

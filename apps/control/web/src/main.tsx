@@ -1,8 +1,8 @@
 import { createEffect, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { useAtomValue, useSetAtom } from 'solid-jotai';
-import App from './App';
-import { resolvedThemeAtom, systemThemeAtom } from './store/theme';
+import App from './App.tsx';
+import { resolvedThemeAtom, systemThemeAtom } from './store/theme.ts';
 import './styles.css';
 
 if (import.meta.env.PROD && import.meta.env.MODE !== 'staging-debug') {

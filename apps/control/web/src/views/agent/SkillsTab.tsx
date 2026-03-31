@@ -1,12 +1,12 @@
 import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { useToast } from '../../store/toast';
-import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson, rpcPath } from '../../lib/rpc';
-import { getErrorMessage } from '../../lib/errors';
-import { SkeletonList } from '../../components/Skeleton';
-import type { OfficialSkill, Skill } from '../../types';
-import { SkillList } from './SkillList';
+import { useI18n } from '../../store/i18n.ts';
+import { useToast } from '../../store/toast.ts';
+import { useConfirmDialog } from '../../store/confirm-dialog.ts';
+import { rpc, rpcJson, rpcPath } from '../../lib/rpc.ts';
+import { getErrorMessage } from '../../lib/errors.ts';
+import { SkeletonList } from '../../components/Skeleton.tsx';
+import type { OfficialSkill, Skill } from '../../types/index.ts';
+import { SkillList } from './SkillList.tsx';
 import {
   SkillFormView,
   INITIAL_SKILL_FORM,
@@ -14,7 +14,7 @@ import {
   splitCsv,
   readSkillMutationResponse,
   type SkillFormData,
-} from './SkillForm';
+} from './SkillForm.tsx';
 
 export function SkillsTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();

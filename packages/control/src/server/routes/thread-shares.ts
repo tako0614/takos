@@ -1,17 +1,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../shared/types';
-import { type BaseVariables } from './route-auth';
+import type { Env } from '../../shared/types/index.ts';
+import { type BaseVariables } from './route-auth.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger';
-import { zValidator } from './zod-validator';
-import { checkThreadAccess } from '../../application/services/threads/thread-service';
+import { logError } from '../../shared/utils/logger.ts';
+import { zValidator } from './zod-validator.ts';
+import { checkThreadAccess } from '../../application/services/threads/thread-service.ts';
 import {
   createThreadShare,
   listThreadShares,
   revokeThreadShare,
   type ThreadShareMode,
-} from '../../application/services/threads/thread-shares';
+} from '../../application/services/threads/thread-shares.ts';
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 

@@ -1,14 +1,14 @@
-import { getDb } from '../../../infra/db';
-import { sessions } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { sessions } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { HEARTBEAT_TIMEOUT_MS, STARTUP_GRACE_MS } from '../../../shared/constants/index.ts';
 import { BadRequestError, AuthorizationError, NotFoundError } from 'takos-common/errors';
 import type {
   JwtHeartbeatPayload,
   SessionContext,
-} from './session-mappers';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+} from './session-mappers.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 

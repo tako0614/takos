@@ -1,18 +1,18 @@
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import { useSetAtom } from 'solid-jotai';
-import { UnifiedSidebar } from '../navigation/UnifiedSidebar';
-import { SidebarContext, type SidebarCallbacks } from '../navigation/SidebarContext';
-import { MobileBottomNav, type NavItem } from './MobileBottomNav';
-import { MobileDrawer } from './MobileDrawer';
-import { MobileHeader } from './MobileHeader';
-import { getSpaceIdentifier } from '../../lib/spaces';
-import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { useI18n } from '../../store/i18n';
-import { useAuth } from '../../hooks/useAuth';
-import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal';
-import { useNavigation } from '../../store/navigation';
-import type { View } from '../../types';
+import { UnifiedSidebar } from '../navigation/UnifiedSidebar.tsx';
+import { SidebarContext, type SidebarCallbacks } from '../navigation/SidebarContext.tsx';
+import { MobileBottomNav, type NavItem } from './MobileBottomNav.tsx';
+import { MobileDrawer } from './MobileDrawer.tsx';
+import { MobileHeader } from './MobileHeader.tsx';
+import { getSpaceIdentifier } from '../../lib/spaces.ts';
+import { useBreakpoint } from '../../hooks/useBreakpoint.ts';
+import { useI18n } from '../../store/i18n.ts';
+import { useAuth } from '../../hooks/useAuth.ts';
+import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal.ts';
+import { useNavigation } from '../../store/navigation.ts';
+import type { View } from '../../types/index.ts';
 
 function getMobileActiveItem(view: View): NavItem {
   switch (view) {

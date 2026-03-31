@@ -1,12 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Message, MemoryType } from '../../../shared/types';
-import { LLMClient } from '../agent';
-import { getDb, memories, messages as messagesTable } from '../../../infra/db';
+import type { Message, MemoryType } from '../../../shared/types/index.ts';
+import { LLMClient } from '../agent/index.ts';
+import { getDb, memories, messages as messagesTable } from '../../../infra/db/index.ts';
 import { eq, asc } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { chatAndParseJsonArray } from './llm-parser';
-import { MEMORY_TYPES } from './memories';
-import { logError } from '../../../shared/utils/logger';
+import { generateId } from '../../../shared/utils/index.ts';
+import { chatAndParseJsonArray } from './llm-parser.ts';
+import { MEMORY_TYPES } from './memories.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 interface ExtractedMemory {
   type: MemoryType;

@@ -7,6 +7,7 @@ import {
   tryParseJson,
 } from './api-request.ts';
 import type { ParsedSseEvent, StreamCommandOptions } from './api-request.ts';
+import { Buffer } from "node:buffer";
 
 function printSseEvent(event: ParsedSseEvent, jsonOutput: boolean): void {
   if (jsonOutput) {

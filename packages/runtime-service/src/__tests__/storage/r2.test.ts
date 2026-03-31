@@ -1,6 +1,7 @@
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import path from 'path';
+import { Buffer } from 'node:buffer';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import path from 'node:path';
 // [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
 import { downloadSpaceFiles, uploadSpaceFiles, s3Client } from '../../storage/r2.ts';
 

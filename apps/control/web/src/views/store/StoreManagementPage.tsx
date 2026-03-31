@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
+import { useI18n } from '../../store/i18n.ts';
 import {
   useStoreManagement,
   useStoreInventory,
@@ -7,7 +7,7 @@ import {
   type StoreItem,
   type InventoryItem,
   type RegistryEntry,
-} from '../../hooks/useStoreManagement';
+} from '../../hooks/useStoreManagement.ts';
 
 interface StoreManagementPageProps {
   spaceId: string;

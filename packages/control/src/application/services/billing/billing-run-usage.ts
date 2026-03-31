@@ -5,15 +5,15 @@
  * run, then records them idempotently via the core usage recording functions.
  */
 
-import { getDb, runs } from '../../../infra/db';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import { logWarn, logError } from '../../../shared/utils/logger';
-import type { Env } from '../../../shared/types';
+import { getDb, runs } from '../../../infra/db/index.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { logWarn, logError } from '../../../shared/utils/logger.ts';
+import type { Env } from '../../../shared/types/index.ts';
 import { eq } from 'drizzle-orm';
-import { getUsageEventsFromR2 } from '../offload/usage-events';
-import { METER_TYPES, type MeterType } from './billing-types';
-import { getOrCreateBillingAccount } from './billing-accounts';
-import { recordUsage } from './billing-usage';
+import { getUsageEventsFromR2 } from '../offload/usage-events.ts';
+import { METER_TYPES, type MeterType } from './billing-types.ts';
+import { getOrCreateBillingAccount } from './billing-accounts.ts';
+import { recordUsage } from './billing-usage.ts';
 
 /**
  * Batch-record all usage for a run (LLM tokens + raw usage events from R2).

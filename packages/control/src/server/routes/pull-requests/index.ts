@@ -1,8 +1,8 @@
-import pullRequestsBase from './routes';
-import pullRequestsMerge from './merge-handlers';
-import pullRequestsReviews from './reviews';
-import pullRequestsComments from './comments';
-import type { AuthenticatedRouteEnv } from '../route-auth';
+import pullRequestsBase from './routes.ts';
+import pullRequestsMerge from './merge-handlers.ts';
+import pullRequestsReviews from './reviews.ts';
+import pullRequestsComments from './comments.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { Hono } from 'hono';
 
 export default new Hono<AuthenticatedRouteEnv>()

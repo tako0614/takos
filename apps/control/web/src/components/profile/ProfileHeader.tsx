@@ -1,9 +1,9 @@
 import type { JSX } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { Avatar, Button } from '../ui';
-import type { ProfileTab, UserProfile } from '../../types/profile';
-import { formatDate, formatNumber } from '../../lib/format';
+import { Icons } from '../../lib/Icons.tsx';
+import { Avatar, Button } from '../ui/index.ts';
+import type { ProfileTab, UserProfile } from '../../types/profile.ts';
+import { formatDate, formatNumber } from '../../lib/format.ts';
 
 interface ProfileHeaderProps {
   profile: UserProfile;

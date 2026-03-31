@@ -1,5 +1,5 @@
 import type { Env } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup';
+import { createMockEnv } from '../../../test/integration/setup.ts';
 import runsRouter from '@/routes/runs/routes';
 
 

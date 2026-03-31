@@ -1,4 +1,4 @@
-import type { SpaceRole } from '../../shared/types';
+import type { SpaceRole } from '../../shared/types/index.ts';
 
 export type ToolClass = 'workspace_mapped' | 'agent_native' | 'composite';
 export type SensitiveReadPolicy = 'none' | 'masked' | 'write_only';

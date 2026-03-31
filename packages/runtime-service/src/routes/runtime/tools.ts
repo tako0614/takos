@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { Worker } from 'worker_threads';
-import { existsSync } from 'fs';
-import path from 'path';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import { Worker } from 'node:worker_threads';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.ts';
 import { getWorkerResourceLimits } from '../../runtime/validation.ts';
 import { getErrorMessage } from 'takos-common/errors';
@@ -35,7 +36,7 @@ function resolveWorkerPath(): string {
   return existsSync(jsPath) ? jsPath : path.join(__dirname, '../../runtime/tools/worker.ts');
 }
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/execute-tool', async (c) => {
   const startTime = Date.now();

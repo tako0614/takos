@@ -7,7 +7,7 @@ const mocks = ({
   buildRunNotifierEmitPayload: ((..._args: any[]) => undefined) as any,
 });
 
-// workflow-events.ts imports from '../../application/services/run-notifier' (barrel)
+// workflow-events.ts imports from '../../application/services/run-notifier.ts' (barrel)
 // [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier'
 import { emitWorkflowEvent } from '@/queues/workflow-events';
 import type { WorkflowQueueEnv } from '@/queues/workflow-types';

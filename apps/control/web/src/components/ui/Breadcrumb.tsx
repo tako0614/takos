@@ -1,6 +1,6 @@
 import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
+import { Icons } from '../../lib/Icons.tsx';
 
 export interface BreadcrumbItem {
   label: string;

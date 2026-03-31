@@ -1,9 +1,9 @@
-import type { ToolContext } from '../../tool-definitions';
-import { getDb, sessionRepos, sessions } from '../../../../infra/db';
+import type { ToolContext } from '../../tool-definitions.ts';
+import { getDb, sessionRepos, sessions } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { validatePath } from '../../../../shared/utils/path-validation';
-import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler';
-import { buildContainerUnavailableMessage } from '../container/availability';
+import { validatePath } from '../../../../shared/utils/path-validation.ts';
+import { callRuntimeRequest } from '../../../services/execution/runtime-request-handler.ts';
+import { buildContainerUnavailableMessage } from '../container/availability.ts';
 
 export function requireContainer(context: ToolContext): void {
   if (!context.sessionId) {

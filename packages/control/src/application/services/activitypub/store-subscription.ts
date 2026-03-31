@@ -5,15 +5,15 @@
 
 import { and, eq, desc, count as countFn } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
-import { fetchRemoteOutbox } from './remote-store-client';
+import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { fetchRemoteOutbox } from './remote-store-client.ts';
 import {
   listSubscribedStores,
   markOutboxChecked,
   type StoreRegistryEntry,
-} from './store-registry';
-import { logError } from '../../../shared/utils/logger';
+} from './store-registry.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export interface StoreUpdate {
   id: string;

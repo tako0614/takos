@@ -6,9 +6,9 @@
  */
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { listFollowers } from './followers';
-import { apFetch } from './remote-store-client';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger';
+import { listFollowers } from './followers.ts';
+import { apFetch } from './remote-store-client.ts';
+import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
 
 const AP_CONTENT_TYPE = 'application/activity+json';
 const DELIVERY_BATCH_SIZE = 50;

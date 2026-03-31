@@ -1,7 +1,7 @@
 import type { JSX } from 'solid-js';
 
-import { Icons } from '../../../lib/Icons';
-import type { Resource } from '../../../types';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Resource } from '../../../types/index.ts';
 
 export function getResourceTypeIcon(type: Resource['type']): JSX.Element {
   switch (type) {

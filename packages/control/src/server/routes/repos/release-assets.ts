@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
-import { generateId } from '../../../shared/utils';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { generateExploreInvalidationUrls, hasWriteRole } from './routes';
-import { getDb } from '../../../infra/db';
-import { repoReleases, repoReleaseAssets } from '../../../infra/db/schema';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { generateExploreInvalidationUrls, hasWriteRole } from './routes.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repoReleases, repoReleaseAssets } from '../../../infra/db/schema.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { type ReleaseAsset, toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets';
+import { invalidateCacheOnMutation } from '../../middleware/cache.ts';
+import { type ReleaseAsset, toReleaseAsset, toReleaseAssets } from '../../../application/services/source/repo-release-assets.ts';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { sanitizeReleaseAssetFilename, buildAttachmentDisposition } from './release-shared';
-import { ok } from '../response-utils';
+import { sanitizeReleaseAssetFilename, buildAttachmentDisposition } from './release-shared.ts';
+import { ok } from '../response-utils.ts';
 
 const releaseAssets = new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/releases/:tag/assets', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {

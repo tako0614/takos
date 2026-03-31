@@ -5,13 +5,13 @@
  * reconcile MCP, and handle failure rollback. Extracted from DeploymentService
  * to keep the main service file focused on coordination.
  */
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state';
-import type { Deployment, DeploymentEnv } from './models';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state.ts';
+import type { Deployment, DeploymentEnv } from './models.ts';
 import {
   createDeploymentProvider,
   parseDeploymentTargetConfig,
-} from './provider';
+} from './provider.ts';
 import {
   createDeploymentProviderRegistry,
   resolveDeploymentProviderConfigsFromEnv,
@@ -23,10 +23,10 @@ import {
   getServiceDeploymentBasics,
   logDeploymentEvent,
   updateDeploymentRecord,
-} from './store';
-import { executeDeploymentStep, updateDeploymentState } from './state';
-import { reconcileManagedWorkerMcpServer } from '../platform/mcp';
-import type { RoutingTarget } from '../routing/routing-models';
+} from './store.ts';
+import { executeDeploymentStep, updateDeploymentState } from './state.ts';
+import { reconcileManagedWorkerMcpServer } from '../platform/mcp.ts';
+import type { RoutingTarget } from '../routing/routing-models.ts';
 import {
   applyRoutingDbUpdates,
   applyRoutingToHostnames,
@@ -36,24 +36,24 @@ import {
   restoreRoutingSnapshot,
   snapshotRouting,
   type RoutingSnapshot,
-} from './routing';
-import { rollbackDeploymentSteps } from './rollback';
-import { deployments, getDb, services } from '../../../infra/db';
+} from './routing.ts';
+import { rollbackDeploymentSteps } from './rollback.ts';
+import { deployments, getDb, services } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants';
-import { logError } from '../../../shared/utils/logger';
+import { CF_COMPATIBILITY_DATE } from '../../../shared/constants/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { InternalError, NotFoundError } from 'takos-common/errors';
 import {
   resolveDeploymentArtifactRef,
   parseRuntimeConfig,
   extractErrorMessage,
-} from './artifact-refs';
+} from './artifact-refs.ts';
 import {
   getBundleContent,
   verifyBundleIntegrity,
   getWasmContent,
   decryptBindings,
-} from './artifact-io';
+} from './artifact-io.ts';
 
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
@@ -316,7 +316,7 @@ export async function executeDeploymentPipeline(
     // Clean up routing snapshot after successful deployment
     if (env.WORKER_BUNDLES) {
       const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
-      await env.WORKER_BUNDLES.delete(snapshotKey).catch((e) => {
+      await env.WORKER_BUNDLES.delete(snapshotKey).catch((e: unknown) => {
         logError('Failed to clean up deployment snapshot (non-critical)', e, { module: 'deployment' });
       });
     }

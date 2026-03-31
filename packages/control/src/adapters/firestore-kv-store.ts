@@ -9,6 +9,7 @@
  */
 
 import type { KVNamespace } from '../shared/types/bindings.ts';
+import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Config

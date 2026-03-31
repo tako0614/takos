@@ -1,13 +1,13 @@
 import type { JSX } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import type { Resource } from '../../types';
-import type { ResourceDetailTab } from './worker-models';
-import { Breadcrumb } from '../../components/ui/Breadcrumb';
-import { ResourceOverviewTab } from './tabs/ResourceOverviewTab';
-import { D1ExplorerTab } from './tabs/D1ExplorerTab';
-import { R2BrowserTab } from './tabs/R2BrowserTab';
-import { ResourceBindingsTab } from './tabs/ResourceBindingsTab';
-import { ResourceSettingsTab } from './tabs/ResourceSettingsTab';
+import { useI18n } from '../../store/i18n.ts';
+import type { Resource } from '../../types/index.ts';
+import type { ResourceDetailTab } from './worker-models.ts';
+import { Breadcrumb } from '../../components/ui/Breadcrumb.tsx';
+import { ResourceOverviewTab } from './tabs/ResourceOverviewTab.tsx';
+import { D1ExplorerTab } from './tabs/D1ExplorerTab.tsx';
+import { R2BrowserTab } from './tabs/R2BrowserTab.tsx';
+import { ResourceBindingsTab } from './tabs/ResourceBindingsTab.tsx';
+import { ResourceSettingsTab } from './tabs/ResourceSettingsTab.tsx';
 
 export interface ResourceDetailProps {
   resource: Resource;

@@ -1,9 +1,9 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { DEFAULT_MODEL_ID, normalizeModelId } from '../agent';
+import { DEFAULT_MODEL_ID, normalizeModelId } from '../agent/index.ts';
 const MAX_RUN_NESTING_DEPTH = 5;
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { getRunHierarchyNode, getSpaceModel } from './create-thread-run-store';
-import { logWarn } from '../../../shared/utils/logger';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { getRunHierarchyNode, getSpaceModel } from './create-thread-run-store.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 export async function validateParentRunId(
   db: D1Database,

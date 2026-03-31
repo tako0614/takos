@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn, timestamps } from './schema-utils';
-import { services, serviceBindings, serviceCommonEnvLinks } from './schema-services';
+import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { services, serviceBindings, serviceCommonEnvLinks } from './schema-services.ts';
 
 // 14. App
 const appsTable = sqliteTable('apps', {

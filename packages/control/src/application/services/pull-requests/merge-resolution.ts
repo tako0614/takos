@@ -1,10 +1,10 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { AuthorType, PullRequestStatus, User } from '../../../shared/types';
-import * as gitStore from '../git-smart';
-import { getDb, branches, pullRequests } from '../../../infra/db';
+import type { AuthorType, PullRequestStatus, User } from '../../../shared/types/index.ts';
+import * as gitStore from '../git-smart/index.ts';
+import { getDb, branches, pullRequests } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { decodeBlobContent } from '../../../shared/utils/unified-diff';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards';
+import { decodeBlobContent } from '../../../shared/utils/unified-diff.ts';
+import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
 import { ALLOWED_COMMANDS_SET } from '../../shared/config.ts';
 import { runCommand } from '../../runtime/command.ts';
 import { validateRuntimeExecEnv } from '../../utils/sandbox-env.ts';
@@ -26,8 +27,9 @@ import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
 
 import type { Context } from 'hono';
+import { Buffer } from "node:buffer";
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // exec

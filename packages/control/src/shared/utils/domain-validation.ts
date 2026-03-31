@@ -1,4 +1,4 @@
-import { bytesToHex } from './encoding-utils';
+import { bytesToHex } from './encoding-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Domain helpers

@@ -1,4 +1,4 @@
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 import {
   CloudflareResourceService,
   type CloudflareDeletableResourceType,

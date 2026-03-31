@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { getDb, oauthAuditLogs } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, oauthAuditLogs } from '../../../infra/db/index.ts';
 
 export type OAuthAuditEvent =
   | 'authorize_approved'

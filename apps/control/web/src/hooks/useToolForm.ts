@@ -1,5 +1,5 @@
 import { createSignal, createMemo } from 'solid-js';
-import type { SchemaParameter } from '../views/hub/ToolModals';
+import type { SchemaParameter } from '../views/hub/ToolModals.tsx';
 
 interface InputSchema {
   properties?: Record<string, { type: string; description?: string }>;

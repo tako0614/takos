@@ -1,11 +1,11 @@
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import type { Worker } from '../../../types';
-import type { WorkerDomain, VerificationInfo } from '../worker-models';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { Worker } from '../../../types/index.ts';
+import type { WorkerDomain, VerificationInfo } from '../worker-models.ts';
 import {
   getWorkerDisplayHostname,
   getWorkerUrl,
-} from '../utils/workerUtils';
+} from '../utils/workerUtils.ts';
 
 interface DomainsTabProps {
   worker: Worker;

@@ -1,18 +1,18 @@
 import { BadRequestError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils';
-import type { RoutingTarget } from '../routing/routing-models';
-import { normalizeEnvName } from '../common-env/crypto';
-import { encrypt } from '../../../shared/utils/crypto';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { RoutingTarget } from '../routing/routing-models.ts';
+import { normalizeEnvName } from '../common-env/crypto.ts';
+import { encrypt } from '../../../shared/utils/crypto.ts';
 import {
   deployments,
   getDb,
   resources,
   serviceDeployments,
   serviceEnvVars,
-} from '../../../infra/db';
-import { physicalServiceBindings, serviceBindings } from '../../../infra/db/schema-services';
+} from '../../../infra/db/index.ts';
+import { physicalServiceBindings, serviceBindings } from '../../../infra/db/schema-services.ts';
 import { and, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
-import { getDeploymentRouteHead } from '../deployment/store';
+import { getDeploymentRouteHead } from '../deployment/store.ts';
 
 // Re-export types from the types module
 export type {
@@ -22,7 +22,7 @@ export type {
   ServiceLocalEnvVarState,
   ServiceLocalEnvVarSummary,
   ServiceDesiredStateSnapshot,
-} from './desired-state-types';
+} from './desired-state-types.ts';
 
 import type {
   DesiredStateEnv,
@@ -34,28 +34,28 @@ import type {
   ServiceManagedMcpServerState,
   ServiceRuntimeConfigState,
   ServiceRuntimeLimits,
-} from './desired-state-types';
-import { MASKED_SECRET_VALUE } from './desired-state-types';
+} from './desired-state-types.ts';
+import { MASKED_SECRET_VALUE } from './desired-state-types.ts';
 
 import {
   normalizeRoutingWeight,
   sortBindings,
   toServiceBinding,
-} from './resource-bindings';
+} from './resource-bindings.ts';
 
 import {
   buildServiceEnvSalt,
   requireEncryptionKey,
   resolveServiceCommonEnvState,
-} from './env-state-resolution';
+} from './env-state-resolution.ts';
 
 import {
   getRuntimeConfig,
   saveRuntimeConfig,
-} from './runtime-config';
+} from './runtime-config.ts';
 
 // Re-export resolveServiceCommonEnvState for external consumers
-export { resolveServiceCommonEnvState } from './env-state-resolution';
+export { resolveServiceCommonEnvState } from './env-state-resolution.ts';
 
 export class ServiceDesiredStateService {
   private readonly encryptionKey: string;

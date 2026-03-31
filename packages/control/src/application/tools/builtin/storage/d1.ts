@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
 
 export const D1_QUERY: ToolDefinition = {
   name: 'd1_query',
@@ -187,18 +187,18 @@ export const d1TablesHandler: ToolHandler = async (_args, context) => {
     return 'No tables found in database.';
   }
 
-  const tables = items.filter((item) => item.type === 'table');
-  const views = items.filter((item) => item.type === 'view');
+  const tables = items.filter((item: { name: string; type: string }) => item.type === 'table');
+  const views = items.filter((item: { name: string; type: string }) => item.type === 'view');
 
   let output = '';
   if (tables.length > 0) {
     output += `Tables (${tables.length}):\n`;
-    output += tables.map((table) => `  - ${table.name}`).join('\n');
+    output += tables.map((table: { name: string; type: string }) => `  - ${table.name}`).join('\n');
   }
   if (views.length > 0) {
     if (output) output += '\n\n';
     output += `Views (${views.length}):\n`;
-    output += views.map((view) => `  - ${view.name}`).join('\n');
+    output += views.map((view: { name: string; type: string }) => `  - ${view.name}`).join('\n');
   }
 
   return output;

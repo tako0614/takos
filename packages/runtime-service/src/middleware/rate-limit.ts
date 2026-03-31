@@ -1,18 +1,18 @@
-import type { Context, Next } from 'hono';
+import type { Context, Env, Next } from 'hono';
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 
-interface RateLimitOptions {
+interface RateLimitOptions<E extends Env = Env> {
   maxRequests: number;
   windowMs: number;
-  keyFn?: (c: Context) => string;
+  keyFn?: (c: Context<E>) => string;
   maxKeys?: number;
 }
 
-export function createRateLimiter(options: RateLimitOptions) {
+export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions<E>) {
   const { maxRequests, windowMs, maxKeys = 10000 } = options;
   const store = new Map<string, RateLimitEntry>();
 
@@ -25,11 +25,9 @@ export function createRateLimiter(options: RateLimitOptions) {
       }
     }
   }, cleanupInterval);
-  if (cleanupTimer.unref) {
-    cleanupTimer.unref();
-  }
+  Deno.unrefTimer(cleanupTimer);
 
-  const defaultKeyFn = (c: Context): string => {
+  const defaultKeyFn = (c: Context<E>): string => {
     // In Hono with @hono/node-server, use the client's IP from the
     // incoming connection info or forwarded header.
     const ip =
@@ -42,7 +40,7 @@ export function createRateLimiter(options: RateLimitOptions) {
 
   const keyFn = options.keyFn || defaultKeyFn;
 
-  return async (c: Context, next: Next): Promise<Response | void> => {
+  return async (c: Context<E>, next: Next): Promise<Response | void> => {
     const key = keyFn(c);
     const now = Date.now();
     let entry = store.get(key);

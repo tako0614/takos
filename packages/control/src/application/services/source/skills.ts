@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { and, desc, eq } from 'drizzle-orm';
 
-import { getDb, skills as skillsTable } from '../../../infra/db';
-import { generateId } from '../../../shared/utils';
+import { getDb, skills as skillsTable } from '../../../infra/db/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
 import {
   getOfficialSkillById,
   listLocalizedOfficialSkills,
@@ -10,19 +10,19 @@ import {
   resolveSkillLocale,
   type LocalizedOfficialSkill,
   validateCustomSkillMetadata,
-} from '../agent/official-skills';
+} from '../agent/official-skills.ts';
 import {
   applySkillAvailability,
   cloneExecutionContract,
   toSkillCatalogEntry,
   type SkillCatalogEntry,
   type SkillContext,
-} from '../agent/skills';
-import type { CustomSkillMetadata, SkillLocale } from '../agent/skill-contracts';
-import { hasSkillTemplate, listSkillTemplates } from '../agent/skill-templates';
-import { listMcpServers } from '../platform/mcp';
-import { logWarn } from '../../../shared/utils/logger';
-import { textDate } from '../../../shared/utils/db-guards';
+} from '../agent/skills.ts';
+import type { CustomSkillMetadata, SkillLocale } from '../agent/skill-contracts.ts';
+import { hasSkillTemplate, listSkillTemplates } from '../agent/skill-templates.ts';
+import { listMcpServers } from '../platform/mcp.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export class SkillMetadataValidationError extends Error {
   constructor(

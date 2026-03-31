@@ -3,11 +3,11 @@
  * Supports OpenAI, Anthropic Claude, and Google Gemini
  */
 
-import type { AgentMessage, AgentTool, ToolCall } from './agent-models';
-import { logError } from '../../../shared/utils/logger';
-import { DEFAULT_MODEL_ID, getModelProvider, type ModelProvider } from './model-catalog';
-export { DEFAULT_MODEL_ID } from './model-catalog';
-export type { ModelProvider } from './model-catalog';
+import type { AgentMessage, AgentTool, ToolCall } from './agent-models.ts';
+import { logError } from '../../../shared/utils/logger.ts';
+import { DEFAULT_MODEL_ID, getModelProvider, type ModelProvider } from './model-catalog.ts';
+export { DEFAULT_MODEL_ID } from './model-catalog.ts';
+export type { ModelProvider } from './model-catalog.ts';
 
 // ---- Public types ----------------------------------------------------------
 

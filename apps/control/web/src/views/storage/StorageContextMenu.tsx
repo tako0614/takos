@@ -1,7 +1,7 @@
 import { onMount, onCleanup, Show } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import type { ContextMenuState } from './storageUtils';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import type { ContextMenuState } from './storageUtils.tsx';
 
 interface StorageContextMenuProps {
   state: ContextMenuState;

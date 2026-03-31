@@ -1,31 +1,31 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { InternalError, ConflictError } from 'takos-common/errors';
-import { decrypt, type EncryptedData } from '../../../shared/utils/crypto';
+import { decrypt, type EncryptedData } from '../../../shared/utils/crypto.ts';
 import {
   type ReconcileUpdate,
   listSpaceEnvRows,
   listServiceLinks,
-} from '../common-env/repository';
+} from '../common-env/repository.ts';
 import {
   createBindingFingerprint,
   decryptCommonEnvValue,
   normalizeEnvName,
-} from '../common-env/crypto';
+} from '../common-env/crypto.ts';
 import {
   ensureManagedTakosTokenValue,
   resolveTakosApiUrl,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
   TAKOS_API_URL_ENV_NAME,
-} from '../common-env/takos-builtins';
-import { getDb, serviceEnvVars } from '../../../infra/db';
+} from '../common-env/takos-builtins.ts';
+import { getDb, serviceEnvVars } from '../../../infra/db/index.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { sortBindings, getEffectiveLinks } from './resource-bindings';
+import { sortBindings, getEffectiveLinks } from './resource-bindings.ts';
 import type {
   DesiredStateEnv,
   ServiceEnvRow,
   ServiceLocalEnvVarState,
   CommonEnvValue,
-} from './desired-state-types';
+} from './desired-state-types.ts';
 
 export function requireEncryptionKey(env: DesiredStateEnv): string {
   const key = env.ENCRYPTION_KEY || '';

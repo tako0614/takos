@@ -47,7 +47,7 @@ async function sendHeartbeat(sessionId: string, proxyToken?: string): Promise<vo
 export function startHeartbeat(
   sessionId: string,
   proxyToken: string | undefined,
-): NodeJS.Timeout | null {
+): ReturnType<typeof setInterval> | null {
   if (!getHeartbeatConfig(sessionId, proxyToken)) return null;
   const timer = setInterval(() => {
     void sendHeartbeat(sessionId, proxyToken);

@@ -1,9 +1,9 @@
-import { getDb, sessions } from '../../../infra/db';
+import { getDb, sessions } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import type { Env } from '../../../shared/types';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { listThreadMessages } from './thread-service';
-import { logError } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { listThreadMessages } from './thread-service.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 export async function getThreadTimeline(env: Env, threadId: string, limit: number, offset: number) {
   const { messages, total, runs } = await listThreadMessages(env, env.DB, threadId, limit, offset);

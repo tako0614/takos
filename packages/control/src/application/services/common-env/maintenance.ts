@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
-import { createCommonEnvDeps } from './deps';
-import { logInfo } from '../../../shared/utils/logger';
+import type { Env } from '../../../shared/types/index.ts';
+import { createCommonEnvDeps } from './deps.ts';
+import { logInfo } from '../../../shared/utils/logger.ts';
 
 export async function runCommonEnvScheduledMaintenance(params: {
   env: Env;

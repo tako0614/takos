@@ -1,5 +1,5 @@
-import type { Env } from '../../../shared/types';
-import { WFPService, type WfpEnv } from '../wfp';
+import type { Env } from '../../../shared/types/index.ts';
+import { WFPService, type WfpEnv } from '../wfp/index.ts';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 
 export type CloudflareManagedResourceType =

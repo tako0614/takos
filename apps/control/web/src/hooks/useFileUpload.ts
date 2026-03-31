@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
 
 interface UseFileUploadParams {
   uploadFile: (file: File) => Promise<unknown>;

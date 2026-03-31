@@ -6,11 +6,11 @@ import type {
   ReminderPriority,
   ReminderStatus,
   ReminderTriggerType,
-} from '../../../shared/types';
-import { generateId } from '../../../shared/utils';
-import { getDb, memories, reminders } from '../../../infra/db';
+} from '../../../shared/types/index.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, memories, reminders } from '../../../infra/db/index.ts';
 import { eq, and, or, like, desc, asc, sql, inArray } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export const MEMORY_TYPES: readonly string[] = ['episode', 'semantic', 'procedural'];
 const REMINDER_TRIGGER_TYPES: readonly string[] = ['time', 'condition', 'context'];

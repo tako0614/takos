@@ -1,5 +1,5 @@
-export { MemoryExtractor, shouldAutoExtract } from './extractor';
-export { MemoryConsolidator } from './consolidation';
+export { MemoryExtractor, shouldAutoExtract } from './extractor.ts';
+export { MemoryConsolidator } from './consolidation.ts';
 export {
   listMemories,
   bumpMemoryAccess,
@@ -14,4 +14,4 @@ export {
   updateReminder,
   deleteReminder,
   triggerReminder,
-} from './memories';
+} from './memories.ts';

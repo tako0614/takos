@@ -1,11 +1,11 @@
 import { Show, For } from 'solid-js';
-import type { PullRequest, PRReview, PRComment } from '../../../types';
-import { formatDateTime } from '../../../lib/format';
-import { Card } from '../../../components/ui/Card';
-import { Textarea } from '../../../components/ui/Textarea';
-import { Button } from '../../../components/ui/Button';
-import { Icons } from '../../../lib/Icons';
-import { useI18n } from '../../../store/i18n';
+import type { PullRequest, PRReview, PRComment } from '../../../types/index.ts';
+import { formatDateTime } from '../../../lib/format.ts';
+import { Card } from '../../../components/ui/Card.tsx';
+import { Textarea } from '../../../components/ui/Textarea.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Icons } from '../../../lib/Icons.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 type ReviewAction = 'approve' | 'request_changes' | 'comment';
 

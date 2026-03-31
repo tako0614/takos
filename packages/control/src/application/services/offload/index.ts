@@ -7,7 +7,7 @@ export {
   makeMessagePreview,
   writeMessageToR2,
   readMessageFromR2,
-} from './messages';
+} from './messages.ts';
 
 export {
   type PersistedRunEvent,
@@ -18,9 +18,9 @@ export {
   listRunEventSegmentIndexes,
   readRunEventSegmentFromR2,
   getRunEventsAfterFromR2,
-} from './run-events';
+} from './run-events.ts';
 
-export { emitRunUsageEvent } from './usage-client';
+export { emitRunUsageEvent } from './usage-client.ts';
 
 export {
   type PersistedUsageEvent,
@@ -28,4 +28,4 @@ export {
   usageSegmentKey,
   writeUsageEventSegmentToR2,
   getUsageEventsFromR2,
-} from './usage-events';
+} from './usage-events.ts';

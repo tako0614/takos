@@ -1,10 +1,10 @@
 import type { D1Database, R2Bucket, Queue } from '../../../shared/types/bindings.ts';
-import type { RepoAccess } from '../source/repos';
-import { logError } from '../../../shared/utils/logger';
+import type { RepoAccess } from '../source/repos.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import {
   triggerPullRequestWorkflows,
   type PullRequestWorkflowEvent,
-} from '../actions';
+} from '../actions/index.ts';
 
 // ---------------------------------------------------------------------------
 // PR workflow event triggers

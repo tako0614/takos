@@ -2,20 +2,20 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
-import { zValidator } from '../zod-validator';
-import * as gitStore from '../../../application/services/git-smart';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import { readableCommitErrorResponse, getTreeFlattenLimitError } from './routes';
-import { validatePath } from '../../../shared/utils/path-validation';
-import { diffLinesLcs } from '../../../shared/utils/lcs-diff';
-import { decodeBlobContent } from '../../../shared/utils/unified-diff';
-import { createEmbeddingsService } from '../../../application/services/execution/embeddings';
-import { generateId } from '../../../shared/utils';
-import type { IndexJobQueueMessage } from '../../../shared/types';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { logError } from '../../../shared/utils/logger';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
+import { zValidator } from '../zod-validator.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import { readableCommitErrorResponse, getTreeFlattenLimitError } from './routes.ts';
+import { validatePath } from '../../../shared/utils/path-validation.ts';
+import { diffLinesLcs } from '../../../shared/utils/lcs-diff.ts';
+import { decodeBlobContent } from '../../../shared/utils/unified-diff.ts';
+import { createEmbeddingsService } from '../../../application/services/execution/embeddings.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { IndexJobQueueMessage } from '../../../shared/types/index.ts';
+import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from 'takos-common/errors';
 import {
   GIT_SEARCH_MAX_TOTAL_BYTES,
@@ -23,7 +23,7 @@ import {
   GIT_DIFF_MAX_FILE_BYTES,
   GIT_DIFF_MAX_LINES,
   GIT_BLAME_MAX_COMMITS,
-} from '../../../shared/config/limits';
+} from '../../../shared/config/limits.ts';
 
 function getPathFromRouteOrQuery(c: Context<AuthenticatedRouteEnv>): string {
   const routePath = c.req.param('path') || '';

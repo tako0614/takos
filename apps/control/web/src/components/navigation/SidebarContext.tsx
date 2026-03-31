@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'solid-js';
-import type { Thread, Space } from '../../types';
+import type { Thread, Space } from '../../types/index.ts';
 
 export interface SidebarCallbacks {
   // Navigation

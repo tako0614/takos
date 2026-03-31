@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { type AuthenticatedRouteEnv } from '../route-auth';
+import { type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { getResourceById, getResourceByName } from '../../../application/services/resources';
-import { getDb } from '../../../infra/db';
-import { resourceAccessTokens } from '../../../infra/db/schema';
+import { zValidator } from '../zod-validator.ts';
+import { getResourceById, getResourceByName } from '../../../application/services/resources/index.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { resourceAccessTokens } from '../../../infra/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { generateId, base64UrlEncode } from '../../../shared/utils';
-import { computeSHA256 } from '../../../shared/utils/hash';
+import { generateId, base64UrlEncode } from '../../../shared/utils/index.ts';
+import { computeSHA256 } from '../../../shared/utils/hash.ts';
 import { AuthorizationError, NotFoundError } from 'takos-common/errors';
 
 function generateRandomBytes(length: number): Uint8Array {

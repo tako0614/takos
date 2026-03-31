@@ -1,7 +1,7 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { DbEnv } from '../../../shared/types';
+import type { DbEnv } from '../../../shared/types/index.ts';
 import type { DurableNamespaceBinding, KvStoreBinding, ObjectStoreBinding } from '../../../shared/types/bindings.ts';
-import type { WfpDeploymentProviderEnv } from './provider';
+import type { WfpDeploymentProviderEnv } from './provider.ts';
 
 export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
   ENCRYPTION_KEY?: string;

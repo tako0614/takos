@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
-import { checkRepoAccess } from '../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { generateExploreInvalidationUrls } from './routes';
-import { getDb } from '../../../infra/db';
-import { repoStars, repositories, accounts } from '../../../infra/db/schema';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { generateExploreInvalidationUrls } from './routes.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repoStars, repositories, accounts } from '../../../infra/db/schema.ts';
 import { eq, and, sql, desc } from 'drizzle-orm';
-import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { parsePagination } from '../../../shared/utils';
+import { invalidateCacheOnMutation } from '../../middleware/cache.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, AuthenticationError, NotFoundError } from 'takos-common/errors';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 export default new Hono<AuthenticatedRouteEnv>()
   .post('/repos/:repoId/star', invalidateCacheOnMutation([generateExploreInvalidationUrls]), async (c) => {

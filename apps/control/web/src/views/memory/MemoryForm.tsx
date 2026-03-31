@@ -1,8 +1,8 @@
 import type { Setter } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import type { Memory, Reminder } from '../../types';
-import type { MemoryFormState, ReminderFormState } from '../../hooks/useMemoryData';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import type { Memory, Reminder } from '../../types/index.ts';
+import type { MemoryFormState, ReminderFormState } from '../../hooks/useMemoryData.ts';
 
 export interface MemoryCreateFormProps {
   memoryForm: MemoryFormState;

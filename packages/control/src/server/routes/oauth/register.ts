@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
-import type { ClientRegistrationRequest } from '../../../shared/types/oauth';
-import { parseJsonStringArray } from '../../../shared/types/oauth';
-import { parseJsonBody } from '../route-auth';
+import type { ClientRegistrationRequest } from '../../../shared/types/oauth.ts';
+import { parseJsonStringArray } from '../../../shared/types/oauth.ts';
+import { parseJsonBody } from '../route-auth.ts';
 import {
   createClient,
   deleteClient,
   getClientById,
   updateClient,
   validateRegistrationToken,
-} from '../../../application/services/oauth/client';
-import { isAccessTokenValid, verifyAccessToken } from '../../../application/services/oauth/token';
-import { tryLogOAuthEvent } from './request-utils';
-import type { PublicRouteEnv } from '../route-auth';
-import { RateLimiters } from '../../../shared/utils/rate-limiter';
+} from '../../../application/services/oauth/client.ts';
+import { isAccessTokenValid, verifyAccessToken } from '../../../application/services/oauth/token.ts';
+import { tryLogOAuthEvent } from './request-utils.ts';
+import type { PublicRouteEnv } from '../route-auth.ts';
+import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
 
 const oauthRegister = new Hono<PublicRouteEnv>();
 

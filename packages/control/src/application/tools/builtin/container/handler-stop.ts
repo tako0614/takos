@@ -1,9 +1,9 @@
-import type { ToolHandler } from '../../tool-definitions';
-import { getDb, sessions } from '../../../../infra/db';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { getDb, sessions } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { callSessionApi } from './session';
-import { appendContainerStartFailureContext } from './availability';
-import { logError, logInfo } from '../../../../shared/utils/logger';
+import { callSessionApi } from './session.ts';
+import { appendContainerStartFailureContext } from './availability.ts';
+import { logError, logInfo } from '../../../../shared/utils/logger.ts';
 
 export const containerStopHandler: ToolHandler = async (args, context) => {
   const reason = (args.reason as string) || 'Container stopped by user';
@@ -50,7 +50,7 @@ export const containerStopHandler: ToolHandler = async (args, context) => {
       const prefix = `session-files/${context.spaceId}/${context.sessionId}/`;
       const listed = await context.storage.list({ prefix });
       if (listed.objects && listed.objects.length > 0) {
-        await Promise.all(listed.objects.map((obj) => context.storage!.delete(obj.key)));
+        await Promise.all(listed.objects.map((obj: { key: string }) => context.storage!.delete(obj.key)));
         logInfo(`Cleaned up ${listed.objects.length} R2 session files on stop`, { module: 'tools/builtin/container/handler-stop' });
       }
     } catch (e) {

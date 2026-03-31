@@ -1,12 +1,12 @@
-import type { Env } from '../../../shared/types';
-import { normalizeEnvName } from './crypto';
-import type { CommonEnvReconcileTrigger } from './reconcile-jobs';
+import type { Env } from '../../../shared/types/index.ts';
+import { normalizeEnvName } from './crypto.ts';
+import type { CommonEnvReconcileTrigger } from './reconcile-jobs.ts';
 import {
   listServiceLinks,
   getService,
   updateLinkRuntime,
-} from './repository';
-import { resolveServiceCommonEnvState } from '../platform/worker-desired-state';
+} from './repository.ts';
+import { resolveServiceCommonEnvState } from '../platform/worker-desired-state.ts';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);

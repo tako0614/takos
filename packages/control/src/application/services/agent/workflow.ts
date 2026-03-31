@@ -13,10 +13,10 @@
  * - workflow-session.ts -- runtime session management
  */
 
-import type { AgentMessage } from './agent-models';
-import { LLMClient } from './llm';
-import { generateId } from '../../../shared/utils';
-import { logError } from '../../../shared/utils/logger';
+import type { AgentMessage } from './agent-models.ts';
+import { LLMClient } from './llm.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 // Re-export all public types so existing imports keep working
 export type {
@@ -26,25 +26,25 @@ export type {
   WorkflowResult,
   ReviewResult,
   ReviewIssue,
-} from './workflow-types';
+} from './workflow-types.ts';
 
 import type {
   TaskStep,
   TaskPlan,
   WorkflowContext,
   WorkflowResult,
-} from './workflow-types';
+} from './workflow-types.ts';
 import {
   VALID_PLAN_TYPES,
   TASK_ANALYSIS_PROMPT,
-} from './workflow-types';
+} from './workflow-types.ts';
 // Re-export submodule functions so existing call-sites keep working
-export { executeReview } from './workflow-review';
-export { startWorkflowSession, commitWorkflowSession } from './workflow-session';
+export { executeReview } from './workflow-review.ts';
+export { startWorkflowSession, commitWorkflowSession } from './workflow-session.ts';
 
 // Import submodule functions used by orchestration logic
-import { executeReview } from './workflow-review';
-import { createPullRequest, mergePullRequest } from './workflow-pr';
+import { executeReview } from './workflow-review.ts';
+import { createPullRequest, mergePullRequest } from './workflow-pr.ts';
 
 // ── Task analysis ───────────────────────────────────────────────────────
 

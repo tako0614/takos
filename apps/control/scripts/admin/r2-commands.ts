@@ -2,9 +2,10 @@
  * R2 object storage commands: list, get, put, delete, upload-dir.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { sanitizeErrorMessage } from 'takos-control/core/wfp-client';
+import { Buffer } from "node:buffer";
 import {
   type GlobalOptions,
   type ResolvedConfig,

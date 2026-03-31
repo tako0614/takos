@@ -5,45 +5,45 @@ import { cors } from 'hono/cors';
 import type {
   Env,
   User,
-} from './shared/types';
+} from './shared/types/index.ts';
 import type {
   PlatformExecutionContext,
   PlatformScheduledController,
 } from './shared/types/bindings.ts';
-import { createApiRouter } from './server/routes/api';
-import { RateLimiters } from './shared/utils/rate-limiter';
-import { externalAuthRouter } from './server/routes/auth/external';
-import { authSessionRouter } from './server/routes/auth/session';
-import { authCliRouter } from './server/routes/auth/cli';
-import { authLinkRouter } from './server/routes/auth/link';
-import oauth from './server/routes/oauth/routes';
-import wellKnown from './server/routes/well-known';
-import activitypubStore from './server/routes/activitypub-store/routes';
-import { registerProfileRoutes } from './server/routes/profiles/register';
-import { smartHttpRoutes } from './server/routes/smart-http';
-import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessions, runSnapshotGcBatch } from './application/services/maintenance';
-import { runR2OrphanedObjectGcBatch } from './application/services/r2/orphaned-object-gc';
-import { runCommonEnvScheduledMaintenance } from './application/services/common-env';
-import { requireAuth, optionalAuth } from './server/middleware/auth';
-import { staticAssetsMiddleware } from './server/middleware/static-assets';
-import { isInvalidArrayBufferError } from './shared/utils/db-guards';
-import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env';
-import { logError, logInfo, logWarn } from './shared/utils/logger';
+import { createApiRouter } from './server/routes/api.ts';
+import { RateLimiters } from './shared/utils/rate-limiter.ts';
+import { externalAuthRouter } from './server/routes/auth/external.ts';
+import { authSessionRouter } from './server/routes/auth/session.ts';
+import { authCliRouter } from './server/routes/auth/cli.ts';
+import { authLinkRouter } from './server/routes/auth/link.ts';
+import oauth from './server/routes/oauth/routes.ts';
+import wellKnown from './server/routes/well-known.ts';
+import activitypubStore from './server/routes/activitypub-store/routes.ts';
+import { registerProfileRoutes } from './server/routes/profiles/register.ts';
+import { smartHttpRoutes } from './server/routes/smart-http.ts';
+import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessions, runSnapshotGcBatch } from './application/services/maintenance/index.ts';
+import { runR2OrphanedObjectGcBatch } from './application/services/r2/orphaned-object-gc.ts';
+import { runCommonEnvScheduledMaintenance } from './application/services/common-env/index.ts';
+import { requireAuth, optionalAuth } from './server/middleware/auth.ts';
+import { staticAssetsMiddleware } from './server/middleware/static-assets.ts';
+import { isInvalidArrayBufferError } from './shared/utils/db-guards.ts';
+import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env.ts';
+import { logError, logInfo, logWarn } from './shared/utils/logger.ts';
 import { AppError, RateLimitError, isAppError } from 'takos-common/errors';
 import { PRODUCTION_DOMAIN } from './shared/constants/app.ts';
 import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/platform-config.ts';
 import { setPlatformContext } from './platform/context.ts';
 import { getPlatformConfig, getPlatformServices } from './platform/accessors.ts';
-import { createExecutorProxyRouter } from './runtime/executor-proxy-api';
+import { createExecutorProxyRouter } from './runtime/executor-proxy-api.ts';
 
 // Durable Object exports for wrangler.toml bindings.
-export { SessionDO } from './runtime/durable-objects/session';
-export { RunNotifierDO } from './runtime/durable-objects/run-notifier';
-export { NotificationNotifierDO } from './runtime/durable-objects/notification-notifier';
-export { RateLimiterDO } from './runtime/durable-objects/rate-limiter';
-export { RoutingDO } from './runtime/durable-objects/routing';
-export { GitPushLockDO } from './runtime/durable-objects/git-push-lock';
+export { SessionDO } from './runtime/durable-objects/session.ts';
+export { RunNotifierDO } from './runtime/durable-objects/run-notifier.ts';
+export { NotificationNotifierDO } from './runtime/durable-objects/notification-notifier.ts';
+export { RateLimiterDO } from './runtime/durable-objects/rate-limiter.ts';
+export { RoutingDO } from './runtime/durable-objects/routing.ts';
+export { GitPushLockDO } from './runtime/durable-objects/git-push-lock.ts';
 
 // Cached environment validation guard.
 const envGuard = createEnvGuard(validateWebEnv);

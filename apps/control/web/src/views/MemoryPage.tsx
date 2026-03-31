@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../lib/Icons';
-import { useI18n } from '../store/i18n';
-import { useMemoryData } from '../hooks/useMemoryData';
-import { MemoryList } from './memory/MemoryList';
-import { MemoryCreateForm, ReminderCreateForm } from './memory/MemoryForm';
-import type { Reminder } from '../types';
+import { Icons } from '../lib/Icons.tsx';
+import { useI18n } from '../store/i18n.ts';
+import { useMemoryData } from '../hooks/useMemoryData.ts';
+import { MemoryList } from './memory/MemoryList.tsx';
+import { MemoryCreateForm, ReminderCreateForm } from './memory/MemoryForm.tsx';
+import type { Reminder } from '../types/index.ts';
 
 export interface MemoryPageProps {
   spaceId: string;

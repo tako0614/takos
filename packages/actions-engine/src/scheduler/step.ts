@@ -189,8 +189,8 @@ const defaultShellExecutor: ShellExecutor = async (
           }, options.timeout)
         : undefined;
 
-    if (timeout && typeof timeout === 'object' && 'unref' in timeout) {
-      (timeout as { unref(): void }).unref();
+    if (timeout !== undefined) {
+      Deno.unrefTimer(timeout);
     }
 
     child.stdout?.on('data', (chunk: string | Uint8Array) => {

@@ -8,14 +8,14 @@ import type {
   R2Bucket,
   Queue,
 } from '../../shared/types/bindings.ts';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response';
-import { base64ToBytes } from '../../shared/utils/encoding-utils';
+import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
+import { base64ToBytes } from '../../shared/utils/encoding-utils.ts';
 import type {
   DbEnv,
   StorageEnv,
   AiEnv,
   IndexJobQueueMessage,
-} from '../../shared/types';
+} from '../../shared/types/index.ts';
 
 // ---------------------------------------------------------------------------
 // Environment types
@@ -50,7 +50,7 @@ export type Env = AgentExecutorEnv;
 import type {
   AgentExecutorDispatchPayload,
   AgentExecutorDispatchResult,
-} from './executor-dispatch';
+} from './executor-dispatch.ts';
 
 /** Token metadata stored alongside each random proxy token. */
 export interface ProxyTokenInfo {

@@ -6,15 +6,15 @@ import type { Workflow } from 'takos-actions-engine';
 import type { Conclusion } from 'takos-actions-engine';
 import { parseWorkflow } from 'takos-actions-engine';
 
-import * as gitStore from '../git-smart';
-import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../../infra/db';
+import * as gitStore from '../git-smart/index.ts';
+import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../../infra/db/index.ts';
 import { eq, and, ne, or, count } from 'drizzle-orm';
-import { buildWorkflowDispatchEnv } from '../actions';
-import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
+import { buildWorkflowDispatchEnv } from '../actions/index.ts';
+import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
 import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import type { WorkflowBucket, WorkflowJobResult, DependencyState } from './workflow-engine-types';
-import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-converters';
-import { finalizeRunIfComplete, enqueueJob, getSecretIds } from './workflow-run-lifecycle';
+import type { WorkflowBucket, WorkflowJobResult, DependencyState } from './workflow-engine-types.ts';
+import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-converters.ts';
+import { finalizeRunIfComplete, enqueueJob, getSecretIds } from './workflow-run-lifecycle.ts';
 
 // ---------------------------------------------------------------------------
 // onJobComplete

@@ -7,8 +7,8 @@
  */
 
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import { bytesToHex } from '../../../shared/utils/encoding-utils';
+import type { Env, User } from '../../../shared/types/index.ts';
+import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
 
 type BrowserSessionVariables = {
   user?: User;

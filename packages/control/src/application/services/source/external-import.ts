@@ -11,16 +11,16 @@
  */
 
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { fetchRemoteRefs, type RemoteRef } from '../git-smart/client/fetch-refs';
-import { fetchPackFromRemote } from '../git-smart/client/fetch-pack';
-import { readPackfileAsync } from '../git-smart/protocol/packfile-reader';
-import { indexCommit, getCommit } from '../git-smart/core/commit-index';
-import { createBranch, createTag } from '../git-smart/core/refs';
-import { getDb, repositories, repoRemotes } from '../../../infra/db';
+import { fetchRemoteRefs, type RemoteRef } from '../git-smart/client/fetch-refs.ts';
+import { fetchPackFromRemote } from '../git-smart/client/fetch-pack.ts';
+import { readPackfileAsync } from '../git-smart/protocol/packfile-reader.ts';
+import { indexCommit, getCommit } from '../git-smart/core/commit-index.ts';
+import { createBranch, createTag } from '../git-smart/core/refs.ts';
+import { getDb, repositories, repoRemotes } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { logInfo, logError } from '../../../shared/utils/logger';
-import { inferRepoName, normalizeGitUrl, sanitizeImportName } from './external-import-utils';
+import { generateId } from '../../../shared/utils/index.ts';
+import { logInfo, logError } from '../../../shared/utils/logger.ts';
+import { inferRepoName, normalizeGitUrl, sanitizeImportName } from './external-import-utils.ts';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -261,7 +261,7 @@ export async function fetchRemoteUpdates(
   const { refs: remoteRefs } = await fetchRemoteRefs(gitUrl, null);
 
   // Get local branch SHAs for have negotiation
-  const localBranches = await import('../git-smart/core/refs').then(
+  const localBranches = await import('../git-smart/core/refs.ts').then(
     (m) => m.listBranches(dbBinding, repoId),
   );
 
@@ -284,7 +284,7 @@ export async function fetchRemoteUpdates(
   }
 
   // Check for new tags
-  const localTags = await import('../git-smart/core/refs').then(
+  const localTags = await import('../git-smart/core/refs.ts').then(
     (m) => m.listTags(dbBinding, repoId),
   );
   const localTagMap = new Map(localTags.map((t) => [t.name, t.commit_sha]));
@@ -324,7 +324,7 @@ export async function fetchRemoteUpdates(
   });
 
   // Update branches
-  const { updateBranch, createBranch: createBr } = await import('../git-smart/core/refs');
+  const { updateBranch, createBranch: createBr } = await import('../git-smart/core/refs.ts');
   for (const ref of remoteBranches) {
     const branchName = ref.name.replace('refs/heads/', '');
     if (localBranchMap.has(branchName)) {
@@ -337,7 +337,7 @@ export async function fetchRemoteUpdates(
   }
 
   // Create new tags
-  const { createTag: createTg } = await import('../git-smart/core/refs');
+  const { createTag: createTg } = await import('../git-smart/core/refs.ts');
   for (const ref of remoteTags) {
     const tagName = ref.name.replace('refs/tags/', '');
     if (!localTagMap.has(tagName)) {

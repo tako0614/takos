@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types';
-import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto';
-import { hexToBytes, bytesToHex, sha256Hex } from '../../../shared/utils/encoding-utils';
+import type { Env } from '../../../shared/types/index.ts';
+import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/crypto.ts';
+import { hexToBytes, bytesToHex, sha256Hex } from '../../../shared/utils/encoding-utils.ts';
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 

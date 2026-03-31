@@ -8,7 +8,7 @@ export {
   updateResourceMetadata,
   markResourceDeleting,
   deleteResource,
-} from './store';
+} from './store.ts';
 
 // access
 export {
@@ -17,7 +17,7 @@ export {
   deleteResourceAccess,
   checkResourceAccess,
   canAccessResource,
-} from './access';
+} from './access.ts';
 
 // bindings
 export {
@@ -26,7 +26,7 @@ export {
   createServiceBinding,
   deleteServiceBinding,
   buildBindingFromResource,
-} from './bindings';
+} from './bindings.ts';
 
 // lifecycle
-export { provisionManagedResource, provisionCloudflareResource, deleteManagedResource } from './lifecycle';
+export { provisionManagedResource, provisionCloudflareResource, deleteManagedResource } from './lifecycle.ts';

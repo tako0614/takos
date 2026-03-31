@@ -2,11 +2,11 @@
  * Billing plan definitions, resolution helpers, and catalog management.
  */
 
-import { billingAccounts, billingPlans, billingPlanQuotas, billingPlanRates, billingPlanFeatures } from '../../../infra/db';
+import { billingAccounts, billingPlans, billingPlanQuotas, billingPlanRates, billingPlanFeatures } from '../../../infra/db/index.ts';
 import { BadRequestError } from 'takos-common/errors';
 import { eq, and } from 'drizzle-orm';
-import type { Database } from '../../../infra/db';
-import type { MeterType, BillingAccountWithPlan } from './billing-types';
+import type { Database } from '../../../infra/db/index.ts';
+import type { MeterType, BillingAccountWithPlan } from './billing-types.ts';
 
 // ---------------------------------------------------------------------------
 // Plan ID constants and resolution

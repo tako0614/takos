@@ -1,7 +1,7 @@
-import type { AgentTaskPriority, AgentTaskStatus } from '../../../types';
-import type { ModelSelectOption } from '../../../lib/modelCatalog';
-import type { TranslationKey } from '../../../i18n';
-import { AGENT_TYPES, DEFAULT_AGENT_TYPE, type ModelOption, type ModelSettings, type TaskPlan } from './task-work-types';
+import type { AgentTaskPriority, AgentTaskStatus } from '../../../types/index.ts';
+import type { ModelSelectOption } from '../../../lib/modelCatalog.ts';
+import type { TranslationKey } from '../../../i18n.ts';
+import { AGENT_TYPES, DEFAULT_AGENT_TYPE, type ModelOption, type ModelSettings, type TaskPlan } from './task-work-types.ts';
 
 export function getAgentTypeOptions(current?: string | null): string[] {
   const normalized = current?.trim();

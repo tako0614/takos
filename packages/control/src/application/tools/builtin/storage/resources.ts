@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
 import { createCloudflareApiClient } from '../../../services/cloudflare/api-client.ts';
 import { createOptionalCloudflareWfpProvider } from '../../../../platform/providers/cloudflare/wfp.ts';
-import { generateId } from '../../../../shared/utils';
-import { getDb, resources } from '../../../../infra/db';
+import { generateId } from '../../../../shared/utils/index.ts';
+import { getDb, resources } from '../../../../infra/db/index.ts';
 
 export const CREATE_D1: ToolDefinition = {
   name: 'create_d1',

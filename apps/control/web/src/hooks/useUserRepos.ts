@@ -1,6 +1,6 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import type { ProfileRepo } from '../types/profile';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { ProfileRepo } from '../types/profile.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface ReposResponse {
   repos: ProfileRepo[];

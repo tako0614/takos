@@ -5,8 +5,8 @@
  * checks, schema validation, directory walking) from higher-level auth logic.
  */
 
-import { platform } from 'os';
-import { join, resolve } from 'path';
+import { platform } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   existsSync,
   chmodSync,
@@ -14,9 +14,10 @@ import {
   fstatSync,
   readSync,
   closeSync,
-} from 'fs';
+} from 'node:fs';
 import { logWarning } from './cli-log.ts';
 import { validateApiUrl, isValidId } from './config-validation.ts';
+import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Constants & helpers

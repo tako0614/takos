@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import type { RepoAccess } from '../../../application/services/source/repos';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import type { RepoAccess } from '../../../application/services/source/repos.ts';
 import {
   triggerPullRequestWorkflows,
   type PullRequestWorkflowEvent,
-} from '../../../application/services/actions';
-import { logError } from '../../../shared/utils/logger';
+} from '../../../application/services/actions/index.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Shared helpers for triggering PR workflow events

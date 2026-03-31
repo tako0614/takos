@@ -4,8 +4,8 @@
  * PKCE (Proof Key for Code Exchange) helpers and token encryption/decryption.
  */
 
-import { encrypt, decrypt, type EncryptedData } from '../../../../shared/utils/crypto';
-import { base64UrlEncode } from '../../../../shared/utils/encoding-utils';
+import { encrypt, decrypt, type EncryptedData } from '../../../../shared/utils/crypto.ts';
+import { base64UrlEncode } from '../../../../shared/utils/encoding-utils.ts';
 
 // ---------------------------------------------------------------------------
 // PKCE helpers

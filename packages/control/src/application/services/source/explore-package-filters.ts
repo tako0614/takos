@@ -2,7 +2,7 @@
 // Filtering and sorting logic for takopack packages
 // ---------------------------------------------------------------------------
 
-import type { PackageWithTakopack, TakopackRatingStats } from './explore-package-types';
+import type { PackageWithTakopack, TakopackRatingStats } from './explore-package-types.ts';
 
 export const SORT_ALIASES: Record<string, string> = { popular: 'downloads', new: 'created' };
 

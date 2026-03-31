@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { WORKDIR_BASE_DIR } from '../../shared/config.ts';
 import {
   getRepoPath,
@@ -17,7 +18,7 @@ import { badRequest, forbidden, notFound } from 'takos-common/middleware/hono';
 // --- getVerifiedRepoPath ---
 
 export async function getVerifiedRepoPath(
-  c: Context,
+  c: Context<RuntimeEnv>,
   spaceId: string,
   repoName: string,
 ): Promise<{ gitPath: string } | { error: Response }> {
@@ -35,7 +36,7 @@ export async function getVerifiedRepoPath(
  * Validate that a git ref is well-formed.
  * Returns null on success, or a Response on failure.
  */
-export function validateRef(c: Context, ref: string): Response | null {
+export function validateRef(c: Context<RuntimeEnv>, ref: string): Response | null {
   try {
     validateGitRef(ref);
     return null;
@@ -48,7 +49,7 @@ export function validateRef(c: Context, ref: string): Response | null {
  * Validate that a git path is well-formed.
  * Returns null on success, or a Response on failure.
  */
-export function validatePathParam(c: Context, filePath: string): Response | null {
+export function validatePathParam(c: Context<RuntimeEnv>, filePath: string): Response | null {
   try {
     validateGitPath(filePath);
     return null;
@@ -61,7 +62,7 @@ export function validatePathParam(c: Context, filePath: string): Response | null
  * Validate that spaceId and repoName are present.
  * Returns null on success, or a Response on failure.
  */
-export function requireRepoParams(c: Context, spaceId: string | undefined, repoName: string | undefined): Response | null {
+export function requireRepoParams(c: Context<RuntimeEnv>, spaceId: string | undefined, repoName: string | undefined): Response | null {
   if (!spaceId || !repoName) {
     return badRequest(c, 'spaceId and repoName are required');
   }
@@ -73,7 +74,7 @@ export function requireRepoParams(c: Context, spaceId: string | undefined, repoN
  * Checks: path resolution, symlink safety, boundary containment before creation.
  * Returns the resolved path on success, or an error Response.
  */
-export async function validateTargetDir(c: Context, targetDir: string): Promise<{ resolved: string } | { error: Response }> {
+export async function validateTargetDir(c: Context<RuntimeEnv>, targetDir: string): Promise<{ resolved: string } | { error: Response }> {
   let resolved: string;
   try {
     resolved = resolveWorkDirPath(targetDir, 'targetDir');
@@ -108,7 +109,7 @@ export async function validateTargetDir(c: Context, targetDir: string): Promise<
  * Checks: path resolution, symlink safety, boundary containment, .git presence.
  * Returns the resolved path on success, or an error Response.
  */
-export async function resolveAndValidateWorkDir(c: Context, workDir: string): Promise<{ resolved: string } | { error: Response }> {
+export async function resolveAndValidateWorkDir(c: Context<RuntimeEnv>, workDir: string): Promise<{ resolved: string } | { error: Response }> {
   let resolved: string;
   try {
     resolved = resolveWorkDirPath(workDir, 'workDir');

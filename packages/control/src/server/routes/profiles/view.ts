@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
-import type { ProfileRepoResponse, UserProfileResponse } from './api';
-import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './profile-queries';
-import { getDb } from '../../../infra/db';
-import { repositories, repoStars, accounts } from '../../../infra/db/schema';
+import type { ProfileRepoResponse, UserProfileResponse } from './api.ts';
+import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './profile-queries.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { repositories, repoStars, accounts } from '../../../infra/db/schema.ts';
 import { eq, and, desc, asc, count } from 'drizzle-orm';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { parsePagination, paginatedResponse } from '../../../shared/utils';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { parsePagination, paginatedResponse } from '../../../shared/utils/index.ts';
 import { NotFoundError } from 'takos-common/errors';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
 

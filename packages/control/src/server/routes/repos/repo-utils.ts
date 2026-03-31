@@ -1,16 +1,16 @@
 /**
  * Private helpers for repo CRUD routes (format, cleanup, owner resolution).
  */
-import type { RepositoryVisibility } from '../../../shared/types';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import * as gitStore from '../../../application/services/git-smart';
-import { collectReachableObjectShas } from '../../../application/services/git-smart';
-import type { Database } from '../../../infra/db';
-import { accounts, repositories } from '../../../infra/db/schema';
+import type { RepositoryVisibility } from '../../../shared/types/index.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { collectReachableObjectShas } from '../../../application/services/git-smart/index.ts';
+import type { Database } from '../../../infra/db/index.ts';
+import { accounts, repositories } from '../../../infra/db/schema.ts';
 import { eq, ne } from 'drizzle-orm';
-import { logWarn } from '../../../shared/utils/logger';
-import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from '../../../shared/config/limits';
-import { textDateNullable } from '../../../shared/utils/db-guards';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from '../../../shared/config/limits.ts';
+import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ---------------------------------------------------------------------------
 // Constants & type aliases

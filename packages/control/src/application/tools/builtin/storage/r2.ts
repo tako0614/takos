@@ -1,9 +1,9 @@
-import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions';
-import { validateR2Key, validateStoragePath } from './validators';
-import { computeSHA256 } from '../../../../shared/utils/hash';
-import { getDb, files } from '../../../../infra/db';
+import type { ToolDefinition, ToolHandler, ToolContext } from '../../tool-definitions.ts';
+import { validateR2Key, validateStoragePath } from './validators.ts';
+import { computeSHA256 } from '../../../../shared/utils/hash.ts';
+import { getDb, files } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils';
+import { generateId } from '../../../../shared/utils/index.ts';
 
 export const R2_UPLOAD: ToolDefinition = {
   name: 'r2_upload',
@@ -257,7 +257,7 @@ export const r2ListHandler: ToolHandler = async (args, context) => {
       : `No objects found in bucket: ${bucketName}`;
   }
 
-  const lines = objects.map((obj) => {
+  const lines = objects.map((obj: { key: string; size: number; uploaded?: Date }) => {
     const sizeKB = (obj.size / 1024).toFixed(1);
     const modified = obj.uploaded ? obj.uploaded.toISOString().split('T')[0] : '-';
     return `${obj.key} (${sizeKB} KB, ${modified})`;

@@ -1,7 +1,7 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { ServiceLinkRow } from '../common-env/repository';
-import { normalizeEnvName } from '../common-env/crypto';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
+import type { ServiceLinkRow } from '../common-env/repository.ts';
+import { normalizeEnvName } from '../common-env/crypto.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
 import type {
   ServiceRuntimeLimits,
   ServiceRuntimeRow,
@@ -11,7 +11,7 @@ import type {
   ServiceRuntimeConfigState,
   ServiceBindingRow,
   EffectiveCommonEnvLink,
-} from './desired-state-types';
+} from './desired-state-types.ts';
 
 export function normalizeLimits(input?: ServiceRuntimeLimits | null): ServiceRuntimeLimits {
   const limits: ServiceRuntimeLimits = {};

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import { runGitCommand } from '../../runtime/git.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import {
@@ -9,7 +10,7 @@ import {
 } from './repo-validation.ts';
 import { badRequest, internalError, notFound } from 'takos-common/middleware/hono';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 // ---------------------------------------------------------------------------
 // tree: ls-tree + blob

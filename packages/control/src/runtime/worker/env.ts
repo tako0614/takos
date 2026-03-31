@@ -12,7 +12,7 @@ import type {
   IndexJobQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
-} from '../../shared/types';
+} from '../../shared/types/index.ts';
 
 /**
  * Unified Env for takos-worker.

@@ -1,5 +1,5 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { AppDeploymentService } from '../../services/platform/app-deployments';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { AppDeploymentService } from '../../services/platform/app-deployments.ts';
 
 export const APP_DEPLOYMENT_LIST: ToolDefinition = {
   name: 'app_deployment_list',

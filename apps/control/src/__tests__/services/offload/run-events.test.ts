@@ -1,4 +1,4 @@
-import { MockR2Bucket } from '../../../../test/integration/setup';
+import { MockR2Bucket } from '../../../../test/integration/setup.ts';
 
 import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 import { assertSpyCalls } from 'jsr:@std/testing/mock';

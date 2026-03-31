@@ -5,14 +5,14 @@
  * and committing session results back to the account.
  */
 
-import type { SnapshotTree } from '../sync/models';
-import type { WorkflowContext, RuntimeSnapshotResponse } from './workflow-types';
-import { SnapshotManager } from '../sync/snapshot';
-import { generateId } from '../../../shared/utils';
-import { getDb, sessions, accounts, runs } from '../../../infra/db';
+import type { SnapshotTree } from '../sync/models.ts';
+import type { WorkflowContext, RuntimeSnapshotResponse } from './workflow-types.ts';
+import { SnapshotManager } from '../sync/snapshot.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { getDb, sessions, accounts, runs } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime-request-handler';
-import { logError } from '../../../shared/utils/logger';
+import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 // ── Session start ───────────────────────────────────────────────────────
 

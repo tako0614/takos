@@ -2,21 +2,21 @@
 // INDEX_QUEUE wiring; indexing implementations live in shared services.
 // Imported by the unified takos-worker entrypoint (src/runtime/worker/index.ts).
 import type { MessageBatch } from '../../shared/types/bindings.ts';
-import type { IndexJobQueueMessage } from '../../shared/types';
-import { isValidIndexJobQueueMessage } from '../../shared/types';
-import type { IndexerEnv as Env } from '../../shared/types';
-import { getDb, indexJobs } from '../../infra/db';
+import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
+import { isValidIndexJobQueueMessage } from '../../shared/types/index.ts';
+import type { IndexerEnv as Env } from '../../shared/types/index.ts';
+import { getDb, indexJobs } from '../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { validateIndexerEnv, createEnvGuard } from '../../shared/utils/validate-env';
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
+import { validateIndexerEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
 import {
   handleVectorize,
   handleInfoUnit,
   handleThreadContext,
   handleRepoCodeIndex,
-} from './handlers';
+} from './handlers.ts';
 
-export { handleIndexJobDlq } from './handlers';
+export { handleIndexJobDlq } from './handlers.ts';
 
 const TAG = '[INDEX_QUEUE]';
 

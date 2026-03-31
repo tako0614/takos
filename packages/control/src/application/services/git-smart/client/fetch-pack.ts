@@ -10,9 +10,9 @@
  * from `protocol/packfile-reader.ts` to unpack objects into R2.
  */
 
-import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '../protocol/pkt-line';
-import { concatBytes } from '../core/sha1';
-import { logWarn } from '../../../../shared/utils/logger';
+import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '../protocol/pkt-line.ts';
+import { concatBytes } from '../core/sha1.ts';
+import { logWarn } from '../../../../shared/utils/logger.ts';
 
 const TEXT_ENCODER = new TextEncoder();
 

@@ -1,6 +1,6 @@
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { CloudflareApiClient } from '../cloudflare/api-client';
-import { sha256Hex } from '../../../shared/utils/encoding-utils';
+import { CloudflareApiClient } from '../cloudflare/api-client.ts';
+import { sha256Hex } from '../../../shared/utils/encoding-utils.ts';
 
 type BackupEnv = {
   DB: D1Database;

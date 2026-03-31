@@ -1,7 +1,7 @@
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { getDb, infoUnits, repositories, edges, nodes } from '../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { getDb, infoUnits, repositories, edges, nodes } from '../../../infra/db/index.ts';
 import { eq, and, like, desc, inArray, or } from 'drizzle-orm';
-import type { Database } from '../../../infra/db';
+import type { Database } from '../../../infra/db/index.ts';
 
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
@@ -179,14 +179,14 @@ export const infoUnitSearchHandler: ToolHandler = async (args, context) => {
     });
 
     const matches = searchResult.matches
-      .filter((match) => match.score >= minScore)
+      .filter((match: { score: number }) => match.score >= minScore)
       .slice(0, limit);
 
     if (matches.length === 0) {
       return `No info units found for: "${query}"`;
     }
 
-    const lines = matches.map((match, index) => formatVectorMatch(match, index, false));
+    const lines = matches.map((match: { score: number; id: string; metadata?: Record<string, unknown> }, index: number) => formatVectorMatch(match, index, false));
 
     return `Found ${matches.length} info units:\n\n${lines.join('\n\n')}`;
   }
@@ -243,9 +243,9 @@ export const repoGraphSearchHandler: ToolHandler = async (args, context) => {
       returnMetadata: 'all',
     });
 
-    let matches = searchResult.matches.filter((match) => match.score >= minScore);
+    let matches = searchResult.matches.filter((match: { score: number }) => match.score >= minScore);
     if (allowedRepoIds.length > 0) {
-      matches = matches.filter((match) => {
+      matches = matches.filter((match: { score: number; metadata?: Record<string, unknown> }) => {
         const meta = match.metadata as Record<string, unknown>;
         const metaRepoIds = Array.isArray(meta.repoIds) ? meta.repoIds as string[] : [];
         return metaRepoIds.some((id) => allowedRepoIds.includes(id));
@@ -258,7 +258,7 @@ export const repoGraphSearchHandler: ToolHandler = async (args, context) => {
       return `No info units found for: "${query}"`;
     }
 
-    const lines = matches.map((match, index) => formatVectorMatch(match, index, true));
+    const lines = matches.map((match: { score: number; id: string; metadata?: Record<string, unknown> }, index: number) => formatVectorMatch(match, index, true));
 
     return `Found ${matches.length} info units:\n\n${lines.join('\n\n')}`;
   }

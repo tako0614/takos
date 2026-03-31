@@ -1,8 +1,8 @@
 import { createMemo, type JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { toSafeHref } from '../../lib/safeHref';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { toSafeHref } from '../../lib/safeHref.ts';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.ts';
 
 function CodeBlock(props: { code: string; language: string }) {
   const { t } = useI18n();

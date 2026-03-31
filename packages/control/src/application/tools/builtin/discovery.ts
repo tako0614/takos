@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler, ToolContext } from '../tool-definitions';
+import type { ToolDefinition, ToolHandler, ToolContext } from '../tool-definitions.ts';
 
 interface ToolExecutorLike {
   execute(call: { id: string; name: string; arguments: Record<string, unknown> }): Promise<{ output: string; error?: string }>;

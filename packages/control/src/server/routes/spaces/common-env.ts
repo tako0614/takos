@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../route-auth';
-import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../../application/services/common-env';
-import { buildCommonEnvActor } from '../common-env-handlers';
-import { logError } from '../../../shared/utils/logger';
+import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
+import { createCommonEnvDeps, listSpaceCommonEnv, upsertSpaceCommonEnv, deleteSpaceCommonEnv } from '../../../application/services/common-env/index.ts';
+import { buildCommonEnvActor } from '../common-env-handlers.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { AppError, BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 
 export default new Hono<SpaceAccessRouteEnv>()

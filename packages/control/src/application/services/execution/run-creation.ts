@@ -1,19 +1,19 @@
-import { generateId } from '../../../shared/utils';
-import type { Env, SpaceRole, RunQueueMessage } from '../../../shared/types';
-import { RUN_QUEUE_MESSAGE_VERSION } from '../../../shared/types';
-import { checkThreadAccess } from '../threads/thread-service';
-import { buildRunFailedPayload } from '../run-notifier';
-import { persistAndEmitEvent } from './run-events';
+import { generateId } from '../../../shared/utils/index.ts';
+import type { Env, SpaceRole, RunQueueMessage } from '../../../shared/types/index.ts';
+import { RUN_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
+import { checkThreadAccess } from '../threads/thread-service.ts';
+import { buildRunFailedPayload } from '../run-notifier/index.ts';
+import { persistAndEmitEvent } from './run-events.ts';
 import {
   checkRunRateLimits,
   createPendingRun,
   getRunResponse,
   getRunHierarchyNode,
   updateRunStatus,
-} from '../runs/create-thread-run-store';
-import { resolveRunModel, validateParentRunId } from '../runs/create-thread-run-validation';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards';
-import { logError } from '../../../shared/utils/logger';
+} from '../runs/create-thread-run-store.ts';
+import { resolveRunModel, validateParentRunId } from '../runs/create-thread-run-validation.ts';
+import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 
 type CreateThreadRunInput = {
   userId: string;

@@ -1,8 +1,8 @@
 import type { D1Database, R2Bucket, DurableObjectNamespace, Queue } from '../../shared/types/bindings.ts';
 import type { Conclusion } from 'takos-actions-engine';
-import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine';
-import type { DbEnv, WorkflowJobQueueMessage, WorkflowShell } from '../../shared/types';
-import type { WorkflowBucket } from '../../application/services/execution/workflow-engine-types';
+import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
+import type { DbEnv, WorkflowJobQueueMessage, WorkflowShell } from '../../shared/types/index.ts';
+import type { WorkflowBucket } from '../../application/services/execution/workflow-engine-types.ts';
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -78,7 +78,7 @@ export interface JobExecutionState {
 
 export interface JobQueueContext {
   env: WorkflowQueueEnv;
-  engine: import('../../application/services/execution/workflow-engine').WorkflowEngine;
+  engine: import('../../application/services/execution/workflow-engine.ts').WorkflowEngine;
   message: WorkflowJobQueueMessage;
   jobName: string;
   effectiveJobEnv: Record<string, string>;

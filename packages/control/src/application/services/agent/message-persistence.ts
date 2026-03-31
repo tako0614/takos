@@ -1,10 +1,10 @@
-import type { Env, MessageRole } from '../../../shared/types';
-import type { AgentMessage } from './agent-models';
-import { getDb, messages } from '../../../infra/db';
+import type { Env, MessageRole } from '../../../shared/types/index.ts';
+import type { AgentMessage } from './agent-models.ts';
+import { getDb, messages } from '../../../infra/db/index.ts';
 import { eq, sql } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { makeMessagePreview, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { generateId } from '../../../shared/utils/index.ts';
+import { makeMessagePreview, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 
 export interface MessagePersistenceDeps {

@@ -2,9 +2,9 @@
  * Pattern constants, limits, and table/prefix tokens for admin-cli.
  */
 
-import * as os from 'os';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Path constants

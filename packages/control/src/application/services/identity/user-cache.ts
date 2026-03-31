@@ -1,8 +1,8 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { User } from '../../../shared/types';
-import { getDb, accounts } from '../../../infra/db';
+import type { User } from '../../../shared/types/index.ts';
+import { getDb, accounts } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 interface UserCacheContext {
   get(key: 'user'): User | undefined;

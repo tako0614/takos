@@ -8,9 +8,9 @@
  */
 
 import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects';
-import { isValidSha } from '../git-objects';
-import { sha1, concatBytes } from './sha1';
+import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects.ts';
+import { isValidSha } from '../git-objects.ts';
+import { sha1, concatBytes } from './sha1.ts';
 import {
   encodeBlob,
   encodeTree,
@@ -21,7 +21,7 @@ import {
   decodeObject,
   decodeTree,
   decodeCommit,
-} from './object';
+} from './object.ts';
 
 const OBJECT_PREFIX = 'git/v2/objects';
 

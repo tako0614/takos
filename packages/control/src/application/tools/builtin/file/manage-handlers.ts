@@ -4,11 +4,11 @@
  * Consolidates: file_delete, file_rename.
  */
 
-import type { ToolHandler } from '../../tool-definitions';
-import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session';
-import { isBinaryFile } from './limits';
-import { logError, logWarn } from '../../../../shared/utils/logger';
-import { setupFileOperation, handleSessionApiResponse } from './file-operations';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { buildSessionPath, callSessionApi, requireContainer, resolveMountPath } from './session.ts';
+import { isBinaryFile } from './limits.ts';
+import { logError, logWarn } from '../../../../shared/utils/logger.ts';
+import { setupFileOperation, handleSessionApiResponse } from './file-operations.ts';
 
 /* ------------------------------------------------------------------ */
 /*  file_delete                                                        */

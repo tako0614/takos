@@ -1,9 +1,9 @@
 import { and, count, desc, eq, sql } from 'drizzle-orm';
-import { getDb } from '../../../infra/db';
-import { accounts, branches, repositories, storeInventoryItems } from '../../../infra/db/schema';
-import type { Env } from '../../../shared/types';
-import { findActivityPubStoreBySlug } from '../../../application/services/activitypub/stores';
-import { hasExplicitInventory, countActiveItems } from '../../../application/services/activitypub/store-inventory';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, branches, repositories, storeInventoryItems } from '../../../infra/db/schema.ts';
+import type { Env } from '../../../shared/types/index.ts';
+import { findActivityPubStoreBySlug } from '../../../application/services/activitypub/stores.ts';
+import { hasExplicitInventory, countActiveItems } from '../../../application/services/activitypub/store-inventory.ts';
 
 export interface StoreRecord {
   accountId: string;

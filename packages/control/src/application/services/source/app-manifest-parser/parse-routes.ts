@@ -3,8 +3,8 @@ import type {
   AppService,
   AppWorker,
   AppRoute,
-} from '../app-manifest-types';
-import { asRecord, asString, asRequiredString, asStringArray } from '../app-manifest-utils';
+} from '../app-manifest-types.ts';
+import { asRecord, asString, asRequiredString, asStringArray } from '../app-manifest-utils.ts';
 
 // ============================================================
 // Routes parser

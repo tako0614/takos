@@ -1,8 +1,8 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { useSidebarCallbacks } from './SidebarContext';
-import type { Thread } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { useSidebarCallbacks } from './SidebarContext.tsx';
+import type { Thread } from '../../types/index.ts';
 
 const THREAD_BASE = 'group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors min-h-[36px] text-sm';
 const THREAD_DEFAULT = `${THREAD_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-800 dark:hover:text-zinc-200`;

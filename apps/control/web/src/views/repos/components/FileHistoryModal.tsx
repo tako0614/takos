@@ -1,8 +1,8 @@
 import { Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import { formatDateTime } from '../../../lib/format';
-import { Modal } from '../../../components/ui/Modal';
-import { useI18n } from '../../../store/i18n';
+import { Icons } from '../../../lib/Icons.tsx';
+import { formatDateTime } from '../../../lib/format.ts';
+import { Modal } from '../../../components/ui/Modal.tsx';
+import { useI18n } from '../../../store/i18n.ts';
 
 export type FileHistoryCommit = {
   sha: string;

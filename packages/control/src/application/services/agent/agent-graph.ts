@@ -20,14 +20,14 @@ import {
   SystemMessage,
   ToolMessage,
 } from '@langchain/core/messages';
-import type { ToolDefinition } from '../../tools/tool-definitions';
-import type { ToolExecutorLike } from '../../tools/executor';
-import { DEFAULT_MODEL_ID } from './model-catalog';
-import { estimateTokens } from './prompt-budget';
-import { withTimeout } from '../../../shared/utils/with-timeout';
-import { logWarn } from '../../../shared/utils/logger';
+import type { ToolDefinition } from '../../tools/tool-definitions.ts';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import { DEFAULT_MODEL_ID } from './model-catalog.ts';
+import { estimateTokens } from './prompt-budget.ts';
+import { withTimeout } from '../../../shared/utils/with-timeout.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { D1CheckpointSaver } from './graph-checkpointer';
+import { D1CheckpointSaver } from './graph-checkpointer.ts';
 import {
   extractMessageText,
   stringifyToolResult,
@@ -36,7 +36,7 @@ import {
   anySignal,
   throwIfAborted,
   type CreateAgentOptions,
-} from './graph-tools';
+} from './graph-tools.ts';
 
 // ── Message limits for Workers memory safety (128MB heap) ───────────────
 

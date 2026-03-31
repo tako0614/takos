@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { SourceItem, SourceItemTakopack } from '../../../hooks/useSourceData';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { SourceItem, SourceItemTakopack } from '../../../hooks/useSourceData.ts';
 
 interface CatalogRepoCardProps {
   item: SourceItem;

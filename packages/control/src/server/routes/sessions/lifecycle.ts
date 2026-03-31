@@ -1,25 +1,25 @@
-import { getDb } from '../../../infra/db';
-import { sessions, repositories } from '../../../infra/db/schema';
+import { getDb } from '../../../infra/db/index.ts';
+import { sessions, repositories } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions';
-import * as gitStore from '../../../application/services/git-smart';
+import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions/index.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
 import {
   RuntimeSessionManager,
   type SessionInitResult,
-} from '../../../application/services/sync';
-import { requireSpaceAccess } from '../route-auth';
-import { generateId } from '../../../shared/utils';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access';
-import { toSessionSnakeCase } from './session-mappers';
-import type { SessionContext } from './session-mappers';
-import { logError, logWarn } from '../../../shared/utils/logger';
+} from '../../../application/services/sync/index.ts';
+import { requireSpaceAccess } from '../route-auth.ts';
+import { generateId } from '../../../shared/utils/index.ts';
+import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import { toSessionSnakeCase } from './session-mappers.ts';
+import type { SessionContext } from './session-mappers.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { requireParam, requireFound } from '../validation-utils';
+import { requireParam, requireFound } from '../validation-utils.ts';
 import {
   getPlatformConfig,
   getPlatformServices,
 } from '../../../platform/accessors.ts';
-import type { RuntimeSessionManagerEnv } from '../../../application/services/sync/runtime-session';
+import type { RuntimeSessionManagerEnv } from '../../../application/services/sync/runtime-session.ts';
 
 type StartSessionBody = {
   repo_id: string;

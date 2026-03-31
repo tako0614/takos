@@ -1,7 +1,7 @@
-import type { Env } from '../../../shared/types';
-import { repositories } from '../../../infra/db';
+import type { Env } from '../../../shared/types/index.ts';
+import { repositories } from '../../../infra/db/index.ts';
 import { desc, asc } from 'drizzle-orm';
-import type { ExploreReposResult } from './explore-types';
+import type { ExploreReposResult } from './explore-types.ts';
 import {
   ALLOWED_ORDER_BY_COLUMNS,
   resolveOrderByColumn,
@@ -10,7 +10,7 @@ import {
   queryReposWithAccount,
   countRepos,
   buildExploreResult,
-} from './source-exploration';
+} from './source-exploration.ts';
 
 export async function listExploreRepos(
   dbBinding: Env['DB'],

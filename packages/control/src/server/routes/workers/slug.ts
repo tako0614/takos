@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { AuthenticatedRouteEnv } from '../route-auth';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator';
-import { getServiceForUserWithRole, slugifyServiceName } from '../../../application/services/platform/workers';
-import { getDb } from '../../../infra/db';
+import { zValidator } from '../zod-validator.ts';
+import { getServiceForUserWithRole, slugifyServiceName } from '../../../application/services/platform/workers.ts';
+import { getDb } from '../../../infra/db/index.ts';
 import { eq, and, or, ne } from 'drizzle-orm';
-import { services } from '../../../infra/db/schema-services';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing/service';
-import type { RoutingTarget } from '../../../application/services/routing/routing-models';
-import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state';
-import { logError } from '../../../shared/utils/logger';
+import { services } from '../../../infra/db/schema-services.ts';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../../../application/services/routing/service.ts';
+import type { RoutingTarget } from '../../../application/services/routing/routing-models.ts';
+import { ServiceDesiredStateService } from '../../../application/services/platform/worker-desired-state.ts';
+import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
 import { renameGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
 

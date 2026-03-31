@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import type { ToolExecution } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import type { ToolExecution } from '../../types/index.ts';
 
 function getToolInfo(name: string) {
   const normalized = name.toLowerCase();

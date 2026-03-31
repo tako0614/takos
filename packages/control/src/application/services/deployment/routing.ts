@@ -1,15 +1,15 @@
-import type { DbEnv } from '../../../shared/types';
-import { deployments, getDb, serviceDeployments, services } from '../../../infra/db';
+import type { DbEnv } from '../../../shared/types/index.ts';
+import { deployments, getDb, serviceDeployments, services } from '../../../infra/db/index.ts';
 import { eq, and, ne, inArray } from 'drizzle-orm';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service';
-import type { RoutingBindings, RoutingTarget } from '../routing/routing-models';
-import { parseDeploymentTargetConfig } from './provider';
+import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service.ts';
+import type { RoutingBindings, RoutingTarget } from '../routing/routing-models.ts';
+import { parseDeploymentTargetConfig } from './provider.ts';
 import {
   getDeploymentRoutingServiceRecord,
   type DeploymentRoutingServiceRecord,
   updateServiceDeploymentPointers,
-} from './store';
-import type { DeploymentTarget } from './models';
+} from './store.ts';
+import type { DeploymentTarget } from './models.ts';
 
 type DeploymentRoutingEnv = DbEnv & RoutingBindings;
 

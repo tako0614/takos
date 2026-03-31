@@ -1,27 +1,27 @@
-import type { Env, RunStatus } from '../../../shared/types';
+import type { Env, RunStatus } from '../../../shared/types/index.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { ToolExecutorLike } from '../../tools/executor';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models';
-import type { ToolExecution } from './runner-utils';
-import type { LLMClient, ModelProvider } from './llm';
+import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models.ts';
+import type { ToolExecution } from './runner-utils.ts';
+import type { LLMClient, ModelProvider } from './llm.ts';
 import {
   buildSkillEnhancedPrompt,
   type ResolvedSkillPlan,
-} from './skills';
+} from './skills.ts';
 import {
   createLangGraphAgent,
   runLangGraph,
   dbMessagesToLangChain,
   langChainMessageToDb,
   type LangGraphEvent,
-} from './graph-agent';
-import { getTimeoutConfig } from './runner-config';
-import { RunCancelledError } from './run-lifecycle';
-import { withTimeout } from '../../../shared/utils/with-timeout';
-import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier';
-import { runWithSimpleLoop, runWithoutLLM } from './simple-loop';
+} from './graph-agent.ts';
+import { getTimeoutConfig } from './runner-config.ts';
+import { RunCancelledError } from './run-lifecycle.ts';
+import { withTimeout } from '../../../shared/utils/with-timeout.ts';
+import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier/index.ts';
+import { runWithSimpleLoop, runWithoutLLM } from './simple-loop.ts';
 import { throwIfAborted } from 'takos-common/abort';
-import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime';
+import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime.ts';
 
 type ToolExecutionRecord = {
   name: string;

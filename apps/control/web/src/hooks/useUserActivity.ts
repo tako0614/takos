@@ -1,6 +1,6 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import type { ActivityEvent } from '../types/profile';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { ActivityEvent } from '../types/profile.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface ActivityResponse {
   events: ActivityEvent[];

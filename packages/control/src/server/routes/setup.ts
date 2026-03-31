@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../shared/types';
+import type { Env } from '../../shared/types/index.ts';
 
-import { validateUsername } from '../../shared/utils/domain-validation';
-import { type BaseVariables } from './route-auth';
+import { validateUsername } from '../../shared/utils/domain-validation.ts';
+import { type BaseVariables } from './route-auth.ts';
 import { BadRequestError, ConflictError } from 'takos-common/errors';
-import { zValidator } from './zod-validator';
-import { getDb } from '../../infra/db';
-import { accounts } from '../../infra/db/schema';
+import { zValidator } from './zod-validator.ts';
+import { getDb } from '../../infra/db/index.ts';
+import { accounts } from '../../infra/db/schema.ts';
 import { eq, and, ne } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,8 @@
  * OSS / self-hosted deployments.
  */
 
-import { WEEKLY_RUNTIME_LIMIT_SECONDS, WEEKLY_RUNTIME_WINDOW_DAYS } from './billing-types';
-import type { MeterType } from './billing-types';
+import { WEEKLY_RUNTIME_LIMIT_SECONDS, WEEKLY_RUNTIME_WINDOW_DAYS } from './billing-types.ts';
+import type { MeterType } from './billing-types.ts';
 
 // ---------------------------------------------------------------------------
 // Core toggle

@@ -1,11 +1,11 @@
-import type { ToolHandler } from '../../tool-definitions';
-import { getDb, repositories } from '../../../../infra/db';
+import type { ToolHandler } from '../../tool-definitions.ts';
+import { getDb, repositories } from '../../../../infra/db/index.ts';
 import { and, eq } from 'drizzle-orm';
-import { createRepository, RepositoryCreationError } from '../../../services/source/repos';
+import { createRepository, RepositoryCreationError } from '../../../services/source/repos.ts';
 import {
   validateStringInput,
-} from './session';
-import { logInfo } from '../../../../shared/utils/logger';
+} from './session.ts';
+import { logInfo } from '../../../../shared/utils/logger.ts';
 
 export const createRepositoryHandler: ToolHandler = async (args, context) => {
   const rawName = validateStringInput(args.name, 'name');

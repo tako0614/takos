@@ -1,18 +1,18 @@
-import type { Env } from '../../../../shared/types';
-import { getDb, serviceCustomDomains } from '../../../../infra/db';
+import type { Env } from '../../../../shared/types/index.ts';
+import { getDb, serviceCustomDomains } from '../../../../infra/db/index.ts';
 import { eq, and, count } from 'drizzle-orm';
-import { isDomainReserved, generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domain-validation';
+import { isDomainReserved, generateDomainId, generateVerificationToken, isValidDomain, normalizeDomain } from '../../../../shared/utils/domain-validation.ts';
 
-import { deleteHostnameRouting } from '../../routing/service';
-import { ServiceDesiredStateService } from '../worker-desired-state';
-import { logError } from '../../../../shared/utils/logger';
+import { deleteHostnameRouting } from '../../routing/service.ts';
+import { ServiceDesiredStateService } from '../worker-desired-state.ts';
+import { logError } from '../../../../shared/utils/logger.ts';
 import {
   MAX_CUSTOM_DOMAINS_PER_SERVICE,
   CustomDomainError,
-} from './domain-models';
-import type { DnsInstruction, AddCustomDomainResult } from './domain-models';
-import { getServiceForUser, requireServiceWriteAccess } from './access';
-import { deleteCloudflareCustomHostname } from './cloudflare';
+} from './domain-models.ts';
+import type { DnsInstruction, AddCustomDomainResult } from './domain-models.ts';
+import { getServiceForUser, requireServiceWriteAccess } from './access.ts';
+import { deleteCloudflareCustomHostname } from './cloudflare.ts';
 
 export async function listCustomDomains(env: Env, serviceId: string, userId: string) {
   const db = getDb(env.DB);

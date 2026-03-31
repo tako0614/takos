@@ -1,7 +1,7 @@
 
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import type { SourceItem, SourceItemTakopack, SourceSort } from '../../hooks/useSourceData';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import type { SourceItem, SourceItemTakopack, SourceSort } from '../../hooks/useSourceData.ts';
 
 /* ── AppTile: Compact tile for horizontal scroll sections ── */
 

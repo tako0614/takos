@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, ThreadStatus, MessageRole } from '../../../shared/types';
-import { requireSpaceAccess, type BaseVariables } from '../route-auth';
-import { parsePagination } from '../../../shared/utils';
+import type { Env, ThreadStatus, MessageRole } from '../../../shared/types/index.ts';
+import { requireSpaceAccess, type BaseVariables } from '../route-auth.ts';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger';
-import { requireFound } from '../validation-utils';
-import { zValidator } from '../zod-validator';
+import { logError } from '../../../shared/utils/logger.ts';
+import { requireFound } from '../validation-utils.ts';
+import { zValidator } from '../zod-validator.ts';
 import {
   checkThreadAccess,
   createMessage,
@@ -15,17 +15,17 @@ import {
   listThreads,
   updateThread,
   updateThreadStatus,
-} from '../../../application/services/threads/thread-service';
+} from '../../../application/services/threads/thread-service.ts';
 import {
   createThreadShare,
   listThreadShares,
   revokeThreadShare,
   type ThreadShareMode,
-} from '../../../application/services/threads/thread-shares';
-import { searchSpaceThreads, searchThreadMessages } from '../../../application/services/threads/thread-search';
-import { getThreadTimeline } from '../../../application/services/threads/thread-timeline';
-import { getThreadHistory } from '../../../application/services/threads/thread-history';
-import { exportThread } from '../../../application/services/threads/thread-export';
+} from '../../../application/services/threads/thread-shares.ts';
+import { searchSpaceThreads, searchThreadMessages } from '../../../application/services/threads/thread-search.ts';
+import { getThreadTimeline } from '../../../application/services/threads/thread-timeline.ts';
+import { getThreadHistory } from '../../../application/services/threads/thread-history.ts';
+import { exportThread } from '../../../application/services/threads/thread-export.ts';
 import { getPlatformServices } from '../../../platform/accessors.ts';
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()

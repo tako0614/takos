@@ -1,10 +1,10 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions';
-import { generateId } from '../../../../shared/utils';
-import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db';
+import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
+import { generateId } from '../../../../shared/utils/index.ts';
+import { getDb, services, apps, serviceCustomDomains, serviceDeployments } from '../../../../infra/db/index.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { deleteHostnameRouting } from '../../../services/routing/service';
+import { deleteHostnameRouting } from '../../../services/routing/service.ts';
 import { deleteCloudflareCustomHostname } from '../../../services/platform/custom-domains.ts';
-import { getServiceRouteRecord } from '../../../services/platform/workers';
+import { getServiceRouteRecord } from '../../../services/platform/workers.ts';
 
 export const WORKER_LIST: ToolDefinition = {
   name: 'service_list',

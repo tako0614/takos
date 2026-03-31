@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import { createSession } from '../../../application/services/identity/session';
-import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils';
-import { getDb, accounts, authIdentities } from '../../../infra/db';
-import type { OptionalAuthRouteEnv } from '../route-auth';
-import { validateCliCallbackUrl } from './provisioning';
-import { escapeHtml, errorPage, warningPage } from './html';
+import { createSession } from '../../../application/services/identity/session.ts';
+import { storeOAuthState, validateOAuthState } from '../../../application/services/identity/auth-utils.ts';
+import { getDb, accounts, authIdentities } from '../../../infra/db/index.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
+import { validateCliCallbackUrl } from './provisioning.ts';
+import { escapeHtml, errorPage, warningPage } from './html.ts';
 import { BadRequestError } from 'takos-common/errors';
 import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
 

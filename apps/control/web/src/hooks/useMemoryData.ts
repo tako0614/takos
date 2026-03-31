@@ -1,9 +1,9 @@
 import { createSignal, createEffect, on, type Setter } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import type { Memory, Reminder } from '../types';
+import { rpc, rpcJson } from '../lib/rpc.ts';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import type { Memory, Reminder } from '../types/index.ts';
 
 export interface MemoryFormState {
   content: string;

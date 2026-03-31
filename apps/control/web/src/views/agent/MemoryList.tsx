@@ -1,8 +1,8 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n';
-import { Icons } from '../../lib/Icons';
-import { Button, Card, Badge, Input, Textarea, Modal, ModalFooter } from '../../components/ui';
-import type { Memory } from '../../types';
+import { useI18n } from '../../store/i18n.ts';
+import { Icons } from '../../lib/Icons.tsx';
+import { Button, Card, Badge, Input, Textarea, Modal, ModalFooter } from '../../components/ui/index.ts';
+import type { Memory } from '../../types/index.ts';
 
 function getTypeIcon(type: Memory['type']) {
   switch (type) {
@@ -20,7 +20,7 @@ function getTypeLabel(type: Memory['type'], t: (key: any) => string) {
   }
 }
 
-import { Select } from '../../components/ui';
+import { Select } from '../../components/ui/index.ts';
 
 export function MemoryList({
   memories,

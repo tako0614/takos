@@ -1,7 +1,7 @@
 import type { JSX } from 'solid-js';
 import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import type { FollowUser } from '../../types/profile';
+import { Icons } from '../../lib/Icons.tsx';
+import type { FollowUser } from '../../types/profile.ts';
 
 interface ProfileUserListProps {
   users: FollowUser[];

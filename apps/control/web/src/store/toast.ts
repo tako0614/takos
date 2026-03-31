@@ -1,6 +1,6 @@
 import { atom } from 'jotai/vanilla';
 import { useAtomValue, useSetAtom } from 'solid-jotai';
-import type { Toast } from '../types';
+import type { Toast } from '../types/index.ts';
 
 export const toastsAtom = atom<Toast[]>([]);
 

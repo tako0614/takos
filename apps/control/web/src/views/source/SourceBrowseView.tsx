@@ -1,8 +1,8 @@
 
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { CatalogRepoCard } from './components/CatalogRepoCard';
-import type { SourceItem, SourceItemTakopack, SourceFilter } from '../../hooks/useSourceData';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { CatalogRepoCard } from './components/CatalogRepoCard.tsx';
+import type { SourceItem, SourceItemTakopack, SourceFilter } from '../../hooks/useSourceData.ts';
 
 interface SourceBrowseViewProps {
   scrollContainerRef: HTMLDivElement | null | undefined;

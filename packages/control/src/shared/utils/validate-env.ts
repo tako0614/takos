@@ -1,4 +1,4 @@
-import { logError } from './logger';
+import { logError } from './logger.ts';
 
 /**
  * Centralized environment validation for all worker entry points.

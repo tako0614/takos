@@ -1,8 +1,8 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons';
-import type { RepoFile } from '../../../types';
-import { useI18n } from '../../../store/i18n';
-import { rpcJson, repoTree } from '../../../lib/rpc';
+import { Icons } from '../../../lib/Icons.tsx';
+import type { RepoFile } from '../../../types/index.ts';
+import { useI18n } from '../../../store/i18n.ts';
+import { rpcJson, repoTree } from '../../../lib/rpc.ts';
 
 interface FileTreeProps {
   repoId: string;

@@ -6,6 +6,7 @@
  */
 
 import http from 'node:http';
+import { Buffer } from "node:buffer";
 import type {
   ContainerBackend,
   ContainerCreateOpts,

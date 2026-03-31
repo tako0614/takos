@@ -9,8 +9,8 @@
  * Verification uses constant-time comparison to prevent timing attacks.
  */
 
-import { constantTimeEqual } from '../../shared/utils/hash';
-import { bytesToHex } from '../../shared/utils/encoding-utils';
+import { constantTimeEqual } from '../../shared/utils/hash.ts';
+import { bytesToHex } from '../../shared/utils/encoding-utils.ts';
 
 /**
  * Token entry stored in the internal map.

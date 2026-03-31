@@ -1,17 +1,17 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
-import type { RunStatus } from '../../../shared/types';
+import type { RunStatus } from '../../../shared/types/index.ts';
 import { throwIfAborted } from 'takos-common/abort';
-import { getDb, runs, artifacts, threads, messages } from '../../../infra/db';
-import { createThreadRun } from '../../services/execution/run-creation';
-import { resolveRunModel } from '../../services/runs/create-thread-run-validation';
-import { createThread, updateThreadStatus } from '../../services/threads/thread-service';
-import { getSpaceLocale } from '../../services/identity/locale';
+import { getDb, runs, artifacts, threads, messages } from '../../../infra/db/index.ts';
+import { createThreadRun } from '../../services/execution/run-creation.ts';
+import { resolveRunModel } from '../../services/runs/create-thread-run-validation.ts';
+import { createThread, updateThreadStatus } from '../../services/threads/thread-service.ts';
+import { getSpaceLocale } from '../../services/identity/locale.ts';
 import {
   buildDelegationPacket,
-} from '../../services/agent/delegation';
-import type { ToolDefinition, ToolHandler } from '../tool-definitions';
-import { safeJsonParseOrDefault } from '../../../shared/utils';
-import { logWarn } from '../../../shared/utils/logger';
+} from '../../services/agent/delegation.ts';
+import type { ToolDefinition, ToolHandler } from '../tool-definitions.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
 
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>(['completed', 'failed', 'cancelled']);
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;

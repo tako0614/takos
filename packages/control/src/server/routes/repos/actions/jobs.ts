@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { checkRepoAccess } from '../../../../application/services/source/repos';
-import type { AuthenticatedRouteEnv } from '../../route-auth';
-import { getDb } from '../../../../infra/db';
-import { workflowJobs, workflowSteps, workflowRuns } from '../../../../infra/db/schema';
+import { checkRepoAccess } from '../../../../application/services/source/repos.ts';
+import type { AuthenticatedRouteEnv } from '../../route-auth.ts';
+import { getDb } from '../../../../infra/db/index.ts';
+import { workflowJobs, workflowSteps, workflowRuns } from '../../../../infra/db/schema.ts';
 import { eq, and, asc } from 'drizzle-orm';
-import { zValidator } from '../../zod-validator';
-import { LogsNotFoundError, parseLogRange, readJobLogs } from './logs';
-import { logError } from '../../../../shared/utils/logger';
+import { zValidator } from '../../zod-validator.ts';
+import { LogsNotFoundError, parseLogRange, readJobLogs } from './logs.ts';
+import { logError } from '../../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
 export default new Hono<AuthenticatedRouteEnv>()

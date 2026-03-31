@@ -1,9 +1,9 @@
 import { createSignal, onMount } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc';
-import { useConfirmDialog } from '../store/confirm-dialog';
-import { useI18n } from '../store/i18n';
-import { useToast } from '../store/toast';
-import type { Resource } from '../types';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import { useConfirmDialog } from '../store/confirm-dialog.ts';
+import { useI18n } from '../store/i18n.ts';
+import { useToast } from '../store/toast.ts';
+import type { Resource } from '../types/index.ts';
 
 function isYurucommuResource(resource: Resource): boolean {
   if (!resource.metadata) return false;

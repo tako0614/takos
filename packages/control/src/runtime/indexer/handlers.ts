@@ -1,17 +1,17 @@
 // Indexer handler implementations.
 // Called by the queue dispatcher in index.ts.
-import type { IndexJobQueueMessage } from '../../shared/types';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../shared/types';
+import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
+import { INDEX_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
 import type { D1Database } from '../../shared/types/bindings.ts';
-import type { IndexerEnv as Env } from '../../shared/types';
-import { getDb, accounts, indexJobs, dlqEntries } from '../../infra/db';
+import type { IndexerEnv as Env } from '../../shared/types/index.ts';
+import { getDb, accounts, indexJobs, dlqEntries } from '../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { createEmbeddingsService } from '../../application/services/execution/embeddings';
-import { createInfoUnitIndexer } from '../../application/services/source/info-units';
-import { indexThreadContext } from '../../application/services/agent';
-import { getOrCreateBillingAccount, recordUsage } from '../../application/services/billing/billing';
-import { generateId } from '../../shared/utils';
-import { logError, logInfo, logWarn } from '../../shared/utils/logger';
+import { createEmbeddingsService } from '../../application/services/execution/embeddings.ts';
+import { createInfoUnitIndexer } from '../../application/services/source/info-units.ts';
+import { indexThreadContext } from '../../application/services/agent/index.ts';
+import { getOrCreateBillingAccount, recordUsage } from '../../application/services/billing/billing.ts';
+import { generateId } from '../../shared/utils/index.ts';
+import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
 
 const TAG = '[INDEX_QUEUE]';
 

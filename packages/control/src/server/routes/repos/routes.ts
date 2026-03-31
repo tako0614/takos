@@ -3,27 +3,27 @@ import { z } from 'zod';
 
 import {
   requireSpaceAccess,
-} from '../route-auth';
+} from '../route-auth.ts';
 import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
-import type { AuthenticatedRouteEnv } from '../route-auth';
-import { zValidator } from '../zod-validator';
-import * as gitStore from '../../../application/services/git-smart';
-import { collectReachableObjectShas } from '../../../application/services/git-smart';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { zValidator } from '../zod-validator.ts';
+import * as gitStore from '../../../application/services/git-smart/index.ts';
+import { collectReachableObjectShas } from '../../../application/services/git-smart/index.ts';
 import {
   checkRepoAccess,
   createRepository,
   listRepositoriesBySpace,
   RepositoryCreationError,
-} from '../../../application/services/source/repos';
-import { getDb } from '../../../infra/db';
-import { accounts, repositories, branches, repoForks, repoRemotes, repoStars, workflowSecrets } from '../../../infra/db/schema';
+} from '../../../application/services/source/repos.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, repositories, branches, repoForks, repoRemotes, repoStars, workflowSecrets } from '../../../infra/db/schema.ts';
 import { and, eq, sql } from 'drizzle-orm';
-import { invalidateCacheOnMutation } from '../../middleware/cache';
-import { logError, logWarn } from '../../../shared/utils/logger';
-import { requireFound } from '../validation-utils';
-import { recordRepoDeleteActivity } from '../../../application/services/activitypub/push-activities';
+import { invalidateCacheOnMutation } from '../../middleware/cache.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
+import { requireFound } from '../validation-utils.ts';
+import { recordRepoDeleteActivity } from '../../../application/services/activitypub/push-activities.ts';
 
-// Re-export shared utilities so existing sibling imports (e.g. `from './routes'`) keep working.
+// Re-export shared utilities so existing sibling imports (e.g. `from './routes.ts'`) keep working.
 export {
   type RepoBucketBinding,
   type GitBucket,
@@ -35,16 +35,16 @@ export {
   hasWriteRole,
   type TreeFlattenLimitErrorCode,
   getTreeFlattenLimitError,
-} from './shared';
+} from './shared.ts';
 
-import { generateExploreInvalidationUrls } from './shared';
+import { generateExploreInvalidationUrls } from './shared.ts';
 import {
   resolveOwnerUsername,
   formatRepositoryResponse,
   deleteR2Prefix,
   cleanupRepoGitObjects,
   collectCleanupCandidates,
-} from './repo-utils';
+} from './repo-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Type aliases for deletion cleanup

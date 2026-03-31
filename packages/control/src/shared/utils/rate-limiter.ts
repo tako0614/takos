@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono';
-import { logWarn } from './logger';
+import { logWarn } from './logger.ts';
 
 // ---------------------------------------------------------------------------
 // Sliding Window

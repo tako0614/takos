@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { badRequest, forbidden, internalError } from 'takos-common/middleware/hono';
 import { getRepoPath } from '../../runtime/paths.ts';
 import { generateTempSuffix } from '../../shared/temp-id.ts';
@@ -15,7 +16,7 @@ async function execGit(args: string[], cwd: string): Promise<void> {
   }
 }
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 app.post('/git/init', async (c) => {
   try {

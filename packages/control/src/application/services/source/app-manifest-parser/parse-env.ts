@@ -1,5 +1,5 @@
-import type { AppEnvConfig } from '../app-manifest-types';
-import { asRecord, asStringArray, asStringMap } from '../app-manifest-utils';
+import type { AppEnvConfig } from '../app-manifest-types.ts';
+import { asRecord, asStringArray, asStringMap } from '../app-manifest-utils.ts';
 
 // ============================================================
 // Environment config parser

@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import type { BaseVariables } from '../route-auth';
-import { InMemoryRateLimiter } from '../../../shared/utils';
-import { parseJsonBody } from '../route-auth';
+import type { Env, User } from '../../../shared/types/index.ts';
+import type { BaseVariables } from '../route-auth.ts';
+import { InMemoryRateLimiter } from '../../../shared/utils/index.ts';
+import { parseJsonBody } from '../route-auth.ts';
 import {
   handleIndexFile,
   handleIndexStatus,
   handleRebuildIndex,
   handleVectorizeIndex,
-} from './index-handlers';
-import { handleGraphNeighbors } from './graph';
+} from './index-handlers.ts';
+import { handleGraphNeighbors } from './graph.ts';
 import { BadRequestError } from 'takos-common/errors';
 
 const indexRoutes = new Hono<{ Bindings: Env; Variables: BaseVariables }>();

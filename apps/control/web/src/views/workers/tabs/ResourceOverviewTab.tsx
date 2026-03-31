@@ -1,12 +1,12 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../../store/i18n';
-import { Icons } from '../../../lib/Icons';
-import { Button } from '../../../components/ui/Button';
-import { Modal, ModalFooter } from '../../../components/ui/Modal';
-import type { Resource } from '../../../types';
-import { useResourceAccessTokens } from '../../../hooks/useResourceAccessTokens';
-import type { ResourceAccessToken, ResourceConnectionInfo } from '../../../hooks/useResourceAccessTokens';
-import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard';
+import { useI18n } from '../../../store/i18n.ts';
+import { Icons } from '../../../lib/Icons.tsx';
+import { Button } from '../../../components/ui/Button.tsx';
+import { Modal, ModalFooter } from '../../../components/ui/Modal.tsx';
+import type { Resource } from '../../../types/index.ts';
+import { useResourceAccessTokens } from '../../../hooks/useResourceAccessTokens.ts';
+import type { ResourceAccessToken, ResourceConnectionInfo } from '../../../hooks/useResourceAccessTokens.ts';
+import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard.ts';
 
 interface ResourceOverviewTabProps {
   resource: Resource;

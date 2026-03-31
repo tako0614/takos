@@ -1,8 +1,8 @@
 import { createUniqueId, createEffect, onCleanup, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
-import { useI18n } from '../../store/i18n';
+import { Icons } from '../../lib/Icons.tsx';
+import { useDialogLifecycle } from '../../hooks/useDialogLifecycle.ts';
+import { useI18n } from '../../store/i18n.ts';
 
 interface MobileDrawerProps {
   isOpen: boolean;

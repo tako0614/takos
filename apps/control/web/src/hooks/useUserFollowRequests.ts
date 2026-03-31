@@ -1,6 +1,6 @@
 import { createSignal, createEffect, on } from 'solid-js';
-import type { FollowRequest } from '../types/profile';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { FollowRequest } from '../types/profile.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface FollowRequestsResponse {
   requests: FollowRequest[];

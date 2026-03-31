@@ -1,8 +1,8 @@
 
-import type { Resource, Worker } from '../../../types';
-import { WorkerDetail } from '../WorkerDetail';
-import type { WorkerDetailTab } from '../worker-models';
-import { useWorkerSettings } from '../../../hooks/useWorkerSettings';
+import type { Resource, Worker } from '../../../types/index.ts';
+import { WorkerDetail } from '../WorkerDetail.tsx';
+import type { WorkerDetailTab } from '../worker-models.ts';
+import { useWorkerSettings } from '../../../hooks/useWorkerSettings.ts';
 
 export interface WorkerDetailContainerProps {
   worker: Worker;

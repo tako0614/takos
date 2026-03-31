@@ -2,9 +2,9 @@
 // Run dispatch, DLQ, stale run recovery.
 // Imported by the unified takos-worker entrypoint (src/runtime/worker/index.ts).
 import type { MessageBatch, ScheduledEvent } from '../../shared/types/bindings.ts';
-import type { RunnerEnv as Env } from '../../shared/types';
-import { handleQueue } from './queue-handler';
-import { handleScheduled } from './cron-handler';
+import type { RunnerEnv as Env } from '../../shared/types/index.ts';
+import { handleQueue } from './queue-handler.ts';
+import { handleScheduled } from './cron-handler.ts';
 
 export { handleQueue };
 export { handleScheduled };

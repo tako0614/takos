@@ -5,21 +5,21 @@
  * DB persistence, and Durable Object relay.
  */
 
-import type { RunStatus, Env } from '../../../shared/types';
-import type { AgentEvent } from './agent-models';
-import type { EventEmissionError } from './runner-utils';
-import { getDb, runEvents } from '../../../infra/db';
-import type { RunTerminalPayload } from '../run-notifier';
+import type { RunStatus, Env } from '../../../shared/types/index.ts';
+import type { AgentEvent } from './agent-models.ts';
+import type { EventEmissionError } from './runner-utils.ts';
+import { getDb, runEvents } from '../../../infra/db/index.ts';
+import type { RunTerminalPayload } from '../run-notifier/index.ts';
 import {
   buildTerminalPayload,
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
   buildRunNotifierEmitPayload,
-} from '../run-notifier';
-import { logError, logWarn } from '../../../shared/utils/logger';
+} from '../run-notifier/index.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import {
   MAX_EVENT_EMISSION_ERRORS as MAX_EMISSION_ERRORS,
-} from '../../../shared/config/limits';
+} from '../../../shared/config/limits.ts';
 import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 
 // ── Event emission helpers ──────────────────────────────────────────

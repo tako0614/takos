@@ -1,11 +1,11 @@
-import { createWorkflowEngine } from '../../application/services/execution/workflow-engine';
-import { getDb, workflowRuns, workflowJobs } from '../../infra/db';
+import { createWorkflowEngine } from '../../application/services/execution/workflow-engine.ts';
+import { getDb, workflowRuns, workflowJobs } from '../../infra/db/index.ts';
 import { eq, and, notInArray } from 'drizzle-orm';
-import { isValidWorkflowJobQueueMessage } from '../../shared/types';
-import { logError, logWarn } from '../../shared/utils/logger';
-import type { WorkflowQueueEnv, WorkflowEngineBucket } from './workflow-types';
-import { buildSkippedWorkflowStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-runtime-client';
-import { emitWorkflowEvent } from './workflow-events';
+import { isValidWorkflowJobQueueMessage } from '../../shared/types/index.ts';
+import { logError, logWarn } from '../../shared/utils/logger.ts';
+import type { WorkflowQueueEnv, WorkflowEngineBucket } from './workflow-types.ts';
+import { buildSkippedWorkflowStepResultsFromDb, failJobWithResults, markJobFailed } from './workflow-runtime-client.ts';
+import { emitWorkflowEvent } from './workflow-events.ts';
 
 // ---------------------------------------------------------------------------
 // DLQ handler

@@ -1,11 +1,11 @@
 import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons';
-import { useI18n } from '../../store/i18n';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
-import { Input } from '../../components/ui/Input';
-import { useToolForm } from '../../hooks/useToolForm';
-import type { CustomTool } from '../../types';
+import { Icons } from '../../lib/Icons.tsx';
+import { useI18n } from '../../store/i18n.ts';
+import { Button } from '../../components/ui/Button.tsx';
+import { Modal } from '../../components/ui/Modal.tsx';
+import { Input } from '../../components/ui/Input.tsx';
+import { useToolForm } from '../../hooks/useToolForm.ts';
+import type { CustomTool } from '../../types/index.ts';
 
 export interface SchemaParameter {
   name: string;

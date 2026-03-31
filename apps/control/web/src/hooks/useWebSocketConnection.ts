@@ -1,25 +1,25 @@
 import { createEffect, type Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
+import type { TranslationKey } from '../store/i18n.ts';
+import { rpc, rpcJson } from '../lib/rpc.ts';
 import type {
   Message,
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../types';
+} from '../types/index.ts';
 import type {
   ChatRunArtifactMap,
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/chat-types';
-import { isRunInRootTree } from '../views/chat/timeline';
-import { useWsSessionDiff, type SessionDiffState, type PendingSessionDiffSummary } from './useWsSessionDiff';
-import { useWsMessageProcessor, ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor';
-import { useConnectionManagerWithFallback } from './useConnectionManagerWithFallback';
+} from '../views/chat/chat-types.ts';
+import { isRunInRootTree } from '../views/chat/timeline.ts';
+import { useWsSessionDiff, type SessionDiffState, type PendingSessionDiffSummary } from './useWsSessionDiff.ts';
+import { useWsMessageProcessor, ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor.ts';
+import { useConnectionManagerWithFallback } from './useConnectionManagerWithFallback.ts';
 
-export type { SessionDiffState } from './useWsSessionDiff';
+export type { SessionDiffState } from './useWsSessionDiff.ts';
 
 type MutableRefObject<T> = { current: T };
 

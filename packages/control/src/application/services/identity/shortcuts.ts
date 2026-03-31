@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db';
+import { getDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db/index.ts';
 import { eq, and, asc, inArray } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export const ALLOWED_SHORTCUT_RESOURCE_TYPES = ['service', 'resource', 'link'] as const;
 export type ShortcutResourceType = (typeof ALLOWED_SHORTCUT_RESOURCE_TYPES)[number];

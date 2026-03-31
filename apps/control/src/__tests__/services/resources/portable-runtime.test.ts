@@ -14,19 +14,19 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
   let tempDir: string;
   Deno.test('portable managed resource runtime - creates and removes sqlite state for portable sql resources', async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
-    delete process.env.PGVECTOR_ENABLED;
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_S3_ENDPOINT;
-    delete process.env.AWS_DYNAMO_KV_TABLE;
-    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
-    delete process.env.REDIS_URL;
-    delete process.env.GCP_PROJECT_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDir);
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
+    Deno.env.delete('PGVECTOR_ENABLED');
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
+    Deno.env.delete('AWS_S3_ENDPOINT');
+    Deno.env.delete('AWS_DYNAMO_KV_TABLE');
+    Deno.env.delete('AWS_DYNAMO_HOSTNAME_ROUTING_TABLE');
+    Deno.env.delete('REDIS_URL');
+    Deno.env.delete('GCP_PROJECT_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('GCP_FIRESTORE_KV_COLLECTION');
     resetPortableResourceRuntimeCachesForTests();
   try {
   const resource = {
@@ -43,25 +43,25 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
     await await assertRejects(async () => { await access(sqlitePath); });
   } finally {
   resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    Deno.env.delete('TAKOS_LOCAL_DATA_DIR');
     await rm(tempDir, { recursive: true, force: true });
   }
 })
   Deno.test('portable managed resource runtime - creates and removes file-backed local object, kv, and queue resources', async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
-    delete process.env.PGVECTOR_ENABLED;
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_S3_ENDPOINT;
-    delete process.env.AWS_DYNAMO_KV_TABLE;
-    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
-    delete process.env.REDIS_URL;
-    delete process.env.GCP_PROJECT_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDir);
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
+    Deno.env.delete('PGVECTOR_ENABLED');
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
+    Deno.env.delete('AWS_S3_ENDPOINT');
+    Deno.env.delete('AWS_DYNAMO_KV_TABLE');
+    Deno.env.delete('AWS_DYNAMO_HOSTNAME_ROUTING_TABLE');
+    Deno.env.delete('REDIS_URL');
+    Deno.env.delete('GCP_PROJECT_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('GCP_FIRESTORE_KV_COLLECTION');
     resetPortableResourceRuntimeCachesForTests();
   try {
   const objectStore = {
@@ -100,25 +100,25 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
     await await assertRejects(async () => { await access(queuePath); });
   } finally {
   resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    Deno.env.delete('TAKOS_LOCAL_DATA_DIR');
     await rm(tempDir, { recursive: true, force: true });
   }
 })
   Deno.test('portable managed resource runtime - does not materialize marker files for takos-runtime logical resources', async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
-    delete process.env.PGVECTOR_ENABLED;
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_S3_ENDPOINT;
-    delete process.env.AWS_DYNAMO_KV_TABLE;
-    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
-    delete process.env.REDIS_URL;
-    delete process.env.GCP_PROJECT_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDir);
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
+    Deno.env.delete('PGVECTOR_ENABLED');
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
+    Deno.env.delete('AWS_S3_ENDPOINT');
+    Deno.env.delete('AWS_DYNAMO_KV_TABLE');
+    Deno.env.delete('AWS_DYNAMO_HOSTNAME_ROUTING_TABLE');
+    Deno.env.delete('REDIS_URL');
+    Deno.env.delete('GCP_PROJECT_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('GCP_FIRESTORE_KV_COLLECTION');
     resetPortableResourceRuntimeCachesForTests();
   try {
   const analytics = {
@@ -172,25 +172,25 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
     await await assertRejects(async () => { await access(secretPath); });
   } finally {
   resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    Deno.env.delete('TAKOS_LOCAL_DATA_DIR');
     await rm(tempDir, { recursive: true, force: true });
   }
 })
   Deno.test('portable managed resource runtime - requires pgvector bootstrap for portable vector indexes', async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
-    delete process.env.PGVECTOR_ENABLED;
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_S3_ENDPOINT;
-    delete process.env.AWS_DYNAMO_KV_TABLE;
-    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
-    delete process.env.REDIS_URL;
-    delete process.env.GCP_PROJECT_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDir);
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
+    Deno.env.delete('PGVECTOR_ENABLED');
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
+    Deno.env.delete('AWS_S3_ENDPOINT');
+    Deno.env.delete('AWS_DYNAMO_KV_TABLE');
+    Deno.env.delete('AWS_DYNAMO_HOSTNAME_ROUTING_TABLE');
+    Deno.env.delete('REDIS_URL');
+    Deno.env.delete('GCP_PROJECT_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('GCP_FIRESTORE_KV_COLLECTION');
     resetPortableResourceRuntimeCachesForTests();
   try {
   const vector = {
@@ -204,25 +204,25 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
     );
   } finally {
   resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    Deno.env.delete('TAKOS_LOCAL_DATA_DIR');
     await rm(tempDir, { recursive: true, force: true });
   }
 })
   Deno.test('portable managed resource runtime - describes provider-backed vs takos-runtime resolutions', () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
-    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
-    delete process.env.POSTGRES_URL;
-    delete process.env.DATABASE_URL;
-    delete process.env.PGVECTOR_ENABLED;
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_S3_ENDPOINT;
-    delete process.env.AWS_DYNAMO_KV_TABLE;
-    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
-    delete process.env.REDIS_URL;
-    delete process.env.GCP_PROJECT_ID;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    Deno.env.set('TAKOS_LOCAL_DATA_DIR', tempDir);
+    Deno.env.delete('POSTGRES_URL');
+    Deno.env.delete('DATABASE_URL');
+    Deno.env.delete('PGVECTOR_ENABLED');
+    Deno.env.delete('AWS_ACCESS_KEY_ID');
+    Deno.env.delete('AWS_SECRET_ACCESS_KEY');
+    Deno.env.delete('AWS_S3_ENDPOINT');
+    Deno.env.delete('AWS_DYNAMO_KV_TABLE');
+    Deno.env.delete('AWS_DYNAMO_HOSTNAME_ROUTING_TABLE');
+    Deno.env.delete('REDIS_URL');
+    Deno.env.delete('GCP_PROJECT_ID');
+    Deno.env.delete('GOOGLE_APPLICATION_CREDENTIALS');
+    Deno.env.delete('GCP_FIRESTORE_KV_COLLECTION');
     resetPortableResourceRuntimeCachesForTests();
   try {
   assertObjectMatch(describePortableResourceResolution('aws', 'sql'), {
@@ -257,7 +257,7 @@ import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std
     });
   } finally {
   resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    Deno.env.delete('TAKOS_LOCAL_DATA_DIR');
     await rm(tempDir, { recursive: true, force: true });
   }
 })

@@ -7,7 +7,7 @@
 
 import type { Queue } from '../../../shared/types/bindings.ts';
 import type { Conclusion } from 'takos-actions-engine';
-import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types';
+import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
 
 // Re-export public types so existing consumers keep working.
 export type {
@@ -16,18 +16,18 @@ export type {
   WorkflowJobResult,
   WorkflowStepResult,
   WorkflowRunRecord,
-} from './workflow-engine-types';
+} from './workflow-engine-types.ts';
 
 import type {
   WorkflowEngineConfig,
   StartRunOptions,
   WorkflowRunRecord,
   WorkflowJobResult,
-} from './workflow-engine-types';
+} from './workflow-engine-types.ts';
 
-import { startRun, cancelRun, enqueueJob } from './workflow-run-lifecycle';
-import { onJobComplete, onJobStart, updateStepStatus } from './workflow-job-scheduler';
-import { storeJobLogs, createArtifact } from './workflow-storage';
+import { startRun, cancelRun, enqueueJob } from './workflow-run-lifecycle.ts';
+import { onJobComplete, onJobStart, updateStepStatus } from './workflow-job-scheduler.ts';
+import { storeJobLogs, createArtifact } from './workflow-storage.ts';
 
 export interface WorkflowEngine {
   startRun(options: StartRunOptions): Promise<WorkflowRunRecord>;

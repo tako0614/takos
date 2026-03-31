@@ -4,7 +4,7 @@
  * Extracted from workflow.ts to keep each module focused on a single concern.
  */
 
-import type { Env } from '../../../shared/types';
+import type { Env } from '../../../shared/types/index.ts';
 
 // ── Public types ────────────────────────────────────────────────────────
 

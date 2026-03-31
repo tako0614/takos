@@ -4,7 +4,7 @@ import {
   type WfpEnv,
   type WorkerBinding,
   createWfpService,
-} from '../../../application/services/wfp';
+} from '../../../application/services/wfp/index.ts';
 
 export type {
   WorkerBinding,

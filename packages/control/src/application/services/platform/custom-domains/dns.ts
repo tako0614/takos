@@ -1,4 +1,4 @@
-import { logError } from '../../../../shared/utils/logger';
+import { logError } from '../../../../shared/utils/logger.ts';
 
 export async function verifyDNS(
   domain: string,

@@ -2,14 +2,14 @@
  * High-level git operations (init, fork, sync, commit).
  */
 import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { GitCommit, GitSignature, GitBranch } from './git-objects';
-import { createBranch, getBranch, getDefaultBranch, updateBranch } from './core/refs';
-import { createCommit, countCommitsBetween } from './core/commit-index';
-import { createEmptyTree, applyTreeChanges } from './core/tree-ops';
-import { putBlob, getCommitData } from './core/object-store';
-import { getDb, branches, tags, repoForks, repoRemotes } from '../../../infra/db';
+import type { GitCommit, GitSignature, GitBranch } from './git-objects.ts';
+import { createBranch, getBranch, getDefaultBranch, updateBranch } from './core/refs.ts';
+import { createCommit, countCommitsBetween } from './core/commit-index.ts';
+import { createEmptyTree, applyTreeChanges } from './core/tree-ops.ts';
+import { putBlob, getCommitData } from './core/object-store.ts';
+import { getDb, branches, tags, repoForks, repoRemotes } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
+import { generateId } from '../../../shared/utils/index.ts';
 
 function makeSignature(sig?: GitSignature): GitSignature {
   const ts = new Date().toISOString();

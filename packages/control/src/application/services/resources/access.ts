@@ -1,12 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { ResourcePermission } from '../../../shared/types';
-import { getDb, resourceAccess } from '../../../infra/db';
+import type { ResourcePermission } from '../../../shared/types/index.ts';
+import { getDb, resourceAccess } from '../../../infra/db/index.ts';
 import { eq, and, inArray } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils';
-import { toApiResourceAccess } from './format';
-import { getResourceById } from './store';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver';
-import { textDate } from '../../../shared/utils/db-guards';
+import { generateId } from '../../../shared/utils/index.ts';
+import { toApiResourceAccess } from './format.ts';
+import { getResourceById } from './store.ts';
+import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 const RESOURCE_PERMISSIONS: readonly string[] = ['read', 'write', 'admin'];
 
@@ -18,7 +18,7 @@ export async function listResourceAccess(db: D1Database, resourceId: string) {
   const drizzle = getDb(db);
 
   // We need account name, so join with accounts
-  const { accounts } = await import('../../../infra/db');
+  const { accounts } = await import('../../../infra/db/index.ts');
   const accessGrants = await drizzle.select({
     id: resourceAccess.id,
     resourceId: resourceAccess.resourceId,

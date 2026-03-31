@@ -12,8 +12,8 @@
  *   );
  */
 
-import { parsePktLines, pktLineText } from '../protocol/pkt-line';
-import { logWarn } from '../../../../shared/utils/logger';
+import { parsePktLines, pktLineText } from '../protocol/pkt-line.ts';
+import { logWarn } from '../../../../shared/utils/logger.ts';
 
 export interface RemoteRef {
   /** Fully qualified ref name, e.g. `refs/heads/main`. */

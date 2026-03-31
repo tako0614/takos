@@ -4,11 +4,11 @@
  * bundle deployment による UI 拡張の管理
  */
 
-import { getDb, uiExtensions } from '../../../infra/db';
+import { getDb, uiExtensions } from '../../../infra/db/index.ts';
 import { eq, and, isNotNull, asc, count as drizzleCount } from 'drizzle-orm';
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { textDate } from '../../../shared/utils/db-guards';
+import { textDate } from '../../../shared/utils/db-guards.ts';
 
 export interface UIExtension {
   id: string;

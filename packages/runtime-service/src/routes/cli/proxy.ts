@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
+import type { RuntimeEnv } from '../../types/hono.d.ts';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { PROXY_BASE_URL } from '../../shared/config.ts';
 import { isValidSessionId } from '../../runtime/validation.ts';
 import { sessionStore } from '../sessions/storage.ts';
 import { badRequest, internalError, forbidden } from 'takos-common/middleware/hono';
 
-const app = new Hono();
+const app = new Hono<RuntimeEnv>();
 
 const ALLOWED_PATHS = [
   /^\/api\/repos\/[^/]+\/import$/,
@@ -15,7 +16,7 @@ const ALLOWED_PATHS = [
   /^\/api\/repos\/[^/]+\/commit$/,
 ];
 
-function getProxyPathAndQuery(c: import('hono').Context): { apiPath: string; apiQuery: string } {
+function getProxyPathAndQuery(c: import('hono').Context<RuntimeEnv>): { apiPath: string; apiQuery: string } {
   // In Hono, c.req.path gives us the path matched by the route.
   // c.req.url gives the full URL. We need to extract the proxy target.
   const url = new URL(c.req.url);

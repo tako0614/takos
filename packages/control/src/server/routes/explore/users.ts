@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types';
-import { withCache, CacheTTL, CacheTags } from '../../middleware/cache';
-import { getDb } from '../../../infra/db';
-import { accounts, repositories, repoStars } from '../../../infra/db/schema';
+import type { Env, User } from '../../../shared/types/index.ts';
+import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
 import { eq, and, or, desc, asc, like, inArray, count } from 'drizzle-orm';
-import { parsePagination } from '../../../shared/utils';
+import { parsePagination } from '../../../shared/utils/index.ts';
 import { NotFoundError } from 'takos-common/errors';
 
 type Variables = {

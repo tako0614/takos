@@ -1,7 +1,7 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, commits, repoReleases, pullRequests, repositories, accounts, serviceDeployments } from '../../../infra/db';
+import { getDb, commits, repoReleases, pullRequests, repositories, accounts, serviceDeployments } from '../../../infra/db/index.ts';
 import { eq, and, lt, desc } from 'drizzle-orm';
-import { listServiceRouteRecordsByIds } from '../platform/workers';
+import { listServiceRouteRecordsByIds } from '../platform/workers.ts';
 
 function resolveRepoOwnerUsername(account: {
   id: string;

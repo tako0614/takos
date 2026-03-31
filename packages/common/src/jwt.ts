@@ -3,7 +3,8 @@
  * 署名方式は RS256（RSA + SHA-256）を使用する。
  */
 
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
+import { Buffer } from "node:buffer";
 
 /**
  * サービストークンの JWT ペイロード構造

@@ -1,4 +1,4 @@
-import { useI18n } from '../../store/i18n';
+import { useI18n } from '../../store/i18n.ts';
 
 interface ScopeListProps {
   identity: string[];

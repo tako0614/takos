@@ -8,7 +8,7 @@ import type {
   DeploymentTarget,
   DeploymentTargetArtifact,
   DeploymentTargetEndpoint,
-} from './models';
+} from './models.ts';
 
 export type DeploymentProviderDeployResult = {
   resolvedEndpoint?: { kind: 'http-url'; base_url: string };
