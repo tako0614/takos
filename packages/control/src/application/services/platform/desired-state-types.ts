@@ -87,8 +87,10 @@ export type ServiceBindingRow = {
   resourceName: string | null;
   resourceType: string;
   resourceStatus: string;
+  resourceProviderName: string | null;
   resourceProviderResourceId: string | null;
   resourceProviderResourceName: string | null;
+  resourceConfig: string;
 };
 
 export type RoutingRow = {

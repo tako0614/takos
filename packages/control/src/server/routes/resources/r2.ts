@@ -14,7 +14,7 @@ import { resources } from '../../../infra/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { logError } from '../../../shared/utils/logger';
 import { textDate } from '../../../shared/utils/db-guards';
-import type { R2Bucket } from '../../../shared/types/bindings.ts';
+import type { R2Bucket, R2Object, R2ObjectBody } from '../../../shared/types/bindings.ts';
 
 function toResource(data: {
   id: string;
@@ -51,16 +51,34 @@ function toResource(data: {
 }
 
 async function listAllObjects(bucket: R2Bucket) {
-  const objects: Array<Record<string, unknown>> = [];
+  const objects: R2Object[] = [];
   let cursor: string | undefined;
 
   do {
     const page = await bucket.list({ limit: 1000, cursor });
-    objects.push(...((page.objects ?? []) as Array<Record<string, unknown>>));
-    cursor = page.truncated ? page.cursor : undefined;
+    objects.push(...(page.objects ?? []));
+    cursor = page.truncated && 'cursor' in page ? page.cursor : undefined;
   } while (cursor);
 
   return objects;
+}
+
+function getR2ListCursor(result: Awaited<ReturnType<R2Bucket['list']>>): string | null {
+  return result.truncated && 'cursor' in result ? result.cursor ?? null : null;
+}
+
+function getPortableObjectContentType(object: R2ObjectBody): string | null {
+  const metadata = object.httpMetadata;
+  if (metadata && typeof metadata === 'object' && 'contentType' in metadata) {
+    const contentType = metadata.contentType;
+    return typeof contentType === 'string' ? contentType : null;
+  }
+  if (typeof object.writeHttpMetadata === 'function') {
+    const headers = new Headers();
+    object.writeHttpMetadata(headers as unknown as Parameters<NonNullable<R2ObjectBody['writeHttpMetadata']>>[0]);
+    return headers.get('content-type');
+  }
+  return null;
 }
 
 const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
@@ -106,7 +124,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
       return c.json({
         objects: result.objects ?? [],
         truncated: result.truncated ?? false,
-        cursor: result.cursor ?? null,
+        cursor: getR2ListCursor(result),
       });
     } catch (err) {
       logError('Failed to list portable objects', err, { module: 'routes/resources/r2' });
@@ -181,7 +199,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
       return c.json({
         objects: result.objects ?? [],
         truncated: result.truncated ?? false,
-        cursor: result.cursor ?? null,
+        cursor: getR2ListCursor(result),
       });
     } catch (err) {
       logError('Failed to list portable objects', err, { module: 'routes/resources/r2' });
@@ -352,12 +370,10 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
       if (!object) {
         throw new NotFoundError('Object');
       }
-      const headers = new Headers();
-      object.writeHttpMetadata?.(headers);
       return c.json({
         key,
         value: await object.text(),
-        content_type: headers.get('content-type'),
+        content_type: getPortableObjectContentType(object),
         size: object.size,
       });
     } catch (err) {
@@ -423,7 +439,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
       try {
         const bucket = getPortableObjectStore(resource);
         await bucket.put(key, body.value, {
-          ...(body.content_type ? { httpMetadata: { 'content-type': body.content_type, contentType: body.content_type } } : {}),
+          ...(body.content_type ? { httpMetadata: { contentType: body.content_type } } : {}),
         });
         return c.json({ success: true });
       } catch (err) {

@@ -16,7 +16,7 @@ export type PolyfillBindingEntry = {
   /** Binding name as seen by tenant code (e.g., "VECTORIZE", "AI"). */
   name: string;
   /** Polyfill type determines which client object to generate. */
-  type: 'vectorize' | 'ai' | 'analytics_engine' | 'workflow';
+  type: 'vectorize' | 'ai' | 'analytics_engine' | 'workflow' | 'queue';
   /** Name of the hidden Miniflare service binding for RPC. */
   rpcBindingName: string;
 };
@@ -168,6 +168,30 @@ function generatePolyfillBlock(entry: PolyfillBindingEntry): string {
     async get(id) {
       await rpcCall('get', { id });
       return makeInstance(id);
+    },
+  };
+}`;
+
+    case 'queue':
+      return `function ${fnName}(rpc) {
+  async function rpcCall(method, body) {
+    const res = await rpc.fetch('http://rpc/' + method, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Queue RPC error');
+    }
+    return res.json();
+  }
+  return {
+    async send(message, options) {
+      await rpcCall('send', { message, options });
+    },
+    async sendBatch(messages) {
+      await rpcCall('sendBatch', { messages: Array.from(messages || []) });
     },
   };
 }`;

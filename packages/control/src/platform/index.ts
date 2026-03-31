@@ -22,6 +22,7 @@ export type {
   CloudRunDeployProviderConfig,
   K8sDeployProviderConfig,
   PlatformDeployProviderConfig,
+  PlatformDeployProviderRegistry,
   PlatformConfig,
   PlatformRoutingService,
   PlatformQueues,

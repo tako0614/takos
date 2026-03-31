@@ -1,539 +1,395 @@
-# ActivityPub Store 仕様
+# ActivityPub Store
 
-Revision: 2026-03-28 r2
-Status: 確定仕様
-
-Takos の Store は **ActivityPub** をベースとしたパッケージリポジトリの発見・配布メカニズムです。
-フェデレーション可能な Store Actor を通じて、リモートの Takos インスタンスからリポジトリを発見・インストールできます。
+Takos の Store は **ActivityPub** と **ForgeFed** をベースとした Git リポジトリの分散カタログです。
+git データ本体は各インスタンスに分散したまま、リポジトリメタデータの発見・共有・購読を行います。
 
 関連ドキュメント:
 
 - [Store](/platform/store) — パッケージエコシステムの概念
-- [`.takos/app.yml`](/apps/manifest) — パッケージマニフェスト
-- [Deploy System](/deploy/) — デプロイとリリース
 
 ---
 
-## 1. 概要
+## 概要
 
-Store は ActivityPub ベースのリポジトリ配布の仕組みです。以下の役割を担います。
+Store はリポジトリカタログとして機能します。git データの複製は行いません。
 
-- **発見 (Discovery)** — WebFinger と ActivityPub Actor によるリポジトリの発見
-- **一覧 (Listing)** — Repositories Collection によるリポジトリメタデータの公開
-- **検索 (Search)** — リポジトリの全文検索
-- **更新通知 (Notification)** — Outbox のアクティビティストリームによる変更の配信
-- **インストール (Installation)** — リモートストアからのリポジトリインストール
-
-### 設計原則
-
-1. **Pull-only** — Store は outbox を公開するのみ。inbox は未実装 (501 を返す)
-2. **ActivityPub 互換** — 標準の ActivityPub / ActivityStreams 2.0 語彙 + `tkg` (takos-git) 拡張を使用
-3. **WebFinger 発見** — 標準のリソース発見プロトコルに従う
-4. **SSRF 保護** — リモート Store の fetch 時にプライベート IP / 内部 TLD をブロック
+- **発見** — WebFinger と ActivityPub Actor によるリポジトリの発見
+- **カタログ** — Inventory Collection による複数インスタンスの repo 参照の集約
+- **検索** — リポジトリの全文検索
+- **メタデータ共有** — commit / tag 情報の ActivityPub outbox での配信
+- **購読** — Outbox polling による変更検出
 
 ---
 
-## 2. WebFinger 発見
+## 設計原則
 
-### リクエスト
+### git データは分散のまま
 
-```http
-GET /.well-known/webfinger?resource=acct:{storeSlug}@{domain}
-```
+各インスタンスは自身の git データを保持する。
+Store は git データを持たず、リポジトリへの **参照** とメタデータのみを扱う。
+clone / fetch / push は常に canonical repo の `cloneUri` / `pushUri` に対して行う。
 
-`resource` パラメータは次の形式を受け付けます。
+### Store はカタログ
 
-- `acct:{storeSlug}@{domain}` — acct URI 形式
-- `https://{domain}/ap/stores/{storeSlug}` — Actor URL 形式
+`Store` actor はリポジトリの発見、購読、メタデータ共有を担当する。
+inventory は複数インスタンスにまたがるリポジトリ参照のコレクションである。
 
-### レスポンス
+### 共有するのはメタデータ
+
+インスタンス間で共有するのは以下のメタデータである。
+
+- リポジトリの存在と基本情報 (名前, 説明, owner)
+- commit メタデータ (SHA, message, author, date)
+- tag 情報 (名前, 対象 commit)
+- branch 一覧と default branch hash
+- push イベント
+
+git object data (blob, tree, packfile) は共有しない。
+
+### Follow は購読だけ
+
+`Follow` は outbox 更新を受け取るための購読である。
+public な actor / collection の GET に follow を要求してはならない。
+
+### 非目標
+
+- Git packfile / object data の複製・転送
+- git データの CDN 的地理分散
+- 複数インスタンス間の multi-master 書き込み
+
+---
+
+## 依存仕様
+
+- [ActivityPub](https://www.w3.org/TR/activitypub/)
+- [ActivityStreams 2.0](https://www.w3.org/TR/activitystreams-core/)
+- [ForgeFed](https://forgefed.org/)
+
+Takos 独自拡張は JSON-LD context (`https://takos.jp/ns#`) により追加する。
+HTTP Signature 用に `https://w3id.org/security/v1` context も使用する。
+
+---
+
+## Actor モデル
+
+### Canonical Repository actor
+
+canonical repo は ForgeFed `Repository` actor であり、git データを保持する唯一の権威ソースである。
+
+| フィールド | 必須 | 説明 |
+| --- | --- | --- |
+| `id` | Yes | Actor URI |
+| `type` | Yes | `"Repository"` |
+| `name` | Yes | リポジトリ名 |
+| `inbox` | Yes | ActivityPub inbox |
+| `outbox` | Yes | ActivityPub outbox |
+| `followers` | Yes | Followers collection |
+| `cloneUri` | Yes | Git clone URL の配列 (常にこの canonical repo を指す) |
+| `pushUri` | | Git push URL の配列 |
+| `summary` | | 説明 |
+| `url` | | ブラウズ用 URL (`/@{owner}/{repo}`) |
+| `published` | | 作成日時 |
+| `updated` | | 更新日時 |
+| `stores` | | この repo を参照している Store の Collection URL |
+| `defaultBranchRef` | | `refs/heads/{branch}` 形式 |
+| `defaultBranchHash` | | 既定ブランチの最新 commit hash |
 
 ```json
 {
-  "subject": "acct:{storeSlug}@{domain}",
-  "aliases": [
-    "https://takos.example.dev/ap/stores/{storeSlug}"
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    "https://forgefed.org/ns",
+    "https://w3id.org/security/v1",
+    { "takos": "https://takos.jp/ns#", "stores": { "@id": "takos:stores", "@type": "@id" }, "defaultBranchRef": "takos:defaultBranchRef", "defaultBranchHash": "takos:defaultBranchHash" }
   ],
-  "links": [
-    {
-      "rel": "self",
-      "type": "application/activity+json",
-      "href": "https://takos.example.dev/ap/stores/{storeSlug}"
-    }
-  ]
+  "id": "https://a.example/ap/repos/alice/calc",
+  "type": "Repository",
+  "name": "calc",
+  "summary": "Integer calculator",
+  "url": "https://a.example/@alice/calc",
+  "published": "2026-01-15T10:00:00Z",
+  "updated": "2026-03-30T10:00:00Z",
+  "inbox": "https://a.example/ap/repos/alice/calc/inbox",
+  "outbox": "https://a.example/ap/repos/alice/calc/outbox",
+  "followers": "https://a.example/ap/repos/alice/calc/followers",
+  "cloneUri": ["https://a.example/git/alice/calc.git"],
+  "pushUri": ["https://a.example/git/alice/calc.git"],
+  "stores": "https://a.example/ap/repos/alice/calc/stores",
+  "defaultBranchRef": "refs/heads/main",
+  "defaultBranchHash": "4cc1f5b12a0f9c6d2db97e4f0ce4e98a1a0d9320"
 }
 ```
 
-Content-Type: `application/jrd+json; charset=utf-8`
+### Store actor
 
----
+`Store` actor はリポジトリカタログとして機能する。git データを保持しない。
 
-## 3. Store Actor
-
-Store Actor は ActivityPub の `Group` 型 Actor です。
-
-### リクエスト
-
-```http
-GET /ap/stores/{storeSlug}
-Accept: application/activity+json
-```
-
-### レスポンス
+| フィールド | 必須 | 説明 |
+| --- | --- | --- |
+| `id` | Yes | Actor URI |
+| `type` | Yes | `["Service", "Store"]` |
+| `name` | Yes | Store 名 |
+| `inbox` | Yes | ActivityPub inbox |
+| `outbox` | Yes | ActivityPub outbox |
+| `followers` | Yes | Followers collection |
+| `inventory` | Yes | リポジトリ参照の Collection URL |
+| `preferredUsername` | | WebFinger 用 slug |
+| `summary` | | 説明 |
+| `url` | | Actor の canonical URL |
+| `icon` | | Store の画像 (`{ type: "Image", url: "..." }`) |
+| `publicKey` | | HTTP Signature 用公開鍵 |
+| `search` | | Search Service の URL |
+| `repositorySearch` | | リポジトリ検索の直接 URL |
 
 ```json
 {
   "@context": [
     "https://www.w3.org/ns/activitystreams",
     "https://w3id.org/security/v1",
-    {
-      "tkg": "https://takos.example.dev/ns/takos-git#",
-      "GitRepository": "tkg:GitRepository",
-      "SearchService": "tkg:SearchService"
-    }
+    { "takos": "https://takos.jp/ns#", "Store": "takos:Store", "inventory": { "@id": "takos:inventory", "@type": "@id" } }
   ],
-  "id": "https://takos.example.dev/ap/stores/official",
-  "type": "Group",
-  "preferredUsername": "official",
-  "name": "Official Store",
-  "summary": "Public repository catalog for Official Store",
-  "url": "https://takos.example.dev/ap/stores/official",
-  "icon": { "type": "Image", "url": "https://takos.example.dev/icon.png" },
-  "inbox": "https://takos.example.dev/ap/stores/official/inbox",
-  "outbox": "https://takos.example.dev/ap/stores/official/outbox",
-  "followers": "https://takos.example.dev/ap/stores/official/followers",
+  "id": "https://b.example/ap/stores/curated",
+  "type": ["Service", "Store"],
+  "name": "Curated Tools",
+  "preferredUsername": "curated",
+  "summary": "Curated collection of useful tools across instances",
+  "url": "https://b.example/ap/stores/curated",
+  "inbox": "https://b.example/ap/stores/curated/inbox",
+  "outbox": "https://b.example/ap/stores/curated/outbox",
+  "followers": "https://b.example/ap/stores/curated/followers",
+  "inventory": "https://b.example/ap/stores/curated/inventory",
+  "search": "https://b.example/ap/stores/curated/search",
+  "repositorySearch": "https://b.example/ap/stores/curated/search/repositories",
   "publicKey": {
-    "id": "https://takos.example.dev/ap/stores/official#main-key",
-    "owner": "https://takos.example.dev/ap/stores/official",
+    "id": "https://b.example/ap/stores/curated#main-key",
+    "owner": "https://b.example/ap/stores/curated",
     "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-  },
-  "tkg:repositories": "https://takos.example.dev/ap/stores/official/repositories",
-  "tkg:search": "https://takos.example.dev/ap/stores/official/search",
-  "tkg:repositorySearch": "https://takos.example.dev/ap/stores/official/search/repositories",
-  "tkg:distributionMode": "pull-only"
-}
-```
-
-Content-Type: `application/activity+json; charset=utf-8`
-
-| フィールド | 説明 |
-| --- | --- |
-| `type` | 常に `"Group"` |
-| `icon` | Store の画像がある場合に含まれる |
-| `tkg:repositories` | Repositories Collection の URL |
-| `tkg:search` | Search Service の URL |
-| `tkg:repositorySearch` | リポジトリ検索の直接 URL |
-| `tkg:distributionMode` | 常に `"pull-only"` |
-
----
-
-## 4. Repositories Collection
-
-### リクエスト
-
-```http
-GET /ap/stores/{storeSlug}/repositories
-GET /ap/stores/{storeSlug}/repositories?page=1&limit=20&expand=object
-```
-
-| パラメータ | デフォルト | 説明 |
-| --- | --- | --- |
-| `page` | なし | 指定すると `OrderedCollectionPage` を返す |
-| `limit` | 20 (max 100) | ページあたりの件数 |
-| `expand` | なし | `object` を指定すると完全なオブジェクトを含む。省略時は ID 文字列のみ |
-
-### コレクション概要 (page パラメータなし)
-
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "id": "https://takos.example.dev/ap/stores/official/repositories",
-  "type": "OrderedCollection",
-  "totalItems": 42,
-  "first": "https://takos.example.dev/ap/stores/official/repositories?page=1"
-}
-```
-
-### Repository オブジェクト
-
-```json
-{
-  "id": "https://takos.example.dev/ap/stores/official/repositories/tako/takos-computer",
-  "type": ["Document", "tkg:GitRepository"],
-  "name": "takos-computer",
-  "summary": "Browser automation and agent executor service",
-  "url": "https://takos.example.dev/@tako/takos-computer",
-  "published": "2026-01-15T10:00:00Z",
-  "updated": "2026-03-20T08:30:00Z",
-  "attributedTo": "https://takos.example.dev/ap/stores/official",
-  "tkg:owner": "tako",
-  "tkg:visibility": "public",
-  "tkg:defaultBranch": "main",
-  "tkg:cloneUrl": "https://takos.example.dev/git/tako/takos-computer.git",
-  "tkg:browseUrl": "https://takos.example.dev/@tako/takos-computer",
-  "tkg:branchesEndpoint": "https://takos.example.dev/@tako/takos-computer/branches",
-  "tkg:commitsEndpoint": "https://takos.example.dev/@tako/takos-computer/commits",
-  "tkg:treeUrlTemplate": "https://takos.example.dev/@tako/takos-computer/tree/{ref}/{+path}",
-  "tkg:blobUrlTemplate": "https://takos.example.dev/@tako/takos-computer/blob/{ref}/{+path}",
-  "tkg:refsEndpoint": "https://takos.example.dev/git/tako/takos-computer.git/info/refs?service=git-upload-pack"
-}
-```
-
-| フィールド | 説明 |
-| --- | --- |
-| `type` | `["Document", "tkg:GitRepository"]` の配列 |
-| `url` | ブラウズ用 URL (`/@{owner}/{repo}`) |
-| `tkg:cloneUrl` | Git clone URL (`/git/{owner}/{repo}.git`) |
-| `tkg:owner` | リポジトリの所有者 slug |
-| `tkg:visibility` | `public` / `private` |
-| `tkg:defaultBranch` | デフォルトブランチ名 |
-
-個別リポジトリは `GET /ap/stores/{storeSlug}/repositories/{owner}/{repoName}` で取得できます。
-
----
-
-## 5. Outbox
-
-### リクエスト
-
-```http
-GET /ap/stores/{storeSlug}/outbox
-GET /ap/stores/{storeSlug}/outbox?page=1&limit=20
-```
-
-### コレクション概要
-
-```json
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "id": "https://takos.example.dev/ap/stores/official/outbox",
-  "type": "OrderedCollection",
-  "totalItems": 42,
-  "first": "https://takos.example.dev/ap/stores/official/outbox?page=1"
-}
-```
-
-### アクティビティ
-
-Outbox は `Create` と `Update` のアクティビティを含みます。
-
-- `updatedAt === createdAt` のリポジトリ → `Create` アクティビティ
-- `updatedAt !== createdAt` のリポジトリ → `Update` アクティビティ
-
-```json
-{
-  "id": "https://takos.example.dev/ap/stores/official/repositories/tako/takos-computer/activities/create/2026-01-15T10%3A00%3A00Z",
-  "type": "Create",
-  "actor": "https://takos.example.dev/ap/stores/official",
-  "published": "2026-01-15T10:00:00Z",
-  "to": ["https://www.w3.org/ns/activitystreams#Public"],
-  "object": { "...": "完全な Repository オブジェクト" }
-}
-```
-
-::: warning Delete アクティビティ
-現在の実装では `Delete` アクティビティは生成されません。削除されたリポジトリはコレクションから消えますが、outbox に Delete が発行されることはありません。
-:::
-
----
-
-## 6. 検索
-
-### Search Service
-
-```http
-GET /ap/stores/{storeSlug}/search
-```
-
-```json
-{
-  "id": "https://takos.example.dev/ap/stores/official/search",
-  "type": ["Service", "tkg:SearchService"],
-  "attributedTo": "https://takos.example.dev/ap/stores/official",
-  "name": "official Search",
-  "summary": "Search endpoints for the official store catalog",
-  "tkg:repositorySearch": "https://takos.example.dev/ap/stores/official/search/repositories"
-}
-```
-
-### リポジトリ検索
-
-```http
-GET /ap/stores/{storeSlug}/search/repositories?q={query}&page=1&limit=20&expand=object
-```
-
-`q` パラメータが必須です。リポジトリ名と説明に対する部分一致検索を行います。レスポンスは Repositories Collection と同じ `OrderedCollection` / `OrderedCollectionPage` 形式です。
-
----
-
-## 7. Inbox (未実装)
-
-```http
-POST /ap/stores/{storeSlug}/inbox
-```
-
-常に 501 を返します。
-
-```json
-{
-  "error": "not_implemented",
-  "message": "Store inbox is not implemented. Use outbox polling for updates."
-}
-```
-
----
-
-## 8. Followers (スタブ)
-
-```http
-GET /ap/stores/{storeSlug}/followers
-```
-
-常に空のコレクションを返します (`totalItems: 0`)。将来のフォロー機能のためのエンドポイントです。
-
----
-
-## 9. `tkg` 名前空間
-
-Takos は ActivityPub の標準語彙に加え、`tkg` (takos-git) 拡張名前空間を定義しています。
-
-```http
-GET /ns/takos-git
-```
-
-Content-Type: `application/ld+json; charset=utf-8`
-
-定義される用語: `GitRepository`, `SearchService`, `repositories`, `search`, `repositorySearch`, `distributionMode`, `query`, `owner`, `visibility`, `defaultBranch`, `cloneUrl`, `browseUrl`, `branchesEndpoint`, `commitsEndpoint`, `treeUrlTemplate`, `blobUrlTemplate`, `refsEndpoint`
-
----
-
-## 10. Store Registry API
-
-Space にリモートの Store を登録・管理する API です。すべて認証が必要です。
-
-### Store 登録
-
-```http
-POST /api/spaces/:spaceId/store-registry
-```
-
-```json
-{
-  "identifier": "official@takos.example.dev",
-  "set_active": true,
-  "subscribe": true
-}
-```
-
-`identifier` は `{slug}@{domain}` 形式または ActivityPub Actor の完全 URL を受け付けます。
-
-レスポンス (201):
-
-```json
-{
-  "store": {
-    "id": "sr_abc123",
-    "actor_url": "https://takos.example.dev/ap/stores/official",
-    "domain": "takos.example.dev",
-    "store_slug": "official",
-    "name": "Official Store",
-    "summary": "Public repository catalog",
-    "icon_url": "https://takos.example.dev/icon.png",
-    "is_active": true,
-    "subscription_enabled": true,
-    "last_fetched_at": "2026-03-28T10:00:00Z",
-    "created_at": "2026-03-28T10:00:00Z",
-    "updated_at": "2026-03-28T10:00:00Z"
-  }
-}
-```
-
-### Store 一覧
-
-```http
-GET /api/spaces/:spaceId/store-registry
-```
-
-レスポンス: `{ "stores": [...] }`
-
-### Store 更新
-
-```http
-PATCH /api/spaces/:spaceId/store-registry/:entryId
-```
-
-```json
-{
-  "is_active": true,
-  "subscription_enabled": false
-}
-```
-
-`is_active: true` を設定すると、他の Store は自動的に非アクティブになります。
-
-### Store メタデータ再取得
-
-```http
-POST /api/spaces/:spaceId/store-registry/:entryId/refresh
-```
-
-リモート Actor を再 fetch し、name / summary / icon 等を更新します。
-
-### Store 削除
-
-```http
-DELETE /api/spaces/:spaceId/store-registry/:entryId
-```
-
-レスポンス: `{ "success": true }`
-
-### リモートリポジトリ閲覧
-
-```http
-GET /api/spaces/:spaceId/store-registry/:entryId/repositories?page=1&limit=20
-```
-
-リモート Store のリポジトリ一覧をプロキシ経由で取得します。
-
-### リモートリポジトリ検索
-
-```http
-GET /api/spaces/:spaceId/store-registry/:entryId/repositories/search?q={query}&page=1&limit=20
-```
-
----
-
-## 11. リポジトリインストール
-
-```http
-POST /api/spaces/:spaceId/store-registry/:entryId/install
-```
-
-```json
-{
-  "remote_owner": "tako",
-  "remote_repo_name": "takos-computer",
-  "local_name": "my-takos-computer"
-}
-```
-
-`local_name` は省略可能です。
-
-レスポンス (201):
-
-```json
-{
-  "repository": {
-    "id": "repo_xyz789",
-    "name": "my-takos-computer",
-    "clone_url": "https://takos.example.dev/git/tako/takos-computer.git",
-    "remote_store_actor_url": "https://takos.example.dev/ap/stores/official",
-    "remote_browse_url": "https://takos.example.dev/@tako/takos-computer"
   }
 }
 ```
 
 ---
 
-## 12. サブスクリプション更新
+## コレクション
 
-Store の outbox をポーリングして更新を検出します。
+### inventory
 
-### 手動ポーリング
+Store の `inventory` は `OrderedCollection` で、canonical `Repository` actor の URI を含む。
+同一インスタンスの repo と他インスタンスの repo を混在できる。
 
-```http
-POST /api/spaces/:spaceId/store-registry/:entryId/poll
-```
+**ハイブリッドモード:**
+- 明示的な登録がない場合: アカウント内の全 public repo を自動列挙 (自動モード)
+- 1件でも明示登録があれば: 登録されたリポジトリのみを表示 (明示モード)
 
-レスポンス: `{ "new_updates": 3 }`
-
-### 更新一覧
-
-```http
-GET /api/spaces/:spaceId/store-registry/updates?unseen=true&limit=50&offset=0
-```
+明示モードの管理は Workspace API (`/api/spaces/:spaceId/stores/:storeSlug/inventory`) で行う。
 
 ```json
 {
-  "total": 3,
-  "updates": [
-    {
-      "id": "upd_abc",
-      "registry_entry_id": "sr_abc123",
-      "store_name": "Official Store",
-      "store_domain": "takos.example.dev",
-      "activity_id": "https://takos.example.dev/ap/stores/official/repositories/tako/new-app/activities/create/...",
-      "activity_type": "Create",
-      "object_id": "https://takos.example.dev/ap/stores/official/repositories/tako/new-app",
-      "object_type": "GitRepository",
-      "object_name": "new-app",
-      "object_summary": "New application template",
-      "published": "2026-03-28T08:00:00Z",
-      "seen": false,
-      "created_at": "2026-03-28T08:30:00Z"
-    }
+  "id": "https://b.example/ap/stores/curated/inventory",
+  "type": "OrderedCollection",
+  "totalItems": 2,
+  "orderedItems": [
+    "https://a.example/ap/repos/alice/calc",
+    "https://b.example/ap/repos/bob/tool"
   ]
 }
 ```
 
-### 既読マーク
+### stores
+
+canonical repo の `stores` は `OrderedCollection` で、この repo を inventory に含む Store actor の URI を含む。
+
+---
+
+## メタデータ共有
+
+### Push activity
+
+canonical repo は push 成功後に ForgeFed `Push` activity を outbox に publish する。
+commit メタデータを含めてよい。
+
+```json
+{
+  "type": "Push",
+  "actor": "https://a.example/ap/repos/alice/calc",
+  "attributedTo": "https://a.example/ap/users/alice",
+  "target": "refs/heads/main",
+  "to": ["https://www.w3.org/ns/activitystreams#Public"],
+  "object": {
+    "type": "OrderedCollection",
+    "totalItems": 1,
+    "orderedItems": [
+      {
+        "type": "Commit",
+        "hash": "abc123def456",
+        "message": "feat: add division operator",
+        "attributedTo": { "name": "Alice", "email": "alice@example.com" },
+        "committed": "2026-03-30T09:58:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Tag activity
+
+tag 作成時は `Create` activity で tag 情報を publish してよい。
+
+```json
+{
+  "type": "Create",
+  "actor": "https://a.example/ap/repos/alice/calc",
+  "object": {
+    "type": "Tag",
+    "name": "v1.0.0",
+    "ref": "refs/tags/v1.0.0",
+    "target": "abc123...",
+    "published": "2026-03-30T12:00:00Z"
+  }
+}
+```
+
+### Store での再配信
+
+Store は購読している repo の activity を `Announce` で再配信してよい。
+Store の follower は、Store をフォローすることで inventory 内の全 repo の活動を受け取れる。
+
+---
+
+## Activity rules
+
+### canonical repo outbox
+
+- `Create` : repo 生成時
+- `Update` : summary, defaultBranchHash など変更時
+- `Delete` : repo 削除時
+- `Push` : push 成功時 (commit メタデータを含む)
+- tag 関連の `Create` / `Delete`
+- `Accept` / `Reject` : Follow への応答
+
+### store outbox
+
+明示モードの場合、Store outbox は実際の inventory 操作を activity として記録する。
+自動モードの場合は repo の Create/Update activity を生成する (後方互換)。
+
+- `Add` : 新しい repo 参照が inventory に追加された (明示モード)
+- `Remove` : repo 参照が inventory から削除された (明示モード)
+- `Announce` : inventory 内 repo の activity を再配信
+
+---
+
+## リポジトリ参照の管理
+
+### 参照の追加
+
+1. 管理者が Store の管理 API を通じて canonical repo の URI を指定する
+2. Store は canonical repo の actor document を fetch してメタデータを取得する
+3. Store は inventory に参照を追加する
+
+### リモートインスタンスの repo を参照
+
+1. 管理者がリモートインスタンスの repo URI を指定する
+2. Store は ActivityPub fetch で actor document を取得する
+3. `cloneUri`, `defaultBranchRef`, `defaultBranchHash` などを読み取る
+4. inventory に参照として追加する
+5. 必要なら canonical repo の outbox を定期的に polling して更新を検出する
+
+---
+
+## WebFinger 発見
 
 ```http
-POST /api/spaces/:spaceId/store-registry/updates/mark-seen
+GET /.well-known/webfinger?resource=acct:{storeSlug}@{domain}
+GET /.well-known/webfinger?resource=https://{domain}/ap/repos/{owner}/{repo}
+```
+
+Store は `acct:` URI 形式、Repository は Actor URL 形式で解決できる。
+
+---
+
+## 可視性と access control
+
+### public read
+
+public repo / store について、以下は **follow なし** で GET 可能でなければならない。
+
+- actor document
+- public outbox page
+- stores / inventory collection
+
+### Follow
+
+- `Follow` を inbox に POST すると `Accept` が返り、followers に追加される
+- `Undo` + `Follow` で unfollow
+- `Follow` は購読であり、認可ではない
+- `Store` への `Follow` は inventory 変化の通知購読を意味する
+- `Repository` への `Follow` は Push activity の通知購読を意味する
+
+### capability / Grant
+
+- private repo のメタデータを Store が参照する場合、`visit` Grant が必要
+- push 権限は `write` 以上の Grant でなければならない
+- Grant は canonical repo に対して発行する
+
+---
+
+## `takos:` 名前空間
+
+```http
+GET /ns/takos
 ```
 
 ```json
 {
-  "update_ids": ["upd_abc", "upd_def"]
+  "@context": {
+    "takos": "https://takos.jp/ns#",
+    "Store": "takos:Store",
+    "inventory": { "@id": "takos:inventory", "@type": "@id" },
+    "stores": { "@id": "takos:stores", "@type": "@id" },
+    "defaultBranchRef": "takos:defaultBranchRef",
+    "defaultBranchHash": "takos:defaultBranchHash"
+  }
 }
 ```
 
-`all: true` を渡すと全更新を既読にします。
-
-レスポンス: `{ "success": true }`
-
----
-
-## 13. Seed Repository との比較
-
-| | Store | Seed Repository |
-| --- | --- | --- |
-| 用途 | 継続的なリポジトリ発見・配布 | space 初期化時の一度きりのクローン |
-| 仕組み | ActivityPub outbox ポーリング | `GET /api/seed-repositories` |
-| 更新検出 | outbox の activity stream | なし |
-| インストール | Store Registry API | space 作成フロー内 |
-| フェデレーション | あり (リモート Store を登録可能) | なし (同一インスタンスのみ) |
+::: info 旧エンドポイント
+`/ns/takos-git` は `/ns/takos` へ 301 リダイレクトします。
+:::
 
 ---
 
-## 14. 制約と今後
+## クライアント利用フロー
 
-- **inbox は未実装**: Store は pull-only。outbox ポーリングで更新を検出する
-- **Delete アクティビティ非対応**: 削除されたリポジトリはコレクションから消えるが、Delete 通知は発行されない
-- **followers はスタブ**: フォロー機能は将来対応
-- **HTTP 署名は公開鍵のみ**: Actor の `publicKey` は公開するが、リクエスト署名検証は未実装
-- **SSRF 保護**: リモート Store の fetch 時にプライベート IP / IPv6 / 内部 TLD (`.local`, `.internal`, `.localhost`) をブロック
+1. Store の inventory または検索で目的の repo を発見する
+2. repo の actor document を取得する
+3. `cloneUri` を使って canonical repo から直接 `git clone` する
+
+Store は発見の手段であり、git データの取得先ではない。
 
 ---
 
-## 15. エンドポイント一覧
+## セキュリティ要件
 
-### ActivityPub エンドポイント
+1. 受信 activity の actor なりすましを検証しなければならない
+2. push は capability と Git 認証の両方を検証すべきである
+3. public GET を許可する場合でも rate limit を設けるべきである
+4. private repo のメタデータを Store が参照する場合、`visit` Grant の範囲を最小化すべきである
+5. リモート Store fetch 時にプライベート IP / IPv6 / 内部 TLD をブロックする (SSRF 保護)
 
-| エンドポイント | メソッド | 説明 |
-| --- | --- | --- |
-| `/.well-known/webfinger` | GET | WebFinger 発見 |
-| `/ap/stores/:store` | GET | Store Actor |
-| `/ap/stores/:store/repositories` | GET | Repositories Collection |
-| `/ap/stores/:store/repositories/:owner/:repo` | GET | 個別 Repository |
-| `/ap/stores/:store/outbox` | GET | Outbox |
-| `/ap/stores/:store/inbox` | POST | Inbox (501) |
-| `/ap/stores/:store/followers` | GET | Followers (スタブ) |
-| `/ap/stores/:store/search` | GET | Search Service |
-| `/ap/stores/:store/search/repositories` | GET | リポジトリ検索 |
-| `/ns/takos-git` | GET | `tkg` 名前空間定義 |
+---
 
-### Store Registry API
+## 互換性
+
+- Store を知らないクライアントでも、canonical repo は通常の ForgeFed `Repository` として読める
+- `Store` は `Service` を兼ねるため、非対応実装でも actor として最低限扱える
+- git 転送は `cloneUri` / `pushUri` に残すため、ActivityPub 経由で大きなデータを流さない
+- inventory の item は canonical repo の URI なので、Store 非対応のクライアントでも直接 repo にアクセスできる
+
+---
+
+## Store Registry API
+
+Space にリモートの Store を登録・管理する API。すべて認証が必要。
 
 | エンドポイント | メソッド | 説明 |
 | --- | --- | --- |
@@ -548,3 +404,48 @@ POST /api/spaces/:spaceId/store-registry/updates/mark-seen
 | `/api/spaces/:spaceId/store-registry/:entryId/poll` | POST | 手動ポーリング |
 | `/api/spaces/:spaceId/store-registry/updates` | GET | サブスクリプション更新一覧 |
 | `/api/spaces/:spaceId/store-registry/updates/mark-seen` | POST | 既読マーク |
+
+---
+
+## エンドポイント一覧
+
+### ActivityPub
+
+| エンドポイント | メソッド | 説明 |
+| --- | --- | --- |
+| `/.well-known/webfinger` | GET | WebFinger 発見 (Store + Repo) |
+| `/ns/takos` | GET | `takos:` 名前空間定義 |
+| `/ap/stores/:store` | GET | Store Actor (カタログ) |
+| `/ap/stores/:store/inventory` | GET | Inventory (repo 参照コレクション) |
+| `/ap/stores/:store/outbox` | GET | Store Outbox |
+| `/ap/stores/:store/inbox` | POST | Store Inbox (Follow/Undo) |
+| `/ap/stores/:store/followers` | GET | Store Followers |
+| `/ap/stores/:store/search` | GET | Search Service |
+| `/ap/stores/:store/search/repositories` | GET | リポジトリ検索 |
+| `/ap/repos/:owner/:repo` | GET | Canonical Repository Actor |
+| `/ap/repos/:owner/:repo/inbox` | POST | Repo Inbox (Follow/Undo) |
+| `/ap/repos/:owner/:repo/outbox` | GET | Repo Outbox (Push activities) |
+| `/ap/repos/:owner/:repo/followers` | GET | Repo Followers |
+| `/ap/repos/:owner/:repo/stores` | GET | Stores Collection |
+
+### 後方互換リダイレクト
+
+| 旧 | 新 |
+| --- | --- |
+| `/ns/takos-git` | `/ns/takos` |
+| `/ap/stores/:store/repositories` | `/ap/stores/:store/inventory` |
+| `/ap/stores/:store/repositories/:owner/:repo` | `/ap/repos/:owner/:repo` |
+
+---
+
+## URI 推奨パターン
+
+### Canonical repo
+
+- Actor: `/ap/repos/{owner}/{repo}`
+- Git clone: `/git/{owner}/{repo}.git`
+
+### Store
+
+- Actor: `/ap/stores/{storeId}`
+- Inventory: `/ap/stores/{storeId}/inventory`

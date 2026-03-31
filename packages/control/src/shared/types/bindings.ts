@@ -41,7 +41,7 @@ export type VectorizeIndex = CfVectorizeIndex;
 // ---------------------------------------------------------------------------
 
 export type DurableObjectStub<T = unknown> = {
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  fetch(input: Request | URL | string, init?: RequestInit): Promise<Response>;
 };
 export type DurableObjectNamespace<T = unknown> = {
   idFromName(name: string): unknown;

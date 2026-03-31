@@ -4,6 +4,16 @@ import { eq, and } from 'drizzle-orm';
 import { toApiServiceBinding } from './format';
 import { getResourceById } from './store';
 import { textDate } from '../../../shared/utils/db-guards';
+import { getPortableSecretValue } from './portable-runtime.ts';
+
+function sanitizePortableName(name: string): string {
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitized || 'resource';
+}
+
+function derivePortableQueueSubscriptionName(name: string): string {
+  return `${sanitizePortableName(name)}-subscription`;
+}
 
 export async function listServiceBindings(db: D1Database, resourceId: string) {
   const drizzle = getDb(db);
@@ -93,7 +103,7 @@ export async function buildBindingFromResource(
   resourceId: string,
   bindingName: string
 ): Promise<{
-  type: 'd1' | 'r2' | 'kv' | 'queue' | 'analytics_engine' | 'workflow' | 'vectorize' | 'durable_object_namespace';
+  type: 'd1' | 'r2' | 'kv' | 'queue' | 'analytics_engine' | 'workflow' | 'vectorize' | 'durable_object_namespace' | 'secret_text';
   name: string;
   id?: string;
   bucket_name?: string;
@@ -104,6 +114,11 @@ export async function buildBindingFromResource(
   index_name?: string;
   class_name?: string;
   script_name?: string;
+  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_url?: string;
+  subscription_name?: string;
+  provider_name?: string;
+  text?: string;
 } | null> {
   const resource = await getResourceById(db, resourceId);
 
@@ -111,7 +126,9 @@ export async function buildBindingFromResource(
     return null;
   }
 
-  switch (resource.type) {
+  const resourceType = String(resource.type);
+
+  switch (resourceType) {
     case 'd1':
       return {
         type: 'd1',
@@ -144,6 +161,26 @@ export async function buildBindingFromResource(
         type: 'queue',
         name: bindingName,
         queue_name: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
+        ...(resource.provider_name === 'aws'
+          ? {
+              queue_backend: 'sqs' as const,
+              queue_url: resource.provider_resource_id ?? undefined,
+              provider_name: 'aws' as const,
+            }
+          : {}),
+        ...(resource.provider_name === 'gcp'
+          ? {
+              queue_backend: 'pubsub' as const,
+              subscription_name: derivePortableQueueSubscriptionName(resource.provider_resource_name ?? resource.id),
+              provider_name: 'gcp' as const,
+            }
+          : {}),
+        ...(resource.provider_name === 'k8s'
+          ? {
+              queue_backend: 'redis' as const,
+              provider_name: 'k8s' as const,
+            }
+          : {}),
       };
     case 'analytics_engine':
     case 'analyticsEngine':
@@ -153,12 +190,30 @@ export async function buildBindingFromResource(
         dataset: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
       };
     case 'workflow':
+    case 'workflow_runtime':
       return {
         type: 'workflow',
         name: bindingName,
         workflow_name: resource.provider_resource_name ?? resource.provider_resource_id ?? undefined,
       };
 
+    case 'secretRef':
+      return {
+        type: 'secret_text',
+        name: bindingName,
+        text: resource.provider_name && resource.provider_name !== 'cloudflare'
+          ? await getPortableSecretValue({
+              id: resource.id,
+              provider_name: resource.provider_name,
+              provider_resource_id: resource.provider_resource_id,
+              provider_resource_name: resource.provider_resource_name,
+              ...(resource.config ? { config: resource.config } : {}),
+            })
+          : resource.provider_resource_id ?? '',
+      };
+
+    case 'durableObject':
+    case 'durable_namespace':
     case 'durable_object': {
       let config: Record<string, unknown> = {};
       if (resource.config) {
@@ -168,11 +223,21 @@ export async function buildBindingFromResource(
           config = {};
         }
       }
+      const durableObject = typeof config.durableObject === 'object' && config.durableObject
+        ? config.durableObject as Record<string, unknown>
+        : null;
+      const durableNamespace = typeof config.durableNamespace === 'object' && config.durableNamespace
+        ? config.durableNamespace as Record<string, unknown>
+        : null;
       const className = (config.className as string)
+        || (durableObject?.className as string | undefined)
+        || (durableNamespace?.className as string | undefined)
         || resource.provider_resource_name
         || undefined;
       if (!className) return null;
-      const scriptName = config.scriptName as string | undefined;
+      const scriptName = (config.scriptName as string | undefined)
+        || (durableObject?.scriptName as string | undefined)
+        || (durableNamespace?.scriptName as string | undefined);
       return {
         type: 'durable_object_namespace',
         name: bindingName,

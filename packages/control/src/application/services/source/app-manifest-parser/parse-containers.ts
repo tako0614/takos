@@ -5,12 +5,20 @@ import type {
 } from '../app-manifest-types';
 import {
   asRecord,
-  asString,
   asRequiredString,
+  asString,
   asStringArray,
   asStringMap,
   normalizeRepoPath,
 } from '../app-manifest-utils';
+
+type ContainerProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+
+function parseContainerProvider(value: unknown): ContainerProvider | undefined {
+  return value === 'oci' || value === 'ecs' || value === 'cloud-run' || value === 'k8s'
+    ? value
+    : undefined;
+}
 
 // ============================================================
 // Health check parser
@@ -73,8 +81,7 @@ export function parseContainers(specRecord: Record<string, unknown>): Record<str
       ? {
           kind: 'image' as const,
           imageRef: asRequiredString(artifactRecord.imageRef, `spec.containers.${name}.artifact.imageRef`),
-          ...(artifactRecord.provider === 'oci' || artifactRecord.provider === 'ecs' || artifactRecord.provider === 'cloud-run' || artifactRecord.provider === 'k8s'
-            ? { provider: artifactRecord.provider }
+          ...(parseContainerProvider(artifactRecord.provider) ? { provider: parseContainerProvider(artifactRecord.provider) }
             : {}),
         }
       : undefined;
@@ -87,8 +94,8 @@ export function parseContainers(specRecord: Record<string, unknown>): Record<str
       ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
       ...(imageRef ? { imageRef } : {}),
       ...(artifact ? { artifact } : {}),
-      ...(c.provider === 'oci' || c.provider === 'ecs' || c.provider === 'cloud-run' || c.provider === 'k8s'
-        ? { provider: c.provider }
+      ...(parseContainerProvider(c.provider)
+        ? { provider: parseContainerProvider(c.provider) }
         : {}),
       ...(c.instanceType ? { instanceType: String(c.instanceType) } : {}),
       ...(c.maxInstances ? { maxInstances: Number(c.maxInstances) } : {}),

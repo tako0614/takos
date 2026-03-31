@@ -1,4 +1,4 @@
-import { type WorkerBinding, WFPService } from '../../../platform/providers/cloudflare/wfp.ts';
+import { WFPService, type WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
 import type {
   ArtifactKind,
@@ -54,20 +54,49 @@ type OciDeploymentOrchestratorConfig = {
 
 type DeploymentProviderRegistryEntry = {
   name: DeploymentProviderName;
-  config?: {
-    orchestratorUrl?: string;
-    orchestratorToken?: string;
-  };
+  config?: Record<string, unknown>;
 };
 
 type DeploymentProviderFactoryConfig = OciDeploymentOrchestratorConfig & {
   cloudflareEnv?: WfpDeploymentProviderEnv;
+  awsRegion?: string;
+  awsEcsClusterArn?: string;
+  awsEcsTaskDefinitionFamily?: string;
+  awsEcsServiceArn?: string;
+  awsEcsServiceName?: string;
+  awsEcsContainerName?: string;
+  awsEcsSubnetIds?: string;
+  awsEcsSecurityGroupIds?: string;
+  awsEcsAssignPublicIp?: string;
+  awsEcsLaunchType?: string;
+  awsEcsDesiredCount?: string;
+  awsEcsBaseUrl?: string;
+  awsEcsHealthUrl?: string;
+  awsEcrRepositoryUri?: string;
+  gcpProjectId?: string;
+  gcpRegion?: string;
+  gcpCloudRunServiceId?: string;
+  gcpCloudRunServiceAccount?: string;
+  gcpCloudRunIngress?: string;
+  gcpCloudRunAllowUnauthenticated?: string;
+  gcpCloudRunBaseUrl?: string;
+  gcpCloudRunDeleteOnRemove?: string;
+  gcpArtifactRegistryRepo?: string;
+  k8sNamespace?: string;
+  k8sDeploymentName?: string;
+  k8sImageRegistry?: string;
   providerRegistry?: {
     get(name: DeploymentProviderName): DeploymentProviderRegistryEntry | undefined;
   };
 };
 
 type PersistedDeploymentContract = Pick<Deployment, 'provider_name' | 'target_json'>;
+type OrchestratedDeploymentProviderName = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+
+type OrchestratedDeploymentProviderConfig = OciDeploymentOrchestratorConfig & {
+  providerName: OrchestratedDeploymentProviderName;
+  providerConfig?: Record<string, unknown>;
+};
 
 function normalizeDeployRuntime(input: DeploymentProviderDeployInput): {
   profile: 'workers' | 'container-service';
@@ -92,6 +121,18 @@ function safeJsonParse<T>(raw: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function compactRecord<T extends Record<string, unknown>>(value: T): T | undefined {
+  const filtered = Object.entries(value).filter(([, entry]) => {
+    if (entry == null) return false;
+    if (typeof entry === 'string') return entry.trim().length > 0;
+    return true;
+  });
+  if (filtered.length === 0) {
+    return undefined;
+  }
+  return Object.fromEntries(filtered) as T;
 }
 
 function normalizeTargetEndpoint(raw: Record<string, unknown>): DeploymentTargetEndpoint | undefined {
@@ -135,6 +176,12 @@ function normalizeTargetArtifact(raw: Record<string, unknown>): DeploymentTarget
   }
 
   return undefined;
+}
+
+function targetContainsContainerImage(target: DeploymentTarget): boolean {
+  return target.artifact?.kind === 'container-image'
+    && typeof target.artifact.image_ref === 'string'
+    && target.artifact.image_ref.trim().length > 0;
 }
 
 function normalizeDeploymentTarget(raw: Record<string, unknown>): DeploymentTarget {
@@ -262,11 +309,137 @@ export function createOciDeploymentProvider(
   deployment: PersistedDeploymentContract,
   config?: OciDeploymentOrchestratorConfig,
 ): DeploymentProvider {
+  return createOrchestratedDeploymentProvider(deployment, {
+    providerName: 'oci',
+    orchestratorUrl: config?.orchestratorUrl,
+    orchestratorToken: config?.orchestratorToken,
+    fetchImpl: config?.fetchImpl,
+  });
+}
+
+function readRegistryString(
+  entry: DeploymentProviderRegistryEntry | undefined,
+  key: string,
+): string | undefined {
+  const value = entry?.config?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readConfigString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readConfigBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+  }
+  return undefined;
+}
+
+function readConfigNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function readConfigStringList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const entries = value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+  }
+  if (typeof value === 'string') {
+    const entries = value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+  }
+  return undefined;
+}
+
+function resolveRegistryProviderConfig(
+  entry: DeploymentProviderRegistryEntry | undefined,
+): Record<string, unknown> | undefined {
+  if (!entry?.config || typeof entry.config !== 'object' || Array.isArray(entry.config)) {
+    return undefined;
+  }
+
+  const providerConfig = Object.fromEntries(
+    Object.entries(entry.config)
+      .filter(([key]) => key !== 'orchestratorUrl' && key !== 'orchestratorToken'),
+  );
+
+  return Object.keys(providerConfig).length > 0 ? providerConfig : undefined;
+}
+
+function resolveEnvProviderConfig(
+  providerName: OrchestratedDeploymentProviderName,
+  config: DeploymentProviderFactoryConfig,
+): Record<string, unknown> | undefined {
+  switch (providerName) {
+    case 'ecs':
+      return compactRecord({
+        region: readConfigString(config.awsRegion),
+        clusterArn: readConfigString(config.awsEcsClusterArn),
+        taskDefinitionFamily: readConfigString(config.awsEcsTaskDefinitionFamily),
+        serviceArn: readConfigString(config.awsEcsServiceArn),
+        serviceName: readConfigString(config.awsEcsServiceName),
+        containerName: readConfigString(config.awsEcsContainerName),
+        subnetIds: readConfigStringList(config.awsEcsSubnetIds),
+        securityGroupIds: readConfigStringList(config.awsEcsSecurityGroupIds),
+        assignPublicIp: readConfigBoolean(config.awsEcsAssignPublicIp),
+        launchType: readConfigString(config.awsEcsLaunchType),
+        desiredCount: readConfigNumber(config.awsEcsDesiredCount),
+        baseUrl: readConfigString(config.awsEcsBaseUrl),
+        healthUrl: readConfigString(config.awsEcsHealthUrl),
+        ecrRepositoryUri: readConfigString(config.awsEcrRepositoryUri),
+      });
+    case 'cloud-run':
+      return compactRecord({
+        projectId: readConfigString(config.gcpProjectId),
+        region: readConfigString(config.gcpRegion),
+        serviceId: readConfigString(config.gcpCloudRunServiceId),
+        serviceAccount: readConfigString(config.gcpCloudRunServiceAccount),
+        ingress: readConfigString(config.gcpCloudRunIngress),
+        allowUnauthenticated: readConfigBoolean(config.gcpCloudRunAllowUnauthenticated),
+        baseUrl: readConfigString(config.gcpCloudRunBaseUrl),
+        deleteOnRemove: readConfigBoolean(config.gcpCloudRunDeleteOnRemove),
+        artifactRegistryRepo: readConfigString(config.gcpArtifactRegistryRepo),
+      });
+    case 'k8s':
+      return compactRecord({
+        namespace: readConfigString(config.k8sNamespace),
+        deploymentName: readConfigString(config.k8sDeploymentName),
+        imageRegistry: readConfigString(config.k8sImageRegistry),
+      });
+    case 'oci':
+    default:
+      return undefined;
+  }
+}
+
+function createOrchestratedDeploymentProvider(
+  deployment: PersistedDeploymentContract,
+  config: OrchestratedDeploymentProviderConfig,
+): DeploymentProvider {
   const target = parseDeploymentTargetConfig(deployment);
-  const fetchImpl = config?.fetchImpl ?? fetch;
+  const fetchImpl = config.fetchImpl ?? fetch;
 
   return {
-    name: 'oci',
+    name: config.providerName,
     async deploy(input) {
       const runtime = normalizeDeployRuntime(input);
       const serviceRef = target.endpoint?.kind === 'service-ref'
@@ -284,7 +457,7 @@ export function createOciDeploymentProvider(
       const externalBaseUrl = target.endpoint?.kind === 'http-url'
         ? target.endpoint.base_url
         : null;
-      const orchestratorUrl = config?.orchestratorUrl?.trim();
+      const orchestratorUrl = config.orchestratorUrl?.trim();
       const imageRef = target.artifact?.image_ref?.trim();
       const healthPath = target.artifact?.health_path?.trim() || '/health';
 
@@ -301,16 +474,24 @@ export function createOciDeploymentProvider(
 
       const deployUrl = orchestratorUrl.endsWith('/') ? `${orchestratorUrl}deploy` : `${orchestratorUrl}/deploy`;
 
+      const providerPayload = config.providerName === 'oci' && !config.providerConfig
+        ? undefined
+        : {
+            name: config.providerName,
+            ...(config.providerConfig ? { config: config.providerConfig } : {}),
+          };
+
       const response = await fetchImpl(deployUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(config?.orchestratorToken ? { Authorization: `Bearer ${config.orchestratorToken}` } : {}),
+          ...(config.orchestratorToken ? { Authorization: `Bearer ${config.orchestratorToken}` } : {}),
         },
         body: JSON.stringify({
           deployment_id: input.deployment.id,
           space_id: input.deployment.space_id,
           artifact_ref: input.artifactRef,
+          ...(providerPayload ? { provider: providerPayload } : {}),
           target: {
             route_ref: target.route_ref ?? serviceRef,
             endpoint: {
@@ -369,16 +550,24 @@ export function createDeploymentProvider(
   deployment: PersistedDeploymentContract,
   config: DeploymentProviderFactoryConfig = {},
 ): DeploymentProvider {
+  const deploymentTarget = parseDeploymentTargetConfig(deployment);
+  const hasImageRef = targetContainsContainerImage(deploymentTarget);
   const registryEntry = config.providerRegistry?.get(deployment.provider_name);
-  const registryOrchestratorUrl = registryEntry?.config?.orchestratorUrl;
-  const registryOrchestratorToken = registryEntry?.config?.orchestratorToken;
+  const registryOrchestratorUrl = readRegistryString(registryEntry, 'orchestratorUrl');
+  const registryOrchestratorToken = readRegistryString(registryEntry, 'orchestratorToken');
+  const registryProviderConfig = resolveRegistryProviderConfig(registryEntry);
 
   switch (deployment.provider_name) {
-    case 'oci':
     case 'ecs':
     case 'cloud-run':
     case 'k8s':
-      return createOciDeploymentProvider(deployment, {
+    case 'oci':
+      if (hasImageRef && !((registryOrchestratorUrl ?? config.orchestratorUrl)?.trim())) {
+        throw new Error('OCI deployment target requires OCI_ORCHESTRATOR_URL');
+      }
+      return createOrchestratedDeploymentProvider(deployment, {
+        providerName: deployment.provider_name,
+        providerConfig: registryProviderConfig ?? resolveEnvProviderConfig(deployment.provider_name, config),
         orchestratorUrl: registryOrchestratorUrl ?? config.orchestratorUrl,
         orchestratorToken: registryOrchestratorToken ?? config.orchestratorToken,
         fetchImpl: config.fetchImpl,

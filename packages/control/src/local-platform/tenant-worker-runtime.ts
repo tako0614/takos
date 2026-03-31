@@ -34,6 +34,14 @@ export type TenantWorkflowInvocation = {
   payload?: unknown;
 };
 
+export type TenantWorkflowInvocationResult = {
+  id: string;
+  workflowName: string;
+  status: 'queued' | 'running' | 'paused' | 'completed' | 'errored' | 'terminated';
+  serviceId: string;
+  exportName: string;
+};
+
 export type TenantWorkerFetcher = Fetcher & {
   scheduled(options?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult>;
   queue(queueName: string, messages: TenantWorkerQueueMessage[]): Promise<TenantWorkerQueueResult>;
@@ -73,15 +81,13 @@ export type TenantWorkerRuntimeRegistry = {
     name: string,
     invocation: TenantWorkflowInvocation,
     options?: { deploymentId?: string },
-  ): Promise<never>;
+  ): Promise<TenantWorkflowInvocationResult>;
   dispose(): Promise<void>;
 };
 
 export type LocalTenantWorkerRuntimeFactoryOptions = {
   dataDir?: string | null;
 } & Omit<TenantWorkerRuntimeFactoryOptions, 'bundleCacheRoot' | 'persistRoot'>;
-
-type LocalRuntimeRegistryModule = typeof import('./miniflare-registry.ts');
 
 function resolveLocalPersistenceRoots(dataDir?: string | null) {
   if (!dataDir) {
@@ -112,7 +118,7 @@ export async function createLocalTenantWorkerRuntimeRegistry(
 
   const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> => {
     if (!registryPromise) {
-      const module = await import('./miniflare-registry.ts') as LocalRuntimeRegistryModule;
+      const module = await import('./miniflare-registry.ts');
       registryPromise = module.createLocalTenantRuntimeRegistry(registryOptions);
     }
     return registryPromise;
@@ -166,7 +172,7 @@ export async function createLocalTenantWorkerRuntimeRegistry(
       name: string,
       invocation: TenantWorkflowInvocation,
       registryOptions?: { deploymentId?: string },
-    ): Promise<never> {
+    ): Promise<TenantWorkflowInvocationResult> {
       const registry = await loadRegistry();
       return registry.invokeWorkflow(name, invocation, registryOptions);
     },

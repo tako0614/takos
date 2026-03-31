@@ -3,10 +3,22 @@ import {
   resolveResourceImplementation,
   toResourceCapability,
 } from '../resources/capabilities.ts';
+import { describePortableResourceResolution } from '../resources/portable-runtime.ts';
 import type { GroupDesiredState, GroupWorkloadCategory } from './group-state.ts';
 
 export type GroupProviderTarget = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'k8s';
-export type TranslationStatus = 'native' | 'portable' | 'planned' | 'unsupported';
+type WorkloadProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+type WorkloadProviderSpec = {
+  imageRef?: unknown;
+  artifact?: {
+    kind?: unknown;
+    imageRef?: unknown;
+    provider?: unknown;
+  };
+  provider?: unknown;
+};
+export type TranslationStatus = 'native' | 'portable' | 'unsupported';
+export type TranslationResolutionMode = 'cloudflare-native' | 'provider-backed' | 'takos-runtime' | 'unsupported';
 
 export interface ResourceTranslationEntry {
   name: string;
@@ -16,6 +28,7 @@ export interface ResourceTranslationEntry {
   driver: string;
   provider: string;
   status: TranslationStatus;
+  resolutionMode: TranslationResolutionMode;
   requirements: string[];
   notes?: string[];
 }
@@ -57,6 +70,10 @@ export interface TranslationReport {
   unsupported: TranslationIssue[];
 }
 
+export type TranslationContext = {
+  ociOrchestratorUrl?: string;
+};
+
 function normalizeProvider(provider?: string | null): GroupProviderTarget {
   switch (provider) {
     case 'local':
@@ -74,79 +91,51 @@ function uniqueRequirements(entries: Array<{ requirements: string[] }>): string[
   return Array.from(new Set(entries.flatMap((entry) => entry.requirements))).sort();
 }
 
-function portabilityDriver(provider: GroupProviderTarget, semanticType: string | null): string {
-  if (!semanticType) return 'unknown';
+function isWorkloadProvider(value: unknown): value is WorkloadProvider {
+  return value === 'oci' || value === 'ecs' || value === 'cloud-run' || value === 'k8s';
+}
+
+function trimString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function getContainerImageRef(spec: WorkloadProviderSpec): string | undefined {
+  const artifactImageRef = trimString(spec.artifact?.imageRef);
+  if (artifactImageRef) {
+    return artifactImageRef;
+  }
+  return trimString(spec.imageRef);
+}
+
+function getContainerProvider(spec: WorkloadProviderSpec, fallback: WorkloadProvider): WorkloadProvider {
+  if (spec.artifact?.kind === 'image') {
+    const artifactProvider = trimString(spec.artifact.provider);
+    if (artifactProvider && isWorkloadProvider(artifactProvider)) {
+      return artifactProvider;
+    }
+  }
+
+  const declaredProvider = trimString(spec.provider);
+  if (declaredProvider && isWorkloadProvider(declaredProvider)) {
+    return declaredProvider;
+  }
+
+  return fallback;
+}
+
+function fallbackContainerProvider(provider: GroupProviderTarget): WorkloadProvider {
   switch (provider) {
+    case 'cloudflare':
     case 'local':
-      switch (semanticType) {
-        case 'sql':
-          return 'takos-local-sql';
-        case 'object_store':
-          return 'takos-local-object-store';
-        case 'vector_index':
-          return 'takos-local-vector-index';
-        case 'analytics_store':
-          return 'takos-local-analytics-store';
-        case 'workflow_runtime':
-          return 'takos-local-workflow-runtime';
-        case 'durable_namespace':
-          return 'takos-local-durable-runtime';
-        default:
-          return `takos-local-${semanticType}`;
-      }
+      return 'oci';
     case 'aws':
-      switch (semanticType) {
-        case 'sql':
-          return 'takos-sql';
-        case 'object_store':
-          return 'takos-object-store';
-        case 'vector_index':
-          return 'takos-vector-store';
-        case 'analytics_store':
-          return 'takos-analytics-store';
-        case 'workflow_runtime':
-          return 'takos-workflow-runtime';
-        case 'durable_namespace':
-          return 'takos-durable-runtime';
-        default:
-          return `takos-aws-${semanticType}`;
-      }
+      return 'ecs';
     case 'gcp':
-      switch (semanticType) {
-        case 'sql':
-          return 'takos-sql';
-        case 'object_store':
-          return 'takos-object-store';
-        case 'vector_index':
-          return 'takos-vector-store';
-        case 'analytics_store':
-          return 'takos-analytics-store';
-        case 'workflow_runtime':
-          return 'takos-workflow-runtime';
-        case 'durable_namespace':
-          return 'takos-durable-runtime';
-        default:
-          return `takos-gcp-${semanticType}`;
-      }
+      return 'cloud-run';
     case 'k8s':
-      switch (semanticType) {
-        case 'sql':
-          return 'takos-sql';
-        case 'object_store':
-          return 'takos-object-store';
-        case 'vector_index':
-          return 'takos-vector-store';
-        case 'analytics_store':
-          return 'takos-analytics-store';
-        case 'workflow_runtime':
-          return 'takos-workflow-runtime';
-        case 'durable_namespace':
-          return 'takos-durable-runtime';
-        default:
-          return `takos-k8s-${semanticType}`;
-      }
+      return 'k8s';
     default:
-      return 'unknown';
+      return 'oci';
   }
 }
 
@@ -167,6 +156,7 @@ function translateResource(
       driver: 'unknown',
       provider,
       status: 'unsupported',
+      resolutionMode: 'unsupported',
       requirements: [],
       notes: [`Unsupported resource type: ${publicType}`],
     };
@@ -181,53 +171,45 @@ function translateResource(
       driver: resolveResourceDriver(semanticType, 'cloudflare') ?? `cloudflare-${implementation}`,
       provider: 'cloudflare-native',
       status: 'native',
+      resolutionMode: 'cloudflare-native',
       requirements: ['CF_ACCOUNT_ID', 'CF_API_TOKEN'],
+      notes: ['Takos runtime realizes this Cloudflare-native resource directly on the Cloudflare backend.'],
     };
   }
 
-  if (provider === 'local') {
-    const requirements: string[] = [];
-    const notes: string[] = ['local resolves Cloudflare-native resources through the local portability adapters.'];
-    let status: TranslationStatus = 'portable';
-
-    if (publicType === 'vectorize') {
-      requirements.push('POSTGRES_URL', 'PGVECTOR_ENABLED=true');
-    }
-    if (publicType === 'analyticsEngine') {
-      status = 'unsupported';
-      notes.push('analyticsEngine does not yet have a local portability backend.');
-    }
-
+  const resolution = describePortableResourceResolution(provider, semanticType);
+  if (!resolution) {
     return {
       name,
       publicType,
       semanticType,
       implementation,
-      driver: portabilityDriver(provider, semanticType),
-      provider: 'local-portability-backend',
-      status,
-      requirements,
-      notes,
+      driver: 'unknown',
+      provider,
+      status: 'unsupported',
+      resolutionMode: 'unsupported',
+      requirements: [],
+      notes: [`Unsupported resource type: ${publicType}`],
     };
   }
 
+  const notes = resolution.notes ? [...resolution.notes] : [];
+  if (resolution.mode === 'provider-backed') {
+    notes.push(`Takos runtime on ${provider} realizes this Cloudflare-native resource through a provider-backed adapter.`);
+  } else {
+    notes.push(`Takos runtime on ${provider} realizes this Cloudflare-native resource through the compatibility runtime.`);
+  }
   return {
     name,
     publicType,
     semanticType,
     implementation,
-    driver: portabilityDriver(provider, semanticType),
-    provider: `${provider}-portability-backend`,
+    driver: resolveResourceDriver(semanticType, provider) ?? 'unknown',
+    provider: resolution.mode === 'provider-backed' ? `${provider}-backing-service` : 'takos-runtime',
     status: 'portable',
-    requirements: [
-      'runtime-host adapter',
-      provider === 'aws'
-        ? 'postgres/s3/dynamodb/sqs portability backends'
-        : provider === 'gcp'
-          ? 'postgres/gcs/firestore/pubsub portability backends'
-          : 'postgres/minio/redis/nats portability backends',
-    ],
-    notes: [`${provider} resolves resources through the self-hosted portability backend family.`],
+    resolutionMode: resolution.mode,
+    requirements: resolution.requirements,
+    notes,
   };
 }
 
@@ -235,6 +217,7 @@ function translateWorkload(
   provider: GroupProviderTarget,
   name: string,
   category: GroupWorkloadCategory,
+  spec: WorkloadProviderSpec = {},
 ): WorkloadTranslationEntry {
   if (category === 'worker') {
     if (provider === 'cloudflare') {
@@ -246,6 +229,7 @@ function translateWorkload(
         runtimeProfile: 'workers',
         status: 'native',
         requirements: ['CF_ACCOUNT_ID', 'CF_API_TOKEN', 'WFP_DISPATCH_NAMESPACE'],
+        notes: ['Takos runtime realizes worker workloads directly on the Cloudflare backend.'],
       };
     }
 
@@ -258,7 +242,7 @@ function translateWorkload(
         runtimeProfile: 'workers',
         status: 'portable',
         requirements: ['runtime-host'],
-        notes: ['local resolves workers through the runtime-host compatibility layer.'],
+        notes: ['Takos runtime on local realizes worker workloads through the runtime-host compatibility layer.'],
       };
     }
 
@@ -270,45 +254,57 @@ function translateWorkload(
       runtimeProfile: 'workers',
       status: 'portable',
       requirements: ['runtime-host adapter'],
-      notes: [`${provider} workers resolve through the runtime-host compatibility layer.`],
+      notes: [`Takos runtime on ${provider} realizes worker workloads through the runtime-host compatibility layer.`],
     };
   }
 
   if (provider === 'cloudflare') {
+    const workloadProvider = getContainerProvider(spec, fallbackContainerProvider(provider));
+    const imageRef = getContainerImageRef(spec);
+    const requirements = imageRef ? ['OCI_ORCHESTRATOR_URL'] : [];
+
     return {
       name,
       category,
-      provider: 'oci',
+      provider: workloadProvider,
       runtime: 'container-service',
       runtimeProfile: 'container-service',
       status: 'portable',
-      requirements: ['OCI_ORCHESTRATOR_URL'],
-      notes: ['Cloudflare uses an external OCI orchestrator for service/container workloads.'],
+      requirements,
+      notes: ['Takos runtime on the Cloudflare backend uses the OCI deployment adapter for service/container workloads.'],
     };
   }
 
   if (provider === 'local') {
+    const workloadProvider = getContainerProvider(spec, fallbackContainerProvider(provider));
+    const imageRef = getContainerImageRef(spec);
+    const requirements = imageRef ? ['OCI_ORCHESTRATOR_URL'] : [];
+
     return {
       name,
       category,
-      provider: 'oci',
+      provider: workloadProvider,
       runtime: 'container-service',
       runtimeProfile: 'container-service',
       status: 'portable',
-      requirements: ['OCI_ORCHESTRATOR_URL'],
-      notes: ['local routes OCI workloads through the local OCI orchestrator.'],
+      requirements,
+      notes: ['Takos runtime on local realizes OCI workloads through the local OCI deployment adapter.'],
     };
   }
+
+  const workloadProvider = getContainerProvider(spec, fallbackContainerProvider(provider));
+  const imageRef = getContainerImageRef(spec);
+  const requirements = imageRef ? ['OCI_ORCHESTRATOR_URL'] : [];
 
   return {
     name,
     category,
-    provider: provider === 'aws' ? 'ecs' : provider === 'gcp' ? 'cloud-run' : 'k8s',
+    provider: workloadProvider,
     runtime: 'container-service',
     runtimeProfile: 'container-service',
     status: 'portable',
-    requirements: ['OCI_ORCHESTRATOR_URL'],
-    notes: [`${provider} service execution resolves through the OCI orchestrator adapter.`],
+    requirements,
+    notes: [`Takos runtime on ${provider} realizes service execution through the OCI deployment adapter.`],
   };
 }
 
@@ -325,6 +321,7 @@ function translateRoute(
       provider: 'hostname-routing',
       status: 'native',
       requirements: ['HOSTNAME_ROUTING'],
+      notes: ['Takos runtime realizes routing directly through the Cloudflare hostname routing backend.'],
     };
   }
 
@@ -336,7 +333,7 @@ function translateRoute(
       provider: 'runtime-host-routing',
       status: 'portable',
       requirements: ['runtime-host'],
-      notes: ['local materializes routes through runtime-host/local routing adapters.'],
+      notes: ['Takos runtime on local materializes routes through runtime-host/local routing adapters.'],
     };
   }
 
@@ -347,17 +344,17 @@ function translateRoute(
     provider: 'ingress-routing',
     status: 'portable',
     requirements: ['provider ingress adapter', 'HOSTNAME_ROUTING store'],
-    notes: [`${provider} routing resolves through Takos-managed hostname routing plus provider ingress.`],
+    notes: [`Takos runtime on ${provider} realizes routing through Takos-managed hostname routing plus provider ingress.`],
   };
 }
 
-export function buildTranslationReport(desiredState: GroupDesiredState): TranslationReport {
+export function buildTranslationReport(desiredState: GroupDesiredState, context: TranslationContext = {}): TranslationReport {
   const provider = normalizeProvider(desiredState.provider);
   const resources = Object.entries(desiredState.resources).map(([name, resource]) =>
     translateResource(provider, name, resource.type),
   );
   const workloads = Object.entries(desiredState.workloads).map(([name, workload]) =>
-    translateWorkload(provider, name, workload.category),
+    translateWorkload(provider, name, workload.category, workload.spec),
   );
   const routes = Object.entries(desiredState.routes).map(([name, route]) =>
     translateRoute(provider, name, route.target),
@@ -365,21 +362,21 @@ export function buildTranslationReport(desiredState: GroupDesiredState): Transla
 
   const unsupported: TranslationIssue[] = [
     ...resources
-      .filter((entry) => entry.status === 'planned' || entry.status === 'unsupported')
+      .filter((entry) => entry.status === 'unsupported')
       .map((entry) => ({
         category: 'resource' as const,
         name: entry.name,
         message: `${entry.publicType} resolves to ${entry.driver} (${entry.status}) on provider ${provider}`,
       })),
     ...workloads
-      .filter((entry) => entry.status === 'planned' || entry.status === 'unsupported')
+      .filter((entry) => entry.status === 'unsupported')
       .map((entry) => ({
         category: 'workload' as const,
         name: entry.name,
         message: `${entry.category} resolves to ${entry.provider} (${entry.status}) on provider ${provider}`,
       })),
     ...routes
-      .filter((entry) => entry.status === 'planned' || entry.status === 'unsupported')
+      .filter((entry) => entry.status === 'unsupported')
       .map((entry) => ({
         category: 'route' as const,
         name: entry.name,
@@ -387,10 +384,14 @@ export function buildTranslationReport(desiredState: GroupDesiredState): Transla
       })),
   ];
 
+  const requirements = uniqueRequirements([...resources, ...workloads, ...routes]);
+  const hasMissingOciOrchestrator = requirements.includes('OCI_ORCHESTRATOR_URL')
+    && !context.ociOrchestratorUrl?.trim();
+
   return {
     provider,
-    supported: unsupported.length === 0,
-    requirements: uniqueRequirements([...resources, ...workloads, ...routes]),
+    supported: unsupported.length === 0 && !hasMissingOciOrchestrator,
+    requirements: requirements,
     resources,
     workloads,
     routes,
@@ -398,12 +399,20 @@ export function buildTranslationReport(desiredState: GroupDesiredState): Transla
   };
 }
 
-export function assertTranslationSupported(report: TranslationReport): void {
-  if (report.supported) return;
+export function assertTranslationSupported(report: TranslationReport, context: TranslationContext = {}): void {
+  const isMissingOciOrchestrator = !context.ociOrchestratorUrl?.trim() && report.requirements.includes('OCI_ORCHESTRATOR_URL');
+  if (report.unsupported.length === 0 && !isMissingOciOrchestrator) return;
 
-  const details = report.unsupported
-    .map((issue) => `${issue.category}:${issue.name}: ${issue.message}`)
-    .join('; ');
+  const missingRequirements: string[] = [];
+  if (isMissingOciOrchestrator) {
+    missingRequirements.push('OCI_ORCHESTRATOR_URL');
+  }
+
+  const details = [
+    ...missingRequirements.map((entry) => `${entry} is required`),
+    ...report.unsupported
+      .map((issue) => `${issue.category}:${issue.name}: ${issue.message}`),
+  ].join('; ');
 
   throw new Error(`Provider translation is not supported for "${report.provider}": ${details}`);
 }

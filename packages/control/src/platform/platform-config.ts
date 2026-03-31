@@ -46,6 +46,15 @@ export type EcsDeployProviderConfig = {
     clusterArn: string;
     taskDefinitionFamily: string;
     serviceArn?: string;
+    serviceName?: string;
+    containerName?: string;
+    subnetIds?: string[];
+    securityGroupIds?: string[];
+    assignPublicIp?: boolean;
+    launchType?: string;
+    desiredCount?: number;
+    baseUrl?: string;
+    healthUrl?: string;
     ecrRepositoryUri?: string;
   };
 };
@@ -56,6 +65,11 @@ export type CloudRunDeployProviderConfig = {
     projectId: string;
     region: string;
     serviceId?: string;
+    serviceAccount?: string;
+    ingress?: string;
+    allowUnauthenticated?: boolean;
+    baseUrl?: string;
+    deleteOnRemove?: boolean;
     artifactRegistryRepo?: string;
   };
 };
@@ -75,6 +89,12 @@ export type PlatformDeployProviderConfig =
   | EcsDeployProviderConfig
   | CloudRunDeployProviderConfig
   | K8sDeployProviderConfig;
+
+export type PlatformDeployProviderRegistry = {
+  defaultName: PlatformDeployProviderConfig['name'];
+  list(): PlatformDeployProviderConfig[];
+  get(name: string): PlatformDeployProviderConfig | undefined;
+};
 
 export type PlatformConfig = {
   adminDomain: string;
@@ -115,6 +135,7 @@ export type PlatformServices = {
   routing: PlatformRoutingService;
   routingStore?: RoutingStore;
   hostnameRouting?: KvStoreBinding;
+  deploymentProviders?: PlatformDeployProviderRegistry;
   queues: PlatformQueues;
   objects: PlatformObjects;
   notifications: {

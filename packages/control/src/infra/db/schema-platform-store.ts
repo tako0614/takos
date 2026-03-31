@@ -1,6 +1,74 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils';
 
+// ── Federation tables ────────────────────────────────────────────────
+
+// 121. APFollowers — ActivityPub follower relationships (Store/Repo followers)
+export const apFollowers = sqliteTable('ap_followers', {
+  id: text('id').primaryKey(),
+  targetActorUrl: text('target_actor_url').notNull(),
+  followerActorUrl: text('follower_actor_url').notNull(),
+  ...createdAtColumn,
+}, (table) => ({
+  idxTarget: index('idx_ap_followers_target').on(table.targetActorUrl),
+  uniqFollow: uniqueIndex('idx_ap_followers_unique').on(table.targetActorUrl, table.followerActorUrl),
+}));
+
+// 118. RepoPushActivities — ForgeFed Push activities for repo outbox
+export const repoPushActivities = sqliteTable('repo_push_activities', {
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  accountId: text('account_id').notNull(),
+  ref: text('ref').notNull(),
+  beforeSha: text('before_sha'),
+  afterSha: text('after_sha').notNull(),
+  pusherActorUrl: text('pusher_actor_url'),
+  pusherName: text('pusher_name'),
+  commitCount: integer('commit_count').notNull().default(0),
+  commitsJson: text('commits_json'),
+  ...createdAtColumn,
+}, (table) => ({
+  idxRepo: index('idx_push_activities_repo').on(table.repoId),
+  idxAccount: index('idx_push_activities_account').on(table.accountId),
+  idxCreated: index('idx_push_activities_created').on(table.repoId, table.createdAt),
+}));
+
+// 119. RepoGrants — capability grants for repo access (visit/read/write/admin)
+export const repoGrants = sqliteTable('repo_grants', {
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  granteeActorUrl: text('grantee_actor_url').notNull(),
+  capability: text('capability').notNull(),
+  grantedBy: text('granted_by'),
+  expiresAt: text('expires_at'),
+  ...createdAtColumn,
+}, (table) => ({
+  idxRepo: index('idx_repo_grants_repo').on(table.repoId),
+  uniqGrant: uniqueIndex('idx_repo_grants_unique').on(table.repoId, table.granteeActorUrl, table.capability),
+}));
+
+// 120. StoreInventoryItems — explicit inventory registration + outbox activity log
+export const storeInventoryItems = sqliteTable('store_inventory_items', {
+  id: text('id').primaryKey(),
+  storeSlug: text('store_slug').notNull(),
+  accountId: text('account_id').notNull(),
+  repoActorUrl: text('repo_actor_url').notNull(),
+  repoName: text('repo_name'),
+  repoSummary: text('repo_summary'),
+  repoOwnerSlug: text('repo_owner_slug'),
+  localRepoId: text('local_repo_id'),
+  activityType: text('activity_type').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  ...createdAtColumn,
+}, (table) => ({
+  idxStore: index('idx_store_inventory_store').on(table.accountId, table.storeSlug),
+  idxActive: index('idx_store_inventory_active').on(table.accountId, table.storeSlug, table.isActive),
+  idxCreated: index('idx_store_inventory_created').on(table.accountId, table.storeSlug, table.createdAt),
+  idxLocalRepo: index('idx_store_inventory_local_repo').on(table.localRepoId),
+}));
+
+// ── Store Registry tables ────────────────────────────────────────────
+
 // 115. StoreRegistry — tracks remote ActivityPub stores known to this instance
 export const storeRegistry = sqliteTable('store_registry', {
   id: text('id').primaryKey(),

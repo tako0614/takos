@@ -2,8 +2,8 @@ import type { Env } from '../../../shared/types';
 import { getDb } from '../../../infra/db';
 import { resources } from '../../../infra/db/schema';
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
-import { CloudflareResourceService } from '../../../platform/providers/cloudflare/resources.ts';
-import { logError, logWarn } from '../../../shared/utils/logger';
+import { deleteManagedResource } from '../resources/lifecycle.ts';
+import { logError } from '../../../shared/utils/logger';
 
 export interface ResourceOrphanGcSummary {
   deleted: number;
@@ -26,11 +26,11 @@ export async function gcOrphanedResources(
   const cutoffTime = new Date(Date.now() - gracePeriodMs).toISOString();
 
   const db = getDb(env.DB);
-  const provider = new CloudflareResourceService(env);
 
   const orphaned = await db.select({
     id: resources.id,
     type: resources.type,
+    providerName: resources.providerName,
     providerResourceId: resources.providerResourceId,
     providerResourceName: resources.providerResourceName,
   }).from(resources).where(
@@ -45,8 +45,9 @@ export async function gcOrphanedResources(
 
   for (const resource of orphaned) {
     try {
-      await provider.deleteResource({
+      await deleteManagedResource(env, {
         type: resource.type,
+        providerName: resource.providerName,
         providerResourceId: resource.providerResourceId,
         providerResourceName: resource.providerResourceName,
       });

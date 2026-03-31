@@ -2,6 +2,8 @@
 
 このページは「今 repo に tracked template があり、どこまで current contract として説明できるか」をまとめます。
 
+Takos の public spec は Cloudflare-native です。runtime model は Takos runtime で、Cloudflare backend が基準 backend、local / self-host / AWS / GCP / k8s が互換 backend です。
+
 ## Support matrix
 
 | surface | status | primary config | notes |
@@ -10,8 +12,10 @@
 | Local Docker Compose | `stable` | `.env.local.example`, `compose.local.yml` | 開発・smoke 用 |
 | Local-platform manual process | `supported` | self-host env template + `dev:local:*` scripts | compose を使わない manual 起動 |
 | Helm / Kubernetes | `supported` | Helm chart | self-host packaging |
-| Generic OCI orchestrator | `experimental` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*` | provider adapter 前提 |
-| ECS / Cloud Run 直 deploy | `provider-dependent` | custom operator wiring | repo 内 docs/template は first-class ではない |
+| Generic OCI orchestrator | `experimental` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*` | provider-aware runtime。`k8s` / `cloud-run` / `ecs` は native backend、その他は fallback backend |
+| ECS / Cloud Run / k8s 直 deploy | `provider-dependent` | custom operator wiring + OCI-backed provider | repo 内 backend あり。ECS は task/service bootstrap env が必要 |
+
+Resource layer は Cloudflare-native public kind を維持し、Cloudflare backend では直接実現され、互換 backend では `provider-backed` または Takos-managed runtime に解決されます。詳細は [環境ごとの差異](/hosting/differences) を参照。
 
 ## Tracked templates
 
@@ -59,4 +63,4 @@
 | Local Compose | containerized local-platform | containerized local-platform | containerized local-platform | local-platform | local-platform | local-platform |
 | Helm / self-host | local-platform service | local-platform service | local-platform service | local-platform service | local-platform service | local-platform service |
 
-Cloudflare は provider-native、local/Helm は local-platform contract を使う、という理解で運用するとズレにくいです。
+Cloudflare は Takos runtime の基準 backend、local/Helm は互換 backend、という理解で運用するとズレにくいです。

@@ -98,7 +98,10 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
           cursor: c.req.query('cursor') || undefined,
           limit,
         });
-        return c.json({ entries: result.keys, cursor: result.cursor || null });
+        return c.json({
+          entries: result.keys,
+          cursor: 'cursor' in result ? result.cursor || null : null,
+        });
       } catch (err) {
         logError('Failed to list portable KV entries', err, { module: 'routes/resources/kv' });
         throw new InternalError('Failed to list KV entries');

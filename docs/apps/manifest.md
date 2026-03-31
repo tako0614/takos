@@ -1,6 +1,6 @@
 # .takos/app.yml
 
-`.takos/app.yml` は Takos の宣言的なアプリ定義です。現在の正面入口は `takos apply` で、manifest は Cloudflare-native の syntax を使います。`takos apply` の group は省略時に `metadata.name` を使って自動作成されます。
+`.takos/app.yml` は Takos の宣言的なアプリ定義で、group desired state を author する主要な source です。public spec は Cloudflare-native の syntax を使い、Takos runtime が Cloudflare backend または互換 backend 上で同じ spec を実現します。`takos apply` は manifest を group に反映し、group 省略時は `metadata.name` を使って自動作成します。
 
 ## 最小例
 
@@ -100,6 +100,8 @@ spec:
 - `routes`: workload への公開ルート
 - `mcpServers`: MCP 公開設定
 
+custom domain / hostname routing はこの manifest の canonical desired state には含めず、routing / observed surface として別 API で扱います。
+
 ## resources
 
 public spec で使う `type` は Cloudflare-native resource kind です。
@@ -130,7 +132,7 @@ resources:
     generate: true
 ```
 
-`class` と `backing` は public spec では使いません。Cloudflare では通常そのまま D1/R2/KV/Vectorize/Workflows/DO に解決され、他 provider では translation layer が対応可能な実装に変換します。
+`class` と `backing` は public spec では使いません。Cloudflare backend では通常そのまま D1/R2/KV/Vectorize/Workflows/DO に解決され、他 backend では Takos runtime が provider-backed または Takos-managed な実装に解決します。
 
 `workflow` は manifest でも service settings API / builtin tool でも設定できます。dynamic binding でも `workflow.service` と `workflow.export` の metadata が必要です。
 

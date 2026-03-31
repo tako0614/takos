@@ -4,6 +4,7 @@ import { getWorkloadResourceBindingDescriptors } from '../source/app-manifest-bi
 import type { EntityInfo } from '../entities/resource-ops.ts';
 import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
 import type { Env } from '../../../shared/types/env.ts';
+import { getPortableSecretValue } from '../resources/portable-runtime.ts';
 import {
   type GroupDesiredState,
   type ObservedGroupState,
@@ -74,15 +75,25 @@ function buildServiceBindings(
   });
 }
 
-function buildSecretEnv(resourceRows: Map<string, EntityInfo>): Array<{ name: string; value: string; secret: boolean }> {
+async function buildSecretEnv(resourceRows: Map<string, EntityInfo>): Promise<Array<{ name: string; value: string; secret: boolean }>> {
   const secretEnv: Array<{ name: string; value: string; secret: boolean }> = [];
   for (const resource of resourceRows.values()) {
     const resourceClass = resource.config.resourceClass
       ?? (resource.config.type === 'secret' ? 'secret' : null);
     if (resourceClass !== 'secret') continue;
+
+    const value = resource.providerName && resource.providerName !== 'cloudflare'
+      ? await getPortableSecretValue({
+          id: resource.id,
+          provider_name: resource.providerName,
+          provider_resource_id: resource.providerResourceId,
+          provider_resource_name: resource.providerResourceName,
+          config: resource.config,
+        })
+      : resource.providerResourceId ?? resource.id;
     secretEnv.push({
       name: resource.config.bindingName ?? resource.config.binding,
-      value: resource.providerResourceId ?? resource.id,
+      value,
       secret: true,
     });
   }
@@ -179,7 +190,7 @@ export async function syncGroupManagedDesiredState(
   const desiredStateService = new ServiceDesiredStateService(env);
   const resourceMap = new Map(input.resourceRows.map((resource) => [resource.name, resource]));
   const injectedEnv = buildInjectedEnv(input.desiredState, input.observedState, resourceMap);
-  const sharedSecrets = buildSecretEnv(resourceMap);
+  const sharedSecrets = await buildSecretEnv(resourceMap);
   const failures: Array<{ name: string; error: string }> = [];
 
   for (const [workloadName, desiredWorkload] of Object.entries(input.desiredState.workloads)) {

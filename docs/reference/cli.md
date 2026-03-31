@@ -2,6 +2,8 @@
 
 Takos CLI の current surface の要約です。
 
+`takos apply` / `takos plan` は `.takos/app.yml` を主要 authoring source として読み込み、group desired state に反映します。public spec は Cloudflare-native で、実行モデルは Takos runtime です。
+
 ## Top-level
 
 | command | 説明 |
@@ -28,6 +30,7 @@ takos apply --env staging
 | `--auto-approve` | 確認プロンプトを省略 |
 | `--target <key...>` | 一部だけ反映。例: `workers.web`, `resources.primary-db` |
 | `--namespace <name>` | Dispatch namespace |
+| `--provider <provider>` | `cloudflare|local|aws|gcp|k8s`。既存 group 指定時は `provider` を更新 |
 | `--group <name>` | 対象 group 名。省略時は `metadata.name` |
 | `--space <id>` | 対象 workspace ID |
 | `--account-id <id>` | Cloudflare account ID |
@@ -36,8 +39,19 @@ takos apply --env staging
 | `--base-domain <domain>` | template 解決用 base domain |
 | `--offline` | API を使わず local state で apply |
 
+## `takos plan`
+
+| option | 説明 |
+| --- | --- |
+| `--env <name>` | ターゲット環境名 |
+| `--manifest <path>` | manifest path。既定は `.takos/app.yml` |
+| `--provider <provider>` | `cloudflare|local|aws|gcp|k8s`。既存 group 指定時は `provider` を更新 |
+| `--group <name>` | 対象 group 名。省略時は `metadata.name` |
+| `--space <id>` | 対象 workspace ID |
+| `--offline` | API を使わず local state で plan |
+
 `takos plan` / `takos apply` は provider translation report を表示します。  
-未接続の provider/resource/workload/route が含まれる場合は fail-fast で終了します。
+表示は `Spec: Cloudflare-native` と `Runtime: Takos runtime` を前提にしつつ、どの backend でその spec を実現するかを示します。未接続の provider/resource/workload/route が含まれる場合は fail-fast で終了します。
 
 ## `takos resource`
 

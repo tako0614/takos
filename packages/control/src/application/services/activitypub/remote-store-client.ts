@@ -12,7 +12,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 
 export interface RemoteStoreActor {
   id: string;
-  type: string;
+  type: string | string[];
   preferredUsername: string;
   name: string;
   summary: string;
@@ -26,10 +26,12 @@ export interface RemoteStoreActor {
     owner: string;
     publicKeyPem: string;
   } | null;
-  repositories?: string;
+  /** inventory collection URL (new spec) */
+  inventory?: string;
   search?: string;
   repositorySearch?: string;
-  distributionMode?: string;
+  /** @deprecated use inventory — kept for backward compatibility with legacy remotes */
+  repositories?: string;
 }
 
 export interface RemoteRepository {
@@ -40,7 +42,15 @@ export interface RemoteRepository {
   url: string;
   published: string;
   updated: string;
-  attributedTo: string;
+  attributedTo?: string;
+  inbox?: string;
+  outbox?: string;
+  followers?: string;
+  cloneUri?: string[];
+  stores?: string;
+  defaultBranchRef?: string;
+  defaultBranchHash?: string | null;
+  /** @deprecated legacy tkg: fields — kept for backward compatibility */
   owner?: string;
   visibility?: string;
   defaultBranch?: string;
@@ -252,10 +262,16 @@ export async function fetchRemoteStoreActor(actorUrl: string): Promise<RemoteSto
   const body = await response.json() as JsonObject;
 
   const icon = body.icon as { type?: string; url?: string } | null | undefined;
+  const typeRaw = body.type;
+  const type = Array.isArray(typeRaw)
+    ? typeRaw.map((entry) => String(entry))
+    : typeof typeRaw === 'string'
+      ? typeRaw
+      : 'Service';
 
   return {
     id: String(body.id ?? actorUrl),
-    type: String(body.type ?? 'Group'),
+    type: type ?? 'Service',
     preferredUsername: String(body.preferredUsername ?? ''),
     name: String(body.name ?? ''),
     summary: String(body.summary ?? ''),
@@ -271,10 +287,12 @@ export async function fetchRemoteStoreActor(actorUrl: string): Promise<RemoteSto
           publicKeyPem: String((body.publicKey as JsonObject).publicKeyPem ?? ''),
         }
       : null,
-    repositories: extractTkgField(body, 'repositories'),
-    search: extractTkgField(body, 'search'),
-    repositorySearch: extractTkgField(body, 'repositorySearch'),
-    distributionMode: extractTkgField(body, 'distributionMode'),
+    // New spec: plain field names via JSON-LD context
+    inventory: extractField(body, 'inventory'),
+    search: extractField(body, 'search'),
+    repositorySearch: extractField(body, 'repositorySearch'),
+    // Legacy: fall back to tkg: prefixed fields for older remotes
+    repositories: extractField(body, 'inventory') || extractTkgField(body, 'repositories'),
   };
 }
 
@@ -346,15 +364,21 @@ export async function fetchRemoteOutbox(
 
 // --- Exported helpers ---
 
-export function extractTkgField(body: Record<string, unknown>, field: string): string | undefined {
-  // Try tkg:field, then plain field
-  const tkgKey = `tkg:${field}`;
-  const value = body[tkgKey] ?? body[field];
+/** Extract a plain field or a JSON-LD @id wrapper. */
+export function extractField(body: Record<string, unknown>, field: string): string | undefined {
+  const value = body[field];
   if (typeof value === 'string') return value;
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') return value[0];
   if (typeof value === 'object' && value !== null && '@id' in (value as JsonObject)) {
     return String((value as JsonObject)['@id']);
   }
   return undefined;
+}
+
+/** Extract a tkg:-prefixed field (legacy format), falling back to plain field. */
+export function extractTkgField(body: Record<string, unknown>, field: string): string | undefined {
+  const tkgKey = `tkg:${field}`;
+  return extractField(body, tkgKey) ?? extractField(body, field);
 }
 
 function parseCollection(body: Record<string, unknown>): RemoteCollection {
@@ -385,6 +409,12 @@ function parseRepositoryOrActivity(item: Record<string, unknown>): RemoteReposit
 }
 
 function parseRepositoryObject(obj: Record<string, unknown>, fallbackPublished?: string): RemoteRepository {
+  // New spec: cloneUri is an array
+  const cloneUriRaw = obj.cloneUri;
+  const cloneUri = Array.isArray(cloneUriRaw)
+    ? cloneUriRaw.filter((v): v is string => typeof v === 'string')
+    : undefined;
+
   return {
     id: String(obj.id ?? ''),
     type: obj.type as string | string[],
@@ -393,12 +423,21 @@ function parseRepositoryObject(obj: Record<string, unknown>, fallbackPublished?:
     url: String(obj.url ?? ''),
     published: String(obj.published ?? fallbackPublished ?? ''),
     updated: String(obj.updated ?? obj.published ?? ''),
-    attributedTo: String(obj.attributedTo ?? ''),
+    // New spec fields
+    attributedTo: typeof obj.attributedTo === 'string' ? obj.attributedTo : undefined,
+    inbox: typeof obj.inbox === 'string' ? obj.inbox : undefined,
+    outbox: typeof obj.outbox === 'string' ? obj.outbox : undefined,
+    followers: typeof obj.followers === 'string' ? obj.followers : undefined,
+    cloneUri: cloneUri,
+    stores: typeof obj.stores === 'string' ? obj.stores : undefined,
+    defaultBranchRef: typeof obj.defaultBranchRef === 'string' ? obj.defaultBranchRef : undefined,
+    defaultBranchHash: typeof obj.defaultBranchHash === 'string' ? obj.defaultBranchHash : undefined,
+    // Legacy tkg: fields for backward compatibility
     owner: extractTkgField(obj, 'owner'),
     visibility: extractTkgField(obj, 'visibility'),
     defaultBranch: extractTkgField(obj, 'defaultBranch'),
-    cloneUrl: extractTkgField(obj, 'cloneUrl'),
-    browseUrl: extractTkgField(obj, 'browseUrl'),
+    cloneUrl: extractTkgField(obj, 'cloneUrl') ?? cloneUri?.[0],
+    browseUrl: extractTkgField(obj, 'browseUrl') ?? (typeof obj.url === 'string' ? obj.url : undefined),
   };
 }
 

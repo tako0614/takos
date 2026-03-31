@@ -1,6 +1,7 @@
 import { parseWorkflow, validateWorkflow, type Workflow } from 'takos-actions-engine';
 import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
 import type { AppResource, AppWorker, ResourceLimits } from './app-manifest-types';
+import { toPublicResourceType } from '../resources/capabilities.ts';
 import {
   asRecord,
   asString,
@@ -16,6 +17,37 @@ type ValidatableService = {
   bindings?: AppWorker['bindings'];
   triggers?: AppWorker['triggers'];
 };
+
+const SUPPORTED_PUBLIC_RESOURCE_TYPES = [
+  'd1',
+  'r2',
+  'kv',
+  'secretRef',
+  'vectorize',
+  'queue',
+  'analyticsEngine',
+  'workflow',
+  'durableObject',
+];
+
+function resolveCanonicalResourceType(type: string): AppResource['type'] | null {
+  const publicType = toPublicResourceType(type);
+  if (!publicType) return null;
+  if (!SUPPORTED_PUBLIC_RESOURCE_TYPES.includes(publicType)) {
+    return null;
+  }
+  return publicType as AppResource['type'];
+}
+
+function getResourceSection(resource: Record<string, unknown>, names: readonly string[]): Record<string, unknown> {
+  for (const name of names) {
+    const section = resource[name];
+    if (section && typeof section === 'object') {
+      return asRecord(section);
+    }
+  }
+  return {};
+}
 
 export function parseAndValidateWorkflowYaml(raw: string, workflowPath: string): Workflow {
   const { workflow, diagnostics } = parseWorkflow(raw);
@@ -57,12 +89,13 @@ export function parseResources(
   const resources: Record<string, AppResource> = {};
   for (const [resourceName, resourceValue] of Object.entries(resourcesRecord)) {
     const resource = asRecord(resourceValue);
-    const type = asRequiredString(resource.type, `spec.resources.${resourceName}.type`);
-    if (!['d1', 'r2', 'kv', 'secretRef', 'vectorize', 'queue', 'analyticsEngine', 'workflow', 'durableObject'].includes(type)) {
-      throw new Error(`spec.resources.${resourceName}.type must be d1/r2/kv/secretRef/vectorize/queue/analyticsEngine/workflow/durableObject`);
+    const rawType = asRequiredString(resource.type, `spec.resources.${resourceName}.type`);
+    const type = resolveCanonicalResourceType(rawType);
+    if (!type) {
+      throw new Error(`spec.resources.${resourceName}.type must be d1/r2/kv/secretRef/vectorize/queue/analyticsEngine/workflow/durableObject (or aliases: secret_ref, analytics_engine, workflow_binding, durable_object_namespace, sql, object_store, vector_index, analytics_store, workflow_runtime, durable_namespace, secret)`);
     }
     resources[resourceName] = {
-      type: type as AppResource['type'],
+      type,
       ...((() => { const v = asString(resource.binding, `spec.resources.${resourceName}.binding`); return v ? { binding: v } : {}; })()),
       ...(resource.generate === true ? { generate: true } : {}),
       ...(resource.migrations
@@ -107,8 +140,8 @@ export function parseResources(
       ...(type === 'analyticsEngine'
         ? {
             analyticsEngine: {
-              ...(asString(asRecord(resource.analyticsEngine).dataset, `spec.resources.${resourceName}.analyticsEngine.dataset`)
-                ? { dataset: asString(asRecord(resource.analyticsEngine).dataset, `spec.resources.${resourceName}.analyticsEngine.dataset`) }
+              ...(asString(getResourceSection(resource, ['analyticsEngine', 'analyticsStore']).dataset, `spec.resources.${resourceName}.analyticsEngine.dataset`)
+                ? { dataset: asString(getResourceSection(resource, ['analyticsEngine', 'analyticsStore']).dataset, `spec.resources.${resourceName}.analyticsEngine.dataset`) }
                 : {}),
             },
           }
@@ -116,13 +149,13 @@ export function parseResources(
       ...(type === 'workflow'
         ? {
             workflow: {
-              service: asRequiredString(asRecord(resource.workflow).service, `spec.resources.${resourceName}.workflow.service`),
-              export: asRequiredString(asRecord(resource.workflow).export, `spec.resources.${resourceName}.workflow.export`),
-              ...(asOptionalInteger(asRecord(resource.workflow).timeoutMs, `spec.resources.${resourceName}.workflow.timeoutMs`, { min: 1 }) != null
-                ? { timeoutMs: asOptionalInteger(asRecord(resource.workflow).timeoutMs, `spec.resources.${resourceName}.workflow.timeoutMs`, { min: 1 }) }
+              service: asRequiredString(getResourceSection(resource, ['workflow', 'workflowRuntime']).service, `spec.resources.${resourceName}.workflow.service`),
+              export: asRequiredString(getResourceSection(resource, ['workflow', 'workflowRuntime']).export, `spec.resources.${resourceName}.workflow.export`),
+              ...(asOptionalInteger(getResourceSection(resource, ['workflow', 'workflowRuntime']).timeoutMs, `spec.resources.${resourceName}.workflow.timeoutMs`, { min: 1 }) != null
+                ? { timeoutMs: asOptionalInteger(getResourceSection(resource, ['workflow', 'workflowRuntime']).timeoutMs, `spec.resources.${resourceName}.workflow.timeoutMs`, { min: 1 }) }
                 : {}),
-              ...(asOptionalInteger(asRecord(resource.workflow).maxRetries, `spec.resources.${resourceName}.workflow.maxRetries`, { min: 0 }) != null
-                ? { maxRetries: asOptionalInteger(asRecord(resource.workflow).maxRetries, `spec.resources.${resourceName}.workflow.maxRetries`, { min: 0 }) }
+              ...(asOptionalInteger(getResourceSection(resource, ['workflow', 'workflowRuntime']).maxRetries, `spec.resources.${resourceName}.workflow.maxRetries`, { min: 0 }) != null
+                ? { maxRetries: asOptionalInteger(getResourceSection(resource, ['workflow', 'workflowRuntime']).maxRetries, `spec.resources.${resourceName}.workflow.maxRetries`, { min: 0 }) }
                 : {}),
             },
           }
@@ -130,9 +163,9 @@ export function parseResources(
       ...(type === 'durableObject'
         ? {
             durableObject: {
-              className: asRequiredString(asRecord(resource.durableObject).className, `spec.resources.${resourceName}.durableObject.className`),
-              ...(asString(asRecord(resource.durableObject).scriptName, `spec.resources.${resourceName}.durableObject.scriptName`)
-                ? { scriptName: asString(asRecord(resource.durableObject).scriptName, `spec.resources.${resourceName}.durableObject.scriptName`) }
+              className: asRequiredString(getResourceSection(resource, ['durableObject', 'durableNamespace']).className, `spec.resources.${resourceName}.durableObject.className`),
+              ...(asString(getResourceSection(resource, ['durableObject', 'durableNamespace']).scriptName, `spec.resources.${resourceName}.durableObject.scriptName`)
+                ? { scriptName: asString(getResourceSection(resource, ['durableObject', 'durableNamespace']).scriptName, `spec.resources.${resourceName}.durableObject.scriptName`) }
                 : {}),
             },
           }

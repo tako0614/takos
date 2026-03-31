@@ -1,8 +1,11 @@
 /**
  * Container entity operations for the control plane.
  *
- * Manages Cloudflare Containers (or external container services)
- * and records state in the canonical services table.
+ * Manages container-workload records in the canonical services table.
+ *
+ * The actual deployment-provider selection lives in the deployment pipeline;
+ * this wrapper only persists lifecycle intent and optional OCI-orchestrator
+ * side effects when configured.
  *
  * Runs inside Cloudflare Workers -- delegates to CF API or external
  * OCI orchestrator URL for container lifecycle management.
@@ -47,18 +50,15 @@ interface ContainerConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Container deployment via OCI orchestrator (or CF Containers API)
+// Container lifecycle wrapper backed by the optional OCI orchestrator.
 // ---------------------------------------------------------------------------
 
 /**
  * Deploy a container via the OCI orchestrator endpoint.
  *
- * The OCI orchestrator is an external service that handles container
- * image builds and deployments. When env.OCI_ORCHESTRATOR_URL is set,
- * we POST the container spec to it. Otherwise this is a no-op stub.
- *
- * TODO: Implement CF Containers API when it becomes generally available.
- * TODO: Add AWS ECS / GCP Cloud Run providers.
+ * The OCI orchestrator is an optional external service for container
+ * lifecycle handling. When env.OCI_ORCHESTRATOR_URL is set, we POST the
+ * container spec to it. Otherwise this is a no-op stub.
  */
 async function deployContainerImage(
   env: Env,

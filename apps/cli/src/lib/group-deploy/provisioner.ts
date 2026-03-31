@@ -15,6 +15,25 @@ import { GCPProvider } from './providers/gcp.js';
 import { K8sProvider } from './providers/kubernetes.js';
 import { DockerProvider } from './providers/docker.js';
 
+const RESOURCE_TYPE_ALIAS: Record<string, string> = {
+  secret_ref: 'secretRef',
+  analytics_engine: 'analyticsEngine',
+  workflow_binding: 'workflow',
+  durable_object_namespace: 'durableObject',
+  secret: 'secretRef',
+  sql: 'd1',
+  object_store: 'r2',
+  vector_index: 'vectorize',
+  analytics_store: 'analyticsEngine',
+  workflow_runtime: 'workflow',
+  durable_namespace: 'durableObject',
+  vector_store: 'vectorize',
+};
+
+function canonicalizeResourceType(type: string): string {
+  return RESOURCE_TYPE_ALIAS[type] ?? type;
+}
+
 // ── Provider resolution ──────────────────────────────────────────────────────
 
 /**
@@ -68,19 +87,20 @@ export async function provisionResources(
 
   for (const [name, resource] of Object.entries(resources)) {
     validateResourceName(name);
+    const resourceType = canonicalizeResourceType(resource.type);
     const binding = resource.binding || toBinding(name);
 
     if (options.dryRun) {
       const dryId = `(dry-run) ${name}`;
-      provisioned.set(name, { name, type: resource.type, id: dryId, binding });
-      results.push({ name, type: resource.type, status: 'provisioned', id: dryId });
+      provisioned.set(name, { name, type: resourceType, id: dryId, binding });
+      results.push({ name, type: resourceType, status: 'provisioned', id: dryId });
       continue;
     }
 
     try {
       let result;
 
-      switch (resource.type) {
+      switch (resourceType) {
         case 'd1': {
           result = await provider.createDatabase(name);
           break;
@@ -110,19 +130,19 @@ export async function provisionResources(
         case 'analyticsEngine':
         case 'durableObject':
         case 'workflow': {
-          result = provider.skipAutoConfigured(name, resource.type);
+          result = provider.skipAutoConfigured(name, resourceType);
           break;
         }
         default: {
-          results.push({ name, type: resource.type, status: 'failed', error: `Unsupported resource type: ${resource.type}` });
+          results.push({ name, type: resourceType, status: 'failed', error: `Unsupported resource type: ${resourceType}` });
           continue;
         }
       }
 
-      provisioned.set(name, { name: result.name, type: resource.type, id: result.id || name, binding });
-      results.push({ name, type: resource.type, status: result.status, id: result.id, error: result.error });
+      provisioned.set(name, { name: result.name, type: resourceType, id: result.id || name, binding });
+      results.push({ name, type: resourceType, status: result.status, id: result.id, error: result.error });
     } catch (error) {
-      results.push({ name, type: resource.type, status: 'failed', error: error instanceof Error ? error.message : String(error) });
+      results.push({ name, type: resourceType, status: 'failed', error: error instanceof Error ? error.message : String(error) });
     }
   }
 

@@ -48,6 +48,9 @@ export async function executeEntry(
       if (action === 'create' || action === 'update') {
         const container = containers?.[name];
         if (!container) break;
+        if (!container.dockerfile) {
+          throw new Error(`spec.containers.${name}.dockerfile is required for offline apply`);
+        }
         await deployContainer(name, {
           dockerfile: container.dockerfile,
           port: container.port ?? DEFAULT_CONTAINER_PORT,
@@ -64,6 +67,9 @@ export async function executeEntry(
       if (action === 'create' || action === 'update') {
         const service = services?.[name];
         if (!service) break;
+        if (!service.dockerfile) {
+          throw new Error(`spec.services.${name}.dockerfile is required for offline apply`);
+        }
         await deployService(name, {
           dockerfile: service.dockerfile,
           port: service.port ?? DEFAULT_CONTAINER_PORT,

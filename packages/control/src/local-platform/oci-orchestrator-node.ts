@@ -1,5 +1,8 @@
 import type { ContainerBackend } from './container-backend.ts';
-import { startLocalOciOrchestratorServer } from './oci-orchestrator.ts';
+import {
+  createDefaultOciOrchestratorBackendResolver,
+  startLocalOciOrchestratorServer,
+} from './oci-orchestrator.ts';
 
 async function resolveBackend(): Promise<ContainerBackend> {
   const backendEnv = (process.env.OCI_BACKEND ?? 'docker').trim().toLowerCase();
@@ -19,5 +22,9 @@ async function resolveBackend(): Promise<ContainerBackend> {
   }
 }
 
-const backend = await resolveBackend();
-await startLocalOciOrchestratorServer({ backend });
+const fallbackBackend = await resolveBackend();
+await startLocalOciOrchestratorServer({
+  backendResolver: createDefaultOciOrchestratorBackendResolver({
+    fallbackBackend,
+  }),
+});

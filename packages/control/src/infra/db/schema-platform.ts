@@ -38,6 +38,10 @@ export {
 } from './schema-platform-resources';
 
 export {
+  apFollowers,
+  repoPushActivities,
+  repoGrants,
+  storeInventoryItems,
   storeRegistry,
   storeRegistryUpdates,
 } from './schema-platform-store';

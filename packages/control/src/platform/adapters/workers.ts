@@ -12,6 +12,10 @@ import {
 } from './shared.ts';
 import type { PlatformEnvRecord } from './shared.ts';
 import type { ControlPlatform, PlatformServiceBinding } from '../platform-config.ts';
+import {
+  createDeploymentProviderRegistry,
+  resolveDeploymentProviderConfigsFromEnv,
+} from '../deployment-providers.ts';
 import { resolveHostnameRouting } from '../../application/services/routing/service.ts';
 
 function buildWorkersPlatform<TBindings extends object>(env: TBindings & PlatformEnvRecord): ControlPlatform<TBindings> {
@@ -92,6 +96,9 @@ function buildWorkersPlatform<TBindings extends object>(env: TBindings & Platfor
     },
     documents,
     serviceRegistry: getServiceRegistry(env),
+    deploymentProviders: createDeploymentProviderRegistry(
+      resolveDeploymentProviderConfigsFromEnv(env),
+    ),
   });
 
   return buildPlatform('workers', env, config, services);

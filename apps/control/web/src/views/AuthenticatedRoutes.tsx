@@ -10,6 +10,7 @@ import { SettingsView } from './app/SettingsView';
 import { DeployPanel } from './app/space/DeployPanel';
 import { SpaceSettingsPage } from './hub/SpaceSettingsPage';
 import { SourcePage } from './source/SourcePage';
+import { StoreManagementPage } from './store/StoreManagementPage';
 import { ReposPanel } from './repos/ReposPanel';
 import { ChatPage } from './chat/ChatPage';
 import { AppsPage } from './apps/AppsPage';
@@ -87,18 +88,32 @@ export function AuthenticatedRoutes() {
     />
   );
 
-  const renderStoreView = () => (
-    <AuthenticatedLayout>
-      <ErrorBoundary>
-        <SourcePage
-          spaces={spaces}
-          onNavigateToRepo={(username, repoName) => navigate({ view: 'repo', username, repoName })}
-          isAuthenticated
-          onRequireLogin={handleLogin}
-        />
-      </ErrorBoundary>
-    </AuthenticatedLayout>
-  );
+  const renderStoreView = () => {
+    if (route.storeTab === 'installed') {
+      const storeSpaceId = routeSpaceId ?? preferredSpaceId;
+      if (!storeSpaceId) return <LoadingScreen />;
+      return (
+        <AuthenticatedLayout>
+          <ErrorBoundary>
+            <StoreManagementPage spaceId={storeSpaceId} />
+          </ErrorBoundary>
+        </AuthenticatedLayout>
+      );
+    }
+
+    return (
+      <AuthenticatedLayout>
+        <ErrorBoundary>
+          <SourcePage
+            spaces={spaces}
+            onNavigateToRepo={(username, repoName) => navigate({ view: 'repo', username, repoName })}
+            isAuthenticated
+            onRequireLogin={handleLogin}
+          />
+        </ErrorBoundary>
+      </AuthenticatedLayout>
+    );
+  };
 
   const renderReposView = () => {
     if (waitingForSpaceResolution) return <LoadingScreen />;

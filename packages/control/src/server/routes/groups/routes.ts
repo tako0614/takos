@@ -12,6 +12,37 @@ import type { AppManifest } from '../../../application/services/source/app-manif
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 type GroupRow = typeof groups.$inferSelect;
+type GroupProviderName = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'k8s';
+const GROUP_PROVIDER_VALUES = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
+
+function parseGroupProvider(raw: unknown): GroupProviderName | null {
+  if (raw === undefined) return null;
+  if (raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw new BadRequestError(`Invalid provider: ${String(raw)}`);
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) {
+    throw new BadRequestError('provider must be a non-empty string');
+  }
+  if (!GROUP_PROVIDER_VALUES.includes(normalized as GroupProviderName)) {
+    throw new BadRequestError(`Invalid provider: ${raw}`);
+  }
+  return normalized as GroupProviderName;
+}
+
+function parseGroupEnv(raw: unknown): string | null {
+  if (raw === undefined) return null;
+  if (raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw new BadRequestError(`Invalid env: ${String(raw)}`);
+  }
+  const normalized = raw.trim();
+  if (!normalized) {
+    throw new BadRequestError('env must be a non-empty string');
+  }
+  return normalized;
+}
 
 // ---------------------------------------------------------------------------
 // Param helpers
@@ -99,12 +130,55 @@ async function findGroupByName(
     .get() as Promise<GroupRow | null>;
 }
 
+async function findGroupById(
+  env: Env,
+  groupId: string,
+): Promise<GroupRow | null> {
+  const db = getDb(env.DB);
+  return db.select()
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .get() as Promise<GroupRow | null>;
+}
+
+async function updateGroupMetadata(
+  env: Env,
+  groupId: string,
+  updates: {
+    provider?: GroupProviderName | null;
+    envName?: string | null;
+  },
+): Promise<GroupRow> {
+  const db = getDb(env.DB);
+  const now = new Date().toISOString();
+  const row: {
+    updatedAt: string;
+    provider?: string | null;
+    env?: string | null;
+  } = {
+    updatedAt: now,
+  };
+  if (Object.prototype.hasOwnProperty.call(updates, 'provider')) {
+    row.provider = updates.provider ?? null;
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'envName')) {
+    row.env = updates.envName ?? null;
+  }
+
+  await db.update(groups).set(row).where(eq(groups.id, groupId)).run();
+  const updated = await findGroupById(env, groupId);
+  if (!updated) {
+    throw new BadRequestError(`Group "${groupId}" not found`);
+  }
+  return updated;
+}
+
 async function createGroupByName(
   env: Env,
   input: {
     spaceId: string;
     groupName: string;
-    provider?: string | null;
+    provider?: GroupProviderName | null;
     envName?: string | null;
     appVersion?: string | null;
     manifest?: unknown;
@@ -136,7 +210,7 @@ async function ensureGroupByName(
   input: {
     spaceId: string;
     groupName: string;
-    provider?: string | null;
+    provider?: GroupProviderName | null;
     envName?: string | null;
     appVersion?: string | null;
     manifest?: unknown;
@@ -164,6 +238,8 @@ async function createGroupHandler(c: GroupsContext) {
   const { space } = c.get('access');
   const db = getDb(c.env.DB);
   const body = await c.req.json();
+  const provider = body.provider === undefined ? null : parseGroupProvider(body.provider);
+  const envName = body.env === undefined ? null : parseGroupEnv(body.env);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await db.insert(groups).values({
@@ -171,8 +247,8 @@ async function createGroupHandler(c: GroupsContext) {
     spaceId: space.id,
     name: body.name,
     appVersion: body.appVersion ?? null,
-    provider: body.provider ?? null,
-    env: body.env ?? null,
+    provider,
+    env: envName,
     desiredSpecJson: body.desiredSpecJson ? JSON.stringify(body.desiredSpecJson) : null,
     providerStateJson: '{}',
     reconcileStatus: 'idle',
@@ -212,11 +288,13 @@ async function patchGroupMetadataHandler(c: GroupsContext) {
 
   const db = getDb(c.env.DB);
   const now = new Date().toISOString();
+  const provider = body.provider === undefined ? undefined : parseGroupProvider(body.provider);
+  const envName = body.env === undefined ? undefined : parseGroupEnv(body.env);
   await db.update(groups)
     .set({
       name: nextName,
-      provider: typeof body.provider === 'string' ? body.provider : group.provider,
-      env: typeof body.env === 'string' ? body.env : group.env,
+      provider: body.provider === undefined ? group.provider : provider,
+      env: body.env === undefined ? group.env : envName,
       appVersion: typeof body.appVersion === 'string' ? body.appVersion : group.appVersion,
       updatedAt: now,
     })
@@ -327,21 +405,34 @@ async function listGroupDeploymentsHandler(c: GroupsContext) {
 // ---------------------------------------------------------------------------
 
 async function planGroupHandler(c: GroupsContext) {
-  const group = await requireGroupInSpace(c);
+  let group = await requireGroupInSpace(c);
   const body = await c.req.json();
+  const providerName = body.provider === undefined ? undefined : parseGroupProvider(body.provider);
+  const groupEnv = body.env === undefined ? undefined : parseGroupEnv(body.env);
+
+  if (body.provider !== undefined || body.env !== undefined) {
+    group = await updateGroupMetadata(c.env, group.id, {
+      provider: body.provider === undefined ? undefined : providerName,
+      envName: body.env === undefined ? undefined : groupEnv,
+    });
+  }
 
   let manifest = body.manifest;
   if (typeof manifest === 'string') {
     manifest = parseAppManifestYaml(manifest);
   }
 
-  const result = await planManifest(c.env, group.id, manifest);
+  const result = await planManifest(c.env, group.id, manifest, {
+    envName: body.env === undefined ? undefined : groupEnv ?? undefined,
+  });
   return c.json(result);
 }
 
 async function planGroupByNameHandler(c: GroupsContext) {
   const { space } = c.get('access');
   const body = await c.req.json();
+  const providerName = parseGroupProvider(body.provider);
+  const groupEnv = parseGroupEnv(body.env);
 
   let manifest = body.manifest;
   if (typeof manifest === 'string') {
@@ -355,29 +446,47 @@ async function planGroupByNameHandler(c: GroupsContext) {
     throw new BadRequestError('group_name is required');
   }
 
-  const existing = await findGroupByName(c.env, space.id, groupName);
-  if (!existing && !manifest) {
+  let group = await findGroupByName(c.env, space.id, groupName);
+  if (!group && !manifest) {
     throw new BadRequestError(`Group "${groupName}" does not exist and no manifest was provided`);
   }
-  const group = existing ?? await createGroupByName(c.env, {
+  if (group && (body.provider !== undefined || body.env !== undefined)) {
+    group = await updateGroupMetadata(c.env, group.id, {
+      provider: body.provider === undefined ? undefined : providerName,
+      envName: body.env === undefined ? undefined : groupEnv,
+    });
+  }
+
+  const finalGroup = group ?? await createGroupByName(c.env, {
     spaceId: space.id,
     groupName,
-    provider: typeof body.provider === 'string' ? body.provider : null,
-    envName: typeof body.env === 'string' ? body.env : null,
+    provider: body.provider === undefined ? undefined : providerName,
+    envName: body.env === undefined ? undefined : groupEnv,
     appVersion: typeof manifest?.spec?.version === 'string' ? manifest.spec.version : null,
     manifest,
   });
 
-  const result = await planManifest(c.env, group.id, manifest);
+  const result = await planManifest(c.env, finalGroup.id, manifest, {
+    envName: body.env === undefined ? undefined : groupEnv ?? undefined,
+  });
   return c.json({
-    group: { id: group.id, name: group.name },
+    group: { id: finalGroup.id, name: finalGroup.name },
     ...result,
   });
 }
 
 async function applyGroupHandler(c: GroupsContext) {
-  const group = await requireGroupInSpace(c);
+  let group = await requireGroupInSpace(c);
   const body = await c.req.json();
+  const providerName = body.provider === undefined ? undefined : parseGroupProvider(body.provider);
+  const groupEnv = body.env === undefined ? undefined : parseGroupEnv(body.env);
+
+  if (body.provider !== undefined || body.env !== undefined) {
+    group = await updateGroupMetadata(c.env, group.id, {
+      provider: body.provider === undefined ? undefined : providerName,
+      envName: body.env === undefined ? undefined : groupEnv,
+    });
+  }
 
   let manifest = body.manifest;
   if (typeof manifest === 'string') {
@@ -387,6 +496,7 @@ async function applyGroupHandler(c: GroupsContext) {
   const result = await applyManifest(c.env, group.id, manifest, {
     artifacts: body.artifacts,
     target: body.target,
+    envName: body.env === undefined ? undefined : groupEnv ?? undefined,
   });
   return c.json(result);
 }
@@ -394,6 +504,8 @@ async function applyGroupHandler(c: GroupsContext) {
 async function applyGroupByNameHandler(c: GroupsContext) {
   const { space } = c.get('access');
   const body = await c.req.json();
+  const providerName = parseGroupProvider(body.provider);
+  const groupEnv = parseGroupEnv(body.env);
 
   let manifest = body.manifest;
   if (typeof manifest === 'string') {
@@ -407,28 +519,35 @@ async function applyGroupByNameHandler(c: GroupsContext) {
     throw new BadRequestError('group_name is required');
   }
 
-  const existing = await findGroupByName(c.env, space.id, groupName);
-  if (!existing && !manifest) {
+  let group = await findGroupByName(c.env, space.id, groupName);
+  if (!group && !manifest) {
     throw new BadRequestError(`Group "${groupName}" does not exist and no manifest was provided`);
   }
-  const group = existing ?? await createGroupByName(c.env, {
+  if (group && (body.provider !== undefined || body.env !== undefined)) {
+    group = await updateGroupMetadata(c.env, group.id, {
+      provider: body.provider === undefined ? undefined : providerName,
+      envName: body.env === undefined ? undefined : groupEnv,
+    });
+  }
+
+  const finalGroup = group ?? await createGroupByName(c.env, {
     spaceId: space.id,
     groupName,
-    provider: typeof body.provider === 'string' ? body.provider : null,
-    envName: typeof body.env === 'string' ? body.env : null,
+    provider: body.provider === undefined ? undefined : providerName,
+    envName: body.env === undefined ? undefined : groupEnv,
     appVersion: typeof manifest?.spec?.version === 'string' ? manifest.spec.version : null,
     manifest,
   });
 
-  const result = await applyManifest(c.env, group.id, manifest, {
+  const result = await applyManifest(c.env, finalGroup.id, manifest, {
     artifacts: body.artifacts,
     target: body.target,
-    groupName: group.name,
-    envName: group.env ?? undefined,
+    groupName: finalGroup.name,
+    envName: body.env === undefined ? undefined : groupEnv ?? undefined,
   });
 
   return c.json({
-    group: { id: group.id, name: group.name },
+    group: { id: finalGroup.id, name: finalGroup.name },
     ...result,
   });
 }

@@ -15,6 +15,7 @@ import { logWarn } from '../../../shared/utils/logger';
 import { NotFoundError } from 'takos-common/errors';
 import { MAX_BUNDLE_SIZE_BYTES } from '../../../shared/config/limits';
 import { upsertGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
+import type { AppService } from '../../../application/services/source/app-manifest-types.ts';
 
 type ApiDeploymentEvent = {
   id: string;
@@ -173,16 +174,29 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     } else {
       const target = body.target ?? {};
       const artifact = target.artifact;
-      await upsertGroupDesiredWorkload(c.env, {
-        groupId: worker.group_id,
-        category: 'service',
-        name: worker.slug ?? worker.id,
-        workload: {
-          ...(typeof artifact?.exposed_port === 'number' ? { port: artifact.exposed_port } : {}),
-          ...(artifact?.health_path ? { healthCheck: { type: 'http', path: artifact.health_path } } : {}),
-          ...(artifact?.image_ref ? { artifact: { kind: 'image', imageRef: artifact.image_ref, ...(body.provider?.name && body.provider.name !== 'runtime-host' && body.provider.name !== 'workers-dispatch' ? { provider: body.provider.name } : {}) } } : {}),
-        },
-      });
+      if (typeof artifact?.exposed_port === 'number') {
+        const workload: AppService = {
+          port: artifact.exposed_port,
+          ...(artifact.health_path ? { healthCheck: { type: 'http', path: artifact.health_path } } : {}),
+          ...(artifact.image_ref
+            ? {
+                artifact: {
+                  kind: 'image',
+                  imageRef: artifact.image_ref,
+                  ...(body.provider?.name && body.provider.name !== 'runtime-host' && body.provider.name !== 'workers-dispatch'
+                    ? { provider: body.provider.name }
+                    : {}),
+                },
+              }
+            : {}),
+        };
+        await upsertGroupDesiredWorkload(c.env, {
+          groupId: worker.group_id,
+          category: 'service',
+          name: worker.slug ?? worker.id,
+          workload,
+        });
+      }
     }
   }
 

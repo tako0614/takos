@@ -13,6 +13,10 @@ import {
   parseDeploymentTargetConfig,
 } from './provider';
 import {
+  createDeploymentProviderRegistry,
+  resolveDeploymentProviderConfigsFromEnv,
+} from '../../../platform/deployment-providers.ts';
+import {
   getDeploymentById,
   getDeploymentEvents,
   getDeploymentServiceId,
@@ -97,10 +101,14 @@ export async function executeDeploymentPipeline(
     });
 
     const deployArtifactRef = deploymentArtifactRef;
+    const providerRegistry = createDeploymentProviderRegistry(
+      resolveDeploymentProviderConfigsFromEnv(env as unknown as Record<string, unknown>),
+    );
     const provider = createDeploymentProvider(deployment, {
       cloudflareEnv: env,
       orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
+      providerRegistry,
     });
 
     if (!deployArtifactRef) {
@@ -334,6 +342,9 @@ export async function executeDeploymentPipeline(
         cloudflareEnv: env,
         orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
         orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
+        providerRegistry: createDeploymentProviderRegistry(
+          resolveDeploymentProviderConfigsFromEnv(env as unknown as Record<string, unknown>),
+        ),
       }),
     });
 

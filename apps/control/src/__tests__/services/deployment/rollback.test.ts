@@ -10,7 +10,7 @@ vi.mock('@/services/deployment/store', () => ({
   logDeploymentEvent: mocks.logDeploymentEvent,
 }));
 
-vi.mock('@/services/routing', () => ({
+vi.mock('@/services/routing/service', () => ({
   deleteHostnameRouting: mocks.deleteHostnameRouting,
 }));
 

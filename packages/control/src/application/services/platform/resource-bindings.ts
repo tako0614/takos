@@ -106,8 +106,18 @@ function parseBindingConfig(config: string): Record<string, unknown> {
   return safeJsonParseOrDefault<Record<string, unknown>>(config, {});
 }
 
+function sanitizePortableName(name: string): string {
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitized || 'resource';
+}
+
+function derivePortableQueueSubscriptionName(name: string): string {
+  return `${sanitizePortableName(name)}-subscription`;
+}
+
 export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
   const config = parseBindingConfig(row.config);
+  const resourceConfig = parseBindingConfig(row.resourceConfig);
 
   switch (row.bindingType) {
     case 'd1':
@@ -137,6 +147,28 @@ export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
         type: 'queue',
         name: row.bindingName,
         queue_name: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
+        ...(row.resourceProviderName === 'aws'
+          ? {
+              queue_backend: 'sqs' as const,
+              queue_url: row.resourceProviderResourceId || undefined,
+              provider_name: 'aws' as const,
+            }
+          : {}),
+        ...(row.resourceProviderName === 'gcp'
+          ? {
+              queue_backend: 'pubsub' as const,
+              subscription_name: typeof resourceConfig.subscriptionName === 'string'
+                ? resourceConfig.subscriptionName
+                : derivePortableQueueSubscriptionName(row.resourceProviderResourceName || row.resourceId),
+              provider_name: 'gcp' as const,
+            }
+          : {}),
+        ...(row.resourceProviderName === 'k8s'
+          ? {
+              queue_backend: 'redis' as const,
+              provider_name: 'k8s' as const,
+            }
+          : {}),
       };
     case 'analytics_engine':
       if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;

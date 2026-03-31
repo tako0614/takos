@@ -195,7 +195,28 @@ export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: 
 // ---------------------------------------------------------------------------
 
 export async function ensureSqliteServicesTableShape(client: Client): Promise<void> {
-  if (!(await sqliteTableExists(client, 'services'))) return;
+  if (!(await sqliteTableExists(client, 'services'))) {
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS "services" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "account_id" TEXT NOT NULL,
+        "group_id" TEXT,
+        "service_type" TEXT NOT NULL DEFAULT 'app',
+        "name_type" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "config" TEXT,
+        "hostname" TEXT,
+        "route_ref" TEXT,
+        "slug" TEXT,
+        "active_deployment_id" TEXT,
+        "fallback_deployment_id" TEXT,
+        "current_version" INTEGER NOT NULL DEFAULT 0,
+        "workload_kind" TEXT,
+        "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   const columns = await getSqliteTableColumns(client, 'services');
   const alterStatements: string[] = [];
@@ -235,7 +256,31 @@ export async function ensureSqliteServicesTableShape(client: Client): Promise<vo
 }
 
 export async function ensureSqliteAccountsTableShape(client: Client): Promise<void> {
-  if (!(await sqliteTableExists(client, 'accounts'))) return;
+  if (!(await sqliteTableExists(client, 'accounts'))) {
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS "accounts" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "type" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'active',
+        "name" TEXT NOT NULL,
+        "slug" TEXT NOT NULL UNIQUE,
+        "description" TEXT,
+        "picture" TEXT,
+        "bio" TEXT,
+        "email" TEXT,
+        "trust_tier" TEXT NOT NULL DEFAULT 'new',
+        "setup_completed" INTEGER NOT NULL DEFAULT 0,
+        "default_repository_id" TEXT,
+        "head_snapshot_id" TEXT,
+        "ai_model" TEXT DEFAULT 'gpt-5.4-nano',
+        "ai_provider" TEXT DEFAULT 'openai',
+        "security_posture" TEXT NOT NULL DEFAULT 'standard',
+        "owner_account_id" TEXT,
+        "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   const columns = await getSqliteTableColumns(client, 'accounts');
   const alterStatements: string[] = [];
@@ -250,6 +295,64 @@ export async function ensureSqliteAccountsTableShape(client: Client): Promise<vo
   for (const statement of alterStatements) {
     await client.execute(statement);
   }
+
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`);
+}
+
+export async function ensureSqliteDeploymentsTableShape(client: Client): Promise<void> {
+  if (!(await sqliteTableExists(client, 'deployments'))) {
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS "deployments" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "service_id" TEXT NOT NULL,
+        "account_id" TEXT NOT NULL,
+        "version" INTEGER NOT NULL,
+        "artifact_ref" TEXT,
+        "bundle_r2_key" TEXT,
+        "bundle_hash" TEXT,
+        "bundle_size" INTEGER,
+        "wasm_r2_key" TEXT,
+        "wasm_hash" TEXT,
+        "assets_manifest" TEXT,
+        "runtime_config_snapshot_json" TEXT NOT NULL DEFAULT '{}',
+        "bindings_snapshot_encrypted" TEXT,
+        "env_vars_snapshot_encrypted" TEXT,
+        "deploy_state" TEXT NOT NULL DEFAULT 'pending',
+        "current_step" TEXT,
+        "step_error" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "routing_status" TEXT NOT NULL DEFAULT 'archived',
+        "routing_weight" INTEGER NOT NULL DEFAULT 0,
+        "deployed_by" TEXT,
+        "deploy_message" TEXT,
+        "provider_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
+        "target_json" TEXT NOT NULL DEFAULT '{}',
+        "provider_state_json" TEXT NOT NULL DEFAULT '{}',
+        "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
+        "idempotency_key" TEXT UNIQUE,
+        "is_rollback" INTEGER NOT NULL DEFAULT 0,
+        "rollback_from_version" INTEGER,
+        "rolled_back_at" TEXT,
+        "rolled_back_by" TEXT,
+        "started_at" TEXT,
+        "completed_at" TEXT,
+        "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`);
+  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`);
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +383,28 @@ async function getPostgresTableColumns(pool: Pool, tableName: string): Promise<S
 }
 
 export async function ensurePostgresServicesTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'services'))) return;
+  if (!(await postgresTableExists(pool, 'services'))) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "services" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "account_id" TEXT NOT NULL,
+        "group_id" TEXT,
+        "service_type" TEXT NOT NULL DEFAULT 'app',
+        "name_type" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "config" TEXT,
+        "hostname" TEXT,
+        "route_ref" TEXT,
+        "slug" TEXT,
+        "active_deployment_id" TEXT,
+        "fallback_deployment_id" TEXT,
+        "current_version" INTEGER NOT NULL DEFAULT 0,
+        "workload_kind" TEXT,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   const columns = await getPostgresTableColumns(pool, 'services');
   const alterStatements: string[] = [];
@@ -320,7 +444,31 @@ export async function ensurePostgresServicesTableShape(pool: Pool): Promise<void
 }
 
 export async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'accounts'))) return;
+  if (!(await postgresTableExists(pool, 'accounts'))) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "accounts" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "type" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'active',
+        "name" TEXT NOT NULL,
+        "slug" TEXT NOT NULL UNIQUE,
+        "description" TEXT,
+        "picture" TEXT,
+        "bio" TEXT,
+        "email" TEXT,
+        "trust_tier" TEXT NOT NULL DEFAULT 'new',
+        "setup_completed" BOOLEAN NOT NULL DEFAULT false,
+        "default_repository_id" TEXT,
+        "head_snapshot_id" TEXT,
+        "ai_model" TEXT DEFAULT 'gpt-5.4-nano',
+        "ai_provider" TEXT DEFAULT 'openai',
+        "security_posture" TEXT NOT NULL DEFAULT 'standard',
+        "owner_account_id" TEXT,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   const columns = await getPostgresTableColumns(pool, 'accounts');
   const alterStatements: string[] = [];
@@ -335,4 +483,62 @@ export async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void
   for (const statement of alterStatements) {
     await pool.query(statement);
   }
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`);
+}
+
+export async function ensurePostgresDeploymentsTableShape(pool: Pool): Promise<void> {
+  if (!(await postgresTableExists(pool, 'deployments'))) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "deployments" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "service_id" TEXT NOT NULL,
+        "account_id" TEXT NOT NULL,
+        "version" INTEGER NOT NULL,
+        "artifact_ref" TEXT,
+        "bundle_r2_key" TEXT,
+        "bundle_hash" TEXT,
+        "bundle_size" INTEGER,
+        "wasm_r2_key" TEXT,
+        "wasm_hash" TEXT,
+        "assets_manifest" TEXT,
+        "runtime_config_snapshot_json" TEXT NOT NULL DEFAULT '{}',
+        "bindings_snapshot_encrypted" TEXT,
+        "env_vars_snapshot_encrypted" TEXT,
+        "deploy_state" TEXT NOT NULL DEFAULT 'pending',
+        "current_step" TEXT,
+        "step_error" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "routing_status" TEXT NOT NULL DEFAULT 'archived',
+        "routing_weight" INTEGER NOT NULL DEFAULT 0,
+        "deployed_by" TEXT,
+        "deploy_message" TEXT,
+        "provider_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
+        "target_json" TEXT NOT NULL DEFAULT '{}',
+        "provider_state_json" TEXT NOT NULL DEFAULT '{}',
+        "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
+        "idempotency_key" TEXT UNIQUE,
+        "is_rollback" BOOLEAN NOT NULL DEFAULT false,
+        "rollback_from_version" INTEGER,
+        "rolled_back_at" TIMESTAMPTZ,
+        "rolled_back_by" TEXT,
+        "started_at" TIMESTAMPTZ,
+        "completed_at" TIMESTAMPTZ,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`);
 }

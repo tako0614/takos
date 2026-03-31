@@ -17,6 +17,106 @@ function generateRandomBytes(length: number): Uint8Array {
   return bytes;
 }
 
+function parseResourceConfig(config: unknown): Record<string, unknown> {
+  if (!config) return {};
+  if (typeof config === 'string') {
+    try {
+      return JSON.parse(config) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return typeof config === 'object' && !Array.isArray(config)
+    ? config as Record<string, unknown>
+    : {};
+}
+
+function portableConnectionUrl(resource: {
+  provider_name?: string | null;
+  type: string;
+  provider_resource_id?: string | null;
+  provider_resource_name?: string | null;
+}): string {
+  const provider = resource.provider_name || 'takos';
+  const target = resource.provider_resource_name || resource.provider_resource_id || '';
+  return `takos+${resource.type}://${provider}/${target}`;
+}
+
+function buildConnectionInfo(resource: {
+  id?: string;
+  _internal_id?: string;
+  type: string;
+  provider_name?: string | null;
+  provider_resource_id?: string | null;
+  provider_resource_name?: string | null;
+  config?: unknown;
+}): Record<string, string> {
+  const connectionInfo: Record<string, string> = {};
+  const providerName = resource.provider_name || 'cloudflare';
+  const config = parseResourceConfig(resource.config);
+  const durableConfig = typeof config.durableObject === 'object' && config.durableObject
+    ? config.durableObject as Record<string, unknown>
+    : typeof config.durableNamespace === 'object' && config.durableNamespace
+      ? config.durableNamespace as Record<string, unknown>
+      : config;
+
+  switch (resource.type) {
+    case 'd1':
+      connectionInfo.database_id = resource.provider_resource_id || '';
+      connectionInfo.database_name = resource.provider_resource_name || '';
+      connectionInfo.connection_url = providerName === 'cloudflare'
+        ? `d1://${resource.provider_resource_id || ''}`
+        : portableConnectionUrl(resource);
+      break;
+    case 'r2':
+      connectionInfo.bucket_name = resource.provider_resource_name || '';
+      connectionInfo.access_url = providerName === 'cloudflare'
+        ? `https://${resource.provider_resource_name || ''}.r2.cloudflarestorage.com`
+        : portableConnectionUrl(resource);
+      break;
+    case 'kv':
+      connectionInfo.namespace_id = resource.provider_resource_id || '';
+      connectionInfo.namespace_name = resource.provider_resource_name || '';
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'queue':
+      connectionInfo.queue_id = resource.provider_resource_id || '';
+      connectionInfo.queue_name = resource.provider_resource_name || '';
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'vectorize':
+      connectionInfo.index_name = resource.provider_resource_name || '';
+      connectionInfo.index_id = resource.provider_resource_id || '';
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'analyticsEngine':
+    case 'analytics_engine':
+      connectionInfo.dataset = resource.provider_resource_name || resource.provider_resource_id || '';
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'workflow':
+      connectionInfo.workflow_name = resource.provider_resource_name || resource.provider_resource_id || '';
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'durableObject':
+    case 'durable_object':
+      connectionInfo.class_name = typeof durableConfig.className === 'string' ? durableConfig.className : '';
+      if (typeof durableConfig.scriptName === 'string') {
+        connectionInfo.script_name = durableConfig.scriptName;
+      }
+      connectionInfo.connection_url = portableConnectionUrl(resource);
+      break;
+    case 'secretRef':
+      connectionInfo.secret_name = resource.provider_resource_name || '';
+      connectionInfo.resource_id = resource.provider_resource_id || resource.id || resource._internal_id || '';
+      break;
+    default:
+      connectionInfo.resource_id = resource.provider_resource_id || resource.id || resource._internal_id || '';
+  }
+
+  return connectionInfo;
+}
+
 const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
 
 .get('/:id/tokens', async (c) => {
@@ -297,39 +397,11 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
     throw new AuthorizationError('Only the owner can view connection info');
   }
 
-  const connectionInfo: Record<string, string> = {};
-
-  switch (resource.type) {
-    case 'd1':
-      connectionInfo.database_id = resource.provider_resource_id || '';
-      connectionInfo.database_name = resource.provider_resource_name || '';
-      connectionInfo.connection_url = `d1://${resource.provider_resource_id || ''}`;
-      break;
-
-    case 'r2':
-      connectionInfo.bucket_name = resource.provider_resource_name || '';
-      connectionInfo.access_url = `https://${resource.provider_resource_name || ''}.r2.cloudflarestorage.com`;
-      break;
-
-    case 'kv':
-      connectionInfo.namespace_id = resource.provider_resource_id || '';
-      connectionInfo.namespace_name = resource.provider_resource_name || '';
-      break;
-
-    case 'vectorize':
-      connectionInfo.index_name = resource.provider_resource_name || '';
-      connectionInfo.index_id = resource.provider_resource_id || '';
-      break;
-
-    default:
-      connectionInfo.resource_id = resource.provider_resource_id || resource.id;
-  }
-
   return c.json({
     type: resource.type,
     name: resource.name,
     status: resource.status,
-    connection: connectionInfo,
+    connection: buildConnectionInfo(resource),
   });
 })
 
@@ -343,40 +415,11 @@ const resourcesTokens = new Hono<AuthenticatedRouteEnv>()
     throw new NotFoundError('Resource');
   }
 
-  const connectionInfo: Record<string, string> = {};
-
-  switch (resource.type) {
-    case 'd1':
-      connectionInfo.database_id = resource.provider_resource_id || '';
-      connectionInfo.database_name = resource.provider_resource_name || '';
-      connectionInfo.connection_url = `d1://${resource.provider_resource_id || ''}`;
-      break;
-
-    case 'r2':
-      connectionInfo.bucket_name = resource.provider_resource_name || '';
-      connectionInfo.access_url = `https://${resource.provider_resource_name || ''}.r2.cloudflarestorage.com`;
-      break;
-
-    case 'kv':
-      connectionInfo.namespace_id = resource.provider_resource_id || '';
-      connectionInfo.namespace_name = resource.provider_resource_name || '';
-      break;
-
-    case 'vectorize':
-      connectionInfo.index_name = resource.provider_resource_name || '';
-      connectionInfo.index_id = resource.provider_resource_id || '';
-      break;
-
-    default:
-      connectionInfo.resource_id =
-        resource.provider_resource_id || (resource as { _internal_id?: string })._internal_id || '';
-  }
-
   return c.json({
     type: resource.type,
     name: resource.name,
     status: resource.status,
-    connection: connectionInfo,
+    connection: buildConnectionInfo(resource),
   });
 });
 

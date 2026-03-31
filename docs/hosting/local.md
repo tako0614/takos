@@ -1,6 +1,6 @@
 # ローカル開発
 
-Docker Compose ベースのローカル開発環境。Cloudflare アカウントなしで Takos を動かせる。
+Docker Compose ベースのローカル開発環境。Cloudflare アカウントなしで Takos runtime の互換 backend を動かせる。
 
 ## 前提
 
@@ -39,7 +39,7 @@ pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
 
 ### `pnpm local:proxyless-smoke` とは
 
-CF 固有のルーティングパス（Cloudflare Workers 環境でのみ通るパス）がローカル環境で意図せず「逆流」しないかを確認するテスト。セルフホスト環境で Cloudflare 依存のルーティングが紛れ込んでいないかを検証する。
+Cloudflare backend 固有のルーティングパスがローカル環境で意図せず「逆流」しないかを確認するテスト。セルフホスト環境で Cloudflare 依存のルーティングが紛れ込んでいないかを検証する。
 
 ## 主要サービス
 
@@ -178,11 +178,11 @@ pnpm db:migrate:local
 
 ## ローカル環境の制限
 
-- Workers-compatible な local adapter を使うが、Cloudflare backend と完全同一ではない
+- Cloudflare-native spec を local compatibility backend 上で実現するが、Cloudflare backend と完全同一ではない
 - provider-native な queue consumer / scheduler / workflow semantics は再現しきれない
 - vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
-- Durable Objects はローカルでは利用不可
-- Dispatch Namespace はローカルでは利用不可
+- Durable Object binding は persistent local runtime で利用できるが、Cloudflare backend と byte-for-byte 同一ではない
+- Dispatch Namespace は提供されず、runtime-host compatibility path を使う
 
 詳しくは [環境ごとの差異](/hosting/differences) を参照。
 

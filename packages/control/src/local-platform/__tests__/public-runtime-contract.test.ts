@@ -88,11 +88,13 @@ describe('local public runtime contract', () => {
     // The env builder (node-platform/env-builder.ts) is the canonical location
     // for binding creation.
     const envBuilder = await read('node-platform/env-builder.ts', sourcePackageRoot);
+    const dispatchResolver = await read('node-platform/resolvers/dispatch-resolver.ts', sourcePackageRoot);
     const tenantRuntime = await read('local-platform/tenant-worker-runtime.ts', sourcePackageRoot);
     const servicesSchema = await read('infra/db/schema-services.ts', sourcePackageRoot);
 
     expect(envBuilder).toContain("from '../local-platform/tenant-worker-runtime.ts'");
-    expect(envBuilder).toContain('createLocalTenantWorkerRuntimeRegistry');
+    expect(dispatchResolver).toContain("from '../../local-platform/tenant-worker-runtime.ts'");
+    expect(dispatchResolver).toContain('createLocalTenantWorkerRuntimeRegistry');
     expect(envBuilder).not.toContain("path.join(shared.dataDir, 'miniflare'");
     expect(envBuilder).not.toContain('miniflare-registry');
     expect(envBuilder).not.toContain('createDebugMiniflareFetcherRegistry');
@@ -172,6 +174,24 @@ describe('local public runtime contract', () => {
     };
     const compose = await read('compose.local.yml', repoRoot);
 
+    function getCanonicalScript(scriptName: string): string {
+      const script = controlPackage.scripts?.[scriptName];
+      if (script !== undefined) {
+        return script;
+      }
+
+      const alt = scriptName.startsWith('local:')
+        ? `dev:${scriptName}`
+        : (scriptName.startsWith('dev:local:')
+          ? scriptName.replace('dev:', '')
+          : undefined);
+      if (alt && controlPackage.scripts?.[alt] !== undefined) {
+        return controlPackage.scripts[alt]!;
+      }
+
+      return '';
+    }
+
     for (const scriptName of [
       'local:web',
       'local:dispatch',
@@ -192,7 +212,8 @@ describe('local public runtime contract', () => {
       'dev:local:run-smoke',
       'dev:local:run-smoke-proxyless',
     ]) {
-      const script = controlPackage.scripts?.[scriptName];
+      const script = getCanonicalScript(scriptName);
+      expect(script).toBeTruthy();
       expect(script).toContain('pnpm exec tsx ../../packages/control/local-platform/src/');
       expect(script).not.toContain('--eval');
       expect(script).not.toContain('takos-control-local-platform/');

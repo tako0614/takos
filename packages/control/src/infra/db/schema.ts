@@ -101,6 +101,7 @@ export {
 
 // Platform
 export {
+  apFollowers,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -114,6 +115,9 @@ export {
   notificationSettings,
   notifications,
   reports,
+  repoGrants,
+  repoPushActivities,
+  storeInventoryItems,
   resourceAccess,
   resourceAccessTokens,
   resources,

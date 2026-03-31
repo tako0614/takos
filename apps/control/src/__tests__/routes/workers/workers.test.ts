@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     getDb: vi.fn(),
     upsertGroupDesiredWorkload: vi.fn(),
     removeGroupDesiredWorkload: vi.fn(),
+    renameGroupDesiredWorkload: vi.fn(),
   };
 });
 
@@ -107,6 +108,7 @@ vi.mock('@/db', async (importOriginal) => ({
 vi.mock('@/services/deployment/group-desired-projector', () => ({
   upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
   removeGroupDesiredWorkload: mocks.removeGroupDesiredWorkload,
+  renameGroupDesiredWorkload: mocks.renameGroupDesiredWorkload,
 }));
 
 vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/application/services/platform/workers.ts', async (importOriginal) => {
@@ -306,6 +308,116 @@ describe('services base routes', () => {
         expect.objectContaining({ spaceId: 'ws-2' }),
       );
     });
+
+    it('projects grouped service creation back into desired state', async () => {
+      mocks.requireSpaceAccess.mockResolvedValue({
+        space: { id: 'ws-1' },
+        membership: { role: 'admin' },
+      });
+      mocks.countWorkersInWorkspace.mockResolvedValue(0);
+      mocks.createWorker.mockResolvedValue({
+        service: { id: 'svc-1', slug: 'api-service', status: 'pending' },
+      });
+      mocks.getDb.mockReturnValue({
+        select: vi.fn(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          get: vi.fn().mockResolvedValue({ id: 'group-1', spaceId: 'ws-1' }),
+        })),
+      });
+
+      const app = createApp(createUser());
+      const res = await app.fetch(
+        new Request('http://localhost/api/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            space_id: 'ws-1',
+            group_id: 'group-1',
+            service_type: 'service',
+            config: JSON.stringify({
+              port: 8080,
+              provider: 'k8s',
+              imageRef: 'ghcr.io/takos/api:latest',
+              healthPath: '/health',
+            }),
+          }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(201);
+      expect(mocks.upsertGroupDesiredWorkload).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({
+          groupId: 'group-1',
+          category: 'service',
+          name: 'api-service',
+          workload: {
+            port: 8080,
+            provider: 'k8s',
+            artifact: {
+              kind: 'image',
+              imageRef: 'ghcr.io/takos/api:latest',
+              provider: 'k8s',
+            },
+            healthCheck: {
+              path: '/health',
+              type: 'http',
+            },
+          },
+        }),
+      );
+    });
+
+    it('projects grouped app creation back into desired state', async () => {
+      mocks.requireSpaceAccess.mockResolvedValue({
+        space: { id: 'ws-1' },
+        membership: { role: 'admin' },
+      });
+      mocks.countWorkersInWorkspace.mockResolvedValue(0);
+      mocks.createWorker.mockResolvedValue({
+        service: { id: 'app-1', slug: 'web-app', status: 'pending' },
+      });
+      mocks.getDb.mockReturnValue({
+        select: vi.fn(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          get: vi.fn().mockResolvedValue({ id: 'group-1', spaceId: 'ws-1' }),
+        })),
+      });
+
+      const app = createApp(createUser());
+      const res = await app.fetch(
+        new Request('http://localhost/api/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            space_id: 'ws-1',
+            group_id: 'group-1',
+            service_type: 'app',
+          }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(201);
+      expect(mocks.upsertGroupDesiredWorkload).toHaveBeenCalledWith(
+        env,
+        expect.objectContaining({
+          groupId: 'group-1',
+          category: 'worker',
+          name: 'web-app',
+          workload: {
+            artifact: {
+              kind: 'bundle',
+            },
+          },
+        }),
+      );
+    });
   });
 
   describe('GET /api/services/:id', () => {
@@ -431,6 +543,53 @@ describe('services slug routes', () => {
   });
 
   describe('PATCH /api/services/:id/slug', () => {
+    it('renames grouped desired workload keys after slug updates', async () => {
+      mocks.slugifyWorkerName.mockReturnValue('new-slug');
+      mocks.getWorkerForUserWithRole.mockResolvedValue({
+        id: 'w-1',
+        group_id: 'group-1',
+        service_type: 'service',
+        slug: 'old-slug',
+        hostname: null,
+      });
+      mocks.ServiceDesiredStateService.mockReturnValue({
+        getRoutingTarget: vi.fn().mockResolvedValue(null),
+      });
+
+      const updateWhere = vi.fn().mockResolvedValue(undefined);
+      mocks.getDb.mockReturnValue({
+        select: vi.fn(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          get: vi.fn().mockResolvedValue(null),
+        })),
+        update: vi.fn(() => ({
+          set: vi.fn(() => ({
+            where: updateWhere,
+          })),
+        })),
+      });
+
+      const app = createApp(createUser(), workersSlug);
+      const res = await app.fetch(
+        new Request('http://localhost/api/services/w-1/slug', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: 'new-slug' }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+      expect(res.status).toBe(200);
+      expect(mocks.renameGroupDesiredWorkload).toHaveBeenCalledWith(env, {
+        groupId: 'group-1',
+        category: 'service',
+        fromName: 'old-slug',
+        toName: 'new-slug',
+      });
+    });
+
     it('returns 404 when service not found', async () => {
       mocks.getWorkerForUserWithRole.mockResolvedValue(null);
 

@@ -32,10 +32,25 @@ type PlanByNameResponse = {
 type PlanCommandOptions = {
   manifest?: string;
   env: string;
+  provider?: string;
   group?: string;
   space?: string;
   offline?: boolean;
 };
+
+const VALID_GROUP_PROVIDERS = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
+
+type GroupProviderName = (typeof VALID_GROUP_PROVIDERS)[number];
+
+function parseGroupProvider(raw?: string): GroupProviderName | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if ((VALID_GROUP_PROVIDERS as readonly string[]).includes(normalized)) {
+    return normalized as GroupProviderName;
+  }
+  throw new Error(`Invalid provider: ${raw}`);
+}
 
 /** Offline fallback: compute diff locally (original logic). */
 async function handlePlanOffline(manifest: Awaited<ReturnType<typeof loadAppManifest>>, manifestPath: string, options: PlanCommandOptions): Promise<void> {
@@ -77,6 +92,7 @@ export function registerPlanCommand(program: Command): void {
     .description('Show execution plan: diff between app.yml and current state')
     .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
     .option('--env <env>', 'Target environment', 'staging')
+    .option('--provider <provider>', 'Deployment target provider (cloudflare|local|aws|gcp|k8s)')
     .option('--group <name>', 'Target group name (defaults to metadata.name)')
     .option('--space <id>', 'Target workspace ID')
     .option('--offline', 'Force file-based state (skip API)')
@@ -101,6 +117,14 @@ export function registerPlanCommand(program: Command): void {
         cliExit(1);
       }
 
+      let provider: GroupProviderName | undefined;
+      try {
+        provider = parseGroupProvider(options.provider);
+      } catch (error) {
+        console.log(chalk.red(error instanceof Error ? error.message : 'Invalid provider'));
+        cliExit(1);
+      }
+
       // Offline mode: delegate to local diff computation
       if (options.offline) {
         return handlePlanOffline(manifest, manifestPath, options);
@@ -115,6 +139,7 @@ export function registerPlanCommand(program: Command): void {
         body: {
           group_name: group,
           env: options.env,
+          ...(provider ? { provider } : {}),
           manifest,
         },
       });

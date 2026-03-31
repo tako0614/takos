@@ -1,3 +1,4 @@
+import type { webcrypto } from 'node:crypto';
 import { hexToBytes, bytesToBase64, base64ToBytes } from './encoding-utils';
 
 /** Number of PBKDF2 iterations for key derivation. */
@@ -34,7 +35,7 @@ export interface EncryptedData {
   v: 1;
 }
 
-async function deriveKey(masterSecret: string, salt: string): Promise<CryptoKey> {
+async function deriveKey(masterSecret: string, salt: string): Promise<webcrypto.CryptoKey> {
   const secretBytesRaw = masterSecret.startsWith('0x')
     ? hexToBytes(masterSecret.slice(HEX_PREFIX_LENGTH))
     : masterSecret.length === HEX_ENCODED_SECRET_LENGTH

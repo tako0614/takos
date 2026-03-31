@@ -1,21 +1,16 @@
 import { getDb } from '../../../infra/db';
-import { workflowRuns, workflowJobs } from '../../../infra/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { workflowJobs, workflowRuns } from '../../../infra/db/schema';
+import { and, desc, eq } from 'drizzle-orm';
 import { GoneError } from 'takos-common/errors';
 import type { Env } from '../../../shared/types';
 import { checkRepoAccess } from '../source/repos';
 import * as gitStore from '../git-smart';
 import { resolveWorkflowArtifactFileForJob } from './workflow-artifacts';
 import {
-  appManifestToBundleDocs,
-  buildParsedPackageFromDocs,
-  extractBuildSourcesFromManifestJson,
-  parseAndValidateWorkflowYaml,
-  parseAppManifestYaml,
-  selectAppManifestPathFromRepo,
-  validateDeployProducerJob,
   type AppDeploymentBuildSource,
   type AppManifest,
+  parseAndValidateWorkflowYaml,
+  validateDeployProducerJob,
 } from '../source/app-manifest';
 
 type RepoRefType = 'branch' | 'tag' | 'commit';
@@ -42,7 +37,7 @@ type ResolvedBuildArtifacts = {
 };
 
 export const APP_DEPLOYMENTS_REMOVED_MESSAGE =
-  'App deployment API is not available in the current implementation. Use `takos deploy-group` or `takos apply`.';
+  'App deployment API is not available in the current implementation. Use `takos apply`.';
 
 function throwRemovedAppDeployments(): never {
   throw new GoneError(APP_DEPLOYMENTS_REMOVED_MESSAGE);
@@ -143,25 +138,6 @@ function toArrayBuffer(value: ArrayBuffer | SharedArrayBuffer | ArrayBufferView)
   const copy = new Uint8Array(value.byteLength);
   copy.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
   return copy.buffer;
-}
-
-async function readRepoManifestAtCommit(env: Env, treeSha: string): Promise<{ path: string; raw: string }> {
-  const entries = ['.takos/app.yml', '.takos/app.yaml'] as const;
-  const found: string[] = [];
-  for (const entry of entries) {
-    const content = await readRepoTextFileAtCommit(env, treeSha, entry);
-    if (content != null) {
-      found.push(entry);
-      if (found.length === 1) {
-        return { path: entry, raw: content };
-      }
-    }
-  }
-  const selected = selectAppManifestPathFromRepo(found);
-  if (!selected) {
-    throw new Error('No .takos/app.yml found at the requested repo ref');
-  }
-  throw new Error(`Failed to read manifest: ${selected}`);
 }
 
 async function addRepoSqlPathToPackage(
@@ -265,6 +241,9 @@ export class AppDeploymentService {
     const buildSources: AppDeploymentBuildSource[] = [];
 
     for (const [workerName, worker] of Object.entries(manifest.spec.workers || {})) {
+      if (!worker.build?.fromWorkflow) {
+        throw new Error(`Worker "${workerName}" does not define build.fromWorkflow`);
+      }
       const build = worker.build.fromWorkflow;
       const workflowContent = await readRepoTextFileAtCommit(this.env, target.treeSha, build.path);
       if (!workflowContent) {

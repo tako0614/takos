@@ -1,13 +1,16 @@
-import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
 import { z } from 'zod';
-import { logInfo, logError, logWarn } from '../shared/utils/logger.ts';
+import { logError, logInfo, logWarn } from '../shared/utils/logger.ts';
 import { serveNodeFetch } from './fetch-server.ts';
 import type { ContainerBackend } from './container-backend.ts';
+import { CloudRunContainerBackend } from './cloud-run-container-backend.ts';
 import { DockerContainerBackend } from './docker-container-backend.ts';
+import { EcsContainerBackend } from './ecs-container-backend.ts';
+import { K8sContainerBackend } from './k8s-container-backend.ts';
 import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
 
 type OciServiceStatus = 'deployed' | 'removed' | 'routing-only';
@@ -21,6 +24,8 @@ type OciServiceRecord = {
   route_ref: string;
   deployment_id: string;
   artifact_ref: string;
+  provider_name: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+  provider_config: Record<string, unknown> | null;
   endpoint: OciServiceEndpoint;
   image_ref: string | null;
   exposed_port: number | null;
@@ -45,11 +50,22 @@ type OciOrchestratorState = {
   services: Record<string, OciServiceRecord>;
 };
 
+type OciProviderName = OciServiceRecord['provider_name'];
+
+export type OciOrchestratorBackendResolverInput = {
+  providerName: OciProviderName;
+  providerConfig: Record<string, unknown> | null;
+};
+
+export type OciOrchestratorBackendResolver = (
+  input: OciOrchestratorBackendResolverInput,
+) => ContainerBackend;
+
 const DOCKER_NETWORK = process.env.TAKOS_DOCKER_NETWORK || 'takos-containers';
 const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_POLL_INTERVAL_MS = 1_000;
 
-// ─── Health-check polling (works for both Docker and k8s via IP/hostname) ───
+// ─── Health-check polling (works for both Docker/k8s host:port and provider URLs) ───
 
 async function pollHealthCheck(
   host: string,
@@ -57,6 +73,10 @@ async function pollHealthCheck(
   healthPath: string,
   timeoutMs: number,
 ): Promise<boolean> {
+  if (process.env.TAKOS_SKIP_OCI_HEALTH_CHECK === '1') {
+    return true;
+  }
+
   const normalizedPath = healthPath.startsWith('/') ? healthPath : `/${healthPath}`;
   const deadline = Date.now() + timeoutMs;
 
@@ -66,7 +86,9 @@ async function pollHealthCheck(
         const req = http.request(
           { hostname: host, port, path: normalizedPath, method: 'GET', timeout: 5000 },
           (res) => {
-            res.on('data', () => {});
+            res.on('data', (chunk) => {
+              void chunk;
+            });
             res.on('end', () => resolve(res.statusCode ?? 0));
           },
         );
@@ -75,6 +97,32 @@ async function pollHealthCheck(
         req.end();
       });
       if (result >= 200 && result < 400) return true;
+    } catch {
+      // Not ready yet
+    }
+    await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS));
+  }
+  return false;
+}
+
+async function pollHealthCheckUrl(
+  url: string,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (process.env.TAKOS_SKIP_OCI_HEALTH_CHECK === '1') {
+    return true;
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (response.status >= 200 && response.status < 400) {
+        return true;
+      }
     } catch {
       // Not ready yet
     }
@@ -92,6 +140,10 @@ const deploySchema = z.object({
   deployment_id: z.string().min(1),
   space_id: z.string().min(1),
   artifact_ref: z.string().min(1),
+  provider: z.object({
+    name: z.enum(['oci', 'ecs', 'cloud-run', 'k8s']),
+    config: z.record(z.string(), z.unknown()).optional(),
+  }).strict().optional(),
   target: z.object({
     route_ref: z.string().min(1),
     endpoint: z.discriminatedUnion('kind', [
@@ -199,21 +251,165 @@ function createAuthMiddleware() {
   };
 }
 
+function readProviderConfigString(
+  providerConfig: Record<string, unknown> | null,
+  key: string,
+): string | undefined {
+  const value = providerConfig?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readProviderConfigBoolean(
+  providerConfig: Record<string, unknown> | null,
+  key: string,
+): boolean | undefined {
+  const value = providerConfig?.[key];
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+  }
+  return undefined;
+}
+
+function readProviderConfigNumber(
+  providerConfig: Record<string, unknown> | null,
+  key: string,
+): number | undefined {
+  const value = providerConfig?.[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function readProviderConfigStringArray(
+  providerConfig: Record<string, unknown> | null,
+  key: string,
+): string[] | undefined {
+  const value = providerConfig?.[key];
+  if (Array.isArray(value)) {
+    const entries = value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+  }
+  if (typeof value === 'string') {
+    const entries = value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
+  }
+  return undefined;
+}
+
+export function createDefaultOciOrchestratorBackendResolver(options?: {
+  fallbackBackend?: ContainerBackend;
+}): OciOrchestratorBackendResolver {
+  const fallbackBackend = options?.fallbackBackend ?? new DockerContainerBackend();
+  const providerBackends = new Map<string, ContainerBackend>();
+
+  return ({ providerName, providerConfig }) => {
+    if (providerName === 'oci') {
+      return fallbackBackend;
+    }
+
+    const cacheKey = `${providerName}:${JSON.stringify(providerConfig ?? {})}`;
+    const existing = providerBackends.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
+
+    let backend: ContainerBackend;
+    switch (providerName) {
+      case 'k8s': {
+        backend = new K8sContainerBackend(readProviderConfigString(providerConfig, 'namespace'));
+        break;
+      }
+      case 'cloud-run': {
+        const projectId = readProviderConfigString(providerConfig, 'projectId');
+        const region = readProviderConfigString(providerConfig, 'region');
+        if (!projectId || !region) {
+          return fallbackBackend;
+        }
+        backend = new CloudRunContainerBackend({
+          projectId,
+          region,
+          serviceId: readProviderConfigString(providerConfig, 'serviceId'),
+          serviceAccount: readProviderConfigString(providerConfig, 'serviceAccount'),
+          ingress: readProviderConfigString(providerConfig, 'ingress'),
+          allowUnauthenticated: readProviderConfigBoolean(providerConfig, 'allowUnauthenticated'),
+          baseUrl: readProviderConfigString(providerConfig, 'baseUrl'),
+          deleteOnRemove: readProviderConfigBoolean(providerConfig, 'deleteOnRemove'),
+        });
+        break;
+      }
+      case 'ecs': {
+        const region = readProviderConfigString(providerConfig, 'region');
+        const clusterArn = readProviderConfigString(providerConfig, 'clusterArn');
+        const taskDefinitionFamily = readProviderConfigString(providerConfig, 'taskDefinitionFamily');
+        if (!region || !clusterArn || !taskDefinitionFamily) {
+          return fallbackBackend;
+        }
+        backend = new EcsContainerBackend({
+          region,
+          clusterArn,
+          taskDefinitionFamily,
+          serviceArn: readProviderConfigString(providerConfig, 'serviceArn'),
+          serviceName: readProviderConfigString(providerConfig, 'serviceName'),
+          containerName: readProviderConfigString(providerConfig, 'containerName'),
+          subnetIds: readProviderConfigStringArray(providerConfig, 'subnetIds'),
+          securityGroupIds: readProviderConfigStringArray(providerConfig, 'securityGroupIds'),
+          assignPublicIp: readProviderConfigBoolean(providerConfig, 'assignPublicIp'),
+          launchType: readProviderConfigString(providerConfig, 'launchType'),
+          desiredCount: readProviderConfigNumber(providerConfig, 'desiredCount'),
+          baseUrl: readProviderConfigString(providerConfig, 'baseUrl'),
+          healthUrl: readProviderConfigString(providerConfig, 'healthUrl'),
+        });
+        break;
+      }
+      default:
+        return fallbackBackend;
+    }
+
+    providerBackends.set(cacheKey, backend);
+    return backend;
+  };
+}
+
 // ─── Options for app creation ───
 
 export interface OciOrchestratorAppOptions {
-  /** Container backend to use.  Defaults to DockerContainerBackend. */
+  /** Fixed backend to use for every provider. Preserved for tests and explicit overrides. */
   backend?: ContainerBackend;
+  /** Resolve a backend from the requested provider. Defaults to a provider-aware resolver. */
+  backendResolver?: OciOrchestratorBackendResolver;
 }
 
 // ─── App factory ───
 
 export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOptions): Hono {
-  const backend: ContainerBackend = options?.backend ?? new DockerContainerBackend();
+  const backendResolver = options?.backendResolver
+    ?? (options?.backend
+      ? (() => options.backend!)
+      : createDefaultOciOrchestratorBackendResolver());
   const app = new Hono();
 
   async function stopAndRemoveContainer(record: OciServiceRecord, spaceId: string, routeRef: string): Promise<void> {
     if (!record.container_id) return;
+    const backend = backendResolver({
+      providerName: record.provider_name,
+      providerConfig: record.provider_config,
+    });
     try {
       await backend.stop(record.container_id);
       await backend.remove(record.container_id);
@@ -247,7 +443,10 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
     const imageRef = payload.target.artifact?.image_ref ?? null;
     const exposedPort = payload.target.artifact?.exposed_port ?? 8080;
     const healthPath = payload.target.artifact?.health_path ?? '/health';
+    const providerName = payload.provider?.name ?? 'oci';
+    const providerConfig = payload.provider?.config ?? null;
     const runtime: NonNullable<DeployPayload['runtime']> = payload.runtime ?? { compatibility_flags: [] };
+    const backend = backendResolver({ providerName, providerConfig });
 
     let newContainerId: string | null = null;
     let resolvedEndpoint: { kind: 'http-url'; base_url: string } | null = null;
@@ -276,6 +475,8 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
           name: cName,
           exposedPort,
           network: DOCKER_NETWORK,
+          healthPath,
+          requestedEndpoint: payload.target.endpoint,
           labels: {
             'takos.space-id': payload.space_id,
             'takos.route-ref': routeRef,
@@ -286,15 +487,20 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
 
         await appendServiceLog(payload.space_id, routeRef, `STARTED container ${newContainerId.slice(0, 12)}`);
 
-        // Determine the hostname for health-checking and endpoint resolution.
-        // For Docker, we use the container name (DNS on the Docker network).
-        // For k8s (or any backend that provides a pod IP), we use the IP.
-        const containerIp = await backend.getContainerIp(newContainerId);
-        const healthHost = containerIp ?? cName;
-
-        // Poll health check
-        await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${healthHost}:${exposedPort}${healthPath}`);
-        const healthy = await pollHealthCheck(healthHost, exposedPort, healthPath, HEALTH_TIMEOUT_MS);
+        let healthy = false;
+        if (createResult.healthCheckUrl) {
+          await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${createResult.healthCheckUrl}`);
+          healthy = await pollHealthCheckUrl(createResult.healthCheckUrl, HEALTH_TIMEOUT_MS);
+        } else {
+          // Determine the hostname for health-checking and endpoint resolution.
+          // For Docker, we use the container name (DNS on the Docker network).
+          // For k8s (or any backend that provides a pod IP), we use the IP.
+          const containerIp = await backend.getContainerIp(newContainerId);
+          const healthHost = containerIp ?? cName;
+          await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK polling ${healthHost}:${exposedPort}${healthPath}`);
+          healthy = await pollHealthCheck(healthHost, exposedPort, healthPath, HEALTH_TIMEOUT_MS);
+          resolvedEndpoint = { kind: 'http-url', base_url: `http://${healthHost}:${exposedPort}` };
+        }
 
         if (!healthy) {
           await appendServiceLog(payload.space_id, routeRef, `HEALTH_CHECK failed, removing container`);
@@ -306,7 +512,10 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
           }, 503);
         }
 
-        resolvedEndpoint = { kind: 'http-url', base_url: `http://${healthHost}:${exposedPort}` };
+        resolvedEndpoint = createResult.resolvedEndpoint ?? resolvedEndpoint;
+        if (!resolvedEndpoint) {
+          throw new Error('Container backend did not provide a resolved endpoint');
+        }
         await appendServiceLog(payload.space_id, routeRef, `DEPLOYED container ${newContainerId.slice(0, 12)} → ${resolvedEndpoint.base_url}`);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -330,6 +539,8 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
       route_ref: routeRef,
       deployment_id: payload.deployment_id,
       artifact_ref: payload.artifact_ref,
+      provider_name: providerName,
+      provider_config: providerConfig,
       endpoint: payload.target.endpoint,
       image_ref: imageRef,
       exposed_port: exposedPort,
@@ -352,6 +563,7 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
     await appendServiceLog(payload.space_id, routeRef, `DEPLOY ${JSON.stringify({
       deployment_id: payload.deployment_id,
       artifact_ref: payload.artifact_ref,
+      provider: payload.provider ?? { name: 'oci' },
       target: payload.target,
       runtime,
     })}`);
@@ -434,6 +646,10 @@ export function createLocalOciOrchestratorApp(options?: OciOrchestratorAppOption
     // Fetch container logs if container is running
     let containerLogText = '';
     if (record.container_id && record.status === 'deployed') {
+      const backend = backendResolver({
+        providerName: record.provider_name,
+        providerConfig: record.provider_config,
+      });
       try {
         containerLogText = await backend.getLogs(record.container_id, tailCount);
       } catch {
@@ -523,7 +739,11 @@ export async function startLocalOciOrchestratorServer(
         module: 'local_oci_orchestrator',
         port,
         dataDir: resolveDataDir(),
-        backend: options?.backend?.constructor?.name ?? 'DockerContainerBackend',
+        backend: options?.backend
+          ? (options.backend.constructor?.name ?? 'custom-backend')
+          : options?.backendResolver
+            ? 'custom-resolver'
+            : 'provider-aware-default',
       });
     },
   });
